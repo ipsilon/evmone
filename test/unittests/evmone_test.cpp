@@ -53,3 +53,12 @@ TEST(evmone, set_option_cgoto)
     EXPECT_EQ(vm.set_option("cgoto", "no"), EVMC_SET_OPTION_INVALID_NAME);
 #endif
 }
+
+TEST(evmone, set_option_caterpillar)
+{
+    auto vm = evmc::VM{evmc_create_evmone()};
+    EXPECT_EQ(vm.set_option("caterpillar", ""), EVMC_SET_OPTION_SUCCESS);
+
+    // This will also enable Caterpillar.
+    EXPECT_EQ(vm.set_option("caterpillar", "no"), EVMC_SET_OPTION_SUCCESS);
+}
