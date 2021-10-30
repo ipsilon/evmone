@@ -71,6 +71,28 @@ elseif(MSVC)
     add_compile_options(/wd5030)  # Allow using unknown attributes.
 endif()
 
+    if(CABLE_COMPILER_CLANG)
+        add_compile_options(
+            -Weverything
+            -Wno-c++98-compat
+            -Wno-padded
+            -Wno-old-style-cast
+            -Wno-cast-qual
+            -Wno-cast-align
+            -Wno-c++98-compat-pedantic
+            -Wno-documentation-unknown-command
+            -Wno-array-bounds-pointer-arithmetic
+            -Wno-weak-vtables
+            -Wno-undefined-func-template
+            -Wno-global-constructors
+            -Wno-exit-time-destructors
+            -Wno-missing-variable-declarations
+            -Wno-unsafe-buffer-usage
+            -Wno-deprecated-copy-with-dtor
+            -Wno-switch-enum
+        )
+    endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
     message(FATAL_ERROR "Use -DCOVERAGE=1")
 endif()
