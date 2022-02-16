@@ -79,11 +79,30 @@ inline bool check_stack(const uint256* stack_top, const uint256* stack_bottom) n
     return true;
 }
 
+inline constexpr bool has_const_gas_cost_since_defined(Opcode op) noexcept
+{
+    const size_t first_rev = *instr::traits[op].since;
+    const auto g = instr::gas_costs[first_rev][op];
+    for (size_t r = first_rev + 1; r <= EVMC_MAX_REVISION; ++r)
+    {
+        if (instr::gas_costs[r][op] != g)
+            return false;
+    }
+    return true;
+}
+static_assert(has_const_gas_cost_since_defined(OP_STOP));
+static_assert(has_const_gas_cost_since_defined(OP_ADD));
+static_assert(has_const_gas_cost_since_defined(OP_PUSH1));
+static_assert(has_const_gas_cost_since_defined(OP_SHL));
+static_assert(has_const_gas_cost_since_defined(OP_SELFBALANCE));
+static_assert(!has_const_gas_cost_since_defined(OP_BALANCE));
+static_assert(!has_const_gas_cost_since_defined(OP_SLOAD));
+
 template <Opcode Op>
 inline int64_t check_gas(int64_t gas_left, evmc_revision rev) noexcept
 {
-    auto gas_cost = instr::gas_costs[EVMC_FRONTIER][Op];  // Init assuming const cost.
-    if constexpr (!instr::has_const_gas_cost(Op))
+    auto gas_cost = instr::gas_costs[*instr::traits[Op].since][Op];  // Init assuming const cost.
+    if constexpr (!has_const_gas_cost_since_defined(Op))
         gas_cost = instr::gas_costs[rev][Op];  // If not, load the cost from the table.
     return gas_left - gas_cost;
 }
