@@ -105,16 +105,16 @@ inline int64_t check_gas(int64_t gas_left, evmc_revision rev) noexcept
 
 template <Opcode Op>
 evmc_status_code invoke(
-    uint256* stack_top, code_iterator code_it, int64_t& gas, void*, ExecutionState& state) noexcept;
+    uint256* stack_top, code_iterator code_it, int64_t& gas, ExecutionState& state) noexcept;
 
 evmc_status_code cat_undefined(uint256* /*stack_top*/, code_iterator /*code_it*/, int64_t& /*gas*/,
-    void*, ExecutionState& /*state*/) noexcept
+    ExecutionState& /*state*/) noexcept
 {
     return EVMC_UNDEFINED_INSTRUCTION;
 }
 
 using InstrFn = evmc_status_code (*)(
-    uint256* stack_top, code_iterator code_it, int64_t& gas, void*, ExecutionState& state) noexcept;
+    uint256* stack_top, code_iterator code_it, int64_t& gas, ExecutionState& state) noexcept;
 
 constexpr auto instr_table = []() noexcept {
 #define ON_OPCODE(OPCODE) invoke<OPCODE>,
@@ -131,7 +131,7 @@ static_assert(instr_table[OP_PUSH2] == invoke<OP_PUSH2>);
 
 /// A helper to invoke the instruction implementation of the given opcode Op.
 template <Opcode Op>
-evmc_status_code invoke(uint256* stack_top, code_iterator code_it, int64_t& gas, void* tbl,
+evmc_status_code invoke(uint256* stack_top, code_iterator code_it, int64_t& gas, 
     ExecutionState& state) noexcept
 {
     [[maybe_unused]] auto op = Op;
@@ -153,8 +153,8 @@ evmc_status_code invoke(uint256* stack_top, code_iterator code_it, int64_t& gas,
         return state.status;
 
     stack_top += instr::traits[Op].stack_height_change;
-    auto tbl2 = (InstrFn*)tbl;
-    [[clang::musttail]] return tbl2[*code_it](stack_top, code_it, gas, tbl, state);
+    const auto tbl = static_cast<const InstrFn*>(state.tbl);
+    [[clang::musttail]] return tbl[*code_it](stack_top, code_it, gas, state);
 }
 
 }  // namespace
@@ -166,11 +166,13 @@ evmc_result execute(const VM& /*vm*/, int64_t gas, ExecutionState& state,
 
     const auto code = analysis.executable_code();
 
+    state.tbl = instr_table.data();
+
     const auto code_it = code.data();
     const auto first_fn = instr_table[*code_it];
     state.stack_bottom = state.stack_space.bottom();
     auto stack_top = state.stack_space.bottom();
-    const auto status = first_fn(stack_top, code_it, gas, (void*)instr_table.data(), state);
+    const auto status = first_fn(stack_top, code_it, gas, state);
     state.status = status;
 
     const auto gas_left = (status == EVMC_SUCCESS || status == EVMC_REVERT) ? gas : 0;
