@@ -137,6 +137,7 @@ struct TransactionInitcode
 class ExecutionState
 {
 public:
+    const uint256* stack_bottom = nullptr;
     int64_t gas_refund = 0;
     Memory memory;
     const evmc_message* msg = nullptr;
@@ -181,6 +182,7 @@ public:
         const evmc_host_interface& host_interface, evmc_host_context* host_ctx,
         bytes_view _code) noexcept
     {
+        stack_bottom = nullptr;
         gas_refund = 0;
         memory.clear();
         msg = &message;
