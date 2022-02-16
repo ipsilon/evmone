@@ -6,7 +6,6 @@
 #include "execution_state.hpp"
 #include "instructions.hpp"
 #include "vm.hpp"
-#include <iostream>
 #include <memory>
 
 namespace evmone::caterpillar
@@ -61,24 +60,24 @@ namespace
 /// @}
 
 template <Opcode Op>
-inline evmc_status_code check_requirements(int64_t& gas_left, const uint256* stack_top,
-    const uint256* stack_bottom, evmc_revision rev) noexcept
+inline evmc_status_code check_defined(evmc_revision rev) noexcept
 {
     static_assert(
         !instr::has_const_gas_cost(Op) || instr::gas_costs[EVMC_FRONTIER][Op] != instr::undefined,
         "undefined instructions must not be handled by check_requirements()");
 
-    auto gas_cost = instr::gas_costs[EVMC_FRONTIER][Op];  // Init assuming const cost.
     if constexpr (!instr::has_const_gas_cost(Op))
     {
-        gas_cost = instr::gas_costs[rev][Op];  // If not, load the cost from the table.
-
-        // Negative cost marks an undefined instruction.
-        // This check must be first to produce correct error code.
-        if (INTX_UNLIKELY(gas_cost < 0))
+        if (INTX_UNLIKELY(instr::gas_costs[rev][Op] < 0))
             return EVMC_UNDEFINED_INSTRUCTION;
     }
+    return EVMC_SUCCESS;
+}
 
+template <Opcode Op>
+inline evmc_status_code check_requirements(int64_t& gas_left, const uint256* stack_top,
+    const uint256* stack_bottom, evmc_revision rev) noexcept
+{
     // Check stack requirements first. This is order is not required,
     // but it is nicer because complete gas check may need to inspect operands.
     if constexpr (instr::traits[Op].stack_height_change > 0)
@@ -96,6 +95,9 @@ inline evmc_status_code check_requirements(int64_t& gas_left, const uint256* sta
             return EVMC_STACK_UNDERFLOW;
     }
 
+    auto gas_cost = instr::gas_costs[EVMC_FRONTIER][Op];  // Init assuming const cost.
+    if constexpr (!instr::has_const_gas_cost(Op))
+        gas_cost = instr::gas_costs[rev][Op];  // If not, load the cost from the table.
     if (INTX_UNLIKELY((gas_left -= gas_cost) < 0))
         return EVMC_OUT_OF_GAS;
 
@@ -134,6 +136,11 @@ evmc_status_code invoke(const uint256* stack_bottom, uint256* stack_top, code_it
     int64_t& gas, void* tbl, ExecutionState& state) noexcept
 {
     [[maybe_unused]] auto op = Op;
+
+    const auto rev = state.rev;
+    if (const auto status = check_defined<Op>(rev); status != EVMC_SUCCESS)
+        return status;
+        
     if (const auto status = check_requirements<Op>(gas, stack_top, stack_bottom, state.rev);
         status != EVMC_SUCCESS)
         return status;
