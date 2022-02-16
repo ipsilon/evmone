@@ -75,27 +75,27 @@ inline evmc_status_code check_defined(evmc_revision rev) noexcept
 }
 
 template <Opcode Op>
-inline evmc_status_code check_stack(const uint256* stack_top, const uint256* stack_bottom) noexcept
+inline bool check_stack(const uint256* stack_top, const uint256* stack_bottom) noexcept
 {
     if constexpr (instr::traits[Op].stack_height_change > 0)
     {
         static_assert(instr::traits[Op].stack_height_change == 1,
             "unexpected instruction with multiple results");
         if (INTX_UNLIKELY(stack_top == stack_bottom + StackSpace::limit))
-            return EVMC_STACK_OVERFLOW;
+            return false;
     }
     if constexpr (instr::traits[Op].stack_height_required > 0)
     {
         // Check stack underflow using pointer comparison <= (better optimization).
         static constexpr auto min_offset = instr::traits[Op].stack_height_required - 1;
         if (INTX_UNLIKELY(stack_top <= stack_bottom + min_offset))
-            return EVMC_STACK_UNDERFLOW;
+            return false;
     }
-    return EVMC_SUCCESS;
+    return true;
 }
 
 template <Opcode Op>
-inline int64_t check_gas(int64_t& gas_left, evmc_revision rev) noexcept
+inline int64_t check_gas(int64_t gas_left, evmc_revision rev) noexcept
 {
     auto gas_cost = instr::gas_costs[EVMC_FRONTIER][Op];  // Init assuming const cost.
     if constexpr (!instr::has_const_gas_cost(Op))
@@ -140,9 +140,10 @@ evmc_status_code invoke(const uint256* stack_bottom, uint256* stack_top, code_it
     if (const auto status = check_defined<Op>(rev); status != EVMC_SUCCESS)
         return status;
 
-    if (const auto status = check_stack<Op>(stack_top, stack_bottom);
-        INTX_UNLIKELY(status != EVMC_SUCCESS))
-        return status;
+    if (INTX_UNLIKELY(!check_stack<Op>(stack_top, stack_bottom)))
+        return stack_top - stack_bottom < StackSpace::limit ? EVMC_STACK_UNDERFLOW :
+                                                              EVMC_STACK_OVERFLOW;
+
 
     if (gas = check_gas<Op>(gas, rev); INTX_UNLIKELY(gas < 0))
         return EVMC_OUT_OF_GAS;
