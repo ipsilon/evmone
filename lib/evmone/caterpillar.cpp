@@ -60,21 +60,6 @@ namespace
 /// @}
 
 template <Opcode Op>
-inline evmc_status_code check_defined(evmc_revision rev) noexcept
-{
-    static_assert(
-        !instr::has_const_gas_cost(Op) || instr::gas_costs[EVMC_FRONTIER][Op] != instr::undefined,
-        "undefined instructions must not be handled by check_requirements()");
-
-    if constexpr (!instr::has_const_gas_cost(Op))
-    {
-        if (INTX_UNLIKELY(instr::gas_costs[rev][Op] < 0))
-            return EVMC_UNDEFINED_INSTRUCTION;
-    }
-    return EVMC_SUCCESS;
-}
-
-template <Opcode Op>
 inline bool check_stack(const uint256* stack_top, const uint256* stack_bottom) noexcept
 {
     if constexpr (instr::traits[Op].stack_height_change > 0)
@@ -120,7 +105,7 @@ using InstrTable = std::array<InstrFn, 256>;
 template <evmc_revision Rev>
 constexpr InstrTable build_instr_table() noexcept
 {
-#define ON_OPCODE(OPCODE) invoke<OPCODE>,
+#define ON_OPCODE(OPCODE) (instr::traits[OPCODE].since <= Rev ? invoke<OPCODE> : cat_undefined),
 #undef ON_OPCODE_UNDEFINED
 #define ON_OPCODE_UNDEFINED(_) cat_undefined,
     return {MAP_OPCODES};
@@ -152,21 +137,16 @@ static_assert(instr_table[0][OP_PUSH2] == invoke<OP_PUSH2>);
 
 /// A helper to invoke the instruction implementation of the given opcode Op.
 template <Opcode Op>
-evmc_status_code invoke(uint256* stack_top, code_iterator code_it, int64_t& gas, 
-    ExecutionState& state) noexcept
+evmc_status_code invoke(
+    uint256* stack_top, code_iterator code_it, int64_t& gas, ExecutionState& state) noexcept
 {
     [[maybe_unused]] auto op = Op;
-
-    const auto rev = state.rev;
-    if (const auto status = check_defined<Op>(rev); status != EVMC_SUCCESS)
-        return status;
 
     if (INTX_UNLIKELY(!check_stack<Op>(stack_top, state.stack_bottom)))
         return stack_top - state.stack_bottom < StackSpace::limit ? EVMC_STACK_UNDERFLOW :
                                                                     EVMC_STACK_OVERFLOW;
 
-
-    if (gas = check_gas<Op>(gas, rev); INTX_UNLIKELY(gas < 0))
+    if (gas = check_gas<Op>(gas, state.rev); INTX_UNLIKELY(gas < 0))
         return EVMC_OUT_OF_GAS;
 
     code_it = invoke(instr::core::impl<Op>, stack_top, code_it, gas, state);
