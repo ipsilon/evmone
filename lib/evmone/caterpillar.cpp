@@ -120,11 +120,22 @@ evmc_status_code cat_undefined(uint256* /*stack_top*/, code_iterator /*code_it*/
 using InstrFn = evmc_status_code (*)(
     uint256* stack_top, code_iterator code_it, int64_t& gas, ExecutionState& state) noexcept;
 
+#define ON_OPCODE(OPCODE)                                                                      \
+    extern "C" evmc_status_code evmone_##OPCODE(                                                                \
+        uint256* stack_top, code_iterator code_it, int64_t& g, ExecutionState& state) noexcept \
+    {                                                                                          \
+        /*TODO: The [[musttail]] is needed although invoke<> is [[always_inline]]*/ \
+        [[clang::musttail]] return invoke<OPCODE>(stack_top, code_it, g, state);             \
+    }
+
+MAP_OPCODES
+#undef ON_OPCODE
+
 using InstrTable = std::array<InstrFn, 256>;
 template <evmc_revision Rev>
 constexpr InstrTable build_instr_table() noexcept
 {
-#define ON_OPCODE(OPCODE) (instr::traits[OPCODE].since <= Rev ? invoke<OPCODE> : cat_undefined),
+#define ON_OPCODE(OPCODE) (instr::traits[OPCODE].since <= Rev ? evmone_##OPCODE : cat_undefined),
 #undef ON_OPCODE_UNDEFINED
 #define ON_OPCODE_UNDEFINED(_) cat_undefined,
     return {MAP_OPCODES};
@@ -152,7 +163,7 @@ constexpr InstrTable instr_table[] = {
 };
 static_assert(std::size(instr_table) == EVMC_MAX_REVISION + 1);
 static_assert(std::size(instr_table[0]) == 256);
-static_assert(instr_table[0][OP_PUSH2] == invoke<OP_PUSH2>);
+static_assert(instr_table[0][OP_PUSH2] == evmone_OP_PUSH2);
 
 /// A helper to invoke the instruction implementation of the given opcode Op.
 template <Opcode Op>
