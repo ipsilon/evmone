@@ -101,6 +101,7 @@ endif()
     if(CABLE_COMPILER_CLANG)
         add_compile_options(
             -Weverything
+            -Wno-unknown-warning-option  # FIXME
             -Wno-c++98-compat
             -Wno-padded
             -Wno-old-style-cast
