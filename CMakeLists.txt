@@ -66,14 +66,12 @@ if(CABLE_COMPILER_GNULIKE)
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wnewline-eof>
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wunreachable-code-aggressive>
 
-        -Warray-bounds
-#        -Warray-bounds=2
-#        -Warith-conversion
-#        -Wredundant-tags
+        $<$<CXX_COMPILER_ID:GNU>:-Warray-bounds=2>
+        $<$<CXX_COMPILER_ID:GNU>:-Warith-conversion>
         -Wmismatched-tags
         -Wenum-conversion
 
-#        -Wcast-qual
+#        -Wcast-qual FIXME
         -Wmissing-declarations
         -Wsign-conversion
         -Wundef
@@ -81,7 +79,20 @@ if(CABLE_COMPILER_GNULIKE)
         -Wcovered-switch-default
         -Wextra-semi-stmt
         $<$<COMPILE_LANGUAGE:C>:-Wmissing-prototypes>
-    )
+        $<$<CXX_COMPILER_ID:Clang>:-Wduplicate-enum>
+        $<$<CXX_COMPILER_ID:Clang>:-Wnewline-eof>
+        $<$<CXX_COMPILER_ID:Clang>:-Wunreachable-code-aggressive>
+        $<$<CXX_COMPILER_ID:Clang>:-Wcovered-switch-default>
+        $<$<CXX_COMPILER_ID:Clang>:-Wextra-semi-stmt>
+
+        $<$<CXX_COMPILER_ID:GNU>:-Wduplicated-cond>
+
+        $<$<CXX_COMPILER_ID:Clang>:-Wfinal-dtor-non-final-class>
+        $<$<CXX_COMPILER_ID:GNU>:-Wlogical-op>
+        $<$<CXX_COMPILER_ID:Clang>:-Wnewline-eof>
+        $<$<CXX_COMPILER_ID:Clang>:-Wsuggest-destructor-override>
+        $<$<CXX_COMPILER_ID:Clang>:-Wunreachable-code-break>
+        )
 elseif(MSVC)
     add_compile_options(/wd4324)  # Disabled warning about alignment caused by alignas.
     add_compile_options(/wd5030)  # Allow using unknown attributes.
