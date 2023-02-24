@@ -65,6 +65,22 @@ if(CABLE_COMPILER_GNULIKE)
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wduplicate-enum>
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wnewline-eof>
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wunreachable-code-aggressive>
+
+        -Warray-bounds
+#        -Warray-bounds=2
+#        -Warith-conversion
+#        -Wredundant-tags
+        -Wmismatched-tags
+        -Wenum-conversion
+
+#        -Wcast-qual
+        -Wmissing-declarations
+        -Wsign-conversion
+        -Wundef
+        -Wunreachable-code
+        -Wcovered-switch-default
+        -Wextra-semi-stmt
+        $<$<COMPILE_LANGUAGE:C>:-Wmissing-prototypes>
     )
 elseif(MSVC)
     add_compile_options(/wd4324)  # Disabled warning about alignment caused by alignas.
@@ -90,6 +106,7 @@ endif()
             -Wno-unsafe-buffer-usage
             -Wno-deprecated-copy-with-dtor
             -Wno-switch-enum
+            -Wno-used-but-marked-unused
         )
     endif()
 
