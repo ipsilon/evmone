@@ -27,6 +27,7 @@ namespace
     gas = o.gas_left;
     if (o.status != EVMC_SUCCESS)
     {
+        state.gas_left = gas;
         state.status = o.status;
         return nullptr;
     }
@@ -53,7 +54,7 @@ namespace
     code_iterator /*code_it*/, int64_t& gas, ExecutionState& state) noexcept
 {
     const auto result = instr_fn(stack_top, gas, state);
-    gas = result.gas_left;
+    state.gas_left = result.gas_left;
     state.status = result.status;
     return nullptr;
 }
@@ -209,7 +210,7 @@ evmc_result execute(const VM& /*vm*/, int64_t gas, ExecutionState& state,
     const auto status = first_fn(stack_top, code_it, gas, state);
     state.status = status;
 
-    const auto gas_left = (status == EVMC_SUCCESS || status == EVMC_REVERT) ? gas : 0;
+    const auto gas_left = (status == EVMC_SUCCESS || status == EVMC_REVERT) ? state.gas_left : 0;
     const auto gas_refund = (status == EVMC_SUCCESS) ? state.gas_refund : 0;
 
     assert(state.output_size != 0 || state.output_offset == 0);
