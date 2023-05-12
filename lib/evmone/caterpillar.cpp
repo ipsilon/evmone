@@ -110,23 +110,23 @@ inline int64_t check_gas(int64_t gas_left, evmc_revision rev) noexcept
 
 template <Opcode Op>
 evmc_status_code invoke(
-    uint256* stack_top, code_iterator code_it, int64_t gas, ExecutionState& state) noexcept;
+    uint256* stack_top, code_iterator code_it, int64_t gas, void*, ExecutionState& state) noexcept;
 
 evmc_status_code cat_undefined(uint256* /*stack_top*/, code_iterator /*code_it*/, int64_t /*gas*/,
-    ExecutionState& /*state*/) noexcept
+    void*, ExecutionState& /*state*/) noexcept
 {
     return EVMC_UNDEFINED_INSTRUCTION;
 }
 
 using InstrFn = evmc_status_code (*)(
-    uint256* stack_top, code_iterator code_it, int64_t gas, ExecutionState& state) noexcept;
+    uint256* stack_top, code_iterator code_it, int64_t gas, void*, ExecutionState& state) noexcept;
 
 #define ON_OPCODE(OPCODE)                                                                      \
     extern "C" evmc_status_code evmone_##OPCODE(                                                                \
-        uint256* stack_top, code_iterator code_it, int64_t g, ExecutionState& state) noexcept \
+        uint256* stack_top, code_iterator code_it, int64_t g, void* tbl, ExecutionState& state) noexcept \
     {                                                                                          \
         /*TODO: The [[musttail]] is needed although invoke<> is [[always_inline]]*/ \
-        [[clang::musttail]] return invoke<OPCODE>(stack_top, code_it, g, state);             \
+        [[clang::musttail]] return invoke<OPCODE>(stack_top, code_it, g, tbl, state);             \
     }
 
 MAP_OPCODES
@@ -169,7 +169,7 @@ static_assert(instr_table[0][OP_PUSH2] == evmone_OP_PUSH2);
 /// A helper to invoke the instruction implementation of the given opcode Op.
 template <Opcode Op>
 evmc_status_code invoke(
-    uint256* stack_top, code_iterator code_it, int64_t gas, ExecutionState& state) noexcept
+    uint256* stack_top, code_iterator code_it, int64_t gas, void* tbl, ExecutionState& state) noexcept
 {
     [[maybe_unused]] auto op = Op;
 
@@ -185,8 +185,8 @@ evmc_status_code invoke(
         return state.status;
 
     stack_top += instr::traits[Op].stack_height_change;
-    const auto tbl = static_cast<const InstrFn*>(state.tbl);
-    [[clang::musttail]] return tbl[*code_it](stack_top, code_it, gas, state);
+    auto tbl2 = (InstrFn*)tbl;
+    [[clang::musttail]] return tbl2[*code_it](stack_top, code_it, gas, tbl, state);
 }
 
 }  // namespace
@@ -199,15 +199,12 @@ evmc_result execute(const VM& /*vm*/, int64_t gas, ExecutionState& state,
     const auto code = analysis.executable_code();
 
     const auto& tbl = instr_table[state.rev];
-    state.tbl = tbl.data();
-
-    state.tbl = instr_table[state.rev].data();
 
     const auto code_it = code.data();
-    const auto first_fn = instr_table[state.rev][*code_it];
+    const auto first_fn = tbl[*code_it];
     state.stack_bottom = state.stack_space.bottom();
     auto stack_top = state.stack_space.bottom();
-    const auto status = first_fn(stack_top, code_it, gas, state);
+    const auto status = first_fn(stack_top, code_it, gas, (void*)tbl.data(), state);
     state.status = status;
 
     const auto gas_left = (status == EVMC_SUCCESS || status == EVMC_REVERT) ? state.gas_left : 0;

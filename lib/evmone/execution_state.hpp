@@ -138,7 +138,6 @@ class ExecutionState
 {
 public:
     const uint256* stack_bottom = nullptr;
-    const void* tbl = nullptr;
     int64_t gas_left = 0;
     int64_t gas_refund = 0;
     Memory memory;
