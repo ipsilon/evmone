@@ -443,4 +443,46 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
     }
     return r;
 }
+
+// Computes uG + vQ using "Shamir's trick". https://eprint.iacr.org/2003/257.pdf (page 7)
+// Input arguments must be in Montgomery form and it returns result in Montgomery form.
+template <typename UIntT>
+inline ProjPoint<UIntT> shamir_multiply(const ModArith<UIntT>& m, const UIntT& u,
+    const Point<UIntT>& g, const UIntT& v, const Point<UIntT>& q, const UIntT& b3)
+{
+    ProjPoint<UIntT> r;
+    const ProjPoint<UIntT> h = add(m, {g.x, g.y, m.to_mont(1)}, q, b3);
+
+    const auto u_lz = clz(u);
+    const auto v_lz = clz(v);
+
+    auto lz = std::min(u_lz, v_lz);
+
+    if (lz == UIntT::num_bits)
+        return {};
+
+    if (u_lz < v_lz)
+        r = {g.x, g.y, m.to_mont(1)};
+    else if (u_lz > v_lz)
+        r = {q.x, q.y, m.to_mont(1)};
+    else
+        r = h;
+
+    auto mask = (UIntT{1} << (UIntT::num_bits - 1 - lz - 1));
+
+    while (mask != 0)
+    {
+        r = dbl(m, r, b3);
+        if (u & v & mask)
+            r = add(m, r, h, b3);
+        else if (u & mask)
+            r = add(m, r, g, b3);
+        else if (v & mask)
+            r = add(m, r, q, b3);
+
+        mask >>= 1;
+    }
+
+    return r;
+}
 }  // namespace evmmax::ecc
