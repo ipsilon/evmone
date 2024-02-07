@@ -109,24 +109,27 @@ inline int64_t check_gas(int64_t gas_left, evmc_revision rev) noexcept
 }
 
 template <Opcode Op>
-evmc_status_code invoke(
-    const uint256* stack_bottom, uint256* stack_top, code_iterator code_it, int64_t gas, void*, ExecutionState& state) noexcept;
+[[clang::preserve_none]] evmc_status_code invoke(const uint256* stack_bottom, uint256* stack_top,
+    code_iterator code_it, int64_t gas, void*, ExecutionState& state) noexcept;
 
-evmc_status_code cat_undefined(const uint256*, uint256* /*stack_top*/, code_iterator /*code_it*/, int64_t /*gas*/,
-    void*, ExecutionState& /*state*/) noexcept
+[[clang::preserve_none]] evmc_status_code cat_undefined(const uint256*, uint256* /*stack_top*/,
+    code_iterator /*code_it*/, int64_t /*gas*/, void*, ExecutionState& /*state*/) noexcept
 {
     return EVMC_UNDEFINED_INSTRUCTION;
 }
 
-using InstrFn = evmc_status_code (*)(
-    const uint256* stack_bottom, uint256* stack_top, code_iterator code_it, int64_t gas, void*, ExecutionState& state) noexcept;
+using InstrFn = evmc_status_code (*)(const uint256* stack_bottom, uint256* stack_top,
+    code_iterator code_it, int64_t gas, void*, ExecutionState& state) noexcept
+    [[clang::preserve_none]];
 
-#define ON_OPCODE(OPCODE)                                                                      \
-    extern "C" evmc_status_code evmone_##OPCODE(                                                                \
-        const uint256* stack_bottom, uint256* stack_top, code_iterator code_it, int64_t g, void* tbl, ExecutionState& state) noexcept \
-    {                                                                                          \
-        /*TODO: The [[musttail]] is needed although invoke<> is [[always_inline]]*/ \
-        [[clang::musttail]] return invoke<OPCODE>(stack_bottom, stack_top, code_it, g, tbl, state);             \
+#define ON_OPCODE(OPCODE)                                                                  \
+    extern "C" [[clang::preserve_none]] evmc_status_code evmone_##OPCODE(                  \
+        const uint256* stack_bottom, uint256* stack_top, code_iterator code_it, int64_t g, \
+        void* tbl, ExecutionState& state) noexcept                                         \
+    {                                                                                      \
+        /*TODO: The [[musttail]] is needed although invoke<> is [[always_inline]]*/        \
+        [[clang::musttail]] return invoke<OPCODE>(                                         \
+            stack_bottom, stack_top, code_it, g, tbl, state);                              \
     }
 
 MAP_OPCODES
@@ -168,14 +171,14 @@ static_assert(instr_table[0][OP_PUSH2] == evmone_OP_PUSH2);
 
 /// A helper to invoke the instruction implementation of the given opcode Op.
 template <Opcode Op>
-evmc_status_code invoke(
-    const uint256* stack_bottom, uint256* stack_top, code_iterator code_it, int64_t gas, void* tbl, ExecutionState& state) noexcept
+evmc_status_code invoke(const uint256* stack_bottom, uint256* stack_top, code_iterator code_it,
+    int64_t gas, void* tbl, ExecutionState& state) noexcept
 {
     [[maybe_unused]] auto op = Op;
 
     if (INTX_UNLIKELY(!check_stack<Op>(stack_top, stack_bottom)))
         return stack_top - stack_bottom < StackSpace::limit ? EVMC_STACK_UNDERFLOW :
-                                                                    EVMC_STACK_OVERFLOW;
+                                                              EVMC_STACK_OVERFLOW;
 
     if (gas = check_gas<Op>(gas, state.rev); INTX_UNLIKELY(gas < 0))
         return EVMC_OUT_OF_GAS;
