@@ -111,7 +111,12 @@ inline G check_gas(int64_t gas_left, evmc_revision rev) noexcept
     auto gas_cost = instr::gas_costs[*instr::traits[Op].since][Op];  // Init assuming const cost.
     if constexpr (!has_const_gas_cost_since_defined(Op))
         gas_cost = instr::gas_costs[rev][Op];  // If not, load the cost from the table.
-    return {gas_left - gas_cost, gas_left < gas_cost};
+
+    uint64_t g;
+    auto oog = __builtin_usubl_overflow(
+        static_cast<uint64_t>(gas_left), static_cast<uint64_t>(gas_cost), &g);
+
+    return {static_cast<int64_t>(g), oog};
 }
 
 template <Opcode Op>
