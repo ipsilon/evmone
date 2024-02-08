@@ -99,13 +99,19 @@ static_assert(has_const_gas_cost_since_defined(OP_SELFBALANCE));
 static_assert(!has_const_gas_cost_since_defined(OP_BALANCE));
 static_assert(!has_const_gas_cost_since_defined(OP_SLOAD));
 
+struct G
+{
+    int64_t gas;
+    bool oog;
+};
+
 template <Opcode Op>
-inline int64_t check_gas(int64_t gas_left, evmc_revision rev) noexcept
+inline G check_gas(int64_t gas_left, evmc_revision rev) noexcept
 {
     auto gas_cost = instr::gas_costs[*instr::traits[Op].since][Op];  // Init assuming const cost.
     if constexpr (!has_const_gas_cost_since_defined(Op))
         gas_cost = instr::gas_costs[rev][Op];  // If not, load the cost from the table.
-    return gas_left - gas_cost;
+    return {gas_left - gas_cost, gas_left < gas_cost};
 }
 
 template <Opcode Op>
@@ -179,8 +185,10 @@ evmc_status_code invoke(const uint256* stack_bottom, uint256* stack_top, code_it
     if (INTX_UNLIKELY(!check_stack<Op>(stack_top, stack_bottom)))
         return EVMC_STACK_OVERFLOW;
 
-    if (gas = check_gas<Op>(gas, state.rev); INTX_UNLIKELY(gas < 0))
+    if (auto g = check_gas<Op>(gas, state.rev); g.oog) [[unlikely]]
         return EVMC_OUT_OF_GAS;
+    else
+        gas = g.gas;
 
     code_it = invoke(instr::core::impl<Op>, stack_top, code_it, gas, state);
     if (!code_it)
