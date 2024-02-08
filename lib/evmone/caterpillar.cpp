@@ -177,8 +177,7 @@ evmc_status_code invoke(const uint256* stack_bottom, uint256* stack_top, code_it
     [[maybe_unused]] auto op = Op;
 
     if (INTX_UNLIKELY(!check_stack<Op>(stack_top, stack_bottom)))
-        return stack_top - stack_bottom < StackSpace::limit ? EVMC_STACK_UNDERFLOW :
-                                                              EVMC_STACK_OVERFLOW;
+        return EVMC_STACK_OVERFLOW;
 
     if (gas = check_gas<Op>(gas, state.rev); INTX_UNLIKELY(gas < 0))
         return EVMC_OUT_OF_GAS;
