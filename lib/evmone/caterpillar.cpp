@@ -61,18 +61,20 @@ namespace
 /// @}
 
 template <Opcode Op>
-inline bool check_stack(int stack_height) noexcept
+inline bool check_stack(const uint256* stack_top, const uint256* stack_bottom) noexcept
 {
     if constexpr (instr::traits[Op].stack_height_change > 0)
     {
         static_assert(instr::traits[Op].stack_height_change == 1,
             "unexpected instruction with multiple results");
-        if (INTX_UNLIKELY(stack_height == StackSpace::limit))
+        if (INTX_UNLIKELY(stack_top == stack_bottom + StackSpace::limit))
             return false;
     }
     if constexpr (instr::traits[Op].stack_height_required > 0)
     {
-        if (INTX_UNLIKELY(stack_height < instr::traits[Op].stack_height_required))
+        // Check stack underflow using pointer comparison <= (better optimization).
+        static constexpr auto min_offset = instr::traits[Op].stack_height_required - 1;
+        if (INTX_UNLIKELY(stack_top <= stack_bottom + min_offset))
             return false;
     }
     return true;
@@ -107,26 +109,27 @@ inline int64_t check_gas(int64_t gas_left, evmc_revision rev) noexcept
 }
 
 template <Opcode Op>
-[[clang::preserve_none]] evmc_status_code invoke(int stack_height, uint256* stack_top,
+[[clang::preserve_none]] evmc_status_code invoke(const uint256* stack_bottom, uint256* stack_top,
     code_iterator code_it, int64_t gas, void*, ExecutionState& state) noexcept;
 
-[[clang::preserve_none]] evmc_status_code cat_undefined(int, uint256* /*stack_top*/,
+[[clang::preserve_none]] evmc_status_code cat_undefined(const uint256*, uint256* /*stack_top*/,
     code_iterator /*code_it*/, int64_t /*gas*/, void*, ExecutionState& /*state*/) noexcept
 {
     return EVMC_UNDEFINED_INSTRUCTION;
 }
 
-using InstrFn = evmc_status_code (*)(int stack_height, uint256* stack_top, code_iterator code_it,
-    int64_t gas, void*, ExecutionState& state) noexcept [[clang::preserve_none]];
+using InstrFn = evmc_status_code (*)(const uint256* stack_bottom, uint256* stack_top,
+    code_iterator code_it, int64_t gas, void*, ExecutionState& state) noexcept
+    [[clang::preserve_none]];
 
 #define ON_OPCODE(OPCODE)                                                                  \
-    extern "C" [[clang::preserve_none]] evmc_status_code evmone_##OPCODE(int stack_height, \
-        uint256* stack_top, code_iterator code_it, int64_t g, void* tbl,                   \
-        ExecutionState& state) noexcept                                                    \
+    extern "C" [[clang::preserve_none]] evmc_status_code evmone_##OPCODE(                  \
+        const uint256* stack_bottom, uint256* stack_top, code_iterator code_it, int64_t g, \
+        void* tbl, ExecutionState& state) noexcept                                         \
     {                                                                                      \
         /*TODO: The [[musttail]] is needed although invoke<> is [[always_inline]]*/        \
         [[clang::musttail]] return invoke<OPCODE>(                                         \
-            stack_height, stack_top, code_it, g, tbl, state);                              \
+            stack_bottom, stack_top, code_it, g, tbl, state);                              \
     }
 
 MAP_OPCODES
@@ -168,13 +171,14 @@ static_assert(instr_table[0][OP_PUSH2] == evmone_OP_PUSH2);
 
 /// A helper to invoke the instruction implementation of the given opcode Op.
 template <Opcode Op>
-evmc_status_code invoke(int stack_height, uint256* stack_top, code_iterator code_it, int64_t gas,
-    void* tbl, ExecutionState& state) noexcept
+evmc_status_code invoke(const uint256* stack_bottom, uint256* stack_top, code_iterator code_it,
+    int64_t gas, void* tbl, ExecutionState& state) noexcept
 {
     [[maybe_unused]] auto op = Op;
 
-    if (INTX_UNLIKELY(!check_stack<Op>(stack_height)))
-        return stack_height != StackSpace::limit ? EVMC_STACK_UNDERFLOW : EVMC_STACK_OVERFLOW;
+    if (INTX_UNLIKELY(!check_stack<Op>(stack_top, stack_bottom)))
+        return stack_top - stack_bottom < StackSpace::limit ? EVMC_STACK_UNDERFLOW :
+                                                              EVMC_STACK_OVERFLOW;
 
     if (gas = check_gas<Op>(gas, state.rev); INTX_UNLIKELY(gas < 0))
         return EVMC_OUT_OF_GAS;
@@ -184,9 +188,8 @@ evmc_status_code invoke(int stack_height, uint256* stack_top, code_iterator code
         return state.status;
 
     stack_top += instr::traits[Op].stack_height_change;
-    stack_height += instr::traits[Op].stack_height_change;
     auto tbl2 = (InstrFn*)tbl;
-    [[clang::musttail]] return tbl2[*code_it](stack_height, stack_top, code_it, gas, tbl, state);
+    [[clang::musttail]] return tbl2[*code_it](stack_bottom, stack_top, code_it, gas, tbl, state);
 }
 
 }  // namespace
@@ -202,8 +205,9 @@ evmc_result execute(const VM& /*vm*/, int64_t gas, ExecutionState& state,
 
     const auto code_it = code.data();
     const auto first_fn = tbl[*code_it];
+    const auto stack_bottom = state.stack_space.bottom();
     auto stack_top = state.stack_space.bottom();
-    const auto status = first_fn(0, stack_top, code_it, gas, (void*)tbl.data(), state);
+    const auto status = first_fn(stack_bottom, stack_top, code_it, gas, (void*)tbl.data(), state);
     state.status = status;
 
     const auto gas_left = (status == EVMC_SUCCESS || status == EVMC_REVERT) ? state.gas_left : 0;
