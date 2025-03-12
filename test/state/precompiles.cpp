@@ -19,6 +19,10 @@
 #include <limits>
 #include <span>
 
+#ifdef EVMONE_PRECOMPILES_OPENSSL
+#include "precompiles_openssl.hpp"
+#endif
+
 #ifdef EVMONE_PRECOMPILES_SILKPRE
 #include "precompiles_silkpre.hpp"
 #endif
@@ -312,7 +316,9 @@ ExecutionResult expmod_execute(
         return {EVMC_SUCCESS, output_size};
     }
 
-#ifdef EVMONE_PRECOMPILES_SILKPRE
+#if defined(EVMONE_PRECOMPILES_OPENSSL)
+    return openssl_expmod_execute(input, input_size, output, output_size);
+#elif defined(EVMONE_PRECOMPILES_SILKPRE)
     return silkpre_expmod_execute(input, input_size, output, output_size);
 #else
     return expmod_stub(input, input_size, output, output_size);
