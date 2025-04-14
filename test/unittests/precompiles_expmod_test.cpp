@@ -449,3 +449,42 @@ TEST(expmod, incomplete_inputs)
         EXPECT_EQ(result_hex, expected_result_hex);
     }
 }
+
+TEST(expmod, huge_inputs_analysis)
+{
+    // Tests expmod_analyze for inputs with huge moduli that exceed the native modexp
+    // implementation's size limit. These are near the gas limit boundary:
+    // the max mod_len for a given exp magnitude that still fits within GAS_LIMIT.
+    //
+    // Must be pre-Osaka: EIP-7823 (Osaka) caps mod_len at 1024 bytes, so inputs with
+    // larger moduli would return GasCostMax instead of the expected gas below GAS_LIMIT.
+    static constexpr auto REV = EVMC_PRAGUE;
+    static constexpr auto GAS_LIMIT = 100'000'000;
+    struct TestCase
+    {
+        std::string_view input_hex;
+        size_t expected_output_size;
+    };
+    const std::vector<TestCase> inputs{
+        // mod_len=0xcc80 (52352), adj_exp=7 (exp=0xff): gas=99922517
+        {"0000000000000000000000000000000000000000000000000000000000000001"
+         "0000000000000000000000000000000000000000000000000000000000000001"
+         "000000000000000000000000000000000000000000000000000000000000cc80"
+         "01ffff",
+            0xcc80},
+        // mod_len=0x21d40 (138560), adj_exp=1 (exp=0x01): gas=99994133
+        {"0000000000000000000000000000000000000000000000000000000000000001"
+         "0000000000000000000000000000000000000000000000000000000000000001"
+         "0000000000000000000000000000000000000000000000000000000000021d40"
+         "ff01ff",
+            0x21d40},
+    };
+
+    for (const auto& [input_hex, expected_output_size] : inputs)
+    {
+        const auto input = evmc::from_spaced_hex(input_hex).value();
+        const auto [gas_cost, max_output_size] = evmone::state::expmod_analyze(input, REV);
+        EXPECT_LT(gas_cost, GAS_LIMIT);
+        EXPECT_EQ(max_output_size, expected_output_size);
+    }
+}
