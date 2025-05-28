@@ -66,6 +66,7 @@ static TestBlock load_test_block(
         tb.expected_block_header = from_json<BlockHeader>(*it);
         tb.block_info.number = tb.expected_block_header.block_number;
         tb.block_info.timestamp = tb.expected_block_header.timestamp;
+        tb.block_info.extra_data = tb.expected_block_header.extra_data;
         tb.block_info.hash = tb.expected_block_header.hash;
         tb.block_info.parent_hash = tb.expected_block_header.parent_hash;
 

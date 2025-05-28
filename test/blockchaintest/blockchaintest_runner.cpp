@@ -156,6 +156,9 @@ bool validate_block(evmc_revision rev, state::BlobParams blob_params, const Test
         static_cast<uint64_t>(parent_header->timestamp))
         return false;
 
+    if (test_block.block_info.extra_data.size() > 32)
+        return false;
+
     if (rev >= EVMC_LONDON)
     {
         const auto calculated_base_fee = state::calc_base_fee(
