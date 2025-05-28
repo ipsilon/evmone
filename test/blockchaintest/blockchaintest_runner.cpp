@@ -122,6 +122,9 @@ bool validate_block(evmc_revision rev, state::BlobParams blob_params, const Test
     if (parent_header == nullptr)
         return false;
 
+    if (test_block.block_info.number != parent_header->block_number + 1)
+        return false;
+
     if (test_block.block_info.gas_used > test_block.block_info.gas_limit)
         return false;
 
