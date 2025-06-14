@@ -8,10 +8,20 @@ namespace evmmax::bn254
 {
 namespace
 {
-constexpr ModArith Fp{FieldPrime};
 constexpr auto B = Fp.to_mont(3);
 constexpr auto B3 = Fp.to_mont(3 * 3);
 }  // namespace
+
+
+bool validate(const bn254::PT& pt) noexcept
+{
+    if (pt == PT{})
+        return true;
+
+    const auto yy = pt.y * pt.y;
+    const auto xxx = pt.x * pt.x * pt.x;
+    return yy == xxx + PT::FE{B};
+}
 
 bool validate(const Point& pt) noexcept
 {

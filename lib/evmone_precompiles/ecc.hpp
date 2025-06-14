@@ -8,6 +8,42 @@
 namespace evmmax::ecc
 {
 
+template<typename UintT, const ModArith<UintT>& M>
+struct FE
+{
+    UintT value_;
+
+    FE() = default;
+
+    constexpr explicit FE(UintT v) : value_(M.to_mont(v)) {}
+
+    constexpr UintT value() const noexcept { return M.from_mont(value_); }
+
+    constexpr bool operator==(const FE&) const = default;
+
+    friend constexpr auto operator* (const FE& a, const FE& b) noexcept
+    {
+        return FE{M.mul(a.value_, b.value_)};
+    }
+
+    friend constexpr auto operator+ (const FE& a, const FE& b) noexcept
+    {
+        return FE{M.add(a.value_, b.value_)};
+    }
+};
+
+
+template <typename UintT, const ModArith<UintT>& M>
+struct PT
+{
+    using FE = evmmax::ecc::FE<UintT, M>;
+
+    FE x;
+    FE y;
+
+    constexpr bool operator==(const PT&) const = default;
+};
+
 /// The affine (two coordinates) point on an Elliptic Curve over a prime field.
 template <typename ValueT>
 struct Point
@@ -126,6 +162,41 @@ Point<IntT> add(const ModArith<IntT>& m, const Point<IntT>& p, const Point<IntT>
     const auto xr = m.sub(m.sub(m.mul(slope, slope), x1), x2);
     const auto yr = m.sub(m.mul(m.sub(x1, xr), slope), y1);
     return {m.from_mont(xr), m.from_mont(yr)};
+}
+
+template <typename IntT, const ModArith<IntT>& M>
+PT<IntT, M> add(const PT<IntT, M>& p, const PT<IntT, M>& q) noexcept
+{
+    using PT = PT<IntT, M>;
+
+    if (p == PT{})
+        return q;
+    if (q == PT{})
+        return p;
+
+    const auto& [x1, y1] = p;
+    const auto& [x2, y2] = q;
+
+    // Use classic formula for point addition.
+    // https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication#Point_operations
+
+    auto dx = x2 - x1;
+    auto dy = y2 - y1;
+    if (dx == 0)
+    {
+        if (dy != 0)    // For opposite points
+            return {};  // return the point at infinity.
+
+        // For coincident points find the slope of the tangent line.
+        const auto xx = x1 * x1;
+        dy = xx + xx + xx;
+        dx = y1 + y1;
+    }
+    const auto slope = dy / dx;
+
+    const auto xr = slope * slope - x1 - x2;
+    const auto yr = slope * (x1 - xr) - y1;
+    return {xr, yr};
 }
 
 template <typename IntT, int A = 0>

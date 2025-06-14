@@ -16,6 +16,11 @@ using namespace intx;
 inline constexpr auto FieldPrime =
     0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
 
+constexpr ModArith Fp{FieldPrime};
+
+
+using PT = ecc::PT<uint256, Fp>;
+
 using Point = ecc::Point<uint256>;
 /// Note that real part of G2 value goes first and imaginary part is the second. i.e (a + b*i)
 /// The pairing check precompile EVM ABI presumes that imaginary part goes first.
@@ -26,10 +31,13 @@ using ExtPoint = ecc::Point<std::pair<uint256, uint256>>;
 /// Returns true if y^2 == x^3 + 3. Input is converted to the Montgomery form.
 bool validate(const Point& pt) noexcept;
 
+bool validate(const bn254::PT& pt) noexcept;
+
 /// Addition in bn254 curve group.
 ///
 /// Computes P ⊕ Q for two points in affine coordinates on the bn254 curve,
 Point add(const Point& p, const Point& q) noexcept;
+PT add(const PT& p, const PT& q) noexcept;
 
 /// Scalar multiplication in bn254 curve group.
 ///

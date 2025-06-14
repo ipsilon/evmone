@@ -433,16 +433,18 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
     if (input_size != 0)
         std::memcpy(input_buffer, input, std::min(input_size, std::size(input_buffer)));
 
-    const evmmax::bn254::Point p = {intx::be::unsafe::load<intx::uint256>(input_buffer),
-        intx::be::unsafe::load<intx::uint256>(input_buffer + 32)};
-    const evmmax::bn254::Point q = {intx::be::unsafe::load<intx::uint256>(input_buffer + 64),
-        intx::be::unsafe::load<intx::uint256>(input_buffer + 96)};
+    using namespace evmmax::bn254;
 
-    if (evmmax::bn254::validate(p) && evmmax::bn254::validate(q))
+    const PT p{PT::FE{intx::be::unsafe::load<intx::uint256>(input_buffer)},
+        PT::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 32)}};
+    const PT q{PT::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 64)},
+        PT::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 96)}};
+
+    if (evmmax::bn254::validate(p) && validate(q))
     {
         const auto res = evmmax::bn254::add(p, q);
-        intx::be::unsafe::store(output, res.x);
-        intx::be::unsafe::store(output + 32, res.y);
+        intx::be::unsafe::store(output, res.x.value());
+        intx::be::unsafe::store(output + 32, res.y.value());
         return {EVMC_SUCCESS, 64};
     }
     else
