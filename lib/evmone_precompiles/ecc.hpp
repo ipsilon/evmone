@@ -7,36 +7,64 @@
 
 namespace evmmax::ecc
 {
+template <int N>
+struct Constant : std::integral_constant<int, N>
+{
+    consteval explicit(false) Constant(int value) noexcept
+    {
+        if (N != value)
+            intx::unreachable();
+    }
+};
+using zero_t = Constant<0>;
+using one_t = Constant<1>;
 
-template<typename UintT, const ModArith<UintT>& M>
+template <typename Curve>
 struct FE
 {
-    UintT value_;
+    using uint_type = typename Curve::uint_type;
+    static constexpr auto& M = Curve::M;
+
+    uint_type value_;
 
     FE() = default;
 
-    constexpr explicit FE(UintT v) : value_(M.to_mont(v)) {}
+    constexpr explicit FE(uint_type v) : value_(Curve::M.to_mont(v)) {}
 
-    constexpr UintT value() const noexcept { return M.from_mont(value_); }
+    constexpr uint_type value() const noexcept { return Curve::M.from_mont(value_); }
 
-    constexpr bool operator==(const FE&) const = default;
+    constexpr explicit operator bool() const noexcept { return static_cast<bool>(value_); }
 
-    friend constexpr auto operator* (const FE& a, const FE& b) noexcept
+    friend constexpr bool operator==(const FE&, const FE&) = default;
+
+    friend constexpr bool operator==(const FE& a, zero_t) noexcept { return !a.value_; }
+
+    friend constexpr auto operator*(const FE& a, const FE& b) noexcept
     {
         return FE{M.mul(a.value_, b.value_)};
     }
 
-    friend constexpr auto operator+ (const FE& a, const FE& b) noexcept
+    friend constexpr auto operator+(const FE& a, const FE& b) noexcept
     {
         return FE{M.add(a.value_, b.value_)};
+    }
+
+    friend constexpr auto operator-(const FE& a, const FE& b) noexcept
+    {
+        return FE{M.sub(a.value_, b.value_)};
+    }
+
+    friend constexpr auto operator/(const FE& a, const FE& b) noexcept
+    {
+        return FE{M.mul(a.value_, M.inv(b.value_))};
     }
 };
 
 
-template <typename UintT, const ModArith<UintT>& M>
+template <typename Curve>
 struct PT
 {
-    using FE = evmmax::ecc::FE<UintT, M>;
+    using FE = evmmax::ecc::FE<Curve>;
 
     FE x;
     FE y;
@@ -164,10 +192,10 @@ Point<IntT> add(const ModArith<IntT>& m, const Point<IntT>& p, const Point<IntT>
     return {m.from_mont(xr), m.from_mont(yr)};
 }
 
-template <typename IntT, const ModArith<IntT>& M>
-PT<IntT, M> add(const PT<IntT, M>& p, const PT<IntT, M>& q) noexcept
+template <typename Curve>
+PT<Curve> add(const PT<Curve>& p, const PT<Curve>& q) noexcept
 {
-    using PT = PT<IntT, M>;
+    using PT = PT<Curve>;
 
     if (p == PT{})
         return q;

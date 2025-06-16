@@ -442,7 +442,7 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
 
     if (evmmax::bn254::validate(p) && validate(q))
     {
-        const auto res = evmmax::bn254::add(p, q);
+        const auto res = evmmax::ecc::add(p, q);
         intx::be::unsafe::store(output, res.x.value());
         intx::be::unsafe::store(output + 32, res.y.value());
         return {EVMC_SUCCESS, 64};

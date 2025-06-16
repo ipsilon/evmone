@@ -19,7 +19,12 @@ inline constexpr auto FieldPrime =
 constexpr ModArith Fp{FieldPrime};
 
 
-using PT = ecc::PT<uint256, Fp>;
+struct Curve {
+    using uint_type = uint256;
+    static constexpr ModArith M{FieldPrime};
+};
+
+using PT = ecc::PT<Curve>;
 
 using Point = ecc::Point<uint256>;
 /// Note that real part of G2 value goes first and imaginary part is the second. i.e (a + b*i)
@@ -37,7 +42,6 @@ bool validate(const bn254::PT& pt) noexcept;
 ///
 /// Computes P ⊕ Q for two points in affine coordinates on the bn254 curve,
 Point add(const Point& p, const Point& q) noexcept;
-PT add(const PT& p, const PT& q) noexcept;
 
 /// Scalar multiplication in bn254 curve group.
 ///
