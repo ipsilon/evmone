@@ -13,14 +13,14 @@ constexpr auto B3 = Fp.to_mont(3 * 3);
 }  // namespace
 
 
-bool validate(const bn254::PT& pt) noexcept
+bool validate(const bn254::AffinePoint& pt) noexcept
 {
     if (pt.is_neutral())
         return true;
 
     const auto yy = pt.y * pt.y;
     const auto xxx = pt.x * pt.x * pt.x;
-    return yy == xxx + PT::FE{B};
+    return yy == xxx + AffinePoint::FE{B};
 }
 
 bool validate(const Point& pt) noexcept

@@ -24,7 +24,7 @@ struct Curve {
     static constexpr ModArith M{FieldPrime};
 };
 
-using PT = ecc::PT<Curve>;
+using AffinePoint = ecc::AffinePoint<Curve>;
 
 using Point = ecc::Point<uint256>;
 /// Note that real part of G2 value goes first and imaginary part is the second. i.e (a + b*i)
@@ -36,7 +36,7 @@ using ExtPoint = ecc::Point<std::pair<uint256, uint256>>;
 /// Returns true if y^2 == x^3 + 3. Input is converted to the Montgomery form.
 bool validate(const Point& pt) noexcept;
 
-bool validate(const bn254::PT& pt) noexcept;
+bool validate(const AffinePoint& pt) noexcept;
 
 /// Addition in bn254 curve group.
 ///

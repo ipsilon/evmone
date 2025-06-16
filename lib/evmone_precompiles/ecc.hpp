@@ -62,16 +62,16 @@ struct FE
 
 
 template <typename Curve>
-struct PT
+struct AffinePoint
 {
-    using FE = evmmax::ecc::FE<Curve>;
+    using FE = FE<Curve>;
 
     FE x;
     FE y;
 
-    constexpr bool operator==(const PT&) const = default;
+    friend constexpr bool operator==(const AffinePoint&, const AffinePoint&) = default;
 
-    constexpr bool is_neutral() const noexcept { return *this == PT{}; }
+    constexpr bool is_neutral() const noexcept { return *this == AffinePoint{}; }
 };
 
 /// The affine (two coordinates) point on an Elliptic Curve over a prime field.
@@ -195,9 +195,9 @@ Point<IntT> add(const ModArith<IntT>& m, const Point<IntT>& p, const Point<IntT>
 }
 
 template <typename Curve>
-PT<Curve> add(const PT<Curve>& p, const PT<Curve>& q) noexcept
+AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
-    using PT = PT<Curve>;
+    using PT = AffinePoint<Curve>;
 
     if (p == PT{})
         return q;

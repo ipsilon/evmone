@@ -435,10 +435,10 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
 
     using namespace evmmax::bn254;
 
-    const PT p{PT::FE{intx::be::unsafe::load<intx::uint256>(input_buffer)},
-        PT::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 32)}};
-    const PT q{PT::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 64)},
-        PT::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 96)}};
+    const AffinePoint p{AffinePoint::FE{intx::be::unsafe::load<intx::uint256>(input_buffer)},
+        AffinePoint::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 32)}};
+    const AffinePoint q{AffinePoint::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 64)},
+        AffinePoint::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 96)}};
 
     if (evmmax::bn254::validate(p) && validate(q))
     {
