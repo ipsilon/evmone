@@ -15,7 +15,7 @@ constexpr auto B3 = Fp.to_mont(3 * 3);
 
 bool validate(const bn254::PT& pt) noexcept
 {
-    if (pt == PT{})
+    if (pt.is_neutral())
         return true;
 
     const auto yy = pt.y * pt.y;

@@ -70,6 +70,8 @@ struct PT
     FE y;
 
     constexpr bool operator==(const PT&) const = default;
+
+    constexpr bool is_neutral() const noexcept { return *this == PT{}; }
 };
 
 /// The affine (two coordinates) point on an Elliptic Curve over a prime field.
