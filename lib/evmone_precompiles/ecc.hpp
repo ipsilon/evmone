@@ -73,19 +73,19 @@ struct FE
 template <typename Curve>
 struct AffinePoint
 {
-    using FE = FE<Curve>;
+    using E = FE<Curve>;
 
-    FE x;
-    FE y;
+    E x;
+    E y;
 
     friend constexpr bool operator==(const AffinePoint&, const AffinePoint&) = default;
 
     constexpr bool is_neutral() const noexcept { return *this == AffinePoint{}; }
 
-    static constexpr AffinePoint from_bytes(std::span<uint8_t, sizeof(FE) * 2> b)
+    static constexpr AffinePoint from_bytes(std::span<uint8_t, sizeof(E) * 2> b)
     {
-        const auto x = FE::from_bytes(b.template subspan<0, sizeof(FE)>());
-        const auto y = FE::from_bytes(b.template subspan<sizeof(FE), sizeof(FE)>());
+        const auto x = E::from_bytes(b.template subspan<0, sizeof(E)>());
+        const auto y = E::from_bytes(b.template subspan<sizeof(E), sizeof(E)>());
         return AffinePoint{x, y};
     }
 };
