@@ -5,6 +5,8 @@
 
 #include <evmmax/evmmax.hpp>
 
+#include <span>
+
 namespace evmmax::ecc
 {
 template <int N>
@@ -32,6 +34,13 @@ struct FE
     constexpr explicit FE(uint_type v) : value_(Curve::M.to_mont(v)) {}
 
     constexpr uint_type value() const noexcept { return Curve::M.from_mont(value_); }
+
+    static constexpr FE from_bytes(std::span<uint8_t, sizeof(uint_type)> b) noexcept
+    {
+        // TODO: Add intx::load from std::span.
+        return FE{intx::be::unsafe::load<uint_type>(b.data())};
+    }
+
 
     constexpr explicit operator bool() const noexcept { return static_cast<bool>(value_); }
 
@@ -72,6 +81,13 @@ struct AffinePoint
     friend constexpr bool operator==(const AffinePoint&, const AffinePoint&) = default;
 
     constexpr bool is_neutral() const noexcept { return *this == AffinePoint{}; }
+
+    static constexpr AffinePoint from_bytes(std::span<uint8_t, sizeof(FE) * 2> b)
+    {
+        const auto x = FE::from_bytes(b.template subspan<0, sizeof(FE)>());
+        const auto y = FE::from_bytes(b.template subspan<sizeof(FE), sizeof(FE)>());
+        return AffinePoint{x, y};
+    }
 };
 
 /// The affine (two coordinates) point on an Elliptic Curve over a prime field.

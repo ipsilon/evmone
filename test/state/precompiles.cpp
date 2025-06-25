@@ -433,14 +433,14 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
     if (input_size != 0)
         std::memcpy(input_buffer, input, std::min(input_size, std::size(input_buffer)));
 
+    const auto input_span = std::span{input_buffer};
+
     using namespace evmmax::bn254;
 
-    const AffinePoint p{AffinePoint::FE{intx::be::unsafe::load<intx::uint256>(input_buffer)},
-        AffinePoint::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 32)}};
-    const AffinePoint q{AffinePoint::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 64)},
-        AffinePoint::FE{intx::be::unsafe::load<intx::uint256>(input_buffer + 96)}};
+    const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
+    const auto q = AffinePoint::from_bytes(input_span.subspan<64, 64>());
 
-    if (evmmax::bn254::validate(p) && validate(q))
+    if (validate(p) && validate(q))
     {
         const auto res = evmmax::ecc::add(p, q);
         intx::be::unsafe::store(output, res.x.value());
