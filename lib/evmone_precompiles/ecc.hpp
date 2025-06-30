@@ -50,22 +50,30 @@ struct FE
 
     friend constexpr auto operator*(const FE& a, const FE& b) noexcept
     {
-        return FE{M.mul(a.value_, b.value_)};
+        return wrap(M.mul(a.value_, b.value_));
     }
 
     friend constexpr auto operator+(const FE& a, const FE& b) noexcept
     {
-        return FE{M.add(a.value_, b.value_)};
+        return wrap(M.add(a.value_, b.value_));
     }
 
     friend constexpr auto operator-(const FE& a, const FE& b) noexcept
     {
-        return FE{M.sub(a.value_, b.value_)};
+        return wrap(M.sub(a.value_, b.value_));
     }
 
     friend constexpr auto operator/(const FE& a, const FE& b) noexcept
     {
-        return FE{M.mul(a.value_, M.inv(b.value_))};
+        return wrap(M.mul(a.value_, M.inv(b.value_)));
+    }
+
+private:
+    [[gnu::always_inline]] static constexpr FE wrap(const uint_type& v) noexcept
+    {
+        FE element;
+        element.value_ = v;
+        return element;
     }
 };
 
