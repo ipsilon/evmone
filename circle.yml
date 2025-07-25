@@ -439,13 +439,13 @@ jobs:
           working_directory: ~/build
           command: >
             bin/evmone-statetest ~/spec-tests/fixtures/state_tests/
-            --gtest_filter='-frontier/precompiles/precompiles.precompiles:osaka/eip7951_p256verify_precompiles/*.*:prague/eip7702_set_code_tx/set_code_txs.set_code_to_precompile'
+            --gtest_filter='-osaka/eip7951_p256verify_precompiles/*.*'
       - run:
           name: "Fusaka pre-release execution spec tests (blockchain_tests)"
           working_directory: ~/build
           command: >
             bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests/
-            --gtest_filter='-frontier/precompiles/precompiles.precompiles:osaka/eip7934_block_rlp_limit/max_block_rlp_size.block_at_rlp_size_limit_boundary:osaka/eip7951_p256verify_precompiles/*.*:prague/eip7702_set_code_tx/set_code_txs.set_code_to_precompile'
+            --gtest_filter='-osaka/eip7934_block_rlp_limit/max_block_rlp_size.block_at_rlp_size_limit_boundary:osaka/eip7951_p256verify_precompiles/*.*'
       - collect_coverage_clang
       - upload_coverage:
           flags: eest-fusaka

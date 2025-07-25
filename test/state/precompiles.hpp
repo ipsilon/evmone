@@ -27,6 +27,7 @@ enum class PrecompileId : uint8_t
     bls12_pairing_check,
     bls12_map_fp_to_g1,
     bls12_map_fp2_to_g2,
+    p256verify,
 };
 
 /// Checks if the address @p addr is considered a precompiled contract in the revision @p rev.

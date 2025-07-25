@@ -43,6 +43,9 @@ TEST(state_precompiles, is_precompile)
         EXPECT_EQ(is_precompile(rev, 0x10_address), rev >= EVMC_PRAGUE);
         EXPECT_EQ(is_precompile(rev, 0x11_address), rev >= EVMC_PRAGUE);
 
+        // Osaka:
+        EXPECT_EQ(is_precompile(rev, 0x0100_address), rev >= EVMC_OSAKA);
+
         // Future?
         EXPECT_FALSE(is_precompile(rev, 0x12_address));
         EXPECT_FALSE(is_precompile(rev, 0x13_address));

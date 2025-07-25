@@ -285,6 +285,11 @@ PrecompileAnalysis bls12_map_fp2_to_g2_analyze(bytes_view, evmc_revision) noexce
     return {BLS12_MAP_FP2_TO_G2_PRECOMPILE_GAS, BLS12_G2_POINT_SIZE};
 }
 
+static PrecompileAnalysis p256verify_analyze(bytes_view, evmc_revision) noexcept
+{
+    return {6900, 32};
+}
+
 ExecutionResult ecrecover_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
 {
@@ -676,9 +681,17 @@ ExecutionResult bls12_map_fp2_to_g2_execute(const uint8_t* input, size_t input_s
     return {EVMC_SUCCESS, BLS12_G2_POINT_SIZE};
 }
 
+static ExecutionResult p256verify_execute(
+    const uint8_t*, size_t, uint8_t*, [[maybe_unused]] size_t output_size) noexcept
+{
+    assert(output_size >= 32);
+    // Not implemented. Assume input or signature is invalid.
+    return {EVMC_SUCCESS, 0};
+}
+
 namespace
 {
-using PrecompileLookupIndex = uint8_t;
+using PrecompileLookupIndex = uint16_t;
 
 struct PrecompileTraits
 {
@@ -688,24 +701,25 @@ struct PrecompileTraits
     decltype(identity_execute)* execute = nullptr;
 };
 
-inline constexpr std::array<PrecompileTraits, 17> traits{{
-    {0x01, EVMC_FRONTIER, ecrecover_analyze, ecrecover_execute},
-    {0x02, EVMC_FRONTIER, sha256_analyze, sha256_execute},
-    {0x03, EVMC_FRONTIER, ripemd160_analyze, ripemd160_execute},
-    {0x04, EVMC_FRONTIER, identity_analyze, identity_execute},
-    {0x05, EVMC_BYZANTIUM, expmod_analyze, expmod_execute},
-    {0x06, EVMC_BYZANTIUM, ecadd_analyze, ecadd_execute},
-    {0x07, EVMC_BYZANTIUM, ecmul_analyze, ecmul_execute},
-    {0x08, EVMC_BYZANTIUM, ecpairing_analyze, ecpairing_execute},
-    {0x09, EVMC_ISTANBUL, blake2bf_analyze, blake2bf_execute},
-    {0x0a, EVMC_CANCUN, point_evaluation_analyze, point_evaluation_execute},
-    {0x0b, EVMC_PRAGUE, bls12_g1add_analyze, bls12_g1add_execute},
-    {0x0c, EVMC_PRAGUE, bls12_g1msm_analyze, bls12_g1msm_execute},
-    {0x0d, EVMC_PRAGUE, bls12_g2add_analyze, bls12_g2add_execute},
-    {0x0e, EVMC_PRAGUE, bls12_g2msm_analyze, bls12_g2msm_execute},
-    {0x0f, EVMC_PRAGUE, bls12_pairing_check_analyze, bls12_pairing_check_execute},
-    {0x10, EVMC_PRAGUE, bls12_map_fp_to_g1_analyze, bls12_map_fp_to_g1_execute},
-    {0x11, EVMC_PRAGUE, bls12_map_fp2_to_g2_analyze, bls12_map_fp2_to_g2_execute},
+inline constexpr std::array<PrecompileTraits, 18> traits{{
+    {0x0001, EVMC_FRONTIER, ecrecover_analyze, ecrecover_execute},
+    {0x0002, EVMC_FRONTIER, sha256_analyze, sha256_execute},
+    {0x0003, EVMC_FRONTIER, ripemd160_analyze, ripemd160_execute},
+    {0x0004, EVMC_FRONTIER, identity_analyze, identity_execute},
+    {0x0005, EVMC_BYZANTIUM, expmod_analyze, expmod_execute},
+    {0x0006, EVMC_BYZANTIUM, ecadd_analyze, ecadd_execute},
+    {0x0007, EVMC_BYZANTIUM, ecmul_analyze, ecmul_execute},
+    {0x0008, EVMC_BYZANTIUM, ecpairing_analyze, ecpairing_execute},
+    {0x0009, EVMC_ISTANBUL, blake2bf_analyze, blake2bf_execute},
+    {0x000a, EVMC_CANCUN, point_evaluation_analyze, point_evaluation_execute},
+    {0x000b, EVMC_PRAGUE, bls12_g1add_analyze, bls12_g1add_execute},
+    {0x000c, EVMC_PRAGUE, bls12_g1msm_analyze, bls12_g1msm_execute},
+    {0x000d, EVMC_PRAGUE, bls12_g2add_analyze, bls12_g2add_execute},
+    {0x000e, EVMC_PRAGUE, bls12_g2msm_analyze, bls12_g2msm_execute},
+    {0x000f, EVMC_PRAGUE, bls12_pairing_check_analyze, bls12_pairing_check_execute},
+    {0x0010, EVMC_PRAGUE, bls12_map_fp_to_g1_analyze, bls12_map_fp_to_g1_execute},
+    {0x0011, EVMC_PRAGUE, bls12_map_fp2_to_g2_analyze, bls12_map_fp2_to_g2_execute},
+    {0x0100, EVMC_OSAKA, p256verify_analyze, p256verify_execute},
 }};
 
 constexpr auto LOOKUP_TABLE_SIZE = [] {
@@ -718,7 +732,8 @@ constexpr auto LOOKUP_TABLE_SIZE = [] {
 PrecompileLookupIndex to_lookup_index(const evmc::address& addr) noexcept
 {
     static constexpr auto ADDRESS_SIZE = sizeof(addr.bytes);
-    return addr.bytes[ADDRESS_SIZE - 1];
+    return static_cast<PrecompileLookupIndex>(
+        (addr.bytes[ADDRESS_SIZE - 2] << 8) | addr.bytes[ADDRESS_SIZE - 1]);
 }
 }  // namespace
 
