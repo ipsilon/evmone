@@ -11,9 +11,8 @@ namespace
 constexpr auto B = Curve::Fp.to_mont(7);
 constexpr auto B3 = Curve::Fp.to_mont(7 * 3);
 
-constexpr AffinePoint G{
-    AffinePoint::E{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256},
-    AffinePoint::E{0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256}};
+constexpr AffinePoint G{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256,
+    0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256};
 }  // namespace
 
 // FIXME: Change to "uncompress_point".
@@ -100,7 +99,7 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
     const auto y = Fp.from_mont(*y_mont);
 
     // 6. Calculate public key point Q.
-    const auto R = AffinePoint{AffinePoint::E{r}, AffinePoint::E{y}};
+    const auto R = AffinePoint{AffinePoint::FE{r}, AffinePoint::FE{y}};
     const auto T1 = ecc::mul(Fp, G.to_old(), u1, B3);
     const auto T2 = ecc::mul(Fp, R.to_old(), u2, B3);
     const auto pQ = ecc::add(Fp, T1, T2, B3);

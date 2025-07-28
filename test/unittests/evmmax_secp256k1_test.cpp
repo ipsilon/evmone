@@ -181,9 +181,8 @@ TEST(evmmax, secp256k1_hash_to_number)
 
 TEST(evmmax, secp256k1_pt_add_inf)
 {
-    const AffinePoint p1{
-        AffinePoint::E{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256},
-        AffinePoint::E{0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256}};
+    const AffinePoint p1{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256,
+        0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256};
     const AffinePoint inf;
     ASSERT_TRUE(inf == 0);
 
@@ -194,53 +193,41 @@ TEST(evmmax, secp256k1_pt_add_inf)
 
 TEST(evmmax, secp256k1_pt_add)
 {
-    const AffinePoint p1{
-        AffinePoint::E{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256},
-        AffinePoint::E{0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256}};
-    const AffinePoint p2{
-        AffinePoint::E{0xf929e07c83d65da3569113ae03998d13359ba982216285a686f4d66e721a0beb_u256},
-        AffinePoint::E{0xb6d73966107b10526e2e140c17f343ee0a373351f2b1408923151b027f55b82_u256}};
-    const AffinePoint p3{
-        AffinePoint::E{0xf929e07c83d65da3569113ae03998d13359ba982216285a686f4d66e721a0beb_u256},
-        AffinePoint::E{0xf4928c699ef84efad91d1ebf3e80cbc11f5c8ccae0d4ebf76dceae4ed80aa0ad_u256}};
-    const AffinePoint p4{AffinePoint::E{0x1_u256},
-        AffinePoint::E{0xbde70df51939b94c9c24979fa7dd04ebd9b3572da7802290438af2a681895441_u256}};
+    const AffinePoint p1{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256,
+        0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256};
+    const AffinePoint p2{0xf929e07c83d65da3569113ae03998d13359ba982216285a686f4d66e721a0beb_u256,
+        0xb6d73966107b10526e2e140c17f343ee0a373351f2b1408923151b027f55b82_u256};
+    const AffinePoint p3{0xf929e07c83d65da3569113ae03998d13359ba982216285a686f4d66e721a0beb_u256,
+        0xf4928c699ef84efad91d1ebf3e80cbc11f5c8ccae0d4ebf76dceae4ed80aa0ad_u256};
+    const AffinePoint p4{
+        0x1_u256, 0xbde70df51939b94c9c24979fa7dd04ebd9b3572da7802290438af2a681895441_u256};
 
     {
-        const AffinePoint e{
-            AffinePoint::E{0x40468d7704db3d11961ab9c222e35919d7e5d1baef59e0f46255d66bec3bd1d3_u256},
-            AffinePoint::E{0x6fff88d9f575236b6cc5c74e7d074832a460c2792fba888aea7b9986429dd7f7_u256},
-        };
+        const AffinePoint e{0x40468d7704db3d11961ab9c222e35919d7e5d1baef59e0f46255d66bec3bd1d3_u256,
+            0x6fff88d9f575236b6cc5c74e7d074832a460c2792fba888aea7b9986429dd7f7_u256};
         EXPECT_EQ(add(p1, p2), e);
     }
     {
-        const AffinePoint e{
-            AffinePoint::E{0xd8e7b42b8c82e185bf0669ce0754697a6eb46c156497d5d1971bd6a23f38ed9e_u256},
-            AffinePoint::E{0x628c3107fc73c92e7b8c534e239257fb2de95bd6b965dc1021f636da086a7e99_u256},
-        };
+        const AffinePoint e{0xd8e7b42b8c82e185bf0669ce0754697a6eb46c156497d5d1971bd6a23f38ed9e_u256,
+            0x628c3107fc73c92e7b8c534e239257fb2de95bd6b965dc1021f636da086a7e99_u256};
         EXPECT_EQ(add(p1, p1), e);
     }
     {
-        const AffinePoint e{
-            AffinePoint::E{0xdf592d726f42759020da10d3106db3880e514c783d6970d2a9085fb16879b37f_u256},
-            AffinePoint::E{0x10aa0ef9fe224e3797792b4b286b9f63542d4c11fe26d449a845b9db0f5993f9_u256},
-        };
+        const AffinePoint e{0xdf592d726f42759020da10d3106db3880e514c783d6970d2a9085fb16879b37f_u256,
+            0x10aa0ef9fe224e3797792b4b286b9f63542d4c11fe26d449a845b9db0f5993f9_u256};
         EXPECT_EQ(add(p1, p3), e);
     }
     {
-        const AffinePoint e{
-            AffinePoint::E{0x12a5fd099bcd30e7290e58d63f8d5008287239500e6d0108020040497c5cb9c9_u256},
-            AffinePoint::E{0x7f6bd83b5ac46e3b59e24af3bc9bfbb213ed13e21d754e4950ae635961742574_u256},
-        };
+        const AffinePoint e{0x12a5fd099bcd30e7290e58d63f8d5008287239500e6d0108020040497c5cb9c9_u256,
+            0x7f6bd83b5ac46e3b59e24af3bc9bfbb213ed13e21d754e4950ae635961742574_u256};
         EXPECT_EQ(add(p1, p4), e);
     }
 }
 
 TEST(evmmax, secp256k1_pt_mul_inf)
 {
-    const AffinePoint p1{
-        AffinePoint::E{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256},
-        AffinePoint::E{0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256}};
+    const AffinePoint p1{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256,
+        0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256};
     const AffinePoint inf;
 
     EXPECT_EQ(mul(p1, 0), inf);
@@ -253,40 +240,31 @@ TEST(evmmax, secp256k1_pt_mul_inf)
 
 TEST(evmmax, secp256k1_pt_mul)
 {
-    const AffinePoint p1{
-        AffinePoint::E{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256},
-        AffinePoint::E{0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256}};
+    const AffinePoint p1{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256,
+        0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256};
 
     {
         const auto d{100000000000000000000_u256};
-        const AffinePoint e{
-            AffinePoint::E{0x4c34e6dc48badd579d1ce4702fd490fb98fa0e666417bfc2d4ff8e957d99c565_u256},
-            AffinePoint::E{0xb53da5be179d80c7f07226ba79b6bce643d89496b37d6bc2d111b009e37cc28b_u256},
-        };
+        const AffinePoint e{0x4c34e6dc48badd579d1ce4702fd490fb98fa0e666417bfc2d4ff8e957d99c565_u256,
+            0xb53da5be179d80c7f07226ba79b6bce643d89496b37d6bc2d111b009e37cc28b_u256};
         auto r = mul(p1, d);
         EXPECT_EQ(r, e);
     }
 
     {
         const auto d{100000000000000000000000000000000_u256};
-        const AffinePoint e{
-            AffinePoint::E{0xf86902594c8a4e4fc5f6dfb27886784271302c6bab3dc4350a0fe7c5b056af66_u256},
-            AffinePoint::E{0xb5748aa8f9122bfdcbf5846f6f8ec76f41626642a3f2ea0f483c92bf915847ad_u256},
-        };
+        const AffinePoint e{0xf86902594c8a4e4fc5f6dfb27886784271302c6bab3dc4350a0fe7c5b056af66_u256,
+            0xb5748aa8f9122bfdcbf5846f6f8ec76f41626642a3f2ea0f483c92bf915847ad_u256};
         auto r = mul(p1, d);
         EXPECT_EQ(r, e);
     }
 
     {
         const auto u1 = 0xd17a4c1f283fa5d67656ea81367b520eaa689207e5665620d4f51c7cf85fa220_u256;
-        const AffinePoint G{
-            AffinePoint::E{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256},
-            AffinePoint::E{0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256},
-        };
-        const AffinePoint e{
-            AffinePoint::E{0x39cb41b2567f68137aae52e99dbe91cd38d9faa3ba6be536a04355b63a7964fe_u256},
-            AffinePoint::E{0xf31e6abd08cbd8e4896c9e0304b25000edcd52a9f6d2bac7cfbdad2c835c9a35_u256},
-        };
+        const AffinePoint G{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256,
+            0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256};
+        const AffinePoint e{0x39cb41b2567f68137aae52e99dbe91cd38d9faa3ba6be536a04355b63a7964fe_u256,
+            0xf31e6abd08cbd8e4896c9e0304b25000edcd52a9f6d2bac7cfbdad2c835c9a35_u256};
         auto r = mul(G, u1);
         EXPECT_EQ(r, e);
     }
@@ -309,8 +287,8 @@ static const TestCaseECR test_cases_ecr[] = {
         0x3134a4ba8fafe11b351a720538398a5635e235c0b3258dce19942000731079ec_u256,
         false,
         {
-            AffinePoint::E{0x43ec87f8ee6f58605d947dac51b5e4cfe26705f509e5dad058212aadda180835_u256},
-            AffinePoint::E{0x90ebad786ce091f5af1719bf30ee236a4e6ce8a7ab6c36a16c93c6177aa109df_u256},
+            0x43ec87f8ee6f58605d947dac51b5e4cfe26705f509e5dad058212aadda180835_u256,
+            0x90ebad786ce091f5af1719bf30ee236a4e6ce8a7ab6c36a16c93c6177aa109df_u256,
         },
     },
 };

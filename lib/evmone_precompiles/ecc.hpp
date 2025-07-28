@@ -35,7 +35,7 @@ struct FieldElement
 
     FieldElement() = default;
 
-    constexpr explicit FieldElement(uint_type v) : value_(Fp.to_mont(v)) {}
+    constexpr explicit FieldElement(uint_type v) : value_{Fp.to_mont(v)} {}
 
     constexpr uint_type value() const noexcept { return Fp.from_mont(value_); }
 
@@ -112,10 +112,19 @@ struct Point
 template <typename Curve>
 struct AffinePoint
 {
-    using E = FieldElement<Curve>;
+    using FE = FieldElement<Curve>;
 
-    E x;
-    E y;
+    FE x;
+    FE y;
+
+    AffinePoint() = default;
+    constexpr AffinePoint(const FE& x_, const FE& y_) noexcept : x{x_}, y{y_} {}
+
+    /// Create the point from literal values.
+    consteval AffinePoint(
+        const typename Curve::uint_type& x_value, const typename Curve::uint_type& y_value) noexcept
+      : x{x_value}, y{y_value}
+    {}
 
     friend constexpr bool operator==(const AffinePoint&, const AffinePoint&) = default;
 
@@ -124,17 +133,17 @@ struct AffinePoint
         return p == AffinePoint{};
     }
 
-    static constexpr AffinePoint from_bytes(std::span<const uint8_t, sizeof(E) * 2> b) noexcept
+    static constexpr AffinePoint from_bytes(std::span<const uint8_t, sizeof(FE) * 2> b) noexcept
     {
-        const auto x = E::from_bytes(b.template subspan<0, sizeof(E)>());
-        const auto y = E::from_bytes(b.template subspan<sizeof(E), sizeof(E)>());
-        return AffinePoint{x, y};
+        const auto x = FE::from_bytes(b.template subspan<0, sizeof(FE)>());
+        const auto y = FE::from_bytes(b.template subspan<sizeof(FE), sizeof(FE)>());
+        return {x, y};
     }
 
-    constexpr void to_bytes(std::span<uint8_t, sizeof(E) * 2> b) const noexcept
+    constexpr void to_bytes(std::span<uint8_t, sizeof(FE) * 2> b) const noexcept
     {
-        x.to_bytes(b.template subspan<0, sizeof(E)>());
-        y.to_bytes(b.template subspan<sizeof(E), sizeof(E)>());
+        x.to_bytes(b.template subspan<0, sizeof(FE)>());
+        y.to_bytes(b.template subspan<sizeof(FE), sizeof(FE)>());
     }
 
     Point<typename Curve::uint_type> to_old() const noexcept { return {x.value_, y.value_}; }
