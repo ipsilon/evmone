@@ -8,12 +8,12 @@ namespace evmmax::secp256k1
 {
 namespace
 {
-constexpr ModArith Fp{FieldPrime};
-constexpr auto B = Fp.to_mont(7);
-constexpr auto B3 = Fp.to_mont(7 * 3);
+constexpr auto B = Curve::Fp.to_mont(7);
+constexpr auto B3 = Curve::Fp.to_mont(7 * 3);
 
-constexpr Point G{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256,
-    0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256};
+constexpr AffinePoint G{
+    AffinePoint::E{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256},
+    AffinePoint::E{0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256}};
 }  // namespace
 
 // FIXME: Change to "uncompress_point".
@@ -31,40 +31,23 @@ std::optional<uint256> calculate_y(
     return (candidate_parity == y_parity) ? *y : m.sub(0, *y);
 }
 
-Point add(const Point& p, const Point& q) noexcept
+AffinePoint mul(const AffinePoint& p, const uint256& c) noexcept
 {
-    if (p.is_inf())
-        return q;
-    if (q.is_inf())
-        return p;
-
-    const auto pp = ecc::to_proj(Fp, p);
-    const auto pq = ecc::to_proj(Fp, q);
-
-    // b3 == 21 for y^2 == x^3 + 7
-    const auto r = ecc::add(Fp, pp, pq, B3);
-    return ecc::to_affine(Fp, r);
-}
-
-Point mul(const Point& p, const uint256& c) noexcept
-{
-    if (p.is_inf())
+    if (p == 0)
         return p;
 
     if (c == 0)
-        return {0, 0};
+        return {};
 
-    const Point p_mont{Fp.to_mont(p.x), Fp.to_mont(p.y)};
-    const auto r = ecc::mul(Fp, p_mont, c, B3);
-    return ecc::to_affine(Fp, r);
+    const auto r = ecc::mul(Curve::Fp, p.to_old(), c, B3);
+    return ecc::to_affine<Curve>(r);
 }
 
-evmc::address to_address(const Point& pt) noexcept
+evmc::address to_address(const AffinePoint& pt) noexcept
 {
     // This performs Ethereum's address hashing on an uncompressed pubkey.
     uint8_t serialized[64];
-    intx::be::unsafe::store(serialized, pt.x);
-    intx::be::unsafe::store(serialized + 32, pt.y);
+    pt.to_bytes(serialized);
 
     const auto hashed = ethash::keccak256(serialized, sizeof(serialized));
     evmc::address ret{};
@@ -73,27 +56,27 @@ evmc::address to_address(const Point& pt) noexcept
     return ret;
 }
 
-std::optional<Point> secp256k1_ecdsa_recover(
+std::optional<AffinePoint> secp256k1_ecdsa_recover(
     const ethash::hash256& e, const uint256& r, const uint256& s, bool v) noexcept
 {
     // Follows
     // https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm#Public_key_recovery
 
     // 1. Validate r and s are within [1, n-1].
-    if (r == 0 || r >= Order || s == 0 || s >= Order)
+    if (r == 0 || r >= Curve::ORDER || s == 0 || s >= Curve::ORDER)
         return std::nullopt;
 
     // 3. Hash of the message is already calculated in e.
     // 4. Convert hash e to z field element by doing z = e % n.
     //    https://www.rfc-editor.org/rfc/rfc6979#section-2.3.2
     //    We can do this by n - e because n > 2^255.
-    static_assert(Order > 1_u256 << 255);
+    static_assert(Curve::ORDER > 1_u256 << 255);
     auto z = intx::be::load<uint256>(e.bytes);
-    if (z >= Order)
-        z -= Order;
+    if (z >= Curve::ORDER)
+        z -= Curve::ORDER;
 
 
-    const ModArith<uint256> n{Order};
+    const ModArith n{Curve::ORDER};
 
     // 5. Calculate u1 and u2.
     const auto r_n = n.to_mont(r);
@@ -109,6 +92,7 @@ std::optional<Point> secp256k1_ecdsa_recover(
     const auto u2 = n.from_mont(u2_mont);
 
     // 2. Calculate y coordinate of R from r and v.
+    static constexpr auto& Fp = Curve::Fp;
     const auto r_mont = Fp.to_mont(r);
     const auto y_mont = calculate_y(Fp, r_mont, v);
     if (!y_mont.has_value())
@@ -116,16 +100,15 @@ std::optional<Point> secp256k1_ecdsa_recover(
     const auto y = Fp.from_mont(*y_mont);
 
     // 6. Calculate public key point Q.
-    const auto R = Point{Fp.to_mont(r), Fp.to_mont(y)};
-    const auto pG = Point{Fp.to_mont(G.x), Fp.to_mont(G.y)};
-    const auto T1 = ecc::mul(Fp, pG, u1, B3);
-    const auto T2 = ecc::mul(Fp, R, u2, B3);
+    const auto R = AffinePoint{AffinePoint::E{r}, AffinePoint::E{y}};
+    const auto T1 = ecc::mul(Fp, G.to_old(), u1, B3);
+    const auto T2 = ecc::mul(Fp, R.to_old(), u2, B3);
     const auto pQ = ecc::add(Fp, T1, T2, B3);
 
-    const auto Q = ecc::to_affine(Fp, pQ);
+    const auto Q = ecc::to_affine<Curve>(pQ);
 
     // Any other validity check needed?
-    if (Q.is_inf())
+    if (Q == 0)
         return std::nullopt;
 
     return Q;

@@ -12,15 +12,22 @@ namespace evmmax::secp256k1
 {
 using namespace intx;
 
-/// The secp256k1 field prime number (P).
-inline constexpr auto FieldPrime =
-    0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f_u256;
+struct Curve
+{
+    using uint_type = uint256;
 
-/// The secp256k1 curve group order (N).
-inline constexpr auto Order =
-    0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141_u256;
+    /// The field prime number (P).
+    static constexpr auto FIELD_PRIME =
+        0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f_u256;
 
-using Point = ecc::Point<uint256>;
+    /// The secp256k1 curve group order (N).
+    static constexpr auto ORDER =
+        0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141_u256;
+
+    static constexpr ModArith Fp{FIELD_PRIME};
+};
+
+using AffinePoint = ecc::AffinePoint<Curve>;
 
 /// Square root for secp256k1 prime field.
 ///
@@ -34,20 +41,15 @@ std::optional<uint256> field_sqrt(const ModArith<uint256>& m, const uint256& x) 
 std::optional<uint256> calculate_y(
     const ModArith<uint256>& m, const uint256& x, bool y_parity) noexcept;
 
-/// Addition in secp256k1.
-///
-/// Computes P ⊕ Q for two points in affine coordinates on the secp256k1 curve,
-Point add(const Point& p, const Point& q) noexcept;
-
 /// Scalar multiplication in secp256k1.
 ///
 /// Computes [c]P for a point in affine coordinate on the secp256k1 curve,
-Point mul(const Point& p, const uint256& c) noexcept;
+AffinePoint mul(const AffinePoint& p, const uint256& c) noexcept;
 
 /// Convert the secp256k1 point (uncompressed public key) to Ethereum address.
-evmc::address to_address(const Point& pt) noexcept;
+evmc::address to_address(const AffinePoint& pt) noexcept;
 
-std::optional<Point> secp256k1_ecdsa_recover(
+std::optional<AffinePoint> secp256k1_ecdsa_recover(
     const ethash::hash256& e, const uint256& r, const uint256& s, bool v) noexcept;
 
 std::optional<evmc::address> ecrecover(
