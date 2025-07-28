@@ -8,13 +8,6 @@ namespace evmmax::bn254
 {
 static_assert(AffinePoint{} == 0, "default constructed is the point at infinity");
 
-namespace
-{
-constexpr auto& Fp = Curve::Fp;
-constexpr auto B3 = Fp.to_mont(3 * 3);
-}  // namespace
-
-
 bool validate(const AffinePoint& pt) noexcept
 {
     static constexpr auto _3 = AffinePoint::E{3};
@@ -30,6 +23,9 @@ bool validate(const AffinePoint& pt) noexcept
 
 Point mul(const Point& pt, const uint256& c) noexcept
 {
+    constexpr auto& Fp = Curve::Fp;
+    static constexpr auto B3 = Fp.to_mont(3 * 3);
+
     if (pt.is_inf())
         return pt;
 
