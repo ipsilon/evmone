@@ -235,7 +235,7 @@ TEST(evmmax, bn254_pt_mul)
         const Point e{be::unsafe::load<uint256>(t.expected_output.data()),
             be::unsafe::load<uint256>(&t.expected_output[32])};
 
-        const auto r = mul(p.to_old(), c);
+        const auto r = mul(p, c);
         EXPECT_EQ(r, e);
     }
 }

@@ -469,7 +469,7 @@ ExecutionResult ecmul_execute(const uint8_t* input, size_t input_size, uint8_t* 
 
     if (validate(p))
     {
-        const auto res = evmmax::bn254::mul(p.to_old(), c);
+        const auto res = evmmax::bn254::mul(p, c);
         intx::be::unsafe::store(output, res.x);
         intx::be::unsafe::store(output + 32, res.y);
         return {EVMC_SUCCESS, 64};
