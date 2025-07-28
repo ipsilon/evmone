@@ -25,6 +25,8 @@ struct Curve
         0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141_u256;
 
     static constexpr ModArith Fp{FIELD_PRIME};
+
+    static constexpr auto A = 0;
 };
 
 using AffinePoint = ecc::AffinePoint<Curve>;

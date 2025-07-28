@@ -99,12 +99,7 @@ struct Point
     ValueT x = {};
     ValueT y = {};
 
-    friend constexpr bool operator==(const Point& a, const Point& b) noexcept = default;
-
     friend constexpr Point operator-(const Point& p) noexcept { return {p.x, -p.y}; }
-
-    /// Checks if the point represents the special "infinity" value.
-    [[nodiscard]] constexpr bool is_inf() const noexcept { return *this == Point{}; }
 };
 
 /// The affine (two coordinates) point on an Elliptic Curve over a prime field.
@@ -143,8 +138,6 @@ struct AffinePoint
         x.to_bytes(b.template subspan<0, sizeof(FE)>());
         y.to_bytes(b.template subspan<sizeof(FE), sizeof(FE)>());
     }
-
-    Point<typename Curve::uint_type> to_old() const noexcept { return {x.value_, y.value_}; }
 };
 
 template <typename IntT>
@@ -193,25 +186,6 @@ struct JacPoint
 
 template <typename IntT>
 using InvFn = IntT (*)(const ModArith<IntT>&, const IntT& x) noexcept;
-
-/// Converts an affine point to a projected point with coordinates in Montgomery form.
-template <typename IntT>
-inline ProjPoint<IntT> to_proj(const ModArith<IntT>& s, const Point<IntT>& p) noexcept
-{
-    // FIXME: Add to_mont(1) to ModArith?
-    // FIXME: Handle inf
-    return {s.to_mont(p.x), s.to_mont(p.y), s.to_mont(1)};
-}
-
-/// Converts a projected point to an affine point.
-template <typename IntT>
-inline Point<IntT> to_affine(const ModArith<IntT>& s, const ProjPoint<IntT>& p) noexcept
-{
-    // FIXME: Split to_affine() and to/from_mont(). This is not good idea.
-    // FIXME: Add tests for inf.
-    const auto z_inv = s.inv(p.z);
-    return {s.from_mont(s.mul(p.x, z_inv)), s.from_mont(s.mul(p.y, z_inv))};
-}
 
 /// Converts a projected point to an affine point.
 template <typename Curve>
@@ -322,12 +296,12 @@ ProjPoint<IntT> add(const evmmax::ModArith<IntT>& s, const ProjPoint<IntT>& p,
     return {x3, y3, z3};
 }
 
-template <typename IntT, int A = 0>
-ProjPoint<IntT> add(const ModArith<IntT>& s, const ProjPoint<IntT>& p, const Point<IntT>& q,
-    const IntT& b3) noexcept
+template <typename Curve>
+ProjPoint<typename Curve::uint_type> add(const ProjPoint<typename Curve::uint_type>& p,
+    const AffinePoint<Curve>& q, const typename Curve::uint_type& b3) noexcept
 {
-    (void)s;
-    static_assert(A == 0, "point addition procedure is simplified for a = 0");
+    static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
+    using FE = FieldElement<Curve>;
 
     // Joost Renes and Craig Costello and Lejla Batina
     // "Complete addition formulas for prime order elliptic curves"
@@ -335,48 +309,48 @@ ProjPoint<IntT> add(const ModArith<IntT>& s, const ProjPoint<IntT>& p, const Poi
     // https://eprint.iacr.org/2015/1060
     // Algorithm 8.
 
-    const auto& x1 = p.x;
-    const auto& y1 = p.y;
-    const auto& z1 = p.z;
+    const auto& x1 = FE::wrap(p.x);
+    const auto& y1 = FE::wrap(p.y);
+    const auto& z1 = FE::wrap(p.z);
     const auto& x2 = q.x;
     const auto& y2 = q.y;
-    IntT x3;
-    IntT y3;
-    IntT z3;
-    IntT t0;
-    IntT t1;
-    IntT t2;
-    IntT t3;
-    IntT t4;
+    FE x3;
+    FE y3;
+    FE z3;
+    FE t0;
+    FE t1;
+    FE t2;
+    FE t3;
+    FE t4;
 
-    t0 = s.mul(x1, x2);
-    t1 = s.mul(y1, y2);
-    t3 = s.add(x2, y2);
-    t4 = s.add(x1, y1);
-    t3 = s.mul(t3, t4);
-    t4 = s.add(t0, t1);
-    t3 = s.sub(t3, t4);
-    t4 = s.mul(y2, z1);
-    t4 = s.add(t4, y1);
-    y3 = s.mul(x2, z1);
-    y3 = s.add(y3, x1);
-    x3 = s.add(t0, t0);
-    t0 = s.add(x3, t0);
-    t2 = s.mul(b3, z1);
-    z3 = s.add(t1, t2);
-    t1 = s.sub(t1, t2);
-    y3 = s.mul(b3, y3);
-    x3 = s.mul(t4, y3);
-    t2 = s.mul(t3, t1);
-    x3 = s.sub(t2, x3);
-    y3 = s.mul(y3, t0);
-    t1 = s.mul(t1, z3);
-    y3 = s.add(t1, y3);
-    t0 = s.mul(t0, t3);
-    z3 = s.mul(z3, t4);
-    z3 = s.add(z3, t0);
+    t0 = x1 * x2;
+    t1 = y1 * y2;
+    t3 = x2 + y2;
+    t4 = x1 + y1;
+    t3 = t3 * t4;
+    t4 = t0 + t1;
+    t3 = t3 - t4;
+    t4 = y2 * z1;
+    t4 = t4 + y1;
+    y3 = x2 * z1;
+    y3 = y3 + x1;
+    x3 = t0 + t0;
+    t0 = x3 + t0;
+    t2 = FE::wrap(b3) * z1;
+    z3 = t1 + t2;
+    t1 = t1 - t2;
+    y3 = FE::wrap(b3) * y3;
+    x3 = t4 * y3;
+    t2 = t3 * t1;
+    x3 = t2 - x3;
+    y3 = y3 * t0;
+    t1 = t1 * z3;
+    y3 = t1 + y3;
+    t0 = t0 * t3;
+    z3 = z3 * t4;
+    z3 = z3 + t0;
 
-    return {x3, y3, z3};
+    return {x3.value_, y3.value_, z3.value_};
 }
 
 template <typename IntT, int A = 0>
@@ -423,17 +397,18 @@ ProjPoint<IntT> dbl(
     return {x3, y3, z3};
 }
 
-template <typename IntT>
-ProjPoint<IntT> mul(
-    const ModArith<IntT>& m, const Point<IntT>& p, const IntT& c, const IntT& b3) noexcept
+template <typename Curve>
+ProjPoint<typename Curve::uint_type> mul(const AffinePoint<Curve>& p,
+    const typename Curve::uint_type& c, const typename Curve::uint_type& b3) noexcept
 {
+    using IntT = Curve::uint_type;
     ProjPoint<IntT> r;
     const auto bit_width = sizeof(IntT) * 8 - intx::clz(c);
     for (auto i = bit_width; i != 0; --i)
     {
-        r = ecc::dbl(m, r, b3);
+        r = ecc::dbl(Curve::Fp, r, b3);
         if ((c & (IntT{1} << (i - 1))) != 0)  // if the i-th bit in the scalar is set
-            r = ecc::add(m, r, p, b3);
+            r = ecc::add(r, p, b3);
     }
     return r;
 }

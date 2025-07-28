@@ -38,7 +38,7 @@ AffinePoint mul(const AffinePoint& p, const uint256& c) noexcept
     if (c == 0)
         return {};
 
-    const auto r = ecc::mul(Curve::Fp, p.to_old(), c, B3);
+    const auto r = ecc::mul(p, c, B3);
     return ecc::to_affine<Curve>(r);
 }
 
@@ -100,8 +100,8 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
 
     // 6. Calculate public key point Q.
     const auto R = AffinePoint{AffinePoint::FE{r}, AffinePoint::FE{y}};
-    const auto T1 = ecc::mul(Fp, G.to_old(), u1, B3);
-    const auto T2 = ecc::mul(Fp, R.to_old(), u2, B3);
+    const auto T1 = ecc::mul(G, u1, B3);
+    const auto T2 = ecc::mul(R, u2, B3);
     const auto pQ = ecc::add(Fp, T1, T2, B3);
 
     const auto Q = ecc::to_affine<Curve>(pQ);
