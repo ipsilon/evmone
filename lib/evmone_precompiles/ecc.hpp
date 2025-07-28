@@ -35,10 +35,16 @@ struct Element
 
     constexpr uint_type value() const noexcept { return Curve::M.from_mont(value_); }
 
-    static constexpr Element from_bytes(std::span<uint8_t, sizeof(uint_type)> b) noexcept
+    static constexpr Element from_bytes(std::span<const uint8_t, sizeof(uint_type)> b) noexcept
     {
         // TODO: Add intx::load from std::span.
         return Element{intx::be::unsafe::load<uint_type>(b.data())};
+    }
+
+    constexpr void to_bytes(std::span<uint8_t, sizeof(uint_type)> b) const noexcept
+    {
+        // TODO: Add intx::store to std::span.
+        intx::be::unsafe::store(b.data(), value());
     }
 
 
@@ -90,11 +96,17 @@ struct AffinePoint
 
     constexpr bool is_neutral() const noexcept { return *this == AffinePoint{}; }
 
-    static constexpr AffinePoint from_bytes(std::span<uint8_t, sizeof(E) * 2> b)
+    static constexpr AffinePoint from_bytes(std::span<const uint8_t, sizeof(E) * 2> b) noexcept
     {
         const auto x = E::from_bytes(b.template subspan<0, sizeof(E)>());
         const auto y = E::from_bytes(b.template subspan<sizeof(E), sizeof(E)>());
         return AffinePoint{x, y};
+    }
+
+    constexpr void to_bytes(std::span<uint8_t, sizeof(E) * 2> b) const noexcept
+    {
+        x.to_bytes(b.template subspan<0, sizeof(E)>());
+        y.to_bytes(b.template subspan<sizeof(E), sizeof(E)>());
     }
 };
 

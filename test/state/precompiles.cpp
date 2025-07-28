@@ -443,9 +443,9 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
     if (validate(p) && validate(q))
     {
         const auto res = evmmax::ecc::add(p, q);
-        intx::be::unsafe::store(output, res.x.value());
-        intx::be::unsafe::store(output + 32, res.y.value());
-        return {EVMC_SUCCESS, 64};
+        const std::span<uint8_t, 64> output_span{output, 64};
+        res.to_bytes(output_span);
+        return {EVMC_SUCCESS, output_span.size()};
     }
     else
         return {EVMC_PRECOMPILE_FAILURE, 0};
