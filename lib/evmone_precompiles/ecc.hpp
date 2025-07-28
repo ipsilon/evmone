@@ -94,7 +94,10 @@ struct AffinePoint
 
     friend constexpr bool operator==(const AffinePoint&, const AffinePoint&) = default;
 
-    constexpr bool is_neutral() const noexcept { return *this == AffinePoint{}; }
+    friend constexpr bool operator==(const AffinePoint& p, zero_t) noexcept
+    {
+        return p == AffinePoint{};
+    }
 
     static constexpr AffinePoint from_bytes(std::span<const uint8_t, sizeof(E) * 2> b) noexcept
     {

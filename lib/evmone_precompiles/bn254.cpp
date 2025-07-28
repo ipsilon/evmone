@@ -13,11 +13,12 @@ constexpr auto B3 = Fp.to_mont(3 * 3);
 }  // namespace
 
 
-bool validate(const bn254::AffinePoint& pt) noexcept
+bool validate(const AffinePoint& pt) noexcept
 {
     static constexpr auto _3 = AffinePoint::E{3};
 
-    if (pt.is_neutral())
+    // TODO: Reverse order check.
+    if (pt == 0)
         return true;
 
     const auto yy = pt.y * pt.y;
