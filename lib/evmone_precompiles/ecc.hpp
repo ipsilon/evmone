@@ -230,6 +230,9 @@ Point<IntT> add(const ModArith<IntT>& m, const Point<IntT>& p, const Point<IntT>
     return {m.from_mont(xr), m.from_mont(yr)};
 }
 
+/// Elliptic curve point addition in affine coordinates.
+///
+/// Computes P ⊕ Q for two points in affine coordinates on the elliptic curve.
 template <typename Curve>
 AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {

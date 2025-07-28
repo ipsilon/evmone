@@ -38,11 +38,6 @@ bool validate(const Point& pt) noexcept;
 
 bool validate(const AffinePoint& pt) noexcept;
 
-/// Addition in bn254 curve group.
-///
-/// Computes P ⊕ Q for two points in affine coordinates on the bn254 curve,
-Point add(const Point& p, const Point& q) noexcept;
-
 /// Scalar multiplication in bn254 curve group.
 ///
 /// Computes [c]P for a point in affine coordinate on the bn254 curve,

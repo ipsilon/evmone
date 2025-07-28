@@ -39,11 +39,6 @@ bool validate(const Point& pt) noexcept
     return y2 == x3_3;
 }
 
-Point add(const Point& p, const Point& q) noexcept
-{
-    return ecc::add(Fp, p, q);
-}
-
 Point mul(const Point& pt, const uint256& c) noexcept
 {
     if (pt.is_inf())
