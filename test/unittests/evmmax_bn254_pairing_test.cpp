@@ -34,7 +34,8 @@ TEST(evmmax, bn254_pairing)
         },
     };
     // -Q1:
-    const auto nQ1 = ExtPoint{Q1.x, {Curve::FIELD_PRIME - Q1.y.first, Curve::FIELD_PRIME - Q1.y.second}};
+    const auto nQ1 =
+        ExtPoint{Q1.x, {Curve::FIELD_PRIME - Q1.y.first, Curve::FIELD_PRIME - Q1.y.second}};
     // -Q1 * 16:
     const auto nQ1_16 = ExtPoint{
         {
