@@ -36,8 +36,6 @@ using ExtPoint = ecc::Point<std::pair<uint256, uint256>>;
 /// Validates that point is from the bn254 curve group
 ///
 /// Returns true if y^2 == x^3 + 3. Input is converted to the Montgomery form.
-bool validate(const Point& pt) noexcept;
-
 bool validate(const AffinePoint& pt) noexcept;
 
 /// Scalar multiplication in bn254 curve group.

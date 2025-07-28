@@ -83,7 +83,22 @@ private:
     }
 };
 
+/// The affine (two coordinates) point on an Elliptic Curve over a prime field.
+template <typename ValueT>
+struct Point
+{
+    ValueT x = {};
+    ValueT y = {};
 
+    friend constexpr bool operator==(const Point& a, const Point& b) noexcept = default;
+
+    friend constexpr Point operator-(const Point& p) noexcept { return {p.x, -p.y}; }
+
+    /// Checks if the point represents the special "infinity" value.
+    [[nodiscard]] constexpr bool is_inf() const noexcept { return *this == Point{}; }
+};
+
+/// The affine (two coordinates) point on an Elliptic Curve over a prime field.
 template <typename Curve>
 struct AffinePoint
 {
@@ -111,24 +126,9 @@ struct AffinePoint
         x.to_bytes(b.template subspan<0, sizeof(E)>());
         y.to_bytes(b.template subspan<sizeof(E), sizeof(E)>());
     }
+
+    Point<typename Curve::uint_type> to_old() const noexcept { return {x.value_, y.value_}; }
 };
-
-/// The affine (two coordinates) point on an Elliptic Curve over a prime field.
-template <typename ValueT>
-struct Point
-{
-    ValueT x = {};
-    ValueT y = {};
-
-    friend constexpr bool operator==(const Point& a, const Point& b) noexcept = default;
-
-    friend constexpr Point operator-(const Point& p) noexcept { return {p.x, -p.y}; }
-
-    /// Checks if the point represents the special "infinity" value.
-    [[nodiscard]] constexpr bool is_inf() const noexcept { return *this == Point{}; }
-};
-
-static_assert(Point<unsigned>{}.is_inf());
 
 template <typename IntT>
 struct ProjPoint
