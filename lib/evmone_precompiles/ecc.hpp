@@ -21,24 +21,28 @@ struct Constant : std::integral_constant<int, N>
 using zero_t = Constant<0>;
 using one_t = Constant<1>;
 
+/// A representation of an element in a prime field.
+///
+/// TODO: Combine with BaseFieldElem.
 template <typename Curve>
-struct Element
+struct FieldElement
 {
     using uint_type = typename Curve::uint_type;
     static constexpr auto& Fp = Curve::Fp;
 
+    // TODO: Make this private.
     uint_type value_{};
 
-    Element() = default;
+    FieldElement() = default;
 
-    constexpr explicit Element(uint_type v) : value_(Fp.to_mont(v)) {}
+    constexpr explicit FieldElement(uint_type v) : value_(Fp.to_mont(v)) {}
 
     constexpr uint_type value() const noexcept { return Fp.from_mont(value_); }
 
-    static constexpr Element from_bytes(std::span<const uint8_t, sizeof(uint_type)> b) noexcept
+    static constexpr FieldElement from_bytes(std::span<const uint8_t, sizeof(uint_type)> b) noexcept
     {
         // TODO: Add intx::load from std::span.
-        return Element{intx::be::unsafe::load<uint_type>(b.data())};
+        return FieldElement{intx::be::unsafe::load<uint_type>(b.data())};
     }
 
     constexpr void to_bytes(std::span<uint8_t, sizeof(uint_type)> b) const noexcept
@@ -50,38 +54,40 @@ struct Element
 
     constexpr explicit operator bool() const noexcept { return static_cast<bool>(value_); }
 
-    friend constexpr bool operator==(const Element&, const Element&) = default;
+    friend constexpr bool operator==(const FieldElement&, const FieldElement&) = default;
 
-    friend constexpr bool operator==(const Element& a, zero_t) noexcept { return !a.value_; }
+    friend constexpr bool operator==(const FieldElement& a, zero_t) noexcept { return !a.value_; }
 
-    friend constexpr auto operator*(const Element& a, const Element& b) noexcept
+    friend constexpr auto operator*(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.mul(a.value_, b.value_));
     }
 
-    friend constexpr auto operator+(const Element& a, const Element& b) noexcept
+    friend constexpr auto operator+(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.add(a.value_, b.value_));
     }
 
-    friend constexpr auto operator-(const Element& a, const Element& b) noexcept
+    friend constexpr auto operator-(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.sub(a.value_, b.value_));
     }
 
-    friend constexpr auto operator/(one_t, const Element& a) noexcept
+    friend constexpr auto operator/(one_t, const FieldElement& a) noexcept
     {
         return wrap(Fp.inv(a.value_));
     }
 
-    friend constexpr auto operator/(const Element& a, const Element& b) noexcept
+    friend constexpr auto operator/(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.mul(a.value_, Fp.inv(b.value_)));
     }
 
-    [[gnu::always_inline]] static constexpr Element wrap(const uint_type& v) noexcept
+    /// Wraps a raw value into the Element type assuming it is already in Montgomery form.
+    /// TODO: Make this private.
+    [[gnu::always_inline]] static constexpr FieldElement wrap(const uint_type& v) noexcept
     {
-        Element element;
+        FieldElement element;
         element.value_ = v;
         return element;
     }
@@ -106,7 +112,7 @@ struct Point
 template <typename Curve>
 struct AffinePoint
 {
-    using E = Element<Curve>;
+    using E = FieldElement<Curve>;
 
     E x;
     E y;
@@ -205,8 +211,8 @@ template <typename Curve>
 inline AffinePoint<Curve> to_affine(const ProjPoint<typename Curve::uint_type>& p) noexcept
 {
     // FIXME: Add tests for inf.
-    const auto z_inv = 1 / Element<Curve>::wrap(p.z);
-    return {Element<Curve>::wrap(p.x) * z_inv, Element<Curve>::wrap(p.y) * z_inv};
+    const auto z_inv = 1 / FieldElement<Curve>::wrap(p.z);
+    return {FieldElement<Curve>::wrap(p.x) * z_inv, FieldElement<Curve>::wrap(p.y) * z_inv};
 }
 
 /// Adds two elliptic curve points in affine coordinates
