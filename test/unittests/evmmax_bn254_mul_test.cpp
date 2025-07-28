@@ -232,8 +232,8 @@ TEST(evmmax, bn254_pt_mul)
     {
         const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{&t.input[0], 64});
         const auto c = be::unsafe::load<uint256>(&t.input[64]);
-        const Point e{be::unsafe::load<uint256>(t.expected_output.data()),
-            be::unsafe::load<uint256>(&t.expected_output[32])};
+        const auto e =
+            AffinePoint::from_bytes(std::span<const uint8_t, 64>{&t.expected_output[0], 64});
 
         const auto r = mul(p, c);
         EXPECT_EQ(r, e);

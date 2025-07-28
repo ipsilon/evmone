@@ -41,7 +41,7 @@ bool validate(const AffinePoint& pt) noexcept;
 /// Scalar multiplication in bn254 curve group.
 ///
 /// Computes [c]P for a point in affine coordinate on the bn254 curve,
-Point mul(const AffinePoint& pt, const uint256& c) noexcept;
+AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept;
 
 /// ate paring implementation for bn254 curve according to https://eips.ethereum.org/EIPS/eip-197
 ///

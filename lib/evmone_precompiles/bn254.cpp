@@ -21,18 +21,18 @@ bool validate(const AffinePoint& pt) noexcept
     return yy == xxx + _3;
 }
 
-Point mul(const AffinePoint& pt, const uint256& c) noexcept
+AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept
 {
     constexpr auto& Fp = Curve::Fp;
     static constexpr auto B3 = Fp.to_mont(3 * 3);
 
     if (pt == 0)
-        return pt.to_old();
+        return pt;
 
     if (c == 0)
         return {};
 
     const auto pr = ecc::mul(Fp, pt.to_old(), c, B3);
-    return ecc::to_affine(Fp, pr);
+    return ecc::to_affine<Curve>(pr);
 }
 }  // namespace evmmax::bn254

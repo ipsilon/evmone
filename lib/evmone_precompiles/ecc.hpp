@@ -69,12 +69,16 @@ struct Element
         return wrap(Fp.sub(a.value_, b.value_));
     }
 
+    friend constexpr auto operator/(one_t, const Element& a) noexcept
+    {
+        return wrap(Fp.inv(a.value_));
+    }
+
     friend constexpr auto operator/(const Element& a, const Element& b) noexcept
     {
         return wrap(Fp.mul(a.value_, Fp.inv(b.value_)));
     }
 
-private:
     [[gnu::always_inline]] static constexpr Element wrap(const uint_type& v) noexcept
     {
         Element element;
@@ -194,6 +198,15 @@ inline Point<IntT> to_affine(const ModArith<IntT>& s, const ProjPoint<IntT>& p) 
     // FIXME: Add tests for inf.
     const auto z_inv = s.inv(p.z);
     return {s.from_mont(s.mul(p.x, z_inv)), s.from_mont(s.mul(p.y, z_inv))};
+}
+
+/// Converts a projected point to an affine point.
+template <typename Curve>
+inline AffinePoint<Curve> to_affine(const ProjPoint<typename Curve::uint_type>& p) noexcept
+{
+    // FIXME: Add tests for inf.
+    const auto z_inv = 1 / Element<Curve>::wrap(p.z);
+    return {Element<Curve>::wrap(p.x) * z_inv, Element<Curve>::wrap(p.y) * z_inv};
 }
 
 /// Adds two elliptic curve points in affine coordinates
