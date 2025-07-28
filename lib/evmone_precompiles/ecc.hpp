@@ -22,56 +22,56 @@ using zero_t = Constant<0>;
 using one_t = Constant<1>;
 
 template <typename Curve>
-struct FE
+struct Element
 {
     using uint_type = typename Curve::uint_type;
     static constexpr auto& M = Curve::M;
 
-    uint_type value_;
+    uint_type value_{};
 
-    FE() = default;
+    Element() = default;
 
-    constexpr explicit FE(uint_type v) : value_(Curve::M.to_mont(v)) {}
+    constexpr explicit Element(uint_type v) : value_(Curve::M.to_mont(v)) {}
 
     constexpr uint_type value() const noexcept { return Curve::M.from_mont(value_); }
 
-    static constexpr FE from_bytes(std::span<uint8_t, sizeof(uint_type)> b) noexcept
+    static constexpr Element from_bytes(std::span<uint8_t, sizeof(uint_type)> b) noexcept
     {
         // TODO: Add intx::load from std::span.
-        return FE{intx::be::unsafe::load<uint_type>(b.data())};
+        return Element{intx::be::unsafe::load<uint_type>(b.data())};
     }
 
 
     constexpr explicit operator bool() const noexcept { return static_cast<bool>(value_); }
 
-    friend constexpr bool operator==(const FE&, const FE&) = default;
+    friend constexpr bool operator==(const Element&, const Element&) = default;
 
-    friend constexpr bool operator==(const FE& a, zero_t) noexcept { return !a.value_; }
+    friend constexpr bool operator==(const Element& a, zero_t) noexcept { return !a.value_; }
 
-    friend constexpr auto operator*(const FE& a, const FE& b) noexcept
+    friend constexpr auto operator*(const Element& a, const Element& b) noexcept
     {
         return wrap(M.mul(a.value_, b.value_));
     }
 
-    friend constexpr auto operator+(const FE& a, const FE& b) noexcept
+    friend constexpr auto operator+(const Element& a, const Element& b) noexcept
     {
         return wrap(M.add(a.value_, b.value_));
     }
 
-    friend constexpr auto operator-(const FE& a, const FE& b) noexcept
+    friend constexpr auto operator-(const Element& a, const Element& b) noexcept
     {
         return wrap(M.sub(a.value_, b.value_));
     }
 
-    friend constexpr auto operator/(const FE& a, const FE& b) noexcept
+    friend constexpr auto operator/(const Element& a, const Element& b) noexcept
     {
         return wrap(M.mul(a.value_, M.inv(b.value_)));
     }
 
 private:
-    [[gnu::always_inline]] static constexpr FE wrap(const uint_type& v) noexcept
+    [[gnu::always_inline]] static constexpr Element wrap(const uint_type& v) noexcept
     {
-        FE element;
+        Element element;
         element.value_ = v;
         return element;
     }
@@ -81,7 +81,7 @@ private:
 template <typename Curve>
 struct AffinePoint
 {
-    using E = FE<Curve>;
+    using E = Element<Curve>;
 
     E x;
     E y;
