@@ -16,7 +16,7 @@ TEST(evmmax, bn254_pairing)
         0x3034dd2920f673e204fee2811c678745fc819b55d3e9d294e45c9b03a76aef41_u256,
     };
     // -P1:
-    const auto nP1 = Point{P1.x, FieldPrime - P1.y};
+    const auto nP1 = Point{P1.x, Curve::FIELD_PRIME - P1.y};
     // P1 * 17:
     const auto P1_17 = Point{
         0x22980b2e458ec77e258b19ca3a7b46181f63c6536307acae03eea236f6919eeb_u256,
@@ -34,7 +34,7 @@ TEST(evmmax, bn254_pairing)
         },
     };
     // -Q1:
-    const auto nQ1 = ExtPoint{Q1.x, {FieldPrime - Q1.y.first, FieldPrime - Q1.y.second}};
+    const auto nQ1 = ExtPoint{Q1.x, {Curve::FIELD_PRIME - Q1.y.first, Curve::FIELD_PRIME - Q1.y.second}};
     // -Q1 * 16:
     const auto nQ1_16 = ExtPoint{
         {
@@ -124,14 +124,14 @@ TEST(evmmax, bn254_pairing_invalid_input)
     {
         // Coordinate not a field element
         auto input = valid_input;
-        input[0].first.x = FieldPrime;
+        input[0].first.x = Curve::FIELD_PRIME;
         EXPECT_EQ(pairing_check(input), std::nullopt);
     }
 
     {
         // Coordinate not a field element
         auto input = valid_input;
-        input[0].second.x.second = FieldPrime;
+        input[0].second.x.second = Curve::FIELD_PRIME;
         EXPECT_EQ(pairing_check(input), std::nullopt);
     }
 

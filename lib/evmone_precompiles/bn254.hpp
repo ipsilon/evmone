@@ -12,16 +12,18 @@ namespace evmmax::bn254
 {
 using namespace intx;
 
-/// The bn254 field prime number (P).
-inline constexpr auto FieldPrime =
-    0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
-
-constexpr ModArith Fp{FieldPrime};
-
-
-struct Curve {
+/// The BN254 curve parameters.
+struct Curve
+{
+    /// The field/scalar unsigned int type.
     using uint_type = uint256;
-    static constexpr ModArith M{FieldPrime};
+
+    /// The field prime number (P).
+    static constexpr auto FIELD_PRIME =
+        0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
+
+    /// The modular arithmetic for the field.
+    static constexpr ModArith Fp{FIELD_PRIME};
 };
 
 using AffinePoint = ecc::AffinePoint<Curve>;

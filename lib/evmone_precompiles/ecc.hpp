@@ -25,15 +25,15 @@ template <typename Curve>
 struct Element
 {
     using uint_type = typename Curve::uint_type;
-    static constexpr auto& M = Curve::M;
+    static constexpr auto& Fp = Curve::Fp;
 
     uint_type value_{};
 
     Element() = default;
 
-    constexpr explicit Element(uint_type v) : value_(Curve::M.to_mont(v)) {}
+    constexpr explicit Element(uint_type v) : value_(Fp.to_mont(v)) {}
 
-    constexpr uint_type value() const noexcept { return Curve::M.from_mont(value_); }
+    constexpr uint_type value() const noexcept { return Fp.from_mont(value_); }
 
     static constexpr Element from_bytes(std::span<const uint8_t, sizeof(uint_type)> b) noexcept
     {
@@ -56,22 +56,22 @@ struct Element
 
     friend constexpr auto operator*(const Element& a, const Element& b) noexcept
     {
-        return wrap(M.mul(a.value_, b.value_));
+        return wrap(Fp.mul(a.value_, b.value_));
     }
 
     friend constexpr auto operator+(const Element& a, const Element& b) noexcept
     {
-        return wrap(M.add(a.value_, b.value_));
+        return wrap(Fp.add(a.value_, b.value_));
     }
 
     friend constexpr auto operator-(const Element& a, const Element& b) noexcept
     {
-        return wrap(M.sub(a.value_, b.value_));
+        return wrap(Fp.sub(a.value_, b.value_));
     }
 
     friend constexpr auto operator/(const Element& a, const Element& b) noexcept
     {
-        return wrap(M.mul(a.value_, M.inv(b.value_)));
+        return wrap(Fp.mul(a.value_, Fp.inv(b.value_)));
     }
 
 private:

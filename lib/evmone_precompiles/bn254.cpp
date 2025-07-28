@@ -8,6 +8,7 @@ namespace evmmax::bn254
 {
 namespace
 {
+constexpr auto& Fp = Curve::Fp;
 constexpr auto B = Fp.to_mont(3);
 constexpr auto B3 = Fp.to_mont(3 * 3);
 }  // namespace
