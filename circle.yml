@@ -577,9 +577,9 @@ jobs:
       - test
 
   clang-tidy:
-    executor: linux-clang-2xlarge
+    executor: linux-clang-xlarge
     environment:
-      CMAKE_BUILD_PARALLEL_LEVEL: 32
+      CMAKE_BUILD_PARALLEL_LEVEL: 16
       CMAKE_GENERATOR: Ninja
       CMAKE_OPTIONS: -DCMAKE_CXX_CLANG_TIDY=clang-tidy
       BUILD_TYPE: None
