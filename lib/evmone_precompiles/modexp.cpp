@@ -73,17 +73,23 @@ public:
 template <typename UIntT>
 UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
 {
+    assert(mod != 0);
     const evmmax::ModArith<UIntT> arith{mod};
     const auto base_mont = arith.to_mont(base);
-
     auto ret = arith.to_mont(1);
-    for (auto i = exp.bit_width(); i != 0; --i)
+    if (const auto bit_width = exp.bit_width(); bit_width != 0) [[likely]]
     {
-        ret = arith.mul(ret, ret);
-        if (exp[i - 1])
-            ret = arith.mul(ret, base_mont);
+        auto i = bit_width - 1;
+        while (true)
+        {
+            if (exp[i])
+                ret = arith.mul(ret, base_mont);
+            if (i == 0)
+                break;
+            --i;
+            ret = arith.mul(ret, ret);
+        }
     }
-
     return arith.from_mont(ret);
 }
 
