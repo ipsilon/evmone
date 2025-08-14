@@ -71,3 +71,45 @@ TEST_F(state_transition, precompile_proxy)
     expect.post[PRECOMPILE_PROXY].storage[0x60_bytes32] =
         0x5b7780f100000000000000000000000000000000000000000000000000000000_bytes32;
 }
+
+TEST_F(state_transition, delegatecall_proxy)
+{
+    // Takes the address (2 bytes) and the gas limit (4 bytes) from the stack.
+    // Then copies whole calldata to memory and DELEGATECALLs to the address with the gas limit.
+    // Finally, the call result and the hashed returndata is put in the storage.
+
+    static constexpr auto MAIN_CODE = 0xe1000000000000000000000000000000c0de0000_address;
+
+    auto code = bytecode() +                                 //
+                OP_PUSH2 + "0000" + OP_PUSH4 + "00000000" +  // [gas, addr]
+                calldatacopy(0, 0, calldatasize()) +         // [gas, addr]
+                calldatasize() + push(0) +                   // [0, input_size, gas, addr]
+                OP_DUP1 + OP_DUP3 +               // [input_size, 0, 0, input_size, gas, addr]
+                add(32) +                         // [output_size, 0, 0, input_size, gas, addr]
+                OP_SWAP5 +                        // [addr, 0, 0, input_size, gas, output_size]
+                OP_SWAP1 +                        // [0, addr, 0, input_size, gas, output_size]
+                OP_SWAP4 +                        // [gas, addr, 0, input_size, 0, output_size]
+                OP_DELEGATECALL +                 // [result]
+                sstore(1) +                       // []
+                keccak256(0, returndatasize()) +  // [keccak(returndata)
+                sstore(2);
+
+    EXPECT_EQ(
+        hex(code), "61000063000000003660006000373660008082602001949093f46001553d600020600255");
+
+    code[2] = 0x03;  // set the precompile address
+    code[6] = 0xff;  // set call gas
+
+    pre[MAIN_CODE] = {.code = code};
+    pre[Sender] = {.balance = 10'000'000'000};
+    tx.to = MAIN_CODE;
+    tx.nonce = 0;
+    tx.data = bytes{'a', 'b', 'c'};
+
+    expect.post[MAIN_CODE].storage[0x01_bytes32] = 0x01_bytes32;
+
+    // keccack256(0000000000000000000000008eb208f7e05d987a9b044a8e98c6b087f15a0bfc)
+    // which is ripemd160("abc")
+    expect.post[MAIN_CODE].storage[0x02_bytes32] =
+        0x592a51638107489045cfa238beadd9f3d5cb8c97da92d72d854fd683783f08f2_bytes32;
+}
