@@ -433,17 +433,19 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
     if (input_size != 0)
         std::memcpy(input_buffer, input, std::min(input_size, std::size(input_buffer)));
 
-    const evmmax::bn254::Point p = {intx::be::unsafe::load<intx::uint256>(input_buffer),
-        intx::be::unsafe::load<intx::uint256>(input_buffer + 32)};
-    const evmmax::bn254::Point q = {intx::be::unsafe::load<intx::uint256>(input_buffer + 64),
-        intx::be::unsafe::load<intx::uint256>(input_buffer + 96)};
+    const auto input_span = std::span{input_buffer};
 
-    if (evmmax::bn254::validate(p) && evmmax::bn254::validate(q))
+    using namespace evmmax::bn254;
+
+    const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
+    const auto q = AffinePoint::from_bytes(input_span.subspan<64, 64>());
+
+    if (validate(p) && validate(q))
     {
-        const auto res = evmmax::bn254::add(p, q);
-        intx::be::unsafe::store(output, res.x);
-        intx::be::unsafe::store(output + 32, res.y);
-        return {EVMC_SUCCESS, 64};
+        const auto res = evmmax::ecc::add(p, q);
+        const std::span<uint8_t, 64> output_span{output, 64};
+        res.to_bytes(output_span);
+        return {EVMC_SUCCESS, output_span.size()};
     }
     else
         return {EVMC_PRECOMPILE_FAILURE, 0};
@@ -458,16 +460,19 @@ ExecutionResult ecmul_execute(const uint8_t* input, size_t input_size, uint8_t* 
     if (input_size != 0)
         std::memcpy(input_buffer, input, std::min(input_size, std::size(input_buffer)));
 
-    const evmmax::bn254::Point p = {intx::be::unsafe::load<intx::uint256>(input_buffer),
-        intx::be::unsafe::load<intx::uint256>(input_buffer + 32)};
+    const auto input_span = std::span{input_buffer};
+
+    using namespace evmmax::bn254;
+
+    const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
     const auto c = intx::be::unsafe::load<intx::uint256>(input_buffer + 64);
 
-    if (evmmax::bn254::validate(p))
+    if (validate(p))
     {
         const auto res = evmmax::bn254::mul(p, c);
-        intx::be::unsafe::store(output, res.x);
-        intx::be::unsafe::store(output + 32, res.y);
-        return {EVMC_SUCCESS, 64};
+        const std::span<uint8_t, 64> output_span{output, 64};
+        res.to_bytes(output_span);
+        return {EVMC_SUCCESS, output_span.size()};
     }
     else
         return {EVMC_PRECOMPILE_FAILURE, 0};

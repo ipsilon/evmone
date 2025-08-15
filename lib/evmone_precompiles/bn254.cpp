@@ -6,43 +6,31 @@
 
 namespace evmmax::bn254
 {
-namespace
-{
-constexpr ModArith Fp{FieldPrime};
-constexpr auto B = Fp.to_mont(3);
-constexpr auto B3 = Fp.to_mont(3 * 3);
-}  // namespace
+static_assert(AffinePoint{} == 0, "default constructed is the point at infinity");
 
-bool validate(const Point& pt) noexcept
+bool validate(const AffinePoint& pt) noexcept
 {
-    if (pt.is_inf())
+    // TODO: Reverse order check.
+    if (pt == 0)
         return true;
 
-    const auto xm = Fp.to_mont(pt.x);
-    const auto ym = Fp.to_mont(pt.y);
-    const auto y2 = Fp.mul(ym, ym);
-    const auto x2 = Fp.mul(xm, xm);
-    const auto x3 = Fp.mul(x2, xm);
-    const auto x3_3 = Fp.add(x3, B);
-    return y2 == x3_3;
+    const auto yy = pt.y * pt.y;
+    const auto xxx = pt.x * pt.x * pt.x;
+    return yy == xxx + Curve::B;
 }
 
-Point add(const Point& p, const Point& q) noexcept
+AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept
 {
-    return ecc::add(Fp, p, q);
-}
+    constexpr auto& Fp = Curve::Fp;
+    static constexpr auto B3 = Fp.to_mont(3 * 3);
 
-Point mul(const Point& pt, const uint256& c) noexcept
-{
-    if (pt.is_inf())
+    if (pt == 0)
         return pt;
 
     if (c == 0)
         return {};
 
-    const Point p_mont{Fp.to_mont(pt.x), Fp.to_mont(pt.y)};
-    const auto pr = ecc::mul(Fp, p_mont, c, B3);
-
-    return ecc::to_affine(Fp, pr);
+    const auto pr = ecc::mul(Fp, pt.to_old(), c, B3);
+    return ecc::to_affine<Curve>(pr);
 }
 }  // namespace evmmax::bn254

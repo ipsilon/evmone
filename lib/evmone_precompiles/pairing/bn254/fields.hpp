@@ -15,8 +15,8 @@ using namespace intx;
 struct BaseFieldConfig
 {
     using ValueT = uint256;
-    static constexpr auto MOD_ARITH = ModArith{FieldPrime};
-    static constexpr uint256 ONE = MOD_ARITH.to_mont(1);
+    static constexpr auto& MOD_ARITH = Curve::Fp;
+    static constexpr auto ONE = MOD_ARITH.to_mont(1);
 };
 using Fq = ecc::BaseFieldElem<BaseFieldConfig>;
 

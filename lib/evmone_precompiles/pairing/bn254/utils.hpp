@@ -70,7 +70,7 @@ static inline std::array<std::array<Fq2, 5>, 3> FROBENIUS_COEFFS = {
 /// Verifies that value is in the proper prime field.
 constexpr bool is_field_element(const uint256& v)
 {
-    return v < FieldPrime;
+    return v < Curve::FIELD_PRIME;
 }
 
 /// Verifies that affine point is on the curve (not twisted)

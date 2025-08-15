@@ -5,8 +5,93 @@
 
 #include <evmmax/evmmax.hpp>
 
+#include <span>
+
 namespace evmmax::ecc
 {
+template <int N>
+struct Constant : std::integral_constant<int, N>
+{
+    consteval explicit(false) Constant(int v) noexcept
+    {
+        if (N != v)
+            intx::unreachable();
+    }
+};
+using zero_t = Constant<0>;
+using one_t = Constant<1>;
+
+/// A representation of an element in a prime field.
+///
+/// TODO: Combine with BaseFieldElem.
+template <typename Curve>
+struct FieldElement
+{
+    using uint_type = typename Curve::uint_type;
+    static constexpr auto& Fp = Curve::Fp;
+
+    // TODO: Make this private.
+    uint_type value_{};
+
+    FieldElement() = default;
+
+    constexpr explicit FieldElement(uint_type v) : value_{Fp.to_mont(v)} {}
+
+    constexpr uint_type value() const noexcept { return Fp.from_mont(value_); }
+
+    static constexpr FieldElement from_bytes(std::span<const uint8_t, sizeof(uint_type)> b) noexcept
+    {
+        // TODO: Add intx::load from std::span.
+        return FieldElement{intx::be::unsafe::load<uint_type>(b.data())};
+    }
+
+    constexpr void to_bytes(std::span<uint8_t, sizeof(uint_type)> b) const noexcept
+    {
+        // TODO: Add intx::store to std::span.
+        intx::be::unsafe::store(b.data(), value());
+    }
+
+
+    constexpr explicit operator bool() const noexcept { return static_cast<bool>(value_); }
+
+    friend constexpr bool operator==(const FieldElement&, const FieldElement&) = default;
+
+    friend constexpr bool operator==(const FieldElement& a, zero_t) noexcept { return !a.value_; }
+
+    friend constexpr auto operator*(const FieldElement& a, const FieldElement& b) noexcept
+    {
+        return wrap(Fp.mul(a.value_, b.value_));
+    }
+
+    friend constexpr auto operator+(const FieldElement& a, const FieldElement& b) noexcept
+    {
+        return wrap(Fp.add(a.value_, b.value_));
+    }
+
+    friend constexpr auto operator-(const FieldElement& a, const FieldElement& b) noexcept
+    {
+        return wrap(Fp.sub(a.value_, b.value_));
+    }
+
+    friend constexpr auto operator/(one_t, const FieldElement& a) noexcept
+    {
+        return wrap(Fp.inv(a.value_));
+    }
+
+    friend constexpr auto operator/(const FieldElement& a, const FieldElement& b) noexcept
+    {
+        return wrap(Fp.mul(a.value_, Fp.inv(b.value_)));
+    }
+
+    /// Wraps a raw value into the Element type assuming it is already in Montgomery form.
+    /// TODO: Make this private.
+    [[gnu::always_inline]] static constexpr FieldElement wrap(const uint_type& v) noexcept
+    {
+        FieldElement element;
+        element.value_ = v;
+        return element;
+    }
+};
 
 /// The affine (two coordinates) point on an Elliptic Curve over a prime field.
 template <typename ValueT>
@@ -23,7 +108,46 @@ struct Point
     [[nodiscard]] constexpr bool is_inf() const noexcept { return *this == Point{}; }
 };
 
-static_assert(Point<unsigned>{}.is_inf());
+/// The affine (two coordinates) point on an Elliptic Curve over a prime field.
+template <typename Curve>
+struct AffinePoint
+{
+    using FE = FieldElement<Curve>;
+
+    FE x;
+    FE y;
+
+    AffinePoint() = default;
+    constexpr AffinePoint(const FE& x_, const FE& y_) noexcept : x{x_}, y{y_} {}
+
+    /// Create the point from literal values.
+    consteval AffinePoint(
+        const typename Curve::uint_type& x_value, const typename Curve::uint_type& y_value) noexcept
+      : x{x_value}, y{y_value}
+    {}
+
+    friend constexpr bool operator==(const AffinePoint&, const AffinePoint&) = default;
+
+    friend constexpr bool operator==(const AffinePoint& p, zero_t) noexcept
+    {
+        return p == AffinePoint{};
+    }
+
+    static constexpr AffinePoint from_bytes(std::span<const uint8_t, sizeof(FE) * 2> b) noexcept
+    {
+        const auto x = FE::from_bytes(b.template subspan<0, sizeof(FE)>());
+        const auto y = FE::from_bytes(b.template subspan<sizeof(FE), sizeof(FE)>());
+        return {x, y};
+    }
+
+    constexpr void to_bytes(std::span<uint8_t, sizeof(FE) * 2> b) const noexcept
+    {
+        x.to_bytes(b.template subspan<0, sizeof(FE)>());
+        y.to_bytes(b.template subspan<sizeof(FE), sizeof(FE)>());
+    }
+
+    Point<typename Curve::uint_type> to_old() const noexcept { return {x.value_, y.value_}; }
+};
 
 template <typename IntT>
 struct ProjPoint
@@ -91,6 +215,15 @@ inline Point<IntT> to_affine(const ModArith<IntT>& s, const ProjPoint<IntT>& p) 
     return {s.from_mont(s.mul(p.x, z_inv)), s.from_mont(s.mul(p.y, z_inv))};
 }
 
+/// Converts a projected point to an affine point.
+template <typename Curve>
+inline AffinePoint<Curve> to_affine(const ProjPoint<typename Curve::uint_type>& p) noexcept
+{
+    // FIXME: Add tests for inf.
+    const auto z_inv = 1 / FieldElement<Curve>::wrap(p.z);
+    return {FieldElement<Curve>::wrap(p.x) * z_inv, FieldElement<Curve>::wrap(p.y) * z_inv};
+}
+
 /// Adds two elliptic curve points in affine coordinates
 /// and returns the result in affine coordinates.
 template <typename IntT>
@@ -126,6 +259,44 @@ Point<IntT> add(const ModArith<IntT>& m, const Point<IntT>& p, const Point<IntT>
     const auto xr = m.sub(m.sub(m.mul(slope, slope), x1), x2);
     const auto yr = m.sub(m.mul(m.sub(x1, xr), slope), y1);
     return {m.from_mont(xr), m.from_mont(yr)};
+}
+
+/// Elliptic curve point addition in affine coordinates.
+///
+/// Computes P ⊕ Q for two points in affine coordinates on the elliptic curve.
+template <typename Curve>
+AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
+{
+    using PT = AffinePoint<Curve>;
+
+    if (p == PT{})
+        return q;
+    if (q == PT{})
+        return p;
+
+    const auto& [x1, y1] = p;
+    const auto& [x2, y2] = q;
+
+    // Use classic formula for point addition.
+    // https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication#Point_operations
+
+    auto dx = x2 - x1;
+    auto dy = y2 - y1;
+    if (dx == 0)
+    {
+        if (dy != 0)    // For opposite points
+            return {};  // return the point at infinity.
+
+        // For coincident points find the slope of the tangent line.
+        const auto xx = x1 * x1;
+        dy = xx + xx + xx;
+        dx = y1 + y1;
+    }
+    const auto slope = dy / dx;
+
+    const auto xr = slope * slope - x1 - x2;
+    const auto yr = slope * (x1 - xr) - y1;
+    return {xr, yr};
 }
 
 template <typename IntT, int A = 0>

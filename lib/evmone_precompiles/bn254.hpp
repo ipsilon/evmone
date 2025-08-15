@@ -12,9 +12,23 @@ namespace evmmax::bn254
 {
 using namespace intx;
 
-/// The bn254 field prime number (P).
-inline constexpr auto FieldPrime =
-    0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
+/// The BN254 curve parameters.
+struct Curve
+{
+    /// The field/scalar unsigned int type.
+    using uint_type = uint256;
+
+    /// The field prime number (P).
+    static constexpr auto FIELD_PRIME =
+        0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
+
+    /// The modular arithmetic for the field.
+    static constexpr ModArith Fp{FIELD_PRIME};
+
+    static constexpr auto B = ecc::FieldElement<Curve>(3_u256);
+};
+
+using AffinePoint = ecc::AffinePoint<Curve>;
 
 using Point = ecc::Point<uint256>;
 /// Note that real part of G2 value goes first and imaginary part is the second. i.e (a + b*i)
@@ -24,17 +38,12 @@ using ExtPoint = ecc::Point<std::pair<uint256, uint256>>;
 /// Validates that point is from the bn254 curve group
 ///
 /// Returns true if y^2 == x^3 + 3. Input is converted to the Montgomery form.
-bool validate(const Point& pt) noexcept;
-
-/// Addition in bn254 curve group.
-///
-/// Computes P ⊕ Q for two points in affine coordinates on the bn254 curve,
-Point add(const Point& p, const Point& q) noexcept;
+bool validate(const AffinePoint& pt) noexcept;
 
 /// Scalar multiplication in bn254 curve group.
 ///
 /// Computes [c]P for a point in affine coordinate on the bn254 curve,
-Point mul(const Point& pt, const uint256& c) noexcept;
+AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept;
 
 /// ate paring implementation for bn254 curve according to https://eips.ethereum.org/EIPS/eip-197
 ///

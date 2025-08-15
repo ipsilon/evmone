@@ -121,16 +121,14 @@ TEST(evmmax, bn254_validate_inputs)
         ASSERT_EQ(t.input.size(), 128);
         ASSERT_EQ(t.expected_output.size(), 64);
 
-        const Point a{
-            be::unsafe::load<uint256>(t.input.data()), be::unsafe::load<uint256>(&t.input[32])};
-        const Point b{
-            be::unsafe::load<uint256>(&t.input[64]), be::unsafe::load<uint256>(&t.input[96])};
-        const Point e{be::unsafe::load<uint256>(t.expected_output.data()),
-            be::unsafe::load<uint256>(&t.expected_output[32])};
+        const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{&t.input[0], 64});
+        const auto q = AffinePoint::from_bytes(std::span<const uint8_t, 64>{&t.input[64], 64});
+        const auto r =
+            AffinePoint::from_bytes(std::span<const uint8_t, 64>{&t.expected_output[0], 64});
 
-        EXPECT_TRUE(validate(a));
-        EXPECT_TRUE(validate(b));
-        EXPECT_TRUE(validate(e));
+        EXPECT_TRUE(validate(p));
+        EXPECT_TRUE(validate(q));
+        EXPECT_TRUE(validate(r));
     }
 }
 
@@ -138,13 +136,11 @@ TEST(evmmax, bn254_pt_add)
 {
     for (const auto& t : test_cases)
     {
-        const Point a{
-            be::unsafe::load<uint256>(t.input.data()), be::unsafe::load<uint256>(&t.input[32])};
-        const Point b{
-            be::unsafe::load<uint256>(&t.input[64]), be::unsafe::load<uint256>(&t.input[96])};
-        const Point e{be::unsafe::load<uint256>(t.expected_output.data()),
-            be::unsafe::load<uint256>(&t.expected_output[32])};
+        const auto p = AffinePoint::from_bytes(std::span<const uint8_t, 64>{&t.input[0], 64});
+        const auto q = AffinePoint::from_bytes(std::span<const uint8_t, 64>{&t.input[64], 64});
+        const auto r =
+            AffinePoint::from_bytes(std::span<const uint8_t, 64>{&t.expected_output[0], 64});
 
-        EXPECT_EQ(add(a, b), e);
+        EXPECT_EQ(add(p, q), r);
     }
 }
