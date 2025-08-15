@@ -168,13 +168,20 @@ PrecompileAnalysis expmod_analyze(bytes_view input, evmc_revision rev) noexcept
     const auto exp_len256 = be::unsafe::load<uint256>(&input_header[32]);
     const auto mod_len256 = be::unsafe::load<uint256>(&input_header[64]);
 
-    if (base_len256 == 0 && mod_len256 == 0)
-        return {min_gas, 0};
-
+    // Check the declared input lengths against the practical (2**32)
+    // or specified (EIP-7823: 2**10) limits.
     const auto len_limit =
         rev < EVMC_OSAKA ? std::numeric_limits<uint32_t>::max() : MODEXP_LEN_LIMIT_EIP7823;
-    if (base_len256 > len_limit || exp_len256 > len_limit || mod_len256 > len_limit)
+    if (base_len256 > len_limit || mod_len256 > len_limit)
         return {GasCostMax, 0};
+
+    if (exp_len256 > len_limit)
+    {
+        // Before EIP-7823, the big exponent may be canceled with zero multiplication complexity.
+        if (rev < EVMC_OSAKA && base_len256 == 0 && mod_len256 == 0)
+            return {min_gas, 0};
+        return {GasCostMax, 0};
+    }
 
     const auto base_len = static_cast<uint32_t>(base_len256);
     const auto exp_len = static_cast<uint32_t>(exp_len256);
