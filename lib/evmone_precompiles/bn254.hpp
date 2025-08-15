@@ -16,6 +16,10 @@ using namespace intx;
 inline constexpr auto FieldPrime =
     0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
 
+/// The bn254 curve order (N)
+inline constexpr auto Order =
+    0x30644E72E131A029B85045B68181585D2833E84879B9709143E1F593F0000001_u256;
+
 using Point = ecc::Point<uint256>;
 /// Note that real part of G2 value goes first and imaginary part is the second. i.e (a + b*i)
 /// The pairing check precompile EVM ABI presumes that imaginary part goes first.

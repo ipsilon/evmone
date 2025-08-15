@@ -26,6 +26,18 @@ struct Point
 static_assert(Point<unsigned>{}.is_inf());
 
 template <typename IntT>
+inline Point<IntT> to_mont(const ModArith<IntT>& m, const Point<IntT>& p)
+{
+    return {m.to_mont(p.x), m.to_mont(p.y)};
+}
+
+template <typename IntT>
+inline Point<IntT> from_mont(const ModArith<IntT>& m, const Point<IntT>& p)
+{
+    return {m.from_mont(p.x), m.from_mont(p.y)};
+}
+
+template <typename IntT>
 struct ProjPoint
 {
     IntT x = 0;
@@ -249,6 +261,20 @@ ProjPoint<IntT> add(const ModArith<IntT>& s, const ProjPoint<IntT>& p, const Poi
     return {x3, y3, z3};
 }
 
+// TODO: Implement dbl function for affine coordinates.
+template <typename IntT, int A = 0>
+Point<IntT> dbl(const evmmax::ModArith<IntT>& s, const Point<IntT>& p) noexcept
+{
+    return add(s, p, p);
+}
+
+// TODO: Implement dbl function for affine coordinates.
+template <typename IntT, int A = 0>
+Point<IntT> dbl_in_mont(const evmmax::ModArith<IntT>& s, const Point<IntT>& p) noexcept
+{
+    return add_in_mont(s, p, p);
+}
+
 template <typename IntT, int A = 0>
 ProjPoint<IntT> dbl(
     const evmmax::ModArith<IntT>& s, const ProjPoint<IntT>& p, const IntT& b3) noexcept
@@ -307,4 +333,85 @@ ProjPoint<IntT> mul(
     }
     return r;
 }
+
+// Computes uG + vQ using "Shamir's trick". https://eprint.iacr.org/2003/257.pdf (page 7)
+// Input arguments must be in Montgomery form and it returns result in Montgomery form.
+template <typename UIntT>
+inline ProjPoint<UIntT> shamir_multiply(const ModArith<UIntT>& m, const UIntT& u,
+    const Point<UIntT>& g, const UIntT& v, const Point<UIntT>& q, const UIntT& b3)
+{
+    ProjPoint<UIntT> r;
+    const ProjPoint<UIntT> h = add(m, {g.x, g.y, m.to_mont(1)}, q, b3);
+
+    const auto u_lz = clz(u);
+    const auto v_lz = clz(v);
+
+    auto lz = std::min(u_lz, v_lz);
+
+    if (lz == UIntT::num_bits)
+        return {};
+
+    if (u_lz < v_lz)
+        r = {g.x, g.y, m.to_mont(1)};
+    else if (u_lz > v_lz)
+        r = {q.x, q.y, m.to_mont(1)};
+    else
+        r = h;
+
+    auto mask = (UIntT{1} << (UIntT::num_bits - 1 - lz - 1));
+
+    while (mask != 0)
+    {
+        r = dbl(m, r, b3);
+        if (u & v & mask)
+            r = add(m, r, h, b3);
+        else if (u & mask)
+            r = add(m, r, g, b3);
+        else if (v & mask)
+            r = add(m, r, q, b3);
+
+        mask >>= 1;
+    }
+
+    return r;
+}
+
+// Decomposes scalar k into k₁ and k₂ such that k₁ + k₂λ ≡ k mod n
+// Returns ((is_negative, k1), (is_negative, k2))
+template <typename ConfigT, typename UIntT>
+inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const UIntT& k) noexcept
+{
+    using DIntT = intx::uint<2 * UIntT::num_bits>;
+
+    const auto round_div = [](const DIntT& n) {
+        const auto [q, r] = udivrem(n, ConfigT::DET);
+
+        return (r <= (ConfigT::DET / 2)) ? q : (q + 1);
+    };
+
+    const auto z1 = round_div(ConfigT::Y2 * k);
+    const auto z2 = round_div(ConfigT::Y1 * k);
+
+    auto const z1x1_z2x2 = z1 * ConfigT::X1 + z2 * ConfigT::X2;
+
+    auto k1_is_neg = false;
+    auto k2_is_neg = false;
+
+    auto tk = k;
+    if (tk < z1x1_z2x2)
+        k1_is_neg = true;
+
+    const auto k1 = !k1_is_neg ? (tk - z1x1_z2x2) : z1x1_z2x2 - tk;
+
+    const DIntT z2y2 = z2 * ConfigT::Y2;
+    const DIntT z1y1 = z1 * ConfigT::Y1;
+
+    if (z1y1 < z2y2)
+        k2_is_neg = true;
+
+    const DIntT k2 = !k2_is_neg ? (z1y1 - z2y2) : z2y2 - z1y1;
+
+    return {{k1_is_neg, UIntT{k1}}, {k2_is_neg, UIntT{k2}}};
+}
+
 }  // namespace evmmax::ecc

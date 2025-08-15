@@ -14,6 +14,28 @@ constexpr auto B3 = Fp.to_mont(7 * 3);
 
 constexpr Point G{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256,
     0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256};
+
+struct Config
+{
+    // Linearly independent short vectors (𝑣₁=(𝑥₁, 𝑦₁), 𝑣₂=(x₂, 𝑦₂)) such that f(𝑣₁) = f(𝑣₂) = 0,
+    // where f : ℤ×ℤ → ℤₙ is defined as (𝑖,𝑗) → (𝑖+𝑗λ), where λ² + λ ≡ -1 mod n. n is secp256k1
+    // curve order. Here λ = 0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72. DET
+    // is (𝑣₁, 𝑣₂) matrix determinant. For more details see
+    // https://www.iacr.org/archive/crypto2001/21390189.pdf
+    static constexpr auto X1 = 64502973549206556628585045361533709077_u512;
+    // Y1 should be negative, hence we calculate the determinant below adding operands instead of
+    // subtracting.
+    static constexpr auto Y1 = 303414439467246543595250775667605759171_u512;
+    static constexpr auto X2 = 367917413016453100223835821029139468248_u512;
+    static constexpr auto Y2 = 64502973549206556628585045361533709077_u512;
+    // For secp256k1 the determinant equals curve order.
+    static constexpr auto DET = uint512(Order);
+};
+// For secp256k1 curve and β ∈ 𝔽ₚ endomorphism ϕ : E₂ → E₂ defined as (𝑥,𝑦) → (β𝑥,𝑦) calculates
+// [λ](𝑥,𝑦) with only one multiplication in 𝔽ₚ. BETA value in Montgomery form;
+inline constexpr auto BETA =
+    55313291615161283318657529331139468956476901535073802794763309073431015819598_u256;
+
 }  // namespace
 
 // FIXME: Change to "uncompress_point".
@@ -116,19 +138,26 @@ std::optional<Point> secp256k1_ecdsa_recover(
     const auto y = Fp.from_mont(*y_mont);
 
     // 6. Calculate public key point Q.
-    const auto R = Point{Fp.to_mont(r), Fp.to_mont(y)};
-    const auto pG = Point{Fp.to_mont(G.x), Fp.to_mont(G.y)};
-    const auto T1 = ecc::mul(Fp, pG, u1, B3);
-    const auto T2 = ecc::mul(Fp, R, u2, B3);
-    const auto pQ = ecc::add(Fp, T1, T2, B3);
+    const auto R = Point{r, y};
 
-    const auto Q = ecc::to_affine(Fp, pQ);
+    const auto [u1k1, u1k2] = ecc::decompose<Config>(u1);
+    const auto [u2k1, u2k2] = ecc::decompose<Config>(u2);
+
+    const Point LG = ecc::to_mont(Fp, Point{Fp.mul(BETA, G.x), !u1k2.first ? G.y : Fp.sub(0, G.y)});
+    const Point LR = ecc::to_mont(Fp, Point{Fp.mul(BETA, R.x), !u2k2.first ? R.y : Fp.sub(0, R.y)});
+
+    const auto Q = ecc::add(Fp,
+        shamir_multiply(Fp, u1k1.second,
+            ecc::to_mont(Fp, !u1k1.first ? G : Point{G.x, Fp.sub(0, G.y)}), u1k2.second, LG, B3),
+        shamir_multiply(Fp, u2k1.second,
+            ecc::to_mont(Fp, !u2k1.first ? R : Point{R.x, Fp.sub(0, R.y)}), u2k2.second, LR, B3),
+        B3);
 
     // Any other validity check needed?
     if (Q.is_inf())
         return std::nullopt;
 
-    return Q;
+    return ecc::to_affine(Fp, Q);
 }
 
 std::optional<evmc::address> ecrecover(
