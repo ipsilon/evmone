@@ -29,7 +29,7 @@ constexpr auto MAX_INITCODE_COUNT = 256;
 
 constexpr int64_t num_words(size_t size_in_bytes) noexcept
 {
-    return static_cast<int64_t>((size_in_bytes + 31) / 32);
+    return static_cast<int64_t>(size_in_bytes / 32 + static_cast<size_t>(size_in_bytes % 32 != 0));
 }
 
 size_t compute_tx_data_tokens(evmc_revision rev, bytes_view data) noexcept
