@@ -142,7 +142,7 @@ and improves the interpreter API.
 
 - Implementation of all [EIP-2537] BLS precompiles, enabled in **Prague**:
   [#984](https://github.com/ethereum/evmone/pull/984)
-  - uses [blst] [v0.3.13](https://github.com/supranational/blst/releases/tag/v0.3.13) library,
+  - uses [blst] [v0.3.15](https://github.com/supranational/blst/releases/tag/v0.3.15) library,
     [#972](https://github.com/ethereum/evmone/pull/972)
     [#986](https://github.com/ethereum/evmone/pull/986)
   - `bls12_g1add` (`0x0b`)
