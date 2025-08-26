@@ -25,7 +25,7 @@ struct Curve
     /// The modular arithmetic for the field.
     static constexpr ModArith Fp{FIELD_PRIME};
 
-    static constexpr auto B = ecc::FieldElement<Curve>(3_u256);
+    static constexpr auto B = ecc::FieldElement<Curve>(3);
 };
 
 using AffinePoint = ecc::AffinePoint<Curve>;

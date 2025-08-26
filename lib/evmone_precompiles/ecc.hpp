@@ -218,7 +218,7 @@ inline Point<IntT> to_affine(const ModArith<IntT>& s, const ProjPoint<IntT>& p) 
 template <typename Curve>
 inline AffinePoint<Curve> to_affine(const ProjPoint<typename Curve::uint_type>& p) noexcept
 {
-    // FIXME: Add tests for inf.
+    // This works correctly for the point at infinity (z == 0) because then z_inv == 0.
     const auto z_inv = 1 / FieldElement<Curve>::wrap(p.z);
     return {FieldElement<Curve>::wrap(p.x) * z_inv, FieldElement<Curve>::wrap(p.y) * z_inv};
 }
