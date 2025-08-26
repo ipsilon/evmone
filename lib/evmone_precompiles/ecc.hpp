@@ -230,63 +230,61 @@ template <typename Curve>
 ProjPoint<Curve> add(
     const ProjPoint<Curve>& p, const ProjPoint<Curve>& q, const FieldElement<Curve>& b3) noexcept
 {
+    (void)b3;
     static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
-    using FE = FieldElement<Curve>;
 
-    // Joost Renes and Craig Costello and Lejla Batina
-    // "Complete addition formulas for prime order elliptic curves"
-    // Cryptology ePrint Archive, Paper 2015/1060
-    // https://eprint.iacr.org/2015/1060
-    // Algorithm 7.
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
 
-    const auto& x1 = p.x;
-    const auto& y1 = p.y;
-    const auto& z1 = p.z;
-    const auto& x2 = q.x;
-    const auto& y2 = q.y;
-    const auto& z2 = q.z;
-    FE x3;
-    FE y3;
-    FE z3;
-    FE t0;
-    FE t1;
-    FE t2;
-    FE t3;
-    FE t4;
+    // Z1Z1 = Z1^2
+    // Z2Z2 = Z2^2
+    // U1 = X1*Z2Z2
+    // U2 = X2*Z1Z1
+    // t0 = Z2*Z2Z2
+    // S1 = Y1*t0
+    // t1 = Z1*Z1Z1
+    // S2 = Y2*t1
+    // H = U2-U1
+    // HH = H^2
+    // HHH = H*HH
+    // r = S2-S1
+    // V = U1*HH
+    // t2 = r^2
+    // t3 = 2*V
+    // t4 = t2-HHH
+    // X3 = t4-t3
+    // t5 = V-X3
+    // t6 = S1*HHH
+    // t7 = r*t5
+    // Y3 = t7-t6
+    // t8 = Z2*H
+    // Z3 = Z1*t8
 
-    t0 = x1 * x2;  // 1
-    t1 = y1 * y2;  // 2
-    t2 = z1 * z2;  // 3
-    t3 = x1 + y1;  // 4
-    t4 = x2 + y2;  // 5
-    t3 = t3 * t4;  // 6
-    t4 = t0 + t1;  // 7
-    t3 = t3 - t4;  // 8
-    t4 = y1 + z1;  // 9
-    x3 = y2 + z2;  // 10
-    t4 = t4 * x3;  // 11
-    x3 = t1 + t2;  // 12
-    t4 = t4 - x3;  // 13
-    x3 = x1 + z1;  // 14
-    y3 = x2 + z2;  // 15
-    x3 = x3 * y3;  // 16
-    y3 = t0 + t2;  // 17
-    y3 = x3 - y3;  // 18
-    x3 = t0 + t0;  // 19
-    t0 = x3 + t0;  // 20
-    t2 = b3 * t2;  // 21
-    z3 = t1 + t2;  // 22
-    t1 = t1 - t2;  // 23
-    y3 = b3 * y3;  // 24
-    x3 = t4 * y3;  // 25
-    t2 = t3 * t1;  // 26
-    x3 = t2 - x3;  // 27
-    y3 = y3 * t0;  // 28
-    t1 = t1 * z3;  // 29
-    y3 = t1 + y3;  // 30
-    t0 = t0 * t3;  // 31
-    z3 = z3 * t4;  // 32
-    z3 = z3 + t0;  // 33
+    const auto& [x1, y1, z1] = p;
+    const auto& [x2, y2, z2] = q;
+
+    const auto z1z1 = z1 * z1;
+    const auto z2z2 = z2 * z2;
+    const auto u1 = x1 * z2z2;
+    const auto u2 = x2 * z1z1;
+    const auto t0 = z2 * z2z2;
+    const auto s1 = y1 * t0;
+    const auto t1 = z1 * z1z1;
+    const auto s2 = y2 * t1;
+    const auto h = u2 - u1;
+    const auto hh = h * h;
+    const auto hhh = h * hh;
+    const auto r = s2 - s1;
+    const auto v = u1 * hh;
+    const auto t2 = r * r;
+    const auto t3 = v + v;
+    const auto t4 = t2 - hhh;
+    const auto x3 = t4 - t3;
+    const auto t5 = v - x3;
+    const auto t6 = s1 * hhh;
+    const auto t7 = r * t5;
+    const auto y3 = t7 - t6;
+    const auto t8 = z2 * h;
+    const auto z3 = z1 * t8;
 
     return {x3, y3, z3};
 }
@@ -295,55 +293,59 @@ template <typename Curve>
 ProjPoint<Curve> add(
     const ProjPoint<Curve>& p, const AffinePoint<Curve>& q, const FieldElement<Curve>& b3) noexcept
 {
+    (void)b3;
     static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
-    using FE = FieldElement<Curve>;
 
-    // Joost Renes and Craig Costello and Lejla Batina
-    // "Complete addition formulas for prime order elliptic curves"
-    // Cryptology ePrint Archive, Paper 2015/1060
-    // https://eprint.iacr.org/2015/1060
-    // Algorithm 8.
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
 
-    const auto& x1 = p.x;
-    const auto& y1 = p.y;
-    const auto& z1 = p.z;
-    const auto& x2 = q.x;
-    const auto& y2 = q.y;
-    FE x3;
-    FE y3;
-    FE z3;
-    FE t0;
-    FE t1;
-    FE t2;
-    FE t3;
-    FE t4;
+    // Z1Z1 = Z1^2
+    // U2 = X2*Z1Z1
+    // t0 = Z1*Z1Z1
+    // S2 = Y2*t0
+    // H = U2-X1
+    // t1 = 2*H
+    // I = t1^2
+    // J = H*I
+    // t2 = S2-Y1
+    // r = 2*t2
+    // V = X1*I
+    // t3 = r^2
+    // t4 = 2*V
+    // t5 = t3-J
+    // X3 = t5-t4
+    // t6 = V-X3
+    // t7 = Y1*J
+    // t8 = 2*t7
+    // t9 = r*t6
+    // Y3 = t9-t8
+    // t10 = Z1*H
+    // Z3 = 2*t10
 
-    t0 = x1 * x2;
-    t1 = y1 * y2;
-    t3 = x2 + y2;
-    t4 = x1 + y1;
-    t3 = t3 * t4;
-    t4 = t0 + t1;
-    t3 = t3 - t4;
-    t4 = y2 * z1;
-    t4 = t4 + y1;
-    y3 = x2 * z1;
-    y3 = y3 + x1;
-    x3 = t0 + t0;
-    t0 = x3 + t0;
-    t2 = b3 * z1;
-    z3 = t1 + t2;
-    t1 = t1 - t2;
-    y3 = b3 * y3;
-    x3 = t4 * y3;
-    t2 = t3 * t1;
-    x3 = t2 - x3;
-    y3 = y3 * t0;
-    t1 = t1 * z3;
-    y3 = t1 + y3;
-    t0 = t0 * t3;
-    z3 = z3 * t4;
-    z3 = z3 + t0;
+    const auto& [x1, y1, z1] = p;
+    const auto& [x2, y2] = q;
+
+    const auto z1z1 = z1 * z1;
+    const auto u2 = x2 * z1z1;
+    const auto t0 = z1 * z1z1;
+    const auto s2 = y2 * t0;
+    const auto h = u2 - x1;
+    const auto t1 = h + h;
+    const auto i = t1 * t1;
+    const auto j = h * i;
+    const auto t2 = s2 - y1;
+    const auto r = t2 + t2;
+    const auto v = x1 * i;
+    const auto t3 = r * r;
+    const auto t4 = v + v;
+    const auto t5 = t3 - j;
+    const auto x3 = t5 - t4;
+    const auto t6 = v - x3;
+    const auto t7 = y1 * j;
+    const auto t8 = t7 + t7;
+    const auto t9 = r * t6;
+    const auto y3 = t9 - t8;
+    const auto t10 = z1 * h;
+    const auto z3 = t10 + t10;
 
     return {x3, y3, z3};
 }
@@ -351,43 +353,50 @@ ProjPoint<Curve> add(
 template <typename Curve>
 ProjPoint<Curve> dbl(const ProjPoint<Curve>& p, const FieldElement<Curve>& b3) noexcept
 {
+    (void)b3;
     static_assert(Curve::A == 0, "point doubling procedure is simplified for a = 0");
-    using FE = FieldElement<Curve>;
 
-    // Joost Renes and Craig Costello and Lejla Batina
-    // "Complete addition formulas for prime order elliptic curves"
-    // Cryptology ePrint Archive, Paper 2015/1060
-    // https://eprint.iacr.org/2015/1060
-    // Algorithm 9.
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
 
-    const auto& x = p.x;
-    const auto& y = p.y;
-    const auto& z = p.z;
-    FE x3;
-    FE y3;
-    FE z3;
-    FE t0;
-    FE t1;
-    FE t2;
+    // A = X1^2
+    // B = Y1^2
+    // C = B^2
+    // t0 = X1+B
+    // t1 = t0^2
+    // t2 = t1-A
+    // t3 = t2-C
+    // D = 2*t3
+    // E = 3*A
+    // F = E^2
+    // t4 = 2*D
+    // X3 = F-t4
+    // t5 = D-X3
+    // t6 = 8*C
+    // t7 = E*t5
+    // Y3 = t7-t6
+    // t8 = Y1*Z1
+    // Z3 = 2*t8
 
-    t0 = y * y;    // 1
-    z3 = t0 + t0;  // 2
-    z3 = z3 + z3;  // 3
-    z3 = z3 + z3;  // 4
-    t1 = y * z;    // 5
-    t2 = z * z;    // 6
-    t2 = b3 * t2;  // 7
-    x3 = t2 * z3;  // 8
-    y3 = t0 + t2;  // 9
-    z3 = t1 * z3;  // 10
-    t1 = t2 + t2;  // 11
-    t2 = t1 + t2;  // 12
-    t0 = t0 - t2;  // 13
-    y3 = t0 * y3;  // 14
-    y3 = x3 + y3;  // 15
-    t1 = x * y;    // 16
-    x3 = t0 * t1;  // 17
-    x3 = x3 + x3;  // 18
+    const auto& [x1, y1, z1] = p;
+
+    const auto a = x1 * x1;
+    const auto b = y1 * y1;
+    const auto c = b * b;
+    const auto t0 = x1 + b;
+    const auto t1 = t0 * t0;
+    const auto t2 = t1 - a;
+    const auto t3 = t2 - c;
+    const auto d = t3 + t3;
+    const auto e = a + a + a;
+    const auto f = e * e;
+    const auto t4 = d + d;
+    const auto x3 = f - t4;
+    const auto t5 = d - x3;
+    const auto t6 = c + c + c + c + c + c + c + c;
+    const auto t7 = e * t5;
+    const auto y3 = t7 - t6;
+    const auto t8 = y1 * z1;
+    const auto z3 = t8 + t8;
 
     return {x3, y3, z3};
 }
