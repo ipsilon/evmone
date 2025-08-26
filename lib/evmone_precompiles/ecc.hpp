@@ -187,7 +187,9 @@ inline AffinePoint<Curve> to_affine(const ProjPoint<Curve>& p) noexcept
 {
     // This works correctly for the point at infinity (z == 0) because then z_inv == 0.
     const auto z_inv = 1 / p.z;
-    return {p.x * z_inv, p.y * z_inv};
+    const auto zz_inv = z_inv * z_inv;
+    const auto zzz_inv = zz_inv * z_inv;
+    return {p.x * zz_inv, p.y * zzz_inv};
 }
 
 /// Elliptic curve point addition in affine coordinates.
@@ -232,6 +234,10 @@ ProjPoint<Curve> add(
 {
     (void)b3;
     static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
+
+    if (p.z == 0)
+        return q;
+    assert(q.z != 0);
 
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
 
@@ -295,6 +301,12 @@ ProjPoint<Curve> add(
 {
     (void)b3;
     static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
+
+    if (q == 0)
+        return p;
+
+    if (p.z == 0)
+        return {q.x, q.y, FieldElement<Curve>{1}};
 
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
 
