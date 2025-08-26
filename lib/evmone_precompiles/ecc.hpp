@@ -146,14 +146,7 @@ struct ProjPoint
     IntT x = 0;
     IntT y = 1;
     IntT z = 0;
-
-    /// Checks if the point represents the special "infinity" value.
-    [[nodiscard]] constexpr bool is_inf() const noexcept { return x == 0 && z == 0; }
-
-    friend constexpr ProjPoint operator-(const ProjPoint& p) noexcept { return {p.x, -p.y, p.z}; }
 };
-
-static_assert(ProjPoint<unsigned>{}.is_inf());
 
 // Jacobian (three) coordinates point implementation.
 template <typename ValueT>
