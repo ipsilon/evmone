@@ -10,13 +10,10 @@ static_assert(AffinePoint{} == 0, "default constructed is the point at infinity"
 
 bool validate(const AffinePoint& pt) noexcept
 {
-    // TODO: Reverse order check.
-    if (pt == 0)
-        return true;
-
     const auto yy = pt.y * pt.y;
     const auto xxx = pt.x * pt.x * pt.x;
-    return yy == xxx + Curve::B;
+    const auto on_curve = yy == xxx + Curve::B;
+    return on_curve || pt == 0;
 }
 
 AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept
