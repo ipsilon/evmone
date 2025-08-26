@@ -140,12 +140,13 @@ struct AffinePoint
     }
 };
 
-template <typename IntT>
+template <typename Curve>
 struct ProjPoint
 {
-    IntT x = 0;
-    IntT y = 1;
-    IntT z = 0;
+    using FE = FieldElement<Curve>;
+    FE x;
+    FE y{1};
+    FE z;
 };
 
 // Jacobian (three) coordinates point implementation.
@@ -182,11 +183,11 @@ using InvFn = IntT (*)(const ModArith<IntT>&, const IntT& x) noexcept;
 
 /// Converts a projected point to an affine point.
 template <typename Curve>
-inline AffinePoint<Curve> to_affine(const ProjPoint<typename Curve::uint_type>& p) noexcept
+inline AffinePoint<Curve> to_affine(const ProjPoint<Curve>& p) noexcept
 {
     // This works correctly for the point at infinity (z == 0) because then z_inv == 0.
-    const auto z_inv = 1 / FieldElement<Curve>::wrap(p.z);
-    return {FieldElement<Curve>::wrap(p.x) * z_inv, FieldElement<Curve>::wrap(p.y) * z_inv};
+    const auto z_inv = 1 / p.z;
+    return {p.x * z_inv, p.y * z_inv};
 }
 
 /// Elliptic curve point addition in affine coordinates.
@@ -225,11 +226,12 @@ AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q)
     return {xr, yr};
 }
 
-template <typename IntT, int A = 0>
-ProjPoint<IntT> add(const evmmax::ModArith<IntT>& s, const ProjPoint<IntT>& p,
-    const ProjPoint<IntT>& q, const IntT& b3) noexcept
+template <typename Curve>
+ProjPoint<Curve> add(
+    const ProjPoint<Curve>& p, const ProjPoint<Curve>& q, const FieldElement<Curve>& b3) noexcept
 {
-    static_assert(A == 0, "point addition procedure is simplified for a = 0");
+    static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
+    using FE = FieldElement<Curve>;
 
     // Joost Renes and Craig Costello and Lejla Batina
     // "Complete addition formulas for prime order elliptic curves"
@@ -243,55 +245,55 @@ ProjPoint<IntT> add(const evmmax::ModArith<IntT>& s, const ProjPoint<IntT>& p,
     const auto& x2 = q.x;
     const auto& y2 = q.y;
     const auto& z2 = q.z;
-    IntT x3;
-    IntT y3;
-    IntT z3;
-    IntT t0;
-    IntT t1;
-    IntT t2;
-    IntT t3;
-    IntT t4;
+    FE x3;
+    FE y3;
+    FE z3;
+    FE t0;
+    FE t1;
+    FE t2;
+    FE t3;
+    FE t4;
 
-    t0 = s.mul(x1, x2);  // 1
-    t1 = s.mul(y1, y2);  // 2
-    t2 = s.mul(z1, z2);  // 3
-    t3 = s.add(x1, y1);  // 4
-    t4 = s.add(x2, y2);  // 5
-    t3 = s.mul(t3, t4);  // 6
-    t4 = s.add(t0, t1);  // 7
-    t3 = s.sub(t3, t4);  // 8
-    t4 = s.add(y1, z1);  // 9
-    x3 = s.add(y2, z2);  // 10
-    t4 = s.mul(t4, x3);  // 11
-    x3 = s.add(t1, t2);  // 12
-    t4 = s.sub(t4, x3);  // 13
-    x3 = s.add(x1, z1);  // 14
-    y3 = s.add(x2, z2);  // 15
-    x3 = s.mul(x3, y3);  // 16
-    y3 = s.add(t0, t2);  // 17
-    y3 = s.sub(x3, y3);  // 18
-    x3 = s.add(t0, t0);  // 19
-    t0 = s.add(x3, t0);  // 20
-    t2 = s.mul(b3, t2);  // 21
-    z3 = s.add(t1, t2);  // 22
-    t1 = s.sub(t1, t2);  // 23
-    y3 = s.mul(b3, y3);  // 24
-    x3 = s.mul(t4, y3);  // 25
-    t2 = s.mul(t3, t1);  // 26
-    x3 = s.sub(t2, x3);  // 27
-    y3 = s.mul(y3, t0);  // 28
-    t1 = s.mul(t1, z3);  // 29
-    y3 = s.add(t1, y3);  // 30
-    t0 = s.mul(t0, t3);  // 31
-    z3 = s.mul(z3, t4);  // 32
-    z3 = s.add(z3, t0);  // 33
+    t0 = x1 * x2;  // 1
+    t1 = y1 * y2;  // 2
+    t2 = z1 * z2;  // 3
+    t3 = x1 + y1;  // 4
+    t4 = x2 + y2;  // 5
+    t3 = t3 * t4;  // 6
+    t4 = t0 + t1;  // 7
+    t3 = t3 - t4;  // 8
+    t4 = y1 + z1;  // 9
+    x3 = y2 + z2;  // 10
+    t4 = t4 * x3;  // 11
+    x3 = t1 + t2;  // 12
+    t4 = t4 - x3;  // 13
+    x3 = x1 + z1;  // 14
+    y3 = x2 + z2;  // 15
+    x3 = x3 * y3;  // 16
+    y3 = t0 + t2;  // 17
+    y3 = x3 - y3;  // 18
+    x3 = t0 + t0;  // 19
+    t0 = x3 + t0;  // 20
+    t2 = b3 * t2;  // 21
+    z3 = t1 + t2;  // 22
+    t1 = t1 - t2;  // 23
+    y3 = b3 * y3;  // 24
+    x3 = t4 * y3;  // 25
+    t2 = t3 * t1;  // 26
+    x3 = t2 - x3;  // 27
+    y3 = y3 * t0;  // 28
+    t1 = t1 * z3;  // 29
+    y3 = t1 + y3;  // 30
+    t0 = t0 * t3;  // 31
+    z3 = z3 * t4;  // 32
+    z3 = z3 + t0;  // 33
 
     return {x3, y3, z3};
 }
 
 template <typename Curve>
-ProjPoint<typename Curve::uint_type> add(const ProjPoint<typename Curve::uint_type>& p,
-    const AffinePoint<Curve>& q, const typename Curve::uint_type& b3) noexcept
+ProjPoint<Curve> add(
+    const ProjPoint<Curve>& p, const AffinePoint<Curve>& q, const FieldElement<Curve>& b3) noexcept
 {
     static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
     using FE = FieldElement<Curve>;
@@ -302,9 +304,9 @@ ProjPoint<typename Curve::uint_type> add(const ProjPoint<typename Curve::uint_ty
     // https://eprint.iacr.org/2015/1060
     // Algorithm 8.
 
-    const auto& x1 = FE::wrap(p.x);
-    const auto& y1 = FE::wrap(p.y);
-    const auto& z1 = FE::wrap(p.z);
+    const auto& x1 = p.x;
+    const auto& y1 = p.y;
+    const auto& z1 = p.z;
     const auto& x2 = q.x;
     const auto& y2 = q.y;
     FE x3;
@@ -329,10 +331,10 @@ ProjPoint<typename Curve::uint_type> add(const ProjPoint<typename Curve::uint_ty
     y3 = y3 + x1;
     x3 = t0 + t0;
     t0 = x3 + t0;
-    t2 = FE::wrap(b3) * z1;
+    t2 = b3 * z1;
     z3 = t1 + t2;
     t1 = t1 - t2;
-    y3 = FE::wrap(b3) * y3;
+    y3 = b3 * y3;
     x3 = t4 * y3;
     t2 = t3 * t1;
     x3 = t2 - x3;
@@ -343,14 +345,14 @@ ProjPoint<typename Curve::uint_type> add(const ProjPoint<typename Curve::uint_ty
     z3 = z3 * t4;
     z3 = z3 + t0;
 
-    return {x3.value_, y3.value_, z3.value_};
+    return {x3, y3, z3};
 }
 
-template <typename IntT, int A = 0>
-ProjPoint<IntT> dbl(
-    const evmmax::ModArith<IntT>& s, const ProjPoint<IntT>& p, const IntT& b3) noexcept
+template <typename Curve>
+ProjPoint<Curve> dbl(const ProjPoint<Curve>& p, const FieldElement<Curve>& b3) noexcept
 {
-    static_assert(A == 0, "point doubling procedure is simplified for a = 0");
+    static_assert(Curve::A == 0, "point doubling procedure is simplified for a = 0");
+    using FE = FieldElement<Curve>;
 
     // Joost Renes and Craig Costello and Lejla Batina
     // "Complete addition formulas for prime order elliptic curves"
@@ -361,45 +363,45 @@ ProjPoint<IntT> dbl(
     const auto& x = p.x;
     const auto& y = p.y;
     const auto& z = p.z;
-    IntT x3;
-    IntT y3;
-    IntT z3;
-    IntT t0;
-    IntT t1;
-    IntT t2;
+    FE x3;
+    FE y3;
+    FE z3;
+    FE t0;
+    FE t1;
+    FE t2;
 
-    t0 = s.mul(y, y);    // 1
-    z3 = s.add(t0, t0);  // 2
-    z3 = s.add(z3, z3);  // 3
-    z3 = s.add(z3, z3);  // 4
-    t1 = s.mul(y, z);    // 5
-    t2 = s.mul(z, z);    // 6
-    t2 = s.mul(b3, t2);  // 7
-    x3 = s.mul(t2, z3);  // 8
-    y3 = s.add(t0, t2);  // 9
-    z3 = s.mul(t1, z3);  // 10
-    t1 = s.add(t2, t2);  // 11
-    t2 = s.add(t1, t2);  // 12
-    t0 = s.sub(t0, t2);  // 13
-    y3 = s.mul(t0, y3);  // 14
-    y3 = s.add(x3, y3);  // 15
-    t1 = s.mul(x, y);    // 16
-    x3 = s.mul(t0, t1);  // 17
-    x3 = s.add(x3, x3);  // 18
+    t0 = y * y;    // 1
+    z3 = t0 + t0;  // 2
+    z3 = z3 + z3;  // 3
+    z3 = z3 + z3;  // 4
+    t1 = y * z;    // 5
+    t2 = z * z;    // 6
+    t2 = b3 * t2;  // 7
+    x3 = t2 * z3;  // 8
+    y3 = t0 + t2;  // 9
+    z3 = t1 * z3;  // 10
+    t1 = t2 + t2;  // 11
+    t2 = t1 + t2;  // 12
+    t0 = t0 - t2;  // 13
+    y3 = t0 * y3;  // 14
+    y3 = x3 + y3;  // 15
+    t1 = x * y;    // 16
+    x3 = t0 * t1;  // 17
+    x3 = x3 + x3;  // 18
 
     return {x3, y3, z3};
 }
 
 template <typename Curve>
-ProjPoint<typename Curve::uint_type> mul(const AffinePoint<Curve>& p,
-    const typename Curve::uint_type& c, const typename Curve::uint_type& b3) noexcept
+ProjPoint<Curve> mul(const AffinePoint<Curve>& p, const typename Curve::uint_type& c,
+    const FieldElement<Curve>& b3) noexcept
 {
     using IntT = Curve::uint_type;
-    ProjPoint<IntT> r;
+    ProjPoint<Curve> r;
     const auto bit_width = sizeof(IntT) * 8 - intx::clz(c);
     for (auto i = bit_width; i != 0; --i)
     {
-        r = ecc::dbl(Curve::Fp, r, b3);
+        r = ecc::dbl(r, b3);
         if ((c & (IntT{1} << (i - 1))) != 0)  // if the i-th bit in the scalar is set
             r = ecc::add(r, p, b3);
     }

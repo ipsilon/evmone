@@ -9,7 +9,7 @@ namespace evmmax::secp256k1
 namespace
 {
 constexpr auto B = Curve::Fp.to_mont(7);
-constexpr auto B3 = Curve::Fp.to_mont(7 * 3);
+constexpr auto B3 = ecc::FieldElement<Curve>{7 * 3};
 
 constexpr AffinePoint G{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256,
     0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256};
@@ -96,7 +96,7 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
     const auto R = AffinePoint{AffinePoint::FE{r}, AffinePoint::FE{y}};
     const auto T1 = ecc::mul(G, u1, B3);
     const auto T2 = ecc::mul(R, u2, B3);
-    const auto pQ = ecc::add(Fp, T1, T2, B3);
+    const auto pQ = ecc::add(T1, T2, B3);
 
     const auto Q = ecc::to_affine<Curve>(pQ);
 
