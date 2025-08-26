@@ -259,8 +259,11 @@ ProjPoint<Curve> add(
     if (p.z == 0)
         return q;
     assert(q.z != 0);
-    assert(p != q);
+    // assert(p != q);
     // assert(p != -q);
+
+    if (p == q)
+        return dbl(p, b3);
 
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
 
@@ -336,7 +339,10 @@ ProjPoint<Curve> add(
     if (p.z == 0)
         return {q.x, q.y, FieldElement<Curve>{1}};
 
-    assert(p != ProjPoint<Curve>::from(q));
+    if (p == ProjPoint<Curve>::from(q))
+        return dbl(p, b3);
+
+    // assert(p != ProjPoint<Curve>::from(q));
     // assert(p != -ProjPoint<Curve>::from(q));
 
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
