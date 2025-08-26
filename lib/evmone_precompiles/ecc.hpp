@@ -147,6 +147,27 @@ struct ProjPoint
     FE x;
     FE y{1};
     FE z;
+
+    friend constexpr bool operator==(const ProjPoint& a, const ProjPoint& b) noexcept
+    {
+        const auto bz2 = b.z * b.z;
+        const auto az2 = a.z * a.z;
+
+        const auto bz3 = bz2 * b.z;
+        const auto az3 = az2 * a.z;
+
+        return a.x * bz2 == b.x * az2 && a.y * bz3 == b.y * az3;
+    }
+
+    friend constexpr ProjPoint operator-(const ProjPoint& p) noexcept
+    {
+        return {p.x, FE{} - p.y, p.z};
+    }
+
+    static constexpr ProjPoint from(const AffinePoint<Curve>& a) noexcept
+    {
+        return {a.x, a.y, FE{1}};
+    }
 };
 
 // Jacobian (three) coordinates point implementation.
@@ -238,6 +259,8 @@ ProjPoint<Curve> add(
     if (p.z == 0)
         return q;
     assert(q.z != 0);
+    assert(p != q);
+    // assert(p != -q);
 
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
 
@@ -292,6 +315,11 @@ ProjPoint<Curve> add(
     const auto t8 = z2 * h;
     const auto z3 = z1 * t8;
 
+    if (p == -q)
+    {
+        assert(z3 == 0);
+    }
+
     return {x3, y3, z3};
 }
 
@@ -307,6 +335,9 @@ ProjPoint<Curve> add(
 
     if (p.z == 0)
         return {q.x, q.y, FieldElement<Curve>{1}};
+
+    assert(p != ProjPoint<Curve>::from(q));
+    // assert(p != -ProjPoint<Curve>::from(q));
 
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
 
@@ -358,6 +389,11 @@ ProjPoint<Curve> add(
     const auto y3 = t9 - t8;
     const auto t10 = z1 * h;
     const auto z3 = t10 + t10;
+
+    if (p == -ProjPoint<Curve>::from(q))
+    {
+        assert(z3 == 0);
+    }
 
     return {x3, y3, z3};
 }
