@@ -18,8 +18,7 @@ bool validate(const AffinePoint& pt) noexcept
 
 AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept
 {
-    static constexpr auto B3 = ecc::FieldElement<Curve>{3 * 3};
-    const auto pr = ecc::mul(pt, c, B3);
-    return ecc::to_affine<Curve>(pr);
+    const auto pr = ecc::mul(pt, c);
+    return ecc::to_affine(pr);
 }
 }  // namespace evmmax::bn254

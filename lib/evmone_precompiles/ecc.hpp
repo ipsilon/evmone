@@ -72,6 +72,11 @@ struct FieldElement
         return wrap(Fp.sub(a.value_, b.value_));
     }
 
+    friend constexpr auto operator-(const FieldElement& a) noexcept
+    {
+        return wrap(Fp.sub(0, a.value_));
+    }
+
     friend constexpr auto operator/(one_t, const FieldElement& a) noexcept
     {
         return wrap(Fp.inv(a.value_));
@@ -140,13 +145,35 @@ struct AffinePoint
     }
 };
 
+/// Elliptic curve point in Jacobian coordinates (X, Y, Z)
+/// representing the affine point (X/Z², Y/Z³).
+/// TODO: Merge with JacPoint.
 template <typename Curve>
 struct ProjPoint
 {
     using FE = FieldElement<Curve>;
     FE x;
-    FE y{1};
+    FE y{1};  // TODO: Make sure this is compile-time constant.
     FE z;
+
+    ProjPoint() = default;
+    constexpr ProjPoint(const FE& x_, const FE& y_, const FE& z_) noexcept : x{x_}, y{y_}, z{z_} {}
+    constexpr explicit ProjPoint(const AffinePoint<Curve>& p) noexcept : x{p.x}, y{p.y}, z{FE{1}} {}
+
+    friend constexpr bool operator==(const ProjPoint& p, zero_t) noexcept { return p.z == 0; }
+
+    friend constexpr bool operator==(const ProjPoint& p, const ProjPoint& q) noexcept
+    {
+        const auto& [x1, y1, z1] = p;
+        const auto& [x2, y2, z2] = q;
+        const auto z1z1 = z1 * z1;
+        const auto z1z1z1 = z1z1 * z1;
+        const auto z2z2 = z2 * z2;
+        const auto z2z2z2 = z2z2 * z2;
+        return x1 * z2z2 == x2 * z1z1 && y1 * z2z2z2 == y2 * z1z1z1;
+    }
+
+    friend constexpr ProjPoint operator-(const ProjPoint& p) noexcept { return {p.x, -p.y, p.z}; }
 };
 
 // Jacobian (three) coordinates point implementation.
@@ -187,7 +214,9 @@ inline AffinePoint<Curve> to_affine(const ProjPoint<Curve>& p) noexcept
 {
     // This works correctly for the point at infinity (z == 0) because then z_inv == 0.
     const auto z_inv = 1 / p.z;
-    return {p.x * z_inv, p.y * z_inv};
+    const auto zz_inv = z_inv * z_inv;
+    const auto zzz_inv = zz_inv * z_inv;
+    return {p.x * zz_inv, p.y * zzz_inv};
 }
 
 /// Elliptic curve point addition in affine coordinates.
@@ -226,175 +255,142 @@ AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q)
     return {xr, yr};
 }
 
+/// Elliptic curve point addition in Jacobian coordinates.
+///
+/// Computes P ⊕ Q for two points in Jacobian coordinates on the elliptic curve.
+/// This procedure handles all inputs (e.g. doubling or points at infinity).
 template <typename Curve>
-ProjPoint<Curve> add(
-    const ProjPoint<Curve>& p, const ProjPoint<Curve>& q, const FieldElement<Curve>& b3) noexcept
+ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexcept
 {
-    static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
-    using FE = FieldElement<Curve>;
+    static_assert(Curve::A == 0, "untested for A != 0");
 
-    // Joost Renes and Craig Costello and Lejla Batina
-    // "Complete addition formulas for prime order elliptic curves"
-    // Cryptology ePrint Archive, Paper 2015/1060
-    // https://eprint.iacr.org/2015/1060
-    // Algorithm 7.
+    if (p == 0)
+        return q;
+    if (q == 0)
+        return p;  // TODO: Untested.
 
-    const auto& x1 = p.x;
-    const auto& y1 = p.y;
-    const auto& z1 = p.z;
-    const auto& x2 = q.x;
-    const auto& y2 = q.y;
-    const auto& z2 = q.z;
-    FE x3;
-    FE y3;
-    FE z3;
-    FE t0;
-    FE t1;
-    FE t2;
-    FE t3;
-    FE t4;
+    if (p == q)
+        return dbl(p);
 
-    t0 = x1 * x2;  // 1
-    t1 = y1 * y2;  // 2
-    t2 = z1 * z2;  // 3
-    t3 = x1 + y1;  // 4
-    t4 = x2 + y2;  // 5
-    t3 = t3 * t4;  // 6
-    t4 = t0 + t1;  // 7
-    t3 = t3 - t4;  // 8
-    t4 = y1 + z1;  // 9
-    x3 = y2 + z2;  // 10
-    t4 = t4 * x3;  // 11
-    x3 = t1 + t2;  // 12
-    t4 = t4 - x3;  // 13
-    x3 = x1 + z1;  // 14
-    y3 = x2 + z2;  // 15
-    x3 = x3 * y3;  // 16
-    y3 = t0 + t2;  // 17
-    y3 = x3 - y3;  // 18
-    x3 = t0 + t0;  // 19
-    t0 = x3 + t0;  // 20
-    t2 = b3 * t2;  // 21
-    z3 = t1 + t2;  // 22
-    t1 = t1 - t2;  // 23
-    y3 = b3 * y3;  // 24
-    x3 = t4 * y3;  // 25
-    t2 = t3 * t1;  // 26
-    x3 = t2 - x3;  // 27
-    y3 = y3 * t0;  // 28
-    t1 = t1 * z3;  // 29
-    y3 = t1 + y3;  // 30
-    t0 = t0 * t3;  // 31
-    z3 = z3 * t4;  // 32
-    z3 = z3 + t0;  // 33
+    // Use the "add-1998-cmo-2" formula for curve in Jacobian coordinates.
+    // The cost is 12M + 4S + 6add + 1*2.
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
+    // TODO: The newer formula "add-2007-bl" trades one multiplication for one squaring and
+    //   additional additions. We don't have dedicated squaring operation yet, so it's not clear
+    //   if it would be faster.
+
+    const auto& [x1, y1, z1] = p;
+    const auto& [x2, y2, z2] = q;
+
+    const auto z1z1 = z1 * z1;
+    const auto z2z2 = z2 * z2;
+    const auto u1 = x1 * z2z2;
+    const auto u2 = x2 * z1z1;
+    const auto z1z1z1 = z1 * z1z1;
+    const auto z2z2z2 = z2 * z2z2;
+    const auto s1 = y1 * z2z2z2;
+    const auto s2 = y2 * z1z1z1;
+    const auto h = u2 - u1;
+    const auto r = s2 - s1;
+    assert(h != 0 || r != 0);  // We already handled p == q case above.
+    const auto hh = h * h;
+    const auto hhh = h * hh;
+    const auto v = u1 * hh;
+    const auto t2 = r * r;
+    const auto t3 = v + v;
+    const auto t4 = t2 - hhh;
+    const auto x3 = t4 - t3;
+    const auto t5 = v - x3;
+    const auto t6 = s1 * hhh;
+    const auto t7 = r * t5;
+    const auto y3 = t7 - t6;
+    const auto t8 = z2 * h;
+    const auto z3 = z1 * t8;
+
+    return {x3, y3, z3};
+}
+
+/// Mixed addition of elliptic curve points.
+///
+/// Computes P ⊕ Q for a point P in Jacobian coordinates and a point Q in affine coordinates.
+/// This procedure is for use in point multiplication and not all inputs are supported.
+template <typename Curve>
+ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
+{
+    static_assert(Curve::A == 0, "untested for A != 0");
+    assert(p != ProjPoint(q));
+
+    if (q == 0)
+        return p;
+    if (p == 0)
+        return ProjPoint(q);
+
+    // Use the "madd" formula for curve in Jacobian coordinates.
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
+
+    const auto& [x1, y1, z1] = p;
+    const auto& [x2, y2] = q;
+
+    const auto z1z1 = z1 * z1;
+    const auto u2 = x2 * z1z1;
+    const auto z1z1z1 = z1 * z1z1;
+    const auto s2 = y2 * z1z1z1;
+    const auto h = u2 - x1;
+    const auto t1 = h + h;
+    const auto i = t1 * t1;
+    const auto j = h * i;
+    const auto t2 = s2 - y1;
+    const auto r = t2 + t2;
+    const auto v = x1 * i;
+    const auto t3 = r * r;
+    const auto t4 = v + v;
+    const auto t5 = t3 - j;
+    const auto x3 = t5 - t4;
+    const auto t6 = v - x3;
+    const auto t7 = y1 * j;
+    const auto t8 = t7 + t7;
+    const auto t9 = r * t6;
+    const auto y3 = t9 - t8;
+    const auto t10 = z1 * h;
+    const auto z3 = t10 + t10;
 
     return {x3, y3, z3};
 }
 
 template <typename Curve>
-ProjPoint<Curve> add(
-    const ProjPoint<Curve>& p, const AffinePoint<Curve>& q, const FieldElement<Curve>& b3) noexcept
+ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
 {
-    static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
-    using FE = FieldElement<Curve>;
+    static_assert(Curve::A == 0, "point doubling procedure is for A = 0");
 
-    // Joost Renes and Craig Costello and Lejla Batina
-    // "Complete addition formulas for prime order elliptic curves"
-    // Cryptology ePrint Archive, Paper 2015/1060
-    // https://eprint.iacr.org/2015/1060
-    // Algorithm 8.
+    // Use the "dbl-2009-l" formula for a=0 curve in Jacobian coordinates.
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
 
-    const auto& x1 = p.x;
-    const auto& y1 = p.y;
-    const auto& z1 = p.z;
-    const auto& x2 = q.x;
-    const auto& y2 = q.y;
-    FE x3;
-    FE y3;
-    FE z3;
-    FE t0;
-    FE t1;
-    FE t2;
-    FE t3;
-    FE t4;
+    const auto& [x1, y1, z1] = p;
 
-    t0 = x1 * x2;
-    t1 = y1 * y2;
-    t3 = x2 + y2;
-    t4 = x1 + y1;
-    t3 = t3 * t4;
-    t4 = t0 + t1;
-    t3 = t3 - t4;
-    t4 = y2 * z1;
-    t4 = t4 + y1;
-    y3 = x2 * z1;
-    y3 = y3 + x1;
-    x3 = t0 + t0;
-    t0 = x3 + t0;
-    t2 = b3 * z1;
-    z3 = t1 + t2;
-    t1 = t1 - t2;
-    y3 = b3 * y3;
-    x3 = t4 * y3;
-    t2 = t3 * t1;
-    x3 = t2 - x3;
-    y3 = y3 * t0;
-    t1 = t1 * z3;
-    y3 = t1 + y3;
-    t0 = t0 * t3;
-    z3 = z3 * t4;
-    z3 = z3 + t0;
+    const auto a = x1 * x1;
+    const auto b = y1 * y1;
+    const auto c = b * b;
+    const auto t0 = x1 + b;
+    const auto t1 = t0 * t0;
+    const auto t2 = t1 - a;
+    const auto t3 = t2 - c;
+    const auto d = t3 + t3;
+    const auto e = a + a + a;
+    const auto f = e * e;
+    const auto t4 = d + d;
+    const auto x3 = f - t4;
+    const auto t5 = d - x3;
+    const auto t6 = c + c + c + c + c + c + c + c;
+    const auto t7 = e * t5;
+    const auto y3 = t7 - t6;
+    const auto t8 = y1 * z1;
+    const auto z3 = t8 + t8;
 
     return {x3, y3, z3};
 }
 
 template <typename Curve>
-ProjPoint<Curve> dbl(const ProjPoint<Curve>& p, const FieldElement<Curve>& b3) noexcept
-{
-    static_assert(Curve::A == 0, "point doubling procedure is simplified for a = 0");
-    using FE = FieldElement<Curve>;
-
-    // Joost Renes and Craig Costello and Lejla Batina
-    // "Complete addition formulas for prime order elliptic curves"
-    // Cryptology ePrint Archive, Paper 2015/1060
-    // https://eprint.iacr.org/2015/1060
-    // Algorithm 9.
-
-    const auto& x = p.x;
-    const auto& y = p.y;
-    const auto& z = p.z;
-    FE x3;
-    FE y3;
-    FE z3;
-    FE t0;
-    FE t1;
-    FE t2;
-
-    t0 = y * y;    // 1
-    z3 = t0 + t0;  // 2
-    z3 = z3 + z3;  // 3
-    z3 = z3 + z3;  // 4
-    t1 = y * z;    // 5
-    t2 = z * z;    // 6
-    t2 = b3 * t2;  // 7
-    x3 = t2 * z3;  // 8
-    y3 = t0 + t2;  // 9
-    z3 = t1 * z3;  // 10
-    t1 = t2 + t2;  // 11
-    t2 = t1 + t2;  // 12
-    t0 = t0 - t2;  // 13
-    y3 = t0 * y3;  // 14
-    y3 = x3 + y3;  // 15
-    t1 = x * y;    // 16
-    x3 = t0 * t1;  // 17
-    x3 = x3 + x3;  // 18
-
-    return {x3, y3, z3};
-}
-
-template <typename Curve>
-ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c,
-    const FieldElement<Curve>& b3) noexcept
+ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) noexcept
 {
     using IntT = Curve::uint_type;
 
@@ -412,9 +408,9 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c,
     const auto bit_width = sizeof(IntT) * 8 - intx::clz(c);
     for (auto i = bit_width; i != 0; --i)
     {
-        r = ecc::dbl(r, b3);
+        r = ecc::dbl(r);
         if ((c & (IntT{1} << (i - 1))) != 0)  // if the i-th bit in the scalar is set
-            r = ecc::add(r, p, b3);
+            r = ecc::add(r, p);
     }
     return r;
 }
