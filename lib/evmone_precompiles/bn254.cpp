@@ -19,13 +19,6 @@ bool validate(const AffinePoint& pt) noexcept
 AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept
 {
     static constexpr auto B3 = Curve::Fp.to_mont(3 * 3);
-
-    if (pt == 0)
-        return pt;
-
-    if (c == 0)
-        return {};
-
     const auto pr = ecc::mul(pt, c, B3);
     return ecc::to_affine<Curve>(pr);
 }

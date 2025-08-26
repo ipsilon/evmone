@@ -32,12 +32,6 @@ std::optional<uint256> calculate_y(
 
 AffinePoint mul(const AffinePoint& p, const uint256& c) noexcept
 {
-    if (p == 0)
-        return p;
-
-    if (c == 0)
-        return {};
-
     const auto r = ecc::mul(p, c, B3);
     return ecc::to_affine<Curve>(r);
 }
