@@ -90,10 +90,9 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
     const auto y_mont = calculate_y(Fp, r_mont, v);
     if (!y_mont.has_value())
         return std::nullopt;
-    const auto y = Fp.from_mont(*y_mont);
 
     // 6. Calculate public key point Q.
-    const auto R = AffinePoint{AffinePoint::FE{r}, AffinePoint::FE{y}};
+    const auto R = AffinePoint{AffinePoint::FE::wrap(r_mont), AffinePoint::FE::wrap(*y_mont)};
     const auto T1 = ecc::mul(G, u1, B3);
     const auto T2 = ecc::mul(R, u2, B3);
     const auto pQ = ecc::add(T1, T2, B3);
