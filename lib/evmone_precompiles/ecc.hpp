@@ -335,8 +335,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     if (p.z == 0)
         return {q.x, q.y, FieldElement<Curve>{1}};
 
-    if (p == ProjPoint<Curve>::from(q))
-        return dbl(p);
+    assert(p != ProjPoint<Curve>::from(q));
 
     // assert(p != ProjPoint<Curve>::from(q));
     // assert(p != -ProjPoint<Curve>::from(q));
