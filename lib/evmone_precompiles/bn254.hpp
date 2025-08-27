@@ -22,6 +22,10 @@ struct Curve
     static constexpr auto FIELD_PRIME =
         0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
 
+    /// The order of the curve (N).
+    static constexpr auto ORDER =
+        0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001_u256;
+
     /// The modular arithmetic for the field.
     static constexpr ModArith Fp{FIELD_PRIME};
 

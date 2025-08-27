@@ -393,10 +393,21 @@ ProjPoint<Curve> dbl(const ProjPoint<Curve>& p, const FieldElement<Curve>& b3) n
 }
 
 template <typename Curve>
-ProjPoint<Curve> mul(const AffinePoint<Curve>& p, const typename Curve::uint_type& c,
+ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c,
     const FieldElement<Curve>& b3) noexcept
 {
     using IntT = Curve::uint_type;
+
+    // Reduce the scalar by the curve group order.
+    // This allows using more efficient add algorithm in the loop because doubling cannot happen.
+    while (true)
+    {
+        const auto [reduced_c, less_than] = subc(c, Curve::ORDER);
+        if (less_than) [[likely]]
+            break;
+        c = reduced_c;
+    }
+
     ProjPoint<Curve> r;
     const auto bit_width = sizeof(IntT) * 8 - intx::clz(c);
     for (auto i = bit_width; i != 0; --i)
