@@ -250,11 +250,9 @@ AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q)
 }
 
 template <typename Curve>
-ProjPoint<Curve> add(
-    const ProjPoint<Curve>& p, const ProjPoint<Curve>& q, const FieldElement<Curve>& b3) noexcept
+ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexcept
 {
-    (void)b3;
-    static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
+    static_assert(Curve::A == 0, "untested for A != 0");
 
     if (p.z == 0)
         return q;
@@ -263,7 +261,7 @@ ProjPoint<Curve> add(
     // assert(p != -q);
 
     if (p == q)
-        return dbl(p, b3);
+        return dbl(p);
 
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
 
@@ -327,11 +325,9 @@ ProjPoint<Curve> add(
 }
 
 template <typename Curve>
-ProjPoint<Curve> add(
-    const ProjPoint<Curve>& p, const AffinePoint<Curve>& q, const FieldElement<Curve>& b3) noexcept
+ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
-    (void)b3;
-    static_assert(Curve::A == 0, "point addition procedure is simplified for a = 0");
+    static_assert(Curve::A == 0, "untested for A != 0");
 
     if (q == 0)
         return p;
@@ -340,7 +336,7 @@ ProjPoint<Curve> add(
         return {q.x, q.y, FieldElement<Curve>{1}};
 
     if (p == ProjPoint<Curve>::from(q))
-        return dbl(p, b3);
+        return dbl(p);
 
     // assert(p != ProjPoint<Curve>::from(q));
     // assert(p != -ProjPoint<Curve>::from(q));
@@ -405,10 +401,9 @@ ProjPoint<Curve> add(
 }
 
 template <typename Curve>
-ProjPoint<Curve> dbl(const ProjPoint<Curve>& p, const FieldElement<Curve>& b3) noexcept
+ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
 {
-    (void)b3;
-    static_assert(Curve::A == 0, "point doubling procedure is simplified for a = 0");
+    static_assert(Curve::A == 0, "point doubling procedure is for A = 0");
 
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
 
@@ -456,8 +451,7 @@ ProjPoint<Curve> dbl(const ProjPoint<Curve>& p, const FieldElement<Curve>& b3) n
 }
 
 template <typename Curve>
-ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c,
-    const FieldElement<Curve>& b3) noexcept
+ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) noexcept
 {
     using IntT = Curve::uint_type;
 
@@ -475,9 +469,9 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c,
     const auto bit_width = sizeof(IntT) * 8 - intx::clz(c);
     for (auto i = bit_width; i != 0; --i)
     {
-        r = ecc::dbl(r, b3);
+        r = ecc::dbl(r);
         if ((c & (IntT{1} << (i - 1))) != 0)  // if the i-th bit in the scalar is set
-            r = ecc::add(r, p, b3);
+            r = ecc::add(r, p);
     }
     return r;
 }
