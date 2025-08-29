@@ -42,6 +42,7 @@ struct BlockInfo
     address coinbase;
     int64_t difficulty = 0;
     int64_t parent_difficulty = 0;
+    bytes extra_data;
     hash256 parent_ommers_hash;
     bytes32 prev_randao;
     hash256 parent_beacon_block_root;
