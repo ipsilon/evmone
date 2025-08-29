@@ -72,6 +72,11 @@ struct FieldElement
         return wrap(Fp.sub(a.value_, b.value_));
     }
 
+    friend constexpr auto operator-(const FieldElement& a) noexcept
+    {
+        return wrap(Fp.sub(0, a.value_));
+    }
+
     friend constexpr auto operator/(one_t, const FieldElement& a) noexcept
     {
         return wrap(Fp.inv(a.value_));
@@ -140,33 +145,34 @@ struct AffinePoint
     }
 };
 
+/// Elliptic curve point in Jacobian coordinates (X, Y, Z)
+/// representing the affine point (X/Z², Y/Z³).
+/// TODO: Merge with JacPoint.
 template <typename Curve>
 struct ProjPoint
 {
     using FE = FieldElement<Curve>;
     FE x;
-    FE y{1};
+    FE y{1};  // TODO: Make sure this is compile-time constant.
     FE z;
 
-    friend constexpr bool operator==(const ProjPoint& a, const ProjPoint& b) noexcept
+    friend constexpr bool operator==(const ProjPoint& p, const ProjPoint& q) noexcept
     {
-        const auto bz2 = b.z * b.z;
-        const auto az2 = a.z * a.z;
-
-        const auto bz3 = bz2 * b.z;
-        const auto az3 = az2 * a.z;
-
-        return a.x * bz2 == b.x * az2 && a.y * bz3 == b.y * az3;
+        const auto [x1, y1, z1] = p;
+        const auto [x2, y2, z2] = q;
+        const auto z1z1 = z1 * z1;
+        const auto z1z1z1 = z1z1 * z1;
+        const auto z2z2 = z2 * z2;
+        const auto z2z2z2 = z2z2 * z2;
+        return x1 * z2z2 == x2 * z1z1 && y1 * z2z2z2 == y2 * z1z1z1;
     }
 
-    friend constexpr ProjPoint operator-(const ProjPoint& p) noexcept
-    {
-        return {p.x, FE{} - p.y, p.z};
-    }
+    friend constexpr ProjPoint operator-(const ProjPoint& p) noexcept { return {p.x, -p.y, p.z}; }
 
-    static constexpr ProjPoint from(const AffinePoint<Curve>& a) noexcept
+    static constexpr ProjPoint from(const AffinePoint<Curve>& p) noexcept
     {
-        return {a.x, a.y, FE{1}};
+        assert(p != 0);
+        return {p.x, p.y, FE{1}};
     }
 };
 
@@ -316,10 +322,10 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     const auto t8 = z2 * h;
     const auto z3 = z1 * t8;
 
-    if (p == -q)
-    {
-        assert(z3 == 0);
-    }
+    // if (p == -q)
+    // {
+    //     assert(z3 == 0);
+    // }
 
     return {x3, y3, z3};
 }
@@ -391,10 +397,10 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     const auto t10 = z1 * h;
     const auto z3 = t10 + t10;
 
-    if (p == -ProjPoint<Curve>::from(q))
-    {
-        assert(z3 == 0);
-    }
+    // if (p == -ProjPoint<Curve>::from(q))
+    // {
+    //     assert(z3 == 0);
+    // }
 
     return {x3, y3, z3};
 }
