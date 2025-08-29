@@ -294,6 +294,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     const auto hh = h * h;
     const auto hhh = h * hh;
     const auto r = s2 - s1;
+    assert(r != 0);            // TODO: Untested.
     assert(h != 0 || r != 0);  // We already handled p == q case above.
     const auto v = u1 * hh;
     const auto t2 = r * r;
