@@ -286,14 +286,15 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     const auto z2z2 = z2 * z2;
     const auto u1 = x1 * z2z2;
     const auto u2 = x2 * z1z1;
-    const auto t0 = z2 * z2z2;
-    const auto s1 = y1 * t0;
-    const auto t1 = z1 * z1z1;
-    const auto s2 = y2 * t1;
+    const auto z2z2z2 = z2 * z2z2;
+    const auto s1 = y1 * z2z2z2;
+    const auto z1z1z1 = z1 * z1z1;
+    const auto s2 = y2 * z1z1z1;
     const auto h = u2 - u1;
     const auto hh = h * h;
     const auto hhh = h * hh;
     const auto r = s2 - s1;
+    assert(h != 0 || r != 0);  // We already handled p == q case above.
     const auto v = u1 * hh;
     const auto t2 = r * r;
     const auto t3 = v + v;
@@ -321,7 +322,6 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
 
     if (q == 0)
         return p;
-
     if (p == 0)
         return ProjPoint(q);
 
