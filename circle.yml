@@ -461,12 +461,12 @@ jobs:
       - download_execution_tests:
           rev: v17.2
       - run:
-          name: "State tests"
+          name: "Blockchain tests (state tests)"
           working_directory: ~/build
           command: >
-            bin/evmone-statetest
-            ~/tests/LegacyTests/Cancun/GeneralStateTests
-            ~/tests/LegacyTests/Constantinople/GeneralStateTests
+            bin/evmone-blockchaintest
+            ~/tests/LegacyTests/Cancun/BlockchainTests/GeneralStateTests
+            ~/tests/LegacyTests/Constantinople/BlockchainTests/GeneralStateTests
       - run:
           name: "Blockchain tests (ValidBlocks)"
           working_directory: ~/build
@@ -519,14 +519,14 @@ jobs:
           name: "Install GMP"
           command: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
       - build
-      - download_execution_tests:
-          rev: v17.1
-          legacy: false
+      - download_execution_spec_tests:
+          release: v4.5.0
+          fixtures_suffix: develop
       - run:
-          name: "State tests"
+          name: "Execution spec tests (state_tests)"
           working_directory: ~/build
-          command: |
-            bin/evmone-statetest ~/tests/GeneralStateTests
+          command: >
+            bin/evmone-statetest ~/spec-tests/fixtures/state_tests
       - collect_coverage_clang
       - upload_coverage:
           flags: eest-legacy-silkpre
