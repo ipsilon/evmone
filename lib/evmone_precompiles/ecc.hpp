@@ -156,6 +156,10 @@ struct ProjPoint
     FE y{1};  // TODO: Make sure this is compile-time constant.
     FE z;
 
+    ProjPoint() = default;
+    constexpr ProjPoint(const FE& x_, const FE& y_, const FE& z_) noexcept : x{x_}, y{y_}, z{z_} {}
+    constexpr explicit ProjPoint(const AffinePoint<Curve>& p) noexcept : x{p.x}, y{p.y}, z{FE{1}} {}
+
     friend constexpr bool operator==(const ProjPoint& p, zero_t) noexcept { return p.z == 0; }
 
     friend constexpr bool operator==(const ProjPoint& p, const ProjPoint& q) noexcept
@@ -170,12 +174,6 @@ struct ProjPoint
     }
 
     friend constexpr ProjPoint operator-(const ProjPoint& p) noexcept { return {p.x, -p.y, p.z}; }
-
-    static constexpr ProjPoint from(const AffinePoint<Curve>& p) noexcept
-    {
-        assert(p != 0);
-        return {p.x, p.y, FE{1}};
-    }
 };
 
 // Jacobian (three) coordinates point implementation.
@@ -307,14 +305,13 @@ template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
     static_assert(Curve::A == 0, "untested for A != 0");
+    assert(p != ProjPoint(q));
 
     if (q == 0)
         return p;
 
     if (p == 0)
-        return {q.x, q.y, FieldElement<Curve>{1}};
-
-    assert(p != ProjPoint<Curve>::from(q));
+        return ProjPoint(q);
 
     // FIXME: Add comment.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
@@ -353,26 +350,8 @@ ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
 {
     static_assert(Curve::A == 0, "point doubling procedure is for A = 0");
 
+    // FIXME: Add comment.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
-
-    // A = X1^2
-    // B = Y1^2
-    // C = B^2
-    // t0 = X1+B
-    // t1 = t0^2
-    // t2 = t1-A
-    // t3 = t2-C
-    // D = 2*t3
-    // E = 3*A
-    // F = E^2
-    // t4 = 2*D
-    // X3 = F-t4
-    // t5 = D-X3
-    // t6 = 8*C
-    // t7 = E*t5
-    // Y3 = t7-t6
-    // t8 = Y1*Z1
-    // Z3 = 2*t8
 
     const auto& [x1, y1, z1] = p;
 
