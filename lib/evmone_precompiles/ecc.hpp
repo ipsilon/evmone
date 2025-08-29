@@ -156,6 +156,8 @@ struct ProjPoint
     FE y{1};  // TODO: Make sure this is compile-time constant.
     FE z;
 
+    friend constexpr bool operator==(const ProjPoint& p, zero_t) noexcept { return p.z == 0; }
+
     friend constexpr bool operator==(const ProjPoint& p, const ProjPoint& q) noexcept
     {
         const auto [x1, y1, z1] = p;
@@ -260,40 +262,16 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
 {
     static_assert(Curve::A == 0, "untested for A != 0");
 
-    if (p.z == 0)
+    if (p == 0)
         return q;
-    assert(q.z != 0);
-    // assert(p != q);
-    // assert(p != -q);
+    if (q == 0)
+        return p;  // TODO: Untested.
 
     if (p == q)
         return dbl(p);
 
+    // FIXME: Add comment.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
-
-    // Z1Z1 = Z1^2
-    // Z2Z2 = Z2^2
-    // U1 = X1*Z2Z2
-    // U2 = X2*Z1Z1
-    // t0 = Z2*Z2Z2
-    // S1 = Y1*t0
-    // t1 = Z1*Z1Z1
-    // S2 = Y2*t1
-    // H = U2-U1
-    // HH = H^2
-    // HHH = H*HH
-    // r = S2-S1
-    // V = U1*HH
-    // t2 = r^2
-    // t3 = 2*V
-    // t4 = t2-HHH
-    // X3 = t4-t3
-    // t5 = V-X3
-    // t6 = S1*HHH
-    // t7 = r*t5
-    // Y3 = t7-t6
-    // t8 = Z2*H
-    // Z3 = Z1*t8
 
     const auto& [x1, y1, z1] = p;
     const auto& [x2, y2, z2] = q;
@@ -322,11 +300,6 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     const auto t8 = z2 * h;
     const auto z3 = z1 * t8;
 
-    // if (p == -q)
-    // {
-    //     assert(z3 == 0);
-    // }
-
     return {x3, y3, z3};
 }
 
@@ -338,38 +311,13 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     if (q == 0)
         return p;
 
-    if (p.z == 0)
+    if (p == 0)
         return {q.x, q.y, FieldElement<Curve>{1}};
 
     assert(p != ProjPoint<Curve>::from(q));
 
-    // assert(p != ProjPoint<Curve>::from(q));
-    // assert(p != -ProjPoint<Curve>::from(q));
-
+    // FIXME: Add comment.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
-
-    // Z1Z1 = Z1^2
-    // U2 = X2*Z1Z1
-    // t0 = Z1*Z1Z1
-    // S2 = Y2*t0
-    // H = U2-X1
-    // t1 = 2*H
-    // I = t1^2
-    // J = H*I
-    // t2 = S2-Y1
-    // r = 2*t2
-    // V = X1*I
-    // t3 = r^2
-    // t4 = 2*V
-    // t5 = t3-J
-    // X3 = t5-t4
-    // t6 = V-X3
-    // t7 = Y1*J
-    // t8 = 2*t7
-    // t9 = r*t6
-    // Y3 = t9-t8
-    // t10 = Z1*H
-    // Z3 = 2*t10
 
     const auto& [x1, y1, z1] = p;
     const auto& [x2, y2] = q;
@@ -396,11 +344,6 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     const auto y3 = t9 - t8;
     const auto t10 = z1 * h;
     const auto z3 = t10 + t10;
-
-    // if (p == -ProjPoint<Curve>::from(q))
-    // {
-    //     assert(z3 == 0);
-    // }
 
     return {x3, y3, z3};
 }
