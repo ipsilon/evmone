@@ -45,11 +45,7 @@ constexpr auto analyze<PrecompileId::ecpairing> = ecpairing_analyze;
 template <>
 constexpr auto analyze<PrecompileId::point_evaluation> = point_evaluation_analyze;
 template <>
-constexpr auto analyze<PrecompileId::bls12_g1mul> = bls12_g1mul_analyze;
-template <>
 constexpr auto analyze<PrecompileId::bls12_g1msm> = bls12_g1msm_analyze;
-template <>
-constexpr auto analyze<PrecompileId::bls12_g2mul> = bls12_g2mul_analyze;
 template <>
 constexpr auto analyze<PrecompileId::bls12_g2msm> = bls12_g2msm_analyze;
 
@@ -177,10 +173,6 @@ const inline std::array inputs<PrecompileId::point_evaluation>{
     "01ff83fbe4488061b695d9e4632e9ab23c5b9dfb046241fac921659c2e3b6a4e5e88a0c20ef27ae5dea6e83a748115df152b207362c022a43c8ebbfbec73ea2a2b38376a1de4ed9abd35175ac422af7df2c6ddf1503979964b1d217747c108978969cc0fcbd47dba8b1e3cbba16920f3fc694fadbf203b55aa66aaf138a38ace946a7ccddc20f45d796cd60268df8a2487d06c11cdc50247c580c5dd25f6fb486053b73868038cb92c2ae6d429a7bde850177f31c9fde00ca824c8c59cd4ef49"_hex,
 };
 
-template <>
-const inline std::array inputs<PrecompileId::bls12_g1mul>{generate_g1_mul_input()};
-template <>
-const inline std::array inputs<PrecompileId::bls12_g2mul>{generate_g2_mul_input()};
 template <>
 const inline std::array inputs<PrecompileId::bls12_g1msm>{generate_g1_msm_input(256)};
 template <>
@@ -363,13 +355,6 @@ constexpr auto evmone_blst = point_evaluation_execute;
 BENCHMARK_TEMPLATE(precompile, PrecompileId::point_evaluation, evmone_blst);
 }  // namespace bench_kzg
 
-namespace bench_mul_g1
-{
-constexpr auto evmone_blst = bls12_g1mul_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::bls12_g1mul, evmone_blst)
-    ->Unit(benchmark::TimeUnit::kMicrosecond);
-}  // namespace bench_mul_g1
-
 namespace bench_msm_g1
 {
 constexpr auto evmone_blst = bls12_g1msm_execute;
@@ -378,14 +363,6 @@ BENCHMARK_TEMPLATE(precompile, PrecompileId::bls12_g1msm, evmone_blst)
     // ->Complexity(benchmark::oN)
     ->Unit(benchmark::TimeUnit::kMicrosecond);
 }  // namespace bench_msm_g1
-
-namespace bench_mul_g2
-{
-constexpr auto evmone_blst = bls12_g2mul_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::bls12_g2mul, evmone_blst)
-    // ->Complexity(benchmark::oN)
-    ->Unit(benchmark::TimeUnit::kMicrosecond);
-}  // namespace bench_mul_g2
 
 namespace bench_msm_g2
 {
