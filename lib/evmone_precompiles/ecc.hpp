@@ -255,6 +255,10 @@ AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q)
     return {xr, yr};
 }
 
+/// Elliptic curve point addition in Jacobian coordinates.
+///
+/// Computes P ⊕ Q for two points in Jacobian coordinates on the elliptic curve.
+/// This procedure handles all inputs (e.g. doubling or points at infinity).
 template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexcept
 {
@@ -268,8 +272,12 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     if (p == q)
         return dbl(p);
 
-    // FIXME: Add comment.
+    // Use the "add-1998-cmo-2" formula for curve in Jacobian coordinates.
+    // The cost is 12M + 4S + 6add + 1*2.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
+    // TODO: The newer formula "add-2007-bl" trades one multiplication for one squaring and
+    //   additional additions. We don't have dedicated squaring operation yet, so it's not clear
+    //   if it would be faster.
 
     const auto& [x1, y1, z1] = p;
     const auto& [x2, y2, z2] = q;
@@ -301,6 +309,10 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     return {x3, y3, z3};
 }
 
+/// Mixed addition of elliptic curve points.
+///
+/// Computes P ⊕ Q for a point P in Jacobian coordinates and a point Q in affine coordinates.
+/// This procedure is for use in point multiplication and not all inputs are supported.
 template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
@@ -313,7 +325,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     if (p == 0)
         return ProjPoint(q);
 
-    // FIXME: Add comment.
+    // Use the "madd" formula for curve in Jacobian coordinates.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
 
     const auto& [x1, y1, z1] = p;
@@ -350,7 +362,7 @@ ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
 {
     static_assert(Curve::A == 0, "point doubling procedure is for A = 0");
 
-    // FIXME: Add comment.
+    // Use the "dbl-2009-l" formula for a=0 curve in Jacobian coordinates.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
 
     const auto& [x1, y1, z1] = p;
