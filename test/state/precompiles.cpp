@@ -45,7 +45,7 @@ constexpr auto BLS12_G2_MUL_INPUT_SIZE = BLS12_G2_POINT_SIZE + BLS12_SCALAR_SIZE
 
 constexpr int64_t num_words(size_t size_in_bytes) noexcept
 {
-    return static_cast<int64_t>((size_in_bytes + 31) / 32);
+    return static_cast<int64_t>(size_in_bytes / 32 + static_cast<size_t>(size_in_bytes % 32 != 0));
 }
 
 template <int BaseCost, int WordCost>
