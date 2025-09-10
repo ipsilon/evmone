@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "precompiles.hpp"
+#include "../utils/stdx/utility.hpp"
 #include "precompiles_internal.hpp"
 #include "precompiles_stubs.hpp"
 #include <evmone_precompiles/blake2b.hpp>
@@ -677,61 +678,83 @@ ExecutionResult bls12_map_fp2_to_g2_execute(const uint8_t* input, size_t input_s
 
 namespace
 {
+using PrecompileLookupIndex = uint8_t;
+
 struct PrecompileTraits
 {
+    PrecompileLookupIndex address = 0;
+    evmc_revision since = EVMC_FRONTIER;
     decltype(identity_analyze)* analyze = nullptr;
     decltype(identity_execute)* execute = nullptr;
 };
 
-inline constexpr std::array<PrecompileTraits, NumPrecompiles> traits{{
-    {},  // undefined for 0
-    {ecrecover_analyze, ecrecover_execute},
-    {sha256_analyze, sha256_execute},
-    {ripemd160_analyze, ripemd160_execute},
-    {identity_analyze, identity_execute},
-    {expmod_analyze, expmod_execute},
-    {ecadd_analyze, ecadd_execute},
-    {ecmul_analyze, ecmul_execute},
-    {ecpairing_analyze, ecpairing_execute},
-    {blake2bf_analyze, blake2bf_execute},
-    {point_evaluation_analyze, point_evaluation_execute},
-    {bls12_g1add_analyze, bls12_g1add_execute},
-    {bls12_g1msm_analyze, bls12_g1msm_execute},
-    {bls12_g2add_analyze, bls12_g2add_execute},
-    {bls12_g2msm_analyze, bls12_g2msm_execute},
-    {bls12_pairing_check_analyze, bls12_pairing_check_execute},
-    {bls12_map_fp_to_g1_analyze, bls12_map_fp_to_g1_execute},
-    {bls12_map_fp2_to_g2_analyze, bls12_map_fp2_to_g2_execute},
+inline constexpr std::array<PrecompileTraits, 17> traits{{
+    {0x01, EVMC_FRONTIER, ecrecover_analyze, ecrecover_execute},
+    {0x02, EVMC_FRONTIER, sha256_analyze, sha256_execute},
+    {0x03, EVMC_FRONTIER, ripemd160_analyze, ripemd160_execute},
+    {0x04, EVMC_FRONTIER, identity_analyze, identity_execute},
+    {0x05, EVMC_BYZANTIUM, expmod_analyze, expmod_execute},
+    {0x06, EVMC_BYZANTIUM, ecadd_analyze, ecadd_execute},
+    {0x07, EVMC_BYZANTIUM, ecmul_analyze, ecmul_execute},
+    {0x08, EVMC_BYZANTIUM, ecpairing_analyze, ecpairing_execute},
+    {0x09, EVMC_ISTANBUL, blake2bf_analyze, blake2bf_execute},
+    {0x0a, EVMC_CANCUN, point_evaluation_analyze, point_evaluation_execute},
+    {0x0b, EVMC_PRAGUE, bls12_g1add_analyze, bls12_g1add_execute},
+    {0x0c, EVMC_PRAGUE, bls12_g1msm_analyze, bls12_g1msm_execute},
+    {0x0d, EVMC_PRAGUE, bls12_g2add_analyze, bls12_g2add_execute},
+    {0x0e, EVMC_PRAGUE, bls12_g2msm_analyze, bls12_g2msm_execute},
+    {0x0f, EVMC_PRAGUE, bls12_pairing_check_analyze, bls12_pairing_check_execute},
+    {0x10, EVMC_PRAGUE, bls12_map_fp_to_g1_analyze, bls12_map_fp_to_g1_execute},
+    {0x11, EVMC_PRAGUE, bls12_map_fp2_to_g2_analyze, bls12_map_fp2_to_g2_execute},
 }};
+
+constexpr auto LOOKUP_TABLE_SIZE = [] {
+    PrecompileLookupIndex max_idx = 0;
+    for (const auto& trait : traits)
+        max_idx = std::max(max_idx, trait.address);
+    return max_idx + 1;
+}();
+
+PrecompileLookupIndex to_lookup_index(const evmc::address& addr) noexcept
+{
+    static constexpr auto ADDRESS_SIZE = sizeof(addr.bytes);
+    return addr.bytes[ADDRESS_SIZE - 1];
+}
 }  // namespace
 
 bool is_precompile(evmc_revision rev, const evmc::address& addr) noexcept
 {
-    if (evmc::is_zero(addr) || addr > evmc::address{stdx::to_underlying(PrecompileId::latest)})
-        return false;
+    static constexpr auto AVAILABILITY_LOOKUP_TABLE = [] {
+        using Entry = std::underlying_type_t<evmc_revision>;
+        std::array<Entry, LOOKUP_TABLE_SIZE> table{};
+        std::ranges::fill(table, std::numeric_limits<Entry>::max());
+        for (const auto& trait : traits)
+            table[trait.address] = stdx::to_underlying(trait.since);
+        return table;
+    }();
 
-    const auto id = addr.bytes[19];
-    if (rev < EVMC_BYZANTIUM && id >= stdx::to_underlying(PrecompileId::since_byzantium))
+    if (addr >= evmc::address{AVAILABILITY_LOOKUP_TABLE.size()})
         return false;
-
-    if (rev < EVMC_ISTANBUL && id >= stdx::to_underlying(PrecompileId::since_istanbul))
-        return false;
-
-    if (rev < EVMC_CANCUN && id >= stdx::to_underlying(PrecompileId::since_cancun))
-        return false;
-
-    if (rev < EVMC_PRAGUE && id >= stdx::to_underlying(PrecompileId::since_prague))
-        return false;
-
-    return true;
+    return AVAILABILITY_LOOKUP_TABLE[to_lookup_index(addr)] <= stdx::to_underlying(rev);
 }
 
 evmc::Result call_precompile(evmc_revision rev, const evmc_message& msg) noexcept
 {
+    static constexpr auto EXECUTION_LOOKUP_TABLE = [] {
+        struct Entry
+        {
+            decltype(PrecompileTraits::analyze) analyze = nullptr;
+            decltype(PrecompileTraits::execute) execute = nullptr;
+        };
+        std::array<Entry, LOOKUP_TABLE_SIZE> table{};
+        for (const auto& trait : traits)
+            table[trait.address] = {trait.analyze, trait.execute};
+        return table;
+    }();
+
     assert(msg.gas >= 0);
 
-    const auto id = msg.code_address.bytes[19];
-    const auto [analyze, execute] = traits[id];
+    const auto [analyze, execute] = EXECUTION_LOOKUP_TABLE[to_lookup_index(msg.code_address)];
 
     const bytes_view input{msg.input_data, msg.input_size};
     const auto [gas_cost, max_output_size] = analyze(input, rev);

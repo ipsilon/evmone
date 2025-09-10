@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "precompiles_silkpre.hpp"
+#include "../utils/stdx/utility.hpp"
 #include "precompiles.hpp"
 #include <silkpre/precompile.h>
 #include <cassert>
@@ -15,7 +16,7 @@ namespace
 ExecutionResult execute(const uint8_t* input, size_t input_size, uint8_t* output_buf,
     [[maybe_unused]] size_t max_output_size, PrecompileId id) noexcept
 {
-    const auto index = stdx::to_underlying(id) - 1;
+    const auto index = stdx::to_underlying(id);
     const auto [output, output_size] = kSilkpreContracts[index].run(input, input_size);
     if (output == nullptr)
         return {EVMC_PRECOMPILE_FAILURE, 0};
