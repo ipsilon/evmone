@@ -17,7 +17,7 @@ else()
         set(BLST_CC "${BLST_CC} ${CMAKE_C_FLAGS}")
     endif()
 
-    set(BLST_BUILD_SCRIPT ./build.sh CC='${BLST_CC}' AR='${CMAKE_AR}')
+    set(BLST_BUILD_SCRIPT ./build.sh CC='${BLST_CC}' AR='${CMAKE_AR}' RANLIB='${CMAKE_RANLIB}')
 endif()
 
 ExternalProject_Add(
