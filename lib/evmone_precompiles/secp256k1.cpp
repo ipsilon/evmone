@@ -67,7 +67,6 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
     if (z >= Curve::ORDER)
         z -= Curve::ORDER;
 
-
     const ModArith n{Curve::ORDER};
 
     // 5. Calculate u1 and u2.
@@ -82,6 +81,7 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
     const auto s_mont = n.to_mont(s);
     const auto u2_mont = n.mul(s_mont, r_inv);
     const auto u2 = n.from_mont(u2_mont);
+    assert(u2 != 0);  // Because s != 0 and r_inv != 0.
 
     // 2. Calculate y coordinate of R from r and v.
     static constexpr auto& Fp = Curve::Fp;
@@ -94,12 +94,11 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
     const auto R = AffinePoint{AffinePoint::FE::wrap(r_mont), AffinePoint::FE::wrap(*y_mont)};
     const auto T1 = ecc::mul(G, u1);
     const auto T2 = ecc::mul(R, u2);
-    assert(T2.z != 0);
+    assert(T2 != 0);  // Because u2 != 0 and R != 0.
     const auto pQ = ecc::add(T1, T2);
 
     const auto Q = ecc::to_affine<Curve>(pQ);
 
-    // Any other validity check needed?
     if (Q == 0)
         return std::nullopt;
 
