@@ -268,9 +268,6 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
         // TODO: Untested and untestable via precompile call (for secp256k1 and secp256r1).
         return p;
 
-    if (p == q)
-        return dbl(p);
-
     // Use the "add-1998-cmo-2" formula for curve in Jacobian coordinates.
     // The cost is 12M + 4S + 6add + 1*2.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
@@ -291,7 +288,14 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     const auto s2 = y2 * z1z1z1;
     const auto h = u2 - u1;
     const auto r = s2 - s1;
-    assert(h != 0 || r != 0);  // We already handled p == q case above.
+
+    // Handle point doubling in case p == q, i.e. when u1 == u2 and s1 == s2.
+    // TODO: Untested case of two points having the same y coordinate but different x.
+    //       The following assertion (r == 0) => (h == 0) should fail in that case.
+    assert(r != 0 || h == 0);
+    if (h == 0 && r == 0) [[unlikely]]
+        return dbl(p);
+
     const auto hh = h * h;
     const auto hhh = h * hh;
     const auto v = u1 * hh;
