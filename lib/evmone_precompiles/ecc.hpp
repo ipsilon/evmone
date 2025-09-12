@@ -262,8 +262,6 @@ AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q)
 template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexcept
 {
-    // static_assert(Curve::A == 0, "untested for A != 0");
-
     if (p == 0)
         return q;
     if (q == 0)
@@ -317,7 +315,6 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
 template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
-    // static_assert(Curve::A == 0, "untested for A != 0");
     assert(p != ProjPoint(q));
 
     if (q == 0)
@@ -360,96 +357,65 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
 template <typename Curve>
 ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
 {
-    // static_assert(Curve::A == 0, "point doubling procedure is for A = 0");
-
-    // Use the "dbl-2009-l" formula for a=0 curve in Jacobian coordinates.
-    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
-
     const auto& [x1, y1, z1] = p;
-
-    ProjPoint<Curve> r;
-    auto& [x3, y3, z3] = r;
 
     if constexpr (Curve::A == 0)
     {
-        const auto a = x1 * x1;
-        const auto b = y1 * y1;
-        const auto c = b * b;
-        const auto t0 = x1 + b;
-        const auto t1 = t0 * t0;
-        const auto t2 = t1 - a;
-        const auto t3 = t2 - c;
-        const auto d = t3 + t3;
-        const auto e = a + a + a;
-        const auto f = e * e;
-        const auto t4 = d + d;
-        x3 = f - t4;
-        const auto t5 = d - x3;
-        const auto t6 = c + c + c + c + c + c + c + c;
-        const auto t7 = e * t5;
-        y3 = t7 - t6;
-        const auto t8 = y1 * z1;
-        z3 = t8 + t8;
-    }
-    else
-    {
-        /*
-        XX = X1^2
-    YY = Y1^2
-    YYYY = YY^2
-    ZZ = Z1^2
-    t0 = X1+YY
-    t1 = t0^2
-    t2 = t1-XX
-    t3 = t2-YYYY
-    S = 2*t3
-    t4 = ZZ^2
-    t5 = a*t4
-    t6 = 3*XX
-    M = t6+t5
-    t7 = M^2
-    t8 = 2*S
-    T = t7-t8
-    X3 = T
-    t9 = S-T
-    t10 = 8*YYYY
-    t11 = M*t9
-    Y3 = t11-t10
-    t12 = Y1+Z1
-    t13 = t12^2
-    t14 = t13-YY
-    Z3 = t14-ZZ
-        */
+        assert(false);
+        // Use the "dbl-2009-l" formula for a=0 curve in Jacobian coordinates.
+        // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
+
         const auto xx = x1 * x1;
         const auto yy = y1 * y1;
         const auto yyyy = yy * yy;
-        const auto zz = z1 * z1;
         const auto t0 = x1 + yy;
         const auto t1 = t0 * t0;
         const auto t2 = t1 - xx;
         const auto t3 = t2 - yyyy;
-        const auto s = t3 + t3;
-        const auto t4 = zz * zz;
-        const auto t5 = FieldElement<Curve>{Curve::A} * t4;
-        const auto t6 = xx + xx + xx;
-        const auto m = t6 + t5;
-        const auto t7 = m * m;
-        const auto t8 = s + s;
-        x3 = t7 - t8;
-        const auto t9 = s - x3;
-        const auto t10 = yyyy + yyyy + yyyy + yyyy + yyyy + yyyy + yyyy + yyyy;
-        const auto t11 = m * t9;
-        y3 = t11 - t10;
-        const auto t12 = y1 + z1;
-        const auto t13 = t12 * t12;
-        const auto t14 = t13 - yy;
-        z3 = t14 - zz;
+        const auto d = t3 + t3;
+        const auto e = xx + xx + xx;
+        const auto f = e * e;
+        const auto t4 = d + d;
+        const auto x3 = f - t4;
+        const auto t6 = d - x3;
+        const auto t8 = yyyy + yyyy + yyyy + yyyy + yyyy + yyyy + yyyy + yyyy;
+        const auto t9 = e * t6;
+        const auto y3 = t9 - t8;
+        const auto t10 = y1 * z1;
+        const auto z3 = t10 + t10;
+        return {x3, y3, z3};
     }
+    else
+    {
+        // Use the "dbl-1998-cmo-2" formula for a!=0 curve in Jacobian coordinates.
+        // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#doubling-dbl-1998-cmo-2
+        // TODO: The newer formula "dbl-2007-bl" trades two multiplications for two squarings and
+        //   additional additions. We don't have dedicated squaring operation yet, so it's not clear
+        //   if it would be faster.
 
+        static constexpr FieldElement<Curve> a{Curve::A};
 
-
-
-    return {x3, y3, z3};
+        const auto xx = x1 * x1;
+        const auto yy = y1 * y1;
+        const auto zz = z1 * z1;
+        const auto t0 = x1 * yy;
+        const auto s = t0 + t0 + t0 + t0;
+        const auto t1 = zz * zz;
+        const auto t2 = a * t1;
+        const auto t3 = xx + xx + xx;
+        const auto m = t3 + t2;
+        const auto t4 = m * m;
+        const auto t5 = s + s;
+        const auto x3 = t4 - t5;
+        const auto t6 = s - x3;
+        const auto yyyy = yy * yy;
+        const auto t8 = yyyy + yyyy + yyyy + yyyy + yyyy + yyyy + yyyy + yyyy;
+        const auto t9 = m * t6;
+        const auto y3 = t9 - t8;
+        const auto t10 = y1 * z1;
+        const auto z3 = t10 + t10;
+        return {x3, y3, z3};
+    }
 }
 
 template <typename Curve>
