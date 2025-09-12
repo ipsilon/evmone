@@ -44,7 +44,7 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     if (qx == 0 || qx >= Curve::FIELD_PRIME || qy == 0 || qy >= Curve::FIELD_PRIME)
         return false;
 
-    AffinePoint Q{AffinePoint::FE{qx}, AffinePoint::FE{qy}};
+    const AffinePoint Q{AffinePoint::FE{qx}, AffinePoint::FE{qy}};
 
     static constexpr AffinePoint::FE AA{Curve::A};
     static constexpr AffinePoint::FE BB{B};
@@ -52,7 +52,7 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     if (Q.x * Q.x * Q.x + AA * Q.x + BB != Q.y * Q.y)
         return false;
 
-    ModArith n{Curve::ORDER};
+    const ModArith n{Curve::ORDER};
 
     static_assert(Curve::ORDER > 1_u256 << 255);
     const auto z = intx::be::load<uint256>(h.bytes);
@@ -61,7 +61,9 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     const auto u1 = n.from_mont(n.mul(n.to_mont(z), s_inv));
     const auto u2 = n.from_mont(n.mul(n.to_mont(r), s_inv));
 
-    const auto jR = ecc::add(ecc::mul(G, u1), ecc::mul(Q, u2));
+    const auto T1 = ecc::mul(G, u1);
+    const auto T2 = ecc::mul(Q, u2);
+    const auto jR = ecc::add(T1, T2);
     const auto R = ecc::to_affine(jR);
     auto rp = R.x.value();
 
