@@ -170,3 +170,6 @@ install(DIRECTORY ${include_dir}/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 cable_add_archive_package()
+
+add_executable(guard_pages_poc guard_pages_poc.cpp)
+
