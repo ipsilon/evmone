@@ -27,10 +27,10 @@ executors:
     resource_class: xlarge
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 8
-  linux-clang-2xlarge:
+  linux-clang-selfhosted:
     docker:
       - image: ethereum/cpp-build-env:24-clang-20
-    resource_class: 2xlarge
+    resource_class: ipsilon/ha9x
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 16
   linux-gcc-min:
@@ -57,11 +57,11 @@ executors:
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   macos:
-    resource_class: m4pro.medium
+    resource_class:  macos.m1.medium.gen1
     macos:
       xcode: 16.4.0
     environment:
-      CMAKE_BUILD_PARALLEL_LEVEL: 8
+      CMAKE_BUILD_PARALLEL_LEVEL: 6
   macos-xcode-min:
     resource_class: macos.m1.medium.gen1
     macos:
@@ -567,7 +567,7 @@ jobs:
       - test
 
   clang-latest-sanitizers:
-    executor: linux-clang-xlarge
+    executor: linux-clang-selfhosted
     environment:
       TOOLCHAIN: clang-libcxx-debug
       CMAKE_OPTIONS: -DBUILD_SHARED_LIBS=NO -DSANITIZE=address,undefined,shift-exponent,implicit-conversion,nullability
@@ -577,7 +577,7 @@ jobs:
       - test
 
   clang-tidy:
-    executor: linux-clang-xlarge
+    executor: linux-clang-selfhosted
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 16
       CMAKE_GENERATOR: Ninja
@@ -601,7 +601,7 @@ jobs:
           flags: evmone-unittests
 
   fuzzing:
-    executor: linux-clang-xlarge
+    executor: linux-clang-selfhosted
     environment:
       CMAKE_GENERATOR: Ninja
       CMAKE_OPTIONS: -DEVMONE_FUZZING=ON
