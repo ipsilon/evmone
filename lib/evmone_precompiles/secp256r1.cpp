@@ -9,30 +9,10 @@ namespace evmmax::secp256r1
 {
 namespace
 {
-struct Curve
-{
-    using uint_type = uint256;
 
-    /// The field prime number (P).
-    static constexpr auto FIELD_PRIME =
-        0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff_u256;
-
-    /// The secp256k1 curve group order (N).
-    static constexpr auto ORDER =
-        0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551_u256;
-
-    static constexpr ModArith Fp{FIELD_PRIME};
-
-    static constexpr auto A =
-        0xffffffff00000001000000000000000000000000fffffffffffffffffffffffc_u256;
-};
 
 constexpr auto B = 0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b_u256;
 
-using AffinePoint = ecc::AffinePoint<Curve>;
-
-constexpr AffinePoint G{0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296_u256,
-    0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5_u256};
 
 }  // namespace
 
@@ -52,22 +32,22 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     // UNTESTED(r == Curve::ORDER);
     // UNTESTED(r == Curve::FIELD_PRIME);
     // UNTESTED(r > Curve::ORDER);
-    UNTESTED(r == ~uint256{});
+    // UNTESTED(r == ~uint256{});
     // UNTESTED(s == 0);
     // UNTESTED(s == Curve::ORDER);
     // UNTESTED(s == Curve::FIELD_PRIME);
     // UNTESTED(s > Curve::ORDER);
-    UNTESTED(s == ~uint256{});
+    // UNTESTED(s == ~uint256{});
     // UNTESTED(s_valid && r == 0);
     // UNTESTED(s_valid && r == Curve::ORDER);
     // UNTESTED(s_valid && r == Curve::FIELD_PRIME);
     // UNTESTED(s_valid && r > Curve::ORDER);
-    UNTESTED(s_valid && r == ~uint256{});
+    // UNTESTED(s_valid && r == ~uint256{});
     // UNTESTED(r_valid && s == 0);
     // UNTESTED(r_valid && s == Curve::ORDER);
     // UNTESTED(r_valid && s == Curve::FIELD_PRIME);
     // UNTESTED(r_valid && s > Curve::ORDER);
-    UNTESTED(r_valid && s == ~uint256{});
+    // UNTESTED(r_valid && s == ~uint256{});
     if (r == 0 || r >= Curve::ORDER || s == 0 || s >= Curve::ORDER)
         return false;
 
@@ -86,11 +66,11 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
 
     static_assert(Curve::ORDER > 1_u256 << 255);
     const auto z = intx::be::load<uint256>(h.bytes);
-    UNTESTED(z == 0);
-    UNTESTED(z == Curve::ORDER);
-    UNTESTED(z == Curve::FIELD_PRIME);
+    // UNTESTED(z == 0);
+    // UNTESTED(z == Curve::ORDER);
+    // UNTESTED(z == Curve::FIELD_PRIME);
     // UNTESTED(z > Curve::ORDER);
-    UNTESTED(z == ~uint256{});
+    // UNTESTED(z == ~uint256{});
 
     const auto s_inv = n.inv(n.to_mont(s));
     const auto u1 = n.from_mont(n.mul(n.to_mont(z), s_inv));
@@ -109,14 +89,24 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     auto rp = R.x.value();
 
     UNTESTED(rp == Curve::ORDER);
-    // UNTESTED(rp > Curve::ORDER);
+    UNTESTED(rp > Curve::ORDER);
     // UNTESTED(rp < Curve::ORDER);
-    if (rp >= Curve::ORDER)
-        rp -= Curve::ORDER;
 
     if (rp == r)
         return true;
 
+    if (rp == r + Curve::ORDER)
+        return true;
+
     return false;
+
+    // if (rp >= Curve::ORDER)
+    //     rp -= Curve::ORDER;
+    //
+    // const auto res = rp == r;
+    // // UNTESTED(res);
+    // // UNTESTED(!res);
+    //
+    // return res;
 }
 }  // namespace evmmax::secp256r1

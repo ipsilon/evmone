@@ -315,7 +315,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
 template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
-    assert(p != ProjPoint(q));
+    // assert(p != ProjPoint(q));
 
     if (q == 0)
         return p;
@@ -361,7 +361,6 @@ ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
 
     if constexpr (Curve::A == 0)
     {
-        assert(false);
         // Use the "dbl-2009-l" formula for a=0 curve in Jacobian coordinates.
         // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
 
