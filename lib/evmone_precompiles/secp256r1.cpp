@@ -46,8 +46,8 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
 
 
     // 1. Validate r and s are within [1, n-1].
-    const auto r_valid = (r > 0 && r < Curve::ORDER);
-    const auto s_valid = (s > 0 && s < Curve::ORDER);
+    [[maybe_unused]] const auto r_valid = (r > 0 && r < Curve::ORDER);
+    [[maybe_unused]] const auto s_valid = (s > 0 && s < Curve::ORDER);
     // UNTESTED(r == 0);
     // UNTESTED(r == Curve::ORDER);
     // UNTESTED(r == Curve::FIELD_PRIME);
@@ -76,10 +76,9 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
 
     const AffinePoint Q{AffinePoint::FE{qx}, AffinePoint::FE{qy}};
 
-    static constexpr AffinePoint::FE AA{Curve::A};
-    static constexpr AffinePoint::FE BB{B};
+    [[maybe_unused]] static constexpr AffinePoint::FE AA{Curve::A};
+    [[maybe_unused]] static constexpr AffinePoint::FE BB{B};
 
-    // UNTESTED: this check can be removed.
     if (Q.x * Q.x * Q.x + AA * Q.x + BB != Q.y * Q.y)
         return false;
 
