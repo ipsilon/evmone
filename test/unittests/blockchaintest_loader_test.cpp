@@ -12,6 +12,7 @@ using namespace testing;
 
 TEST(json_loader, blockchain_test)
 {
+    // NOTE: fake `rlp` field! Never decoded by loader, only size is read and checked.
     std::istringstream input{R"({
         "000-fork=Shanghai-fill_stack": {
             "blocks": [
@@ -75,7 +76,8 @@ TEST(json_loader, blockchain_test)
                         "amount" : "0x0186a0",
                         "index" : "0x00",
                         "validatorIndex" : "0x00"
-                    }]
+                    }],
+                    "rlp": "0x00ff00ff00ff"
                 }
             ],
             "genesisBlockHeader": {
@@ -164,6 +166,7 @@ TEST(json_loader, blockchain_test)
 
 TEST(json_loader, blockchain_test_post_state_hash)
 {
+    // NOTE: fake `rlp` field! Never decoded by loader, only size is read and checked.
     std::istringstream input{R"({
         "000-fork=Shanghai-fill_stack": {
             "blocks": [
@@ -205,7 +208,8 @@ TEST(json_loader, blockchain_test_post_state_hash)
                         }
                     ],
                     "uncleHeaders": [],
-                    "withdrawals": []
+                    "withdrawals": [],
+                    "rlp": "0x00ff00ff00ff"
                 }
             ],
             "genesisBlockHeader": {
@@ -272,6 +276,7 @@ TEST(json_loader, blockchain_test_post_state_hash)
 
 TEST(json_loader, blockchain_test_pre_paris)
 {
+    // NOTE: fake `rlp` field! Never decoded by loader, only size is read and checked.
     std::istringstream input{R"({
         "000-fork=Shanghai-fill_stack": {
             "blocks": [
@@ -313,7 +318,8 @@ TEST(json_loader, blockchain_test_pre_paris)
                         }
                     ],
                     "uncleHeaders": [],
-                    "withdrawals": []
+                    "withdrawals": [],
+                    "rlp": "0x00ff00ff00ff"
                 }
             ],
             "genesisBlockHeader": {

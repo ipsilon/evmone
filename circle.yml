@@ -407,7 +407,7 @@ jobs:
           command: >
             LLVM_PROFILE_FILE=blockchain_tests.profraw
             bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests
-            --gtest_filter='-osaka/eip7918_blob_reserve_price.*:osaka/eip7934_block_rlp_limit.*'
+            --gtest_filter='-osaka/eip7918_blob_reserve_price.*'
       - collect_coverage_clang:
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(blockchaintest|experimental|statetest|t8n|unittests|utils)
       - upload_coverage:

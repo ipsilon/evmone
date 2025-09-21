@@ -5,13 +5,19 @@
 #include "../state/mpt_hash.hpp"
 #include "../state/requests.hpp"
 #include "../state/rlp.hpp"
-#include "../state/system_contracts.hpp"
 #include "../test/statetest/statetest.hpp"
 #include "blockchaintest.hpp"
 #include <gtest/gtest.h>
 
 namespace evmone::test
 {
+
+/// The CL gossip protocol constraint of the maximum block size (EIP-7934).
+constexpr size_t MAX_BLOCK_SIZE = 10 * 1024 * 1024;
+/// The safety margin for beacon block content (EIP-7934).
+constexpr size_t SAFETY_MARGIN = 2 * 1024 * 1024;
+/// The maximum EL block size when RLP encoded (EIP-7934).
+constexpr size_t MAX_RLP_BLOCK_SIZE = MAX_BLOCK_SIZE - SAFETY_MARGIN;
 
 struct RejectedTransaction
 {
@@ -189,6 +195,9 @@ bool validate_block(
 
     // Block is invalid if some of the withdrawal fields failed to be parsed.
     if (!test_block.withdrawals_parse_success)
+        return false;
+
+    if (rev >= EVMC_OSAKA && test_block.rlp_size > MAX_RLP_BLOCK_SIZE)
         return false;
 
     return true;

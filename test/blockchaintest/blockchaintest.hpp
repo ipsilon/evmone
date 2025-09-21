@@ -48,6 +48,7 @@ struct TestBlock
 {
     state::BlockInfo block_info;
     std::vector<state::Transaction> transactions;
+    size_t rlp_size = 0;
     bool withdrawals_parse_success = true;
     bool valid = true;
 
