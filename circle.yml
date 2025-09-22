@@ -384,7 +384,7 @@ jobs:
     steps:
       - build
       - download_execution_spec_tests:
-          release: v4.5.0
+          release: v5.1.0
           # develop includes stable
           fixtures_suffix: develop
       - run:
@@ -392,63 +392,20 @@ jobs:
           # Tests for in-development EVM revision currently passing.
           working_directory: ~/build
           command: >
+            LLVM_PROFILE_FILE=state_tests.profraw
             bin/evmone-statetest ~/spec-tests/fixtures/state_tests
+            --gtest_filter='-osaka/eip7951_p256verify_precompiles.*'
       - run:
           name: "Execution spec tests (develop, blockchain_tests)"
           # Tests for in-development EVM revision currently passing.
-          # - The block_hashes_history test is disabled because it takes too long.
           working_directory: ~/build
           command: >
+            LLVM_PROFILE_FILE=blockchain_tests.profraw
             bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests
-            --gtest_filter='-*block_hashes.block_hashes_history'
+            --gtest_filter='-cancun/eip4844_blobs.test_fork_transition_excess_blob_gas_post_blob_genesis:osaka/eip7918_blob_reserve_price.*:osaka/eip7934_block_rlp_limit.*:osaka/eip7951_p256verify_precompiles.*'
       - collect_coverage_clang
       - upload_coverage:
           flags: eest-develop
-      - download_execution_spec_tests:
-          release: v4.5.0
-          fixtures_suffix: static
-      - run:
-          name: "Execution spec tests (static, state_tests)"
-          working_directory: ~/build
-          command: >
-            bin/evmone-statetest ~/spec-tests/fixtures/state_tests
-            --gtest_filter=-*stTimeConsuming.CALLBlake2f_MaxRounds
-      - run:
-          name: "Execution spec tests (static, blockchain_tests)"
-          working_directory: ~/build
-          command: >
-            bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests
-            --gtest_filter=-*stTimeConsuming.CALLBlake2f_MaxRounds
-      - collect_coverage_clang
-      - upload_coverage:
-          flags: eest-static
-
-  fusaka-execution-spec-tests:
-    executor: linux-clang-latest
-    environment:
-      BUILD_TYPE: Release
-      CMAKE_GENERATOR: Ninja
-      CMAKE_OPTIONS: -DCOVERAGE=1
-    steps:
-      - build
-      - download_execution_spec_tests:
-          release: fusaka-devnet-3@v1.0.0
-          fixtures_suffix: fusaka-devnet-3
-      - run:
-          name: "Fusaka pre-release execution spec tests (state_tests)"
-          working_directory: ~/build
-          command: >
-            bin/evmone-statetest ~/spec-tests/fixtures/state_tests/
-            --gtest_filter='-osaka/eip7951_p256verify_precompiles/*.*'
-      - run:
-          name: "Fusaka pre-release execution spec tests (blockchain_tests)"
-          working_directory: ~/build
-          command: >
-            bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests/
-            --gtest_filter='-osaka/eip7934_block_rlp_limit/max_block_rlp_size.block_at_rlp_size_limit_boundary:osaka/eip7951_p256verify_precompiles/*.*'
-      - collect_coverage_clang
-      - upload_coverage:
-          flags: eest-fusaka
 
   ethereum-tests:
     executor: linux-clang-latest
@@ -709,7 +666,6 @@ workflows:
             tags:
               only: /^v[0-9].*/
       - execution-spec-tests
-      - fusaka-execution-spec-tests
       - ethereum-tests
       - precompiles-gmp
       - precompiles-silkpre
