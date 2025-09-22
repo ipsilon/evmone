@@ -238,10 +238,10 @@ commands:
             
             llvm-cov export -format=lcov $ARGS -skip-expansions > ~/coverage/coverage.lcov
             
-            llvm-cov show $ARGS -format=html -show-directory-coverage -show-line-counts-or-regions -o ~/coverage/html
+            llvm-cov show $ARGS -format=html -show-line-counts-or-regions -show-mcdc -o ~/coverage/html
 
-            llvm-cov report $ARGS > ~/coverage/report.txt
-            llvm-cov report $ARGS -use-color
+            llvm-cov report $ARGS -show-mcdc-summary > ~/coverage/report.txt
+            llvm-cov report $ARGS -use-color -show-mcdc-summary
       - store_artifacts:
           path: ~/coverage
           destination: coverage

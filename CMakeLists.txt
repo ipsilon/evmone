@@ -83,6 +83,7 @@ if(COVERAGE)
         # https://clang.llvm.org/docs/SourceBasedCodeCoverage.html
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-fprofile-instr-generate>
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-fcoverage-mapping>
+        $<$<CXX_COMPILER_ID:Clang,AppleClang>:-fcoverage-mcdc>
     )
     add_link_options(
         $<$<CXX_COMPILER_ID:GNU>:--coverage>
