@@ -223,13 +223,18 @@ commands:
 
   collect_coverage_clang:
     description: "Collect coverage data (clang)"
+    parameters:
+      ignore_filename_regex:
+        type: string
+        default: ""
     steps:
       - run:
           name: "Collect coverage data (clang)"
           working_directory: ~/build
           command: |
+            IGNORE_FILENAME_REGEX='include/evmc<<#parameters.ignore_filename_regex>>|<<parameters.ignore_filename_regex>><</parameters.ignore_filename_regex>>'
             OBJECTS="-object bin/evmone-unittests -object bin/evmone-statetest -object bin/evmone-blockchaintest -object bin/evmone-t8n"
-            ARGS="lib/libevmone.so $OBJECTS -Xdemangler llvm-cxxfilt -instr-profile=evmone.profdata -ignore-filename-regex=include/evmc"
+            ARGS="lib/libevmone.so $OBJECTS -Xdemangler llvm-cxxfilt -instr-profile=evmone.profdata -ignore-filename-regex=$IGNORE_FILENAME_REGEX"
 
             rm -rf ~/coverage
             mkdir ~/coverage
@@ -238,7 +243,7 @@ commands:
             
             llvm-cov export -format=lcov $ARGS -skip-expansions > ~/coverage/coverage.lcov
             
-            llvm-cov show $ARGS -format=html -show-line-counts-or-regions -show-mcdc -o ~/coverage/html
+            llvm-cov show $ARGS -format=html -show-line-counts-or-regions -show-mcdc -show-mcdc-summary -o ~/coverage/html
 
             llvm-cov report $ARGS -show-mcdc-summary > ~/coverage/report.txt
             llvm-cov report $ARGS -use-color -show-mcdc-summary
@@ -404,7 +409,8 @@ jobs:
             LLVM_PROFILE_FILE=blockchain_tests.profraw
             bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests
             --gtest_filter='-osaka/eip7918_blob_reserve_price.*:osaka/eip7934_block_rlp_limit.*:osaka/eip7951_p256verify_precompiles.*'
-      - collect_coverage_clang
+      - collect_coverage_clang:
+          ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(blockchaintest|experimental|statetest|t8n|unittests|utils)
       - upload_coverage:
           flags: eest-develop
 
