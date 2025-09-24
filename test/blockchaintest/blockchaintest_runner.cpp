@@ -166,6 +166,8 @@ bool validate_block(
             return false;
 
         // Check that the excess blob gas was updated correctly.
+        // According to EIP-7918 current blocks schedule (`rev`) should be used for parent base fee
+        // calculation.
         const auto parent_blob_base_fee =
             state::compute_blob_gas_price(rev, parent_header->excess_blob_gas.value_or(0));
         if (*test_block.block_info.excess_blob_gas !=

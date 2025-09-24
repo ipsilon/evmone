@@ -402,7 +402,7 @@ jobs:
           command: >
             LLVM_PROFILE_FILE=blockchain_tests.profraw
             bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests
-            --gtest_filter='-cancun/eip4844_blobs.test_fork_transition_excess_blob_gas_post_blob_genesis:osaka/eip7918_blob_reserve_price.*:osaka/eip7934_block_rlp_limit.*:osaka/eip7951_p256verify_precompiles.*'
+            --gtest_filter='-osaka/eip7918_blob_reserve_price.*:osaka/eip7934_block_rlp_limit.*:osaka/eip7951_p256verify_precompiles.*'
       - collect_coverage_clang
       - upload_coverage:
           flags: eest-develop

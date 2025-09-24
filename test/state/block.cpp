@@ -89,7 +89,7 @@ uint64_t calc_excess_blob_gas(evmc_revision rev, uint64_t parent_blob_gas_used,
 
     if (rev >= EVMC_OSAKA && BLOB_BASE_COST * parent_base_fee > GAS_PER_BLOB * parent_blob_base_fee)
         return parent_excess_blob_gas +
-               parent_blob_gas_used * (schedule.max - schedule.target) / schedule.target;
+               parent_blob_gas_used * (schedule.max - schedule.target) / schedule.max;
 
     return parent_excess_blob_gas + parent_blob_gas_used - target_blob_gas_per_block;
 }
