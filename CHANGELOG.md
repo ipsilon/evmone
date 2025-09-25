@@ -5,6 +5,71 @@ Documentation of all notable changes to the **evmone** project.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.16.0] — unreleased
+
+### Added
+
+- Partial **[Osaka]** support:
+  - Add `CLZ` opcode ([EIP-7939]).
+    [#1264](https://github.com/ipsilon/evmone/pull/1264)
+  - Implement blob count limit per transaction ([EIP-7594]).
+    [#1279](https://github.com/ipsilon/evmone/pull/1279)
+  - Modify blob base fee calculation ([EIP-7918]).
+    [#1281](https://github.com/ipsilon/evmone/pull/1281)
+    [#1322](https://github.com/ipsilon/evmone/pull/1322)
+  - Enforce max transaction gas limit ([EIP-7825]).
+    [#1285](https://github.com/ipsilon/evmone/pull/1285)
+  - Add the `modexp` precompile changes from [EIP-7823] and [EIP-7883].
+    [#1242](https://github.com/ipsilon/evmone/pull/1242)
+    [#1268](https://github.com/ipsilon/evmone/pull/1268)
+    [#1294](https://github.com/ipsilon/evmone/pull/1294)
+  - Add `p256verify` ([EIP-7951]) precompile ID/address (no implementation yet).
+    [#1309](https://github.com/ipsilon/evmone/pull/1309)
+
+### Changed
+
+- **EVM Object Format (EOF)**:
+  - New address hashing scheme for `EOFCREATE`.
+    [#1140](https://github.com/ipsilon/evmone/pull/1140)
+  - `TXCREATE` and InitcodeTransaction type ([EIP-7873]).
+    [#1139](https://github.com/ipsilon/evmone/pull/1139)
+    [#1192](https://github.com/ipsilon/evmone/pull/1192)
+  - Align `EOFCREATE` args with `EXT*CALL`.
+    [#1147](https://github.com/ipsilon/evmone/pull/1147)
+  - Change container sections size to 4 bytes.
+    [#1171](https://github.com/ipsilon/evmone/pull/1171)
+  - Caching of `TXCREATE` validation results.
+    [#1193](https://github.com/ipsilon/evmone/pull/1193)
+  - Move EOF to `EVMC_EXPERIMENTAL`.
+    [#1243](https://github.com/ipsilon/evmone/pull/1243)
+- Improvements to Elliptic Curve Cryptography code:
+  - Add mixed-add formula.
+    [#1170](https://github.com/ipsilon/evmone/pull/1170)
+  - Better API for ECC.
+    [#1288](https://github.com/ipsilon/evmone/pull/1288)
+    [#1298](https://github.com/ipsilon/evmone/pull/1298)
+    [#1299](https://github.com/ipsilon/evmone/pull/1299)
+  - Improve bn254 point "on curve".
+    [#1300](https://github.com/ipsilon/evmone/pull/1300)
+  - Remove special case checks from point multiplication.
+    [#1301](https://github.com/ipsilon/evmone/pull/1301)
+  - Avoid conversion to/from Montgomery form of `y` in secp256k1.
+    [#1303](https://github.com/ipsilon/evmone/pull/1303)
+  - Reduce EC multiplication scalar by the order.
+    [#1305](https://github.com/ipsilon/evmone/pull/1305)
+  - Switch to Jacobian coordinates in ECC.
+    [#1312](https://github.com/ipsilon/evmone/pull/1312)
+- Optimization to the Merkle Patricia Trie (MPT) implementation: "Extension node is a lie!"
+  [#703](https://github.com/ipsilon/evmone/pull/703)
+- Better EVM stack memory alignment and implementation:
+  - Mark stack pointer as 32-byte aligned.
+    [#1233](https://github.com/ipsilon/evmone/pull/1233)
+  - Track stack "end" instead of "top".
+    [#895](https://github.com/ipsilon/evmone/pull/895)
+  - Use alignas to specify EVM stack space alignment.
+    [#1304](https://github.com/ipsilon/evmone/pull/1304)
+
+
 [0.15.0] — 2025-04-08
 
 ### Changed
@@ -969,6 +1034,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 - Exposes [EVMC] 6 ABI.
 - The [intx 0.2.0](https://github.com/chfast/intx/releases/tag/v0.2.0) library is used for 256-bit precision arithmetic. 
 
+[0.16.0]: https://github.com/ethereum/evmone/compare/v0.15.0..master
 [0.15.0]: https://github.com/ethereum/evmone/releases/tag/v0.15.0
 [0.14.1]: https://github.com/ethereum/evmone/releases/tag/v0.14.1
 [0.14.0]: https://github.com/ethereum/evmone/releases/tag/v0.14.0
@@ -1025,6 +1091,14 @@ It delivers fully-compatible and high-speed EVM implementation.
 [EIP-7691]: https://eips.ethereum.org/EIPS/eip-7691
 [EIP-7692]: https://eips.ethereum.org/EIPS/eip-7692
 [EIP-7702]: https://eips.ethereum.org/EIPS/eip-7702
+[EIP-7594]: https://eips.ethereum.org/EIPS/eip-7594
+[EIP-7823]: https://eips.ethereum.org/EIPS/eip-7823
+[EIP-7825]: https://eips.ethereum.org/EIPS/eip-7825
+[EIP-7873]: https://eips.ethereum.org/EIPS/eip-7873
+[EIP-7883]: https://eips.ethereum.org/EIPS/eip-7883
+[EIP-7918]: https://eips.ethereum.org/EIPS/eip-7918
+[EIP-7939]: https://eips.ethereum.org/EIPS/eip-7939
+[EIP-7951]: https://eips.ethereum.org/EIPS/eip-7951
 
 [Spurious Dragon]: https://eips.ethereum.org/EIPS/eip-607
 [Petersburg]: https://eips.ethereum.org/EIPS/eip-1716
@@ -1034,6 +1108,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 [Shanghai]: https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md
 [Cancun]: https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/cancun.md
 [Prague]: https://eips.ethereum.org/EIPS/eip-7600
+[Osaka]: https://eips.ethereum.org/EIPS/eip-7607
 
 [EVMC]: https://github.com/ethereum/evmc
 [EVMC 12.1.0]: https://github.com/ethereum/evmc/releases/tag/v12.1.0
