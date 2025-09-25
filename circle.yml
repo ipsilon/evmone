@@ -358,7 +358,8 @@ jobs:
 
   deploy:
     docker:
-      - image: cimg/go
+      - image: cimg/go:1.25.1
+    resource_class: small
     steps:
       - run:
           name: "Install GHR"
