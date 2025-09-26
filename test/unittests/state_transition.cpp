@@ -13,7 +13,7 @@ namespace evmone::test
 {
 void state_transition::SetUp()
 {
-    pre.insert(tx.sender, {.nonce = 1, .balance = tx.gas_limit * tx.max_gas_price + tx.value + 1});
+    pre[tx.sender] = {.nonce = 1, .balance = tx.gas_limit * tx.max_gas_price + tx.value + 1};
 
     // Default expectation (coinbase is added later for valid txs only).
     expect.post[tx.sender].exists = true;
