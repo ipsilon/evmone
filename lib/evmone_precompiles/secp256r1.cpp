@@ -59,6 +59,7 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     //    In this case x₁ is 0 and cannot be equal to r.
     // 6. The signature is valid if r ≡ x₁ (mod n).
     auto x1 = R.x.value();
+    assert(x1 < Curve::ORDER);
     if (x1 >= Curve::ORDER)
         x1 -= Curve::ORDER;
 
