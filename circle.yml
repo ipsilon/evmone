@@ -390,7 +390,7 @@ jobs:
     steps:
       - build
       - download_execution_spec_tests:
-          release: v5.1.0
+          release: v5.2.0
           # develop includes stable
           fixtures_suffix: develop
       - run:
