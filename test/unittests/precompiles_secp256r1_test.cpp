@@ -27,6 +27,14 @@ const P256VerifyInput VALID_INPUTS[]{
         0x2927b10512bae3eddcfe467828128bad2903269919f7086069c8c4df6c732838_u256,
         0xc7787964eaac00e5921fb1498a60f4606766b3d9685001558d1a974e7341513e_u256,
     },
+    {
+        // Valid public key with 0 x-coordinate.
+        0xc3d3be9eb3577f217ae0ab360529a30b18adc751aec886328593d7d6fe042809_u256,
+        0x3a4e97b44cbf88b90e6205a45ba957e520f63f3c6072b53c244653278a1819d8_u256,
+        0x6a184aa037688a5ebd25081fd2c0b10bb64fa558b671bd81955ca86e09d9d722_u256,
+        0,
+        0x66485c780e2f83d72433bd5d84a06bb6541c2af31dae871728bf856a174f93f4_u256,
+    },
 };
 
 const P256VerifyInput INVALID_INPUTS[]{

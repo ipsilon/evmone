@@ -27,11 +27,14 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     if (r == 0 || r >= Curve::ORDER || s == 0 || s >= Curve::ORDER)
         return false;
 
-    if (qx == 0 || qx >= Curve::FIELD_PRIME || qy == 0 || qy >= Curve::FIELD_PRIME)
+    // Check that Q is not equal to the identity element O, and its coordinates are otherwise valid.
+    if (qx >= Curve::FIELD_PRIME || qy >= Curve::FIELD_PRIME)
+        return false;
+    const AffinePoint Q{AffinePoint::FE{qx}, AffinePoint::FE{qy}};
+    if (Q == 0)
         return false;
 
-    const AffinePoint Q{AffinePoint::FE{qx}, AffinePoint::FE{qy}};
-
+    // Check that Q lies on the curve.
     if (!is_on_curve(Q))
         return false;
 
