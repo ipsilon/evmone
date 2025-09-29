@@ -56,6 +56,7 @@ target_sources(
     precompiles_bn254_test.cpp
     precompiles_kzg_test.cpp
     precompiles_ripemd160_test.cpp
+    precompiles_secp256r1_test.cpp
     precompiles_sha256_test.cpp
     precompiles_expmod_test.cpp
     state_block_test.cpp
