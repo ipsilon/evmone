@@ -8,6 +8,8 @@ target_include_directories(evmone-precompiles-bench PRIVATE ..)
 target_link_libraries(evmone-precompiles-bench PRIVATE evmone::state benchmark::benchmark)
 target_sources(
     evmone-precompiles-bench PRIVATE
+    bls_bench_input.hpp
+    bls_bench_input.cpp
     precompiles_bench.cpp
 )
 

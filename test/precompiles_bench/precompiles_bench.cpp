@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "../utils/utils.hpp"
+#include "bls_bench_input.hpp"
 #include <benchmark/benchmark.h>
 #include <intx/intx.hpp>
 #include <state/precompiles.hpp>
@@ -43,6 +44,10 @@ template <>
 constexpr auto analyze<PrecompileId::ecpairing> = ecpairing_analyze;
 template <>
 constexpr auto analyze<PrecompileId::point_evaluation> = point_evaluation_analyze;
+template <>
+constexpr auto analyze<PrecompileId::bls12_g1msm> = bls12_g1msm_analyze;
+template <>
+constexpr auto analyze<PrecompileId::bls12_g2msm> = bls12_g2msm_analyze;
 
 template <PrecompileId>
 const inline std::array inputs{0};
@@ -168,6 +173,11 @@ const inline std::array inputs<PrecompileId::point_evaluation>{
     "01ff83fbe4488061b695d9e4632e9ab23c5b9dfb046241fac921659c2e3b6a4e5e88a0c20ef27ae5dea6e83a748115df152b207362c022a43c8ebbfbec73ea2a2b38376a1de4ed9abd35175ac422af7df2c6ddf1503979964b1d217747c108978969cc0fcbd47dba8b1e3cbba16920f3fc694fadbf203b55aa66aaf138a38ace946a7ccddc20f45d796cd60268df8a2487d06c11cdc50247c580c5dd25f6fb486053b73868038cb92c2ae6d429a7bde850177f31c9fde00ca824c8c59cd4ef49"_hex,
 };
 
+template <>
+const inline std::array inputs<PrecompileId::bls12_g1msm>{generate_g1_msm_input(256)};
+template <>
+const inline std::array inputs<PrecompileId::bls12_g2msm>{generate_g2_msm_input(256)};
+
 template <PrecompileId Id, ExecuteFn Fn>
 void precompile(benchmark::State& state)
 {
@@ -175,7 +185,12 @@ void precompile(benchmark::State& state)
     size_t max_output_size = 0;
     for (const auto& input : inputs<Id>)
     {
-        const auto r = analyze<Id>(input, EVMC_LATEST_STABLE_REVISION);
+        size_t input_size = input.size();  // NOLINT(misc-const-correctness)
+        if constexpr (Id == PrecompileId::bls12_g1msm)
+            input_size = 160 * static_cast<size_t>(state.range(0));
+        else if constexpr (Id == PrecompileId::bls12_g2msm)
+            input_size = 288 * static_cast<size_t>(state.range(0));
+        const auto r = analyze<Id>(input.substr(0, input_size), EVMC_LATEST_STABLE_REVISION);
         batch_gas_cost += r.gas_cost;
         max_output_size = std::max(max_output_size, r.max_output_size);
     }
@@ -187,7 +202,13 @@ void precompile(benchmark::State& state)
     {
         for (const auto& input : inputs<Id>)
         {
-            const auto [status, _] = Fn(input.data(), input.size(), output.get(), max_output_size);
+            size_t input_size = input.size();  // NOLINT(misc-const-correctness)
+            if constexpr (Id == PrecompileId::bls12_g1msm)
+                input_size = 160 * static_cast<size_t>(state.range(0));
+            else if constexpr (Id == PrecompileId::bls12_g2msm)
+                input_size = 288 * static_cast<size_t>(state.range(0));
+
+            const auto [status, _] = Fn(input.data(), input_size, output.get(), max_output_size);
             if (status != EVMC_SUCCESS) [[unlikely]]
             {
                 state.SkipWithError("invalid result");
@@ -200,6 +221,7 @@ void precompile(benchmark::State& state)
     using benchmark::Counter;
     state.counters["gas_used"] = Counter(static_cast<double>(batch_gas_cost));
     state.counters["gas_rate"] = Counter(static_cast<double>(total_gas_used), Counter::kIsRate);
+    // state.SetComplexityN(state.range(0));
 }
 
 template <ExecuteFn Fn>
@@ -274,10 +296,12 @@ BENCHMARK_TEMPLATE(precompile, PrecompileId::identity, identity_execute);
 namespace bench_ecrecovery
 {
 constexpr auto evmmax_cpp = ecrecover_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, evmmax_cpp);
+BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, evmmax_cpp)
+    ->Unit(benchmark::TimeUnit::kMicrosecond);
 #ifdef EVMONE_PRECOMPILES_SILKPRE
 constexpr auto libsecp256k1 = silkpre_ecrecover_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, libsecp256k1);
+BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, libsecp256k1)
+    ->Unit(benchmark::TimeUnit::kMicrosecond);
 #endif
 }  // namespace bench_ecrecovery
 
@@ -330,6 +354,24 @@ namespace bench_kzg
 constexpr auto evmone_blst = point_evaluation_execute;
 BENCHMARK_TEMPLATE(precompile, PrecompileId::point_evaluation, evmone_blst);
 }  // namespace bench_kzg
+
+namespace bench_msm_g1
+{
+constexpr auto evmone_blst = bls12_g1msm_execute;
+BENCHMARK_TEMPLATE(precompile, PrecompileId::bls12_g1msm, evmone_blst)
+    ->DenseRange(1, 256)
+    // ->Complexity(benchmark::oN)
+    ->Unit(benchmark::TimeUnit::kMicrosecond);
+}  // namespace bench_msm_g1
+
+namespace bench_msm_g2
+{
+constexpr auto evmone_blst = bls12_g2msm_execute;
+BENCHMARK_TEMPLATE(precompile, PrecompileId::bls12_g2msm, evmone_blst)
+    ->DenseRange(1, 256)
+    // ->Complexity(benchmark::oN)
+    ->Unit(benchmark::TimeUnit::kMicrosecond);
+}  // namespace bench_msm_g2
 
 }  // namespace
 
