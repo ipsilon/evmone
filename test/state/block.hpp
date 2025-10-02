@@ -69,14 +69,14 @@ uint64_t calc_base_fee(
     int64_t parent_gas_limit, int64_t parent_gas_used, uint64_t parent_base_fee) noexcept;
 
 /// Max amount of blob gas allowed in block.
-uint64_t max_blob_gas_per_block(const BlobSchedule& schedule) noexcept;
+uint64_t max_blob_gas_per_block(const BlobParams& blob_params) noexcept;
 
 /// Computes the current blob gas price based on the excess blob gas.
 intx::uint256 compute_blob_gas_price(
-    const BlobSchedule& schedule, uint64_t excess_blob_gas) noexcept;
+    const BlobParams& blob_params, uint64_t excess_blob_gas) noexcept;
 
 /// Computes the current excess blob gas based on parameters of the parent block.
-uint64_t calc_excess_blob_gas(evmc_revision rev, const BlobSchedule& schedule,
+uint64_t calc_excess_blob_gas(evmc_revision rev, const BlobParams& blob_params,
     uint64_t parent_blob_gas_used, uint64_t parent_excess_blob_gas, uint64_t parent_base_fee,
     const intx::uint256& parent_blob_base_fee) noexcept;
 

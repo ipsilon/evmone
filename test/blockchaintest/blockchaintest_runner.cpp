@@ -113,7 +113,7 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         bloom, blob_gas_left, std::move(block_state)};
 }
 
-bool validate_block(evmc_revision rev, const state::BlobSchedule& schedule,
+bool validate_block(evmc_revision rev, const state::BlobParams& blob_params,
     const TestBlock& test_block, const BlockHeader* parent_header) noexcept
 {
     // NOTE: includes only block validity unrelated to individual txs. See `apply_block`.
@@ -172,18 +172,18 @@ bool validate_block(evmc_revision rev, const state::BlobSchedule& schedule,
             return false;
 
         // Check that the excess blob gas was updated correctly.
-        // According to EIP-7918 current blocks schedule (`rev`) should be used for parent base fee
+        // According to EIP-7918 current blocks params (`rev`) should be used for parent base fee
         // calculation.
         const auto parent_blob_base_fee =
-            state::compute_blob_gas_price(schedule, parent_header->excess_blob_gas.value_or(0));
+            state::compute_blob_gas_price(blob_params, parent_header->excess_blob_gas.value_or(0));
         if (*test_block.block_info.excess_blob_gas !=
-            state::calc_excess_blob_gas(rev, schedule, parent_header->blob_gas_used.value_or(0),
+            state::calc_excess_blob_gas(rev, blob_params, parent_header->blob_gas_used.value_or(0),
                 parent_header->excess_blob_gas.value_or(0), parent_header->base_fee_per_gas,
                 parent_blob_base_fee))
             return false;
 
         // Ensure the total blob gas spent is at most equal to the limit
-        if (*test_block.block_info.blob_gas_used > state::max_blob_gas_per_block(schedule))
+        if (*test_block.block_info.blob_gas_used > state::max_blob_gas_per_block(blob_params))
             return false;
     }
     else
@@ -284,15 +284,14 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 parent_data_it != block_data.end() ? parent_data_it->second.header : nullptr;
 
             const auto rev = rev_schedule.get_revision(bi.timestamp);
-            const auto blob_schedule =
-                get_blob_schedule(c.network, c.blob_schedules, bi.timestamp);
+            const auto blob_params = get_blob_params(c.network, c.blob_schedule, bi.timestamp);
 
             SCOPED_TRACE(std::string{evmc::to_string(rev)} + '/' + std::to_string(case_index) +
                          '/' + c.name + '/' + std::to_string(test_block.block_info.number));
 
             if (test_block.valid)
             {
-                ASSERT_TRUE(validate_block(rev, blob_schedule, test_block, parent_header))
+                ASSERT_TRUE(validate_block(rev, blob_params, test_block, parent_header))
                     << "Expected block to be valid (validate_block)";
 
                 // Block being valid guarantees its parent was found.
@@ -345,7 +344,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
             }
             else
             {
-                if (!validate_block(rev, blob_schedule, test_block, parent_header))
+                if (!validate_block(rev, blob_params, test_block, parent_header))
                     continue;
 
                 // Block being valid guarantees its parent was found.

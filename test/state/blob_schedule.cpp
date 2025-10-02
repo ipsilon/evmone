@@ -5,25 +5,24 @@
 
 namespace evmone::state
 {
-BlobSchedule get_blob_schedule(evmc_revision rev)
+BlobParams get_blob_params(evmc_revision rev)
 {
     if (rev == EVMC_PRAGUE || rev == EVMC_EXPERIMENTAL)
         return {6, 9, 5007716};
     else if (rev > EVMC_PRAGUE)
         throw std::invalid_argument{
-            "no hardcoded blob schedule for " + std::string{evmc::to_string(rev)}};
+            "no hardcoded blob params for " + std::string{evmc::to_string(rev)}};
     else
         return {3, 6, 3338477};
 }
 
-BlobSchedule get_blob_schedule(
-    evmc_revision rev, const BlobScheduleMap& schedules) noexcept
+BlobParams get_blob_params(evmc_revision rev, const BlobSchedule& blob_schedule) noexcept
 {
-    return get_blob_schedule(evmc::to_string(rev), schedules, 0);
+    return get_blob_params(evmc::to_string(rev), blob_schedule, 0);
 }
 
-BlobSchedule get_blob_schedule(
-    std::string_view network, const BlobScheduleMap& schedules, int64_t timestamp) noexcept
+BlobParams get_blob_params(
+    std::string_view network, const BlobSchedule& blob_schedule, int64_t timestamp) noexcept
 {
     std::string fork;
     if (network == "PragueToOsakaAtTime15k")
@@ -38,10 +37,10 @@ BlobSchedule get_blob_schedule(
         fork = timestamp >= 15'000 ? "BPO4" : "BPO3";
     else
         fork = network;
-    if (const auto it = schedules.find(fork); it != schedules.end())
+    if (const auto it = blob_schedule.find(fork); it != blob_schedule.end())
         return it->second;
     else
-        return get_blob_schedule(test::to_rev_schedule(network).get_revision(timestamp));
+        return get_blob_params(test::to_rev_schedule(network).get_revision(timestamp));
 }
 
 }  // namespace evmone::state

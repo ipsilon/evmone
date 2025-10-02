@@ -93,14 +93,14 @@ int main(int argc, const char* argv[])
         TestBlockHashes block_hashes;
         TestState state;
 
-        state::BlobScheduleMap blob_schedules;
+        state::BlobSchedule blob_schedule;
 
         if (!blob_schedule_file.empty())
         {
             const auto j = json::json::parse(std::ifstream{blob_schedule_file}, nullptr, false);
-            blob_schedules = from_json<state::BlobScheduleMap>(j);
+            blob_schedule = from_json<state::BlobSchedule>(j);
         }
-        const auto blob_schedule = state::get_blob_schedule(rev, blob_schedules);
+        const auto blob_params = state::get_blob_params(rev, blob_schedule);
 
         if (!alloc_file.empty())
         {
@@ -111,7 +111,7 @@ int main(int argc, const char* argv[])
         if (!env_file.empty())
         {
             const auto j = json::json::parse(std::ifstream{env_file});
-            block = from_json_with_rev(j, rev, blob_schedules);
+            block = from_json_with_rev(j, rev, blob_schedule);
             block_hashes = from_json<TestBlockHashes>(j);
         }
 
@@ -138,7 +138,7 @@ int main(int argc, const char* argv[])
             j_result["currentBaseFee"] = hex0x(block.base_fee);
 
         int64_t cumulative_gas_used = 0;
-        auto blob_gas_left = static_cast<int64_t>(state::max_blob_gas_per_block(blob_schedule));
+        auto blob_gas_left = static_cast<int64_t>(state::max_blob_gas_per_block(blob_params));
         std::vector<state::Transaction> transactions;
         std::vector<state::TransactionReceipt> receipts;
         int64_t block_gas_left = block.gas_limit;
@@ -278,7 +278,7 @@ int main(int argc, const char* argv[])
         if (rev >= EVMC_CANCUN)
         {
             j_result["blobGasUsed"] = hex0x(
-                static_cast<int64_t>(state::max_blob_gas_per_block(blob_schedule)) - blob_gas_left);
+                static_cast<int64_t>(state::max_blob_gas_per_block(blob_params)) - blob_gas_left);
             if (block.excess_blob_gas.has_value())
                 j_result["currentExcessBlobGas"] = hex0x(*block.excess_blob_gas);
         }

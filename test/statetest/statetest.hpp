@@ -63,7 +63,7 @@ struct StateTransitionTest
     TestMultiTransaction multi_tx;
     std::vector<Case> cases;
     std::unordered_map<uint64_t, std::string> input_labels;
-    state::BlobScheduleMap blob_schedules;
+    state::BlobSchedule blob_schedule;
 };
 
 template <typename T>
@@ -91,7 +91,7 @@ template <>
 bytes from_json<bytes>(const json::json& j);
 
 state::BlockInfo from_json_with_rev(
-    const json::json& j, evmc_revision rev, const state::BlobScheduleMap& blob_schedules = {});
+    const json::json& j, evmc_revision rev, const state::BlobSchedule& blob_schedule = {});
 
 template <>
 TestBlockHashes from_json<TestBlockHashes>(const json::json& j);
@@ -106,7 +106,7 @@ template <>
 state::Transaction from_json<state::Transaction>(const json::json& j);
 
 template <>
-state::BlobScheduleMap from_json<state::BlobScheduleMap>(const json::json& j);
+state::BlobSchedule from_json<state::BlobSchedule>(const json::json& j);
 
 /// Exports the State (accounts) to JSON format (aka pre/post/alloc state).
 json::json to_json(const TestState& state);

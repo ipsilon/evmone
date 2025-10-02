@@ -168,19 +168,19 @@ state::AuthorizationList from_json<state::AuthorizationList>(const json::json& j
 }
 
 template <>
-state::BlobScheduleMap from_json<state::BlobScheduleMap>(const json::json& j)
+state::BlobSchedule from_json<state::BlobSchedule>(const json::json& j)
 {
-    state::BlobScheduleMap schedules;
+    state::BlobSchedule blob_schedule;
     for (const auto& [name, jschedule] : j.items())
     {
-        state::BlobSchedule schedule;
-        schedule.target = from_json<uint16_t>(jschedule.at("target"));
-        schedule.max = from_json<uint16_t>(jschedule.at("max"));
-        schedule.base_fee_update_fraction =
+        state::BlobParams blob_params;
+        blob_params.target = from_json<uint16_t>(jschedule.at("target"));
+        blob_params.max = from_json<uint16_t>(jschedule.at("max"));
+        blob_params.base_fee_update_fraction =
             from_json<uint32_t>(jschedule.at("baseFeeUpdateFraction"));
-        schedules[name] = schedule;
+        blob_schedule[name] = blob_params;
     }
-    return schedules;
+    return blob_schedule;
 }
 
 // Based on calculateEIP1559BaseFee from ethereum/retesteth
@@ -230,7 +230,7 @@ state::Withdrawal from_json<state::Withdrawal>(const json::json& j)
 }
 
 state::BlockInfo from_json_with_rev(
-    const json::json& j, evmc_revision rev, const state::BlobScheduleMap& blob_schedules)
+    const json::json& j, evmc_revision rev, const state::BlobSchedule& blob_schedule)
 {
     evmc::bytes32 prev_randao;
     int64_t current_difficulty = 0;
@@ -289,7 +289,7 @@ state::BlockInfo from_json_with_rev(
     if (parent_timestamp_it != j.end())
         parent_timestamp = from_json<int64_t>(*parent_timestamp_it);
 
-    const auto blob_schedule = state::get_blob_schedule(rev, blob_schedules);
+    const auto blob_params = state::get_blob_params(rev, blob_schedule);
 
     uint64_t excess_blob_gas = 0;
     if (const auto it = j.find("parentExcessBlobGas"); it != j.end())
@@ -298,8 +298,8 @@ state::BlockInfo from_json_with_rev(
         const auto parent_blob_gas_used = from_json<uint64_t>(j.at("parentBlobGasUsed"));
         const auto parent_base_fee = from_json<uint64_t>(j.at("parentBaseFee"));
         const auto parent_blob_base_fee =
-            state::compute_blob_gas_price(blob_schedule, parent_excess_blob_gas);
-        excess_blob_gas = state::calc_excess_blob_gas(rev, blob_schedule, parent_blob_gas_used,
+            state::compute_blob_gas_price(blob_params, parent_excess_blob_gas);
+        excess_blob_gas = state::calc_excess_blob_gas(rev, blob_params, parent_blob_gas_used,
             parent_excess_blob_gas, parent_base_fee, parent_blob_base_fee);
     }
     else if (const auto it2 = j.find("currentExcessBlobGas"); it2 != j.end())
@@ -321,7 +321,7 @@ state::BlockInfo from_json_with_rev(
         .base_fee = base_fee,
         .blob_gas_used = load_if_exists<uint64_t>(j, "blobGasUsed"),
         .excess_blob_gas = excess_blob_gas,
-        .blob_base_fee = state::compute_blob_gas_price(blob_schedule, excess_blob_gas),
+        .blob_base_fee = state::compute_blob_gas_price(blob_params, excess_blob_gas),
         .ommers = std::move(ommers),
         .withdrawals = std::move(withdrawals),
     };
@@ -525,14 +525,14 @@ static void from_json(const json::json& j_t, StateTransitionTest& o)
     if (const auto config_it = j_t.find("config"); config_it != j_t.end())
     {
         if (const auto bs_it = config_it->find("blobSchedule"); bs_it != config_it->end())
-            o.blob_schedules = from_json<state::BlobScheduleMap>(*bs_it);
+            o.blob_schedule = from_json<state::BlobSchedule>(*bs_it);
     }
 
     for (const auto& [rev_name, expectations] : j_t.at("post").items())
     {
         o.cases.emplace_back(to_rev(rev_name),
             expectations.get<std::vector<StateTransitionTest::Case::Expectation>>(),
-            from_json_with_rev(j_t.at("env"), to_rev(rev_name), o.blob_schedules));
+            from_json_with_rev(j_t.at("env"), to_rev(rev_name), o.blob_schedule));
     }
 }
 

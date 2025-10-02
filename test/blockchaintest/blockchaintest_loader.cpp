@@ -56,7 +56,7 @@ BlockHeader from_json<BlockHeader>(const json::json& j)
 }
 
 static TestBlock load_test_block(
-    const json::json& j, const std::string& network, const state::BlobScheduleMap& blob_schedules)
+    const json::json& j, const std::string& network, const state::BlobSchedule& blob_schedule)
 {
     using namespace state;
     TestBlock tb;
@@ -70,8 +70,7 @@ static TestBlock load_test_block(
         tb.block_info.parent_hash = tb.expected_block_header.parent_hash;
 
         const auto rev = to_rev_schedule(network).get_revision(tb.block_info.timestamp);
-        const auto blob_schedule =
-            get_blob_schedule(network, blob_schedules, tb.block_info.timestamp);
+        const auto blob_params = get_blob_params(network, blob_schedule, tb.block_info.timestamp);
 
         tb.block_info.gas_limit = tb.expected_block_header.gas_limit;
         tb.block_info.gas_used = tb.expected_block_header.gas_used;
@@ -85,7 +84,7 @@ static TestBlock load_test_block(
 
         tb.block_info.blob_base_fee = tb.block_info.excess_blob_gas.has_value() ?
                                           std::optional(state::compute_blob_gas_price(
-                                              blob_schedule, *tb.block_info.excess_blob_gas)) :
+                                              blob_params, *tb.block_info.excess_blob_gas)) :
                                           std::nullopt;
 
         // Override prev_randao with difficulty pre-Merge
@@ -148,7 +147,7 @@ BlockchainTest load_blockchain_test_case(const std::string& name, const json::js
     if (const auto config_it = j.find("config"); config_it != j.end())
     {
         if (const auto bs_it = config_it->find("blobSchedule"); bs_it != config_it->end())
-            bt.blob_schedules = from_json<BlobScheduleMap>(*bs_it);
+            bt.blob_schedule = from_json<BlobSchedule>(*bs_it);
     }
     for (const auto& el : j.at("blocks"))
     {
@@ -163,14 +162,14 @@ BlockchainTest load_blockchain_test_case(const std::string& name, const json::js
                 throw UnsupportedTestFeature(
                     "tests with invalidly rlp-encoded blocks are not supported");
 
-            auto test_block = load_test_block(el.at("rlp_decoded"), bt.network, bt.blob_schedules);
+            auto test_block = load_test_block(el.at("rlp_decoded"), bt.network, bt.blob_schedule);
             test_block.valid = false;
             test_block.rlp_size = from_json<bytes>(el.at("rlp")).size();
             bt.test_blocks.emplace_back(test_block);
         }
         else
         {
-            auto test_block = load_test_block(el, bt.blob_schedules);
+            auto test_block = load_test_block(el, bt.network, bt.blob_schedule);
             test_block.rlp_size = from_json<bytes>(el.at("rlp")).size();
             bt.test_blocks.emplace_back(test_block);
         }

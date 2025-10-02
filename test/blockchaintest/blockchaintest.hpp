@@ -70,7 +70,7 @@ struct BlockchainTest
     TestState pre_state;
     RevisionSchedule rev;
     std::string network;
-    state::BlobScheduleMap blob_schedules;
+    state::BlobSchedule blob_schedule;
 
     Expectation expectation;
 };
