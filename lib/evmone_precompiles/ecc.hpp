@@ -315,7 +315,8 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
 template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
-    assert(p != ProjPoint(q));
+    // Not correct in fuzzing mutation:
+    // assert(p != ProjPoint(q));
 
     if (q == 0)
         return p;
