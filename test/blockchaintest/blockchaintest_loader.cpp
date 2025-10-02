@@ -71,7 +71,7 @@ static TestBlock load_test_block(
 
         const auto rev = to_rev_schedule(network).get_revision(tb.block_info.timestamp);
         const auto blob_schedule =
-            get_blob_schedule_by_bpo_fork(network, blob_schedules, tb.block_info.timestamp);
+            get_blob_schedule(network, blob_schedules, tb.block_info.timestamp);
 
         tb.block_info.gas_limit = tb.expected_block_header.gas_limit;
         tb.block_info.gas_used = tb.expected_block_header.gas_used;

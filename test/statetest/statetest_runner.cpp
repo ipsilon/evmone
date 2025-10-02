@@ -27,7 +27,7 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
             const auto tx = test.multi_tx.get(expected.indexes);
             auto state = test.pre_state;
             const auto blob_schedule =
-                state::get_blob_schedule_by_bpo_fork(rev, test.blob_schedules);
+                state::get_blob_schedule(rev, test.blob_schedules);
 
             const auto res =
                 test::transition(state, block, test.block_hashes, tx, rev, vm, block.gas_limit,

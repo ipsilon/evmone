@@ -100,7 +100,7 @@ int main(int argc, const char* argv[])
             const auto j = json::json::parse(std::ifstream{blob_schedule_file}, nullptr, false);
             blob_schedules = from_json<state::BlobScheduleMap>(j);
         }
-        const auto blob_schedule = state::get_blob_schedule_by_bpo_fork(rev, blob_schedules);
+        const auto blob_schedule = state::get_blob_schedule(rev, blob_schedules);
 
         if (!alloc_file.empty())
         {

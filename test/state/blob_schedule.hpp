@@ -24,21 +24,16 @@ struct BlobSchedule
 
 using BlobScheduleMap = std::unordered_map<std::string, state::BlobSchedule>;
 
-/// Returns the blob schedule for the given EVM revision.
-/// After Prague, the blob schedule is derived by BPO config.
-constexpr BlobSchedule get_blob_schedule(evmc_revision rev)
-{
-    if (rev == EVMC_PRAGUE || rev == EVMC_EXPERIMENTAL)
-        return {6, 9, 5007716};
-    else if (rev > EVMC_PRAGUE)
-        throw std::invalid_argument{
-            "no hardcoded blob schedule for " + std::string{evmc::to_string(rev)}};
-    else
-        return {3, 6, 3338477};
-}
+/// Returns the hardcoded blob params for the given EVM revision.
+/// After Prague, the blob params must be derived from config.
+BlobSchedule get_blob_schedule(evmc_revision rev);
 
-BlobSchedule get_blob_schedule_by_bpo_fork(
-    std::string_view network, const BlobScheduleMap& schedules, int64_t timestamp) noexcept;
-BlobSchedule get_blob_schedule_by_bpo_fork(
+/// Returns the blob params for the given EVM revision and a blob schedule.
+BlobSchedule get_blob_schedule(
     evmc_revision rev, const BlobScheduleMap& schedules) noexcept;
+
+/// Returns the blob params for given a description of a test network (e.g. transitioning
+/// across two forks at some time), a blob schedule and the timestamp.
+BlobSchedule get_blob_schedule(
+    std::string_view network, const BlobScheduleMap& schedules, int64_t timestamp) noexcept;
 }  // namespace evmone::state

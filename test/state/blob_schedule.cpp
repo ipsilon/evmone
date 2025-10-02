@@ -5,8 +5,24 @@
 
 namespace evmone::state
 {
+BlobSchedule get_blob_schedule(evmc_revision rev)
+{
+    if (rev == EVMC_PRAGUE || rev == EVMC_EXPERIMENTAL)
+        return {6, 9, 5007716};
+    else if (rev > EVMC_PRAGUE)
+        throw std::invalid_argument{
+            "no hardcoded blob schedule for " + std::string{evmc::to_string(rev)}};
+    else
+        return {3, 6, 3338477};
+}
 
-BlobSchedule get_blob_schedule_by_bpo_fork(
+BlobSchedule get_blob_schedule(
+    evmc_revision rev, const BlobScheduleMap& schedules) noexcept
+{
+    return get_blob_schedule(evmc::to_string(rev), schedules, 0);
+}
+
+BlobSchedule get_blob_schedule(
     std::string_view network, const BlobScheduleMap& schedules, int64_t timestamp) noexcept
 {
     std::string fork;
@@ -26,12 +42,6 @@ BlobSchedule get_blob_schedule_by_bpo_fork(
         return it->second;
     else
         return get_blob_schedule(test::to_rev_schedule(network).get_revision(timestamp));
-}
-
-BlobSchedule get_blob_schedule_by_bpo_fork(
-    evmc_revision rev, const BlobScheduleMap& schedules) noexcept
-{
-    return get_blob_schedule_by_bpo_fork(evmc_revision_to_string(rev), schedules, 0);
 }
 
 }  // namespace evmone::state

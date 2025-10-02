@@ -289,7 +289,7 @@ state::BlockInfo from_json_with_rev(
     if (parent_timestamp_it != j.end())
         parent_timestamp = from_json<int64_t>(*parent_timestamp_it);
 
-    const auto blob_schedule = state::get_blob_schedule_by_bpo_fork(rev, blob_schedules);
+    const auto blob_schedule = state::get_blob_schedule(rev, blob_schedules);
 
     uint64_t excess_blob_gas = 0;
     if (const auto it = j.find("parentExcessBlobGas"); it != j.end())

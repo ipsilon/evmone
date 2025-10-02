@@ -285,7 +285,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
 
             const auto rev = rev_schedule.get_revision(bi.timestamp);
             const auto blob_schedule =
-                get_blob_schedule_by_bpo_fork(c.network, c.blob_schedules, bi.timestamp);
+                get_blob_schedule(c.network, c.blob_schedules, bi.timestamp);
 
             SCOPED_TRACE(std::string{evmc::to_string(rev)} + '/' + std::to_string(case_index) +
                          '/' + c.name + '/' + std::to_string(test_block.block_info.number));
