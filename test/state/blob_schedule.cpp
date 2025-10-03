@@ -16,13 +16,13 @@ BlobParams get_blob_params(evmc_revision rev)
         return {3, 6, 3338477};
 }
 
-BlobParams get_blob_params(evmc_revision rev, const BlobSchedule& blob_schedule) noexcept
+BlobParams get_blob_params(evmc_revision rev, const BlobSchedule& blob_schedule)
 {
     return get_blob_params(evmc::to_string(rev), blob_schedule, 0);
 }
 
 BlobParams get_blob_params(
-    std::string_view network, const BlobSchedule& blob_schedule, int64_t timestamp) noexcept
+    std::string_view network, const BlobSchedule& blob_schedule, int64_t timestamp)
 {
     std::string fork;
     if (network == "PragueToOsakaAtTime15k")
