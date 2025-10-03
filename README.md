@@ -103,6 +103,7 @@ Ethereum Precompiled Contracts (_precompiles_ for short) are supported by evmone
 The **evm-test** executes a collection of unit tests on 
 any EVMC-compatible Ethereum Virtual Machine implementation.
 The collection of tests comes from the evmone project.
+The CMake option `EVMONE_EVM_TEST_TOOL=ON` (the [EVMONE_EVM_TEST_TOOL] option is OFF by default) enables building of evm-test in the `evmone/test/unittests/` directory.
 
 ```bash
 evm-test ./evmone.so
@@ -159,7 +160,7 @@ Licensed under the [Apache License, Version 2.0].
 [Releases]: https://github.com/ethereum/evmone/releases
 [standard readme]: https://github.com/RichardLitt/standard-readme
 [silkpre]: https://github.com/torquem-ch/silkpre
-
+[EVMONE_EVM_TEST_TOOL]: https://github.com/ethereum/evmone/blob/66dcad5af58e6b96e49aa14475142a83b3c99e3b/test/unittests/CMakeLists.txt#L108
 [appveyor badge]: https://img.shields.io/appveyor/ci/chfast/evmone/master.svg?logo=appveyor
 [circleci badge]: https://img.shields.io/circleci/project/github/ethereum/evmone/master.svg?logo=circleci
 [codecov badge]: https://img.shields.io/codecov/c/github/ethereum/evmone.svg?logo=codecov
