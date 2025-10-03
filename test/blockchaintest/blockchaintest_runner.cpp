@@ -9,6 +9,8 @@
 #include "blockchaintest.hpp"
 #include <gtest/gtest.h>
 
+using namespace std::chrono;
+using timer = high_resolution_clock;
 namespace evmone::test
 {
 
@@ -240,7 +242,7 @@ std::string print_state(const TestState& s)
 }
 }  // namespace
 
-void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
+void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm, bool time)
 {
     for (size_t case_index = 0; case_index != tests.size(); ++case_index)
     {
@@ -272,6 +274,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
             {&c.genesis_block_header, c.pre_state, c.genesis_block_header.difficulty}}}};
         const auto* canonical_state = &c.pre_state;
         intx::uint256 max_total_difficulty = c.genesis_block_header.difficulty;
+        decltype(timer::now() - timer::now()) duration;
 
         for (size_t i = 0; i < c.test_blocks.size(); ++i)
         {
@@ -295,10 +298,19 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 // Block being valid guarantees its parent was found.
                 assert(parent_data_it != block_data.end());
                 const auto& pre_state = parent_data_it->second.post_state;
-
-                auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions,
-                    rev, mining_reward(rev));
-
+                TransitionResult res;
+                if (time && i == c.test_blocks.size() - 1)
+                {
+                    const auto start_timer = timer::now();
+                    res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
+                        mining_reward(rev));
+                    duration = timer::now() - start_timer;
+                }
+                else
+                {
+                    res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
+                        mining_reward(rev));
+                }
                 ASSERT_TRUE(res.requests.has_value());
 
                 block_hashes[test_block.expected_block_header.block_number] =
@@ -349,8 +361,19 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 assert(parent_data_it != block_data.end());
                 const auto& pre_state = parent_data_it->second.post_state;
 
-                const auto res = apply_block(pre_state, vm, bi, block_hashes,
-                    test_block.transactions, rev, mining_reward(rev));
+                TransitionResult res;
+                if (time && i == c.test_blocks.size() - 1)
+                {
+                    const auto start_timer = timer::now();
+                    res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
+                        mining_reward(rev));
+                    duration = timer::now() - start_timer;
+                }
+                else
+                {
+                    res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
+                        mining_reward(rev));
+                }
                 if (!res.requests.has_value())
                     continue;
                 if (!res.rejected.empty())
@@ -380,6 +403,12 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
 
                 EXPECT_TRUE(false) << "Expected block to be invalid but resulted valid";
             }
+        }
+        if (time)
+        {
+            std::cout << "             \t" << c.name
+                      << " last block time: " << duration_cast<nanoseconds>(duration).count()
+                      << " ns\n";
         }
         const auto expected_post_hash =
             std::holds_alternative<TestState>(c.expectation.post_state) ?

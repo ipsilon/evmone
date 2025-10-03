@@ -17,10 +17,11 @@ class BlockchainGTest : public testing::Test
 {
     fs::path m_json_test_file;
     evmc::VM& m_vm;
+    bool m_time;
 
 public:
-    explicit BlockchainGTest(fs::path json_test_file, evmc::VM& vm) noexcept
-      : m_json_test_file{std::move(json_test_file)}, m_vm{vm}
+    explicit BlockchainGTest(fs::path json_test_file, evmc::VM& vm, bool time) noexcept
+      : m_json_test_file{std::move(json_test_file)}, m_vm{vm}, m_time{time}
     {}
 
     void TestBody() final
@@ -29,7 +30,8 @@ public:
 
         try
         {
-            evmone::test::run_blockchain_tests(evmone::test::load_blockchain_tests(f), m_vm);
+            evmone::test::run_blockchain_tests(
+                evmone::test::load_blockchain_tests(f), m_vm, m_time);
         }
         catch (const evmone::test::UnsupportedTestFeature& ex)
         {
@@ -38,14 +40,14 @@ public:
     }
 };
 
-void register_test(const std::string& suite_name, const fs::path& file, evmc::VM& vm)
+void register_test(const std::string& suite_name, const fs::path& file, evmc::VM& vm, bool time)
 {
     testing::RegisterTest(suite_name.c_str(), file.stem().string().c_str(), nullptr, nullptr,
         file.string().c_str(), 0,
-        [file, &vm]() -> testing::Test* { return new BlockchainGTest(file, vm); });
+        [file, &vm, time]() -> testing::Test* { return new BlockchainGTest(file, vm, time); });
 }
 
-void register_test_files(const fs::path& root, evmc::VM& vm)
+void register_test_files(const fs::path& root, evmc::VM& vm, bool time)
 {
     if (is_directory(root))
     {
@@ -57,11 +59,11 @@ void register_test_files(const fs::path& root, evmc::VM& vm)
         std::ranges::sort(test_files);
 
         for (const auto& p : test_files)
-            register_test(fs::relative(p, root).parent_path().string(), p, vm);
+            register_test(fs::relative(p, root).parent_path().string(), p, vm, time);
     }
     else  // Treat as a file.
     {
-        register_test(root.parent_path().string(), root, vm);
+        register_test(root.parent_path().string(), root, vm, time);
     }
 }
 }  // namespace
@@ -85,6 +87,9 @@ int main(int argc, char* argv[])
         bool trace_flag = false;
         app.add_flag("--trace", trace_flag, "Enable EVM tracing");
 
+        bool time_flag = false;
+        app.add_flag("--time", time_flag, "Measure last block in test execution");
+
         CLI11_PARSE(app, argc, argv);
 
         evmc::VM vm{evmc_create_evmone()};
@@ -93,7 +98,7 @@ int main(int argc, char* argv[])
             vm.set_option("trace", "1");
 
         for (const auto& p : paths)
-            register_test_files(p, vm);
+            register_test_files(p, vm, time_flag);
 
         return RUN_ALL_TESTS();
     }
