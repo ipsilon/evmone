@@ -22,11 +22,23 @@ struct BlobSchedule
     uint32_t base_fee_update_fraction = 0;
 };
 
+using BlobScheduleMap = std::unordered_map<std::string, state::BlobSchedule>;
+
 /// Returns the blob schedule for the given EVM revision.
-constexpr BlobSchedule get_blob_schedule(evmc_revision rev) noexcept
+/// After Prague, the blob schedule is derived by BPO config.
+constexpr BlobSchedule get_blob_schedule(evmc_revision rev)
 {
-    if (rev >= EVMC_PRAGUE)
+    if (rev == EVMC_PRAGUE || rev == EVMC_EXPERIMENTAL)
         return {6, 9, 5007716};
-    return {3, 6, 3338477};
+    else if (rev > EVMC_PRAGUE)
+        throw std::invalid_argument{
+            "no hardcoded blob schedule for " + std::string{evmc::to_string(rev)}};
+    else
+        return {3, 6, 3338477};
 }
+
+BlobSchedule get_blob_schedule_by_bpo_fork(
+    std::string_view network, const BlobScheduleMap& schedules, int64_t timestamp) noexcept;
+BlobSchedule get_blob_schedule_by_bpo_fork(
+    evmc_revision rev, const BlobScheduleMap& schedules) noexcept;
 }  // namespace evmone::state

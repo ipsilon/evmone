@@ -57,8 +57,10 @@ void state_transition::TearDown()
     if (trace)
         trace_capture.emplace();
 
-    const auto res = test::transition(state, block, block_hashes, tx, rev, selected_vm,
-        block.gas_limit, static_cast<int64_t>(state::max_blob_gas_per_block(rev)));
+    // get_blob_schedule will not work after EVMC_PRAGUE.
+    const auto res =
+        test::transition(state, block, block_hashes, tx, rev, selected_vm, block.gas_limit,
+            static_cast<int64_t>(state::max_blob_gas_per_block(get_blob_schedule(rev))));
     test::finalize(state, rev, block.coinbase, block_reward, block.ommers, block.withdrawals);
     const auto& post = state;
 

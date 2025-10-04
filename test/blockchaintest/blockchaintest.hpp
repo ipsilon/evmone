@@ -69,6 +69,8 @@ struct BlockchainTest
     BlockHeader genesis_block_header;
     TestState pre_state;
     RevisionSchedule rev;
+    std::string network;
+    state::BlobScheduleMap blob_schedules;
 
     Expectation expectation;
 };

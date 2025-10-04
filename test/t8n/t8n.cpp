@@ -30,6 +30,7 @@ int main(int argc, const char* argv[])
     fs::path alloc_file;
     fs::path env_file;
     fs::path txs_file;
+    fs::path blob_schedule_file;
     fs::path output_dir;
     fs::path output_result_file;
     fs::path output_alloc_file;
@@ -60,6 +61,8 @@ int main(int argc, const char* argv[])
                 env_file = argv[i];
             else if (arg == "--input.txs" && ++i < argc)
                 txs_file = argv[i];
+            else if (arg == "--input.blobSchedule" && ++i < argc)
+                blob_schedule_file = argv[i];
             else if (arg == "--output.basedir" && ++i < argc)
             {
                 output_dir = argv[i];
@@ -90,6 +93,15 @@ int main(int argc, const char* argv[])
         TestBlockHashes block_hashes;
         TestState state;
 
+        state::BlobScheduleMap blob_schedules;
+
+        if (!blob_schedule_file.empty())
+        {
+            const auto j = json::json::parse(std::ifstream{blob_schedule_file}, nullptr, false);
+            blob_schedules = from_json<state::BlobScheduleMap>(j);
+        }
+        const auto blob_schedule = state::get_blob_schedule_by_bpo_fork(rev, blob_schedules);
+
         if (!alloc_file.empty())
         {
             const auto j = json::json::parse(std::ifstream{alloc_file}, nullptr, false);
@@ -99,7 +111,7 @@ int main(int argc, const char* argv[])
         if (!env_file.empty())
         {
             const auto j = json::json::parse(std::ifstream{env_file});
-            block = from_json_with_rev(j, rev);
+            block = from_json_with_rev(j, rev, blob_schedules);
             block_hashes = from_json<TestBlockHashes>(j);
         }
 
@@ -126,7 +138,7 @@ int main(int argc, const char* argv[])
             j_result["currentBaseFee"] = hex0x(block.base_fee);
 
         int64_t cumulative_gas_used = 0;
-        auto blob_gas_left = static_cast<int64_t>(state::max_blob_gas_per_block(rev));
+        auto blob_gas_left = static_cast<int64_t>(state::max_blob_gas_per_block(blob_schedule));
         std::vector<state::Transaction> transactions;
         std::vector<state::TransactionReceipt> receipts;
         int64_t block_gas_left = block.gas_limit;
@@ -265,8 +277,8 @@ int main(int argc, const char* argv[])
         j_result["gasUsed"] = hex0x(cumulative_gas_used);
         if (rev >= EVMC_CANCUN)
         {
-            j_result["blobGasUsed"] =
-                hex0x(static_cast<int64_t>(state::max_blob_gas_per_block(rev)) - blob_gas_left);
+            j_result["blobGasUsed"] = hex0x(
+                static_cast<int64_t>(state::max_blob_gas_per_block(blob_schedule)) - blob_gas_left);
             if (block.excess_blob_gas.has_value())
                 j_result["currentExcessBlobGas"] = hex0x(*block.excess_blob_gas);
         }
