@@ -1,0 +1,22 @@
+{
+  "Cancun": {
+      "target": "0x03",
+      "max": "0x06",
+      "baseFeeUpdateFraction": "0x32f0ed"
+  },
+  "Prague": {
+      "target": "0x06",
+      "max": "0x09",
+      "baseFeeUpdateFraction": "0x4c6964"
+  },
+  "Osaka": {
+      "target": "0x06",
+      "max": "0x09",
+      "baseFeeUpdateFraction": "0x4c6964"
+  },
+  "BPO1": {
+      "target": "0x09",
+      "max": "0x0e",
+      "baseFeeUpdateFraction": "0x86c73b"
+  }
+}
