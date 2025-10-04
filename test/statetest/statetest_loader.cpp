@@ -171,6 +171,7 @@ template <>
 state::BlobSchedule from_json<state::BlobSchedule>(const json::json& j)
 {
     state::BlobSchedule blob_schedule;
+    assert(j.is_object());
     for (const auto& [name, jschedule] : j.items())
     {
         state::BlobParams blob_params;
