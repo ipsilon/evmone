@@ -42,7 +42,7 @@ add_test(
 set_tests_properties(
     ${PREFIX}/single_file_list PROPERTIES
     PASS_REGULAR_EXPRESSION [[
-.*test/integration/statetest/tests1/SuiteA\.
+.*test/integration/statetest/tests1/SuiteA/test1\.json\.
   test1
 ]]
 )
@@ -60,8 +60,6 @@ SuiteA\.
   test1
   test2_multi
   test1
-.*test/integration/statetest/tests1/B\.
-  T
 \.
   test1
   test2_multi
