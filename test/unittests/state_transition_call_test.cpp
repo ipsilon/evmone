@@ -22,7 +22,7 @@ TEST_F(state_transition, call_value_to_empty)
 
 TEST_F(state_transition, delegatecall_static_legacy)
 {
-    rev = EVMC_OSAKA;
+    rev = EVMC_LONDON;
     // Checks if DELEGATECALL forwards the "static" flag.
     static constexpr auto CALLEE1 = 0xca11ee01_address;
     static constexpr auto CALLEE2 = 0xca11ee02_address;

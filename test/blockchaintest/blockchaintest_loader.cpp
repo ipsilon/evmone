@@ -2,6 +2,7 @@
 // Copyright 2023 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "../state/blob_schedule.hpp"
 #include "../statetest/statetest.hpp"
 #include "../utils/utils.hpp"
 #include "blockchaintest.hpp"
@@ -54,7 +55,8 @@ BlockHeader from_json<BlockHeader>(const json::json& j)
     };
 }
 
-static TestBlock load_test_block(const json::json& j, const RevisionSchedule& rev_schedule)
+static TestBlock load_test_block(
+    const json::json& j, const std::string& network, const state::BlobSchedule& blob_schedule)
 {
     using namespace state;
     TestBlock tb;
@@ -67,7 +69,8 @@ static TestBlock load_test_block(const json::json& j, const RevisionSchedule& re
         tb.block_info.hash = tb.expected_block_header.hash;
         tb.block_info.parent_hash = tb.expected_block_header.parent_hash;
 
-        const auto rev = rev_schedule.get_revision(tb.block_info.timestamp);
+        const auto rev = to_rev_schedule(network).get_revision(tb.block_info.timestamp);
+        const auto blob_params = get_blob_params(network, blob_schedule, tb.block_info.timestamp);
 
         tb.block_info.gas_limit = tb.expected_block_header.gas_limit;
         tb.block_info.gas_used = tb.expected_block_header.gas_used;
@@ -79,10 +82,10 @@ static TestBlock load_test_block(const json::json& j, const RevisionSchedule& re
         tb.block_info.blob_gas_used = tb.expected_block_header.blob_gas_used;
         tb.block_info.excess_blob_gas = tb.expected_block_header.excess_blob_gas;
 
-        tb.block_info.blob_base_fee =
-            tb.block_info.excess_blob_gas.has_value() ?
-                std::optional(state::compute_blob_gas_price(rev, *tb.block_info.excess_blob_gas)) :
-                std::nullopt;
+        tb.block_info.blob_base_fee = tb.block_info.excess_blob_gas.has_value() ?
+                                          std::optional(state::compute_blob_gas_price(
+                                              blob_params, *tb.block_info.excess_blob_gas)) :
+                                          std::nullopt;
 
         // Override prev_randao with difficulty pre-Merge
         if (rev < EVMC_PARIS)
@@ -139,8 +142,13 @@ BlockchainTest load_blockchain_test_case(const std::string& name, const json::js
     bt.name = name;
     bt.genesis_block_header = from_json<BlockHeader>(j.at("genesisBlockHeader"));
     bt.pre_state = from_json<TestState>(j.at("pre"));
-    bt.rev = to_rev_schedule(j.at("network").get<std::string>());
-
+    bt.network = j.at("network").get<std::string>();
+    bt.rev = to_rev_schedule(bt.network);
+    if (const auto config_it = j.find("config"); config_it != j.end())
+    {
+        if (const auto bs_it = config_it->find("blobSchedule"); bs_it != config_it->end())
+            bt.blob_schedule = from_json<BlobSchedule>(*bs_it);
+    }
     for (const auto& el : j.at("blocks"))
     {
         if (const auto it = el.find("expectException"); it != el.end())
@@ -154,14 +162,14 @@ BlockchainTest load_blockchain_test_case(const std::string& name, const json::js
                 throw UnsupportedTestFeature(
                     "tests with invalidly rlp-encoded blocks are not supported");
 
-            auto test_block = load_test_block(el.at("rlp_decoded"), bt.rev);
+            auto test_block = load_test_block(el.at("rlp_decoded"), bt.network, bt.blob_schedule);
             test_block.valid = false;
             test_block.rlp_size = from_json<bytes>(el.at("rlp")).size();
             bt.test_blocks.emplace_back(test_block);
         }
         else
         {
-            auto test_block = load_test_block(el, bt.rev);
+            auto test_block = load_test_block(el, bt.network, bt.blob_schedule);
             test_block.rlp_size = from_json<bytes>(el.at("rlp")).size();
             bt.test_blocks.emplace_back(test_block);
         }

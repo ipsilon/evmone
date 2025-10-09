@@ -37,6 +37,26 @@ uint8_t from_json<uint8_t>(const json::json& j)
     return static_cast<uint8_t>(ret);
 }
 
+template <>
+uint16_t from_json<uint16_t>(const json::json& j)
+{
+    const auto ret = std::stoul(j.get<std::string>(), nullptr, 16);
+    if (ret > std::numeric_limits<uint16_t>::max())
+        throw std::out_of_range("from_json<uint16_t>: value > 0xFFFF");
+
+    return static_cast<uint16_t>(ret);
+}
+
+template <>
+uint32_t from_json<uint32_t>(const json::json& j)
+{
+    const auto ret = std::stoul(j.get<std::string>(), nullptr, 16);
+    if (ret > std::numeric_limits<uint32_t>::max())
+        throw std::out_of_range("from_json<uint32_t>: value > 0xFFFFFFFF");
+
+    return static_cast<uint32_t>(ret);
+}
+
 template <typename T>
 static std::optional<T> integer_from_json(const json::json& j)
 {
@@ -147,6 +167,29 @@ state::AuthorizationList from_json<state::AuthorizationList>(const json::json& j
     return o;
 }
 
+template <>
+state::BlobParams from_json<state::BlobParams>(const json::json& j)
+{
+    assert(j.is_object());
+    state::BlobParams blob_params;
+    blob_params.target = from_json<uint16_t>(j.at("target"));
+    blob_params.max = from_json<uint16_t>(j.at("max"));
+    blob_params.base_fee_update_fraction = from_json<uint32_t>(j.at("baseFeeUpdateFraction"));
+    return blob_params;
+}
+
+template <>
+state::BlobSchedule from_json<state::BlobSchedule>(const json::json& j)
+{
+    state::BlobSchedule blob_schedule;
+    assert(j.is_object());
+    for (const auto& [name, jschedule] : j.items())
+    {
+        blob_schedule[name] = from_json<state::BlobParams>(jschedule);
+    }
+    return blob_schedule;
+}
+
 // Based on calculateEIP1559BaseFee from ethereum/retesteth
 static uint64_t calculate_current_base_fee_eip1559(
     uint64_t parent_gas_used, uint64_t parent_gas_limit, uint64_t parent_base_fee)
@@ -193,7 +236,8 @@ state::Withdrawal from_json<state::Withdrawal>(const json::json& j)
         from_json<address>(j.at("address")), from_json<uint64_t>(j.at("amount"))};
 }
 
-state::BlockInfo from_json_with_rev(const json::json& j, evmc_revision rev)
+state::BlockInfo from_json_with_rev(
+    const json::json& j, evmc_revision rev, state::BlobParams blob_params)
 {
     evmc::bytes32 prev_randao;
     int64_t current_difficulty = 0;
@@ -259,8 +303,8 @@ state::BlockInfo from_json_with_rev(const json::json& j, evmc_revision rev)
         const auto parent_blob_gas_used = from_json<uint64_t>(j.at("parentBlobGasUsed"));
         const auto parent_base_fee = from_json<uint64_t>(j.at("parentBaseFee"));
         const auto parent_blob_base_fee =
-            state::compute_blob_gas_price(rev, parent_excess_blob_gas);
-        excess_blob_gas = state::calc_excess_blob_gas(rev, parent_blob_gas_used,
+            state::compute_blob_gas_price(blob_params, parent_excess_blob_gas);
+        excess_blob_gas = state::calc_excess_blob_gas(rev, blob_params, parent_blob_gas_used,
             parent_excess_blob_gas, parent_base_fee, parent_blob_base_fee);
     }
     else if (const auto it2 = j.find("currentExcessBlobGas"); it2 != j.end())
@@ -282,7 +326,7 @@ state::BlockInfo from_json_with_rev(const json::json& j, evmc_revision rev)
         .base_fee = base_fee,
         .blob_gas_used = load_if_exists<uint64_t>(j, "blobGasUsed"),
         .excess_blob_gas = excess_blob_gas,
-        .blob_base_fee = state::compute_blob_gas_price(rev, excess_blob_gas),
+        .blob_base_fee = state::compute_blob_gas_price(blob_params, excess_blob_gas),
         .ommers = std::move(ommers),
         .withdrawals = std::move(withdrawals),
     };
@@ -483,11 +527,18 @@ static void from_json(const json::json& j_t, StateTransitionTest& o)
         // LCOV_EXCL_STOP
     }
 
+    if (const auto config_it = j_t.find("config"); config_it != j_t.end())
+    {
+        if (const auto bs_it = config_it->find("blobSchedule"); bs_it != config_it->end())
+            o.blob_schedule = from_json<state::BlobSchedule>(*bs_it);
+    }
+
     for (const auto& [rev_name, expectations] : j_t.at("post").items())
     {
+        const auto blob_params = state::get_blob_params(to_rev(rev_name), o.blob_schedule);
         o.cases.emplace_back(to_rev(rev_name),
             expectations.get<std::vector<StateTransitionTest::Case::Expectation>>(),
-            from_json_with_rev(j_t.at("env"), to_rev(rev_name)));
+            from_json_with_rev(j_t.at("env"), to_rev(rev_name), blob_params));
     }
 }
 

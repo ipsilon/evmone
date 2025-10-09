@@ -10,6 +10,7 @@ target_sources(
     evmone-state PRIVATE
     account.hpp
     blob_schedule.hpp
+    blob_schedule.cpp
     block.hpp
     block.cpp
     bloom_filter.hpp

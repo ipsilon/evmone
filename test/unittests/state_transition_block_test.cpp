@@ -70,8 +70,8 @@ TEST_F(state_transition, eip7516_blob_base_fee)
     // 0x1d is the result of ref implementation in EIP-4844
     static constexpr auto price = 0x1d;
     block.blob_base_fee = price;
-    assert(
-        state::compute_blob_gas_price(EVMC_CANCUN, *block.excess_blob_gas) == *block.blob_base_fee);
+    assert(state::compute_blob_gas_price(state::get_blob_params(rev), *block.excess_blob_gas) ==
+           *block.blob_base_fee);
 
     tx.to = To;
     pre.insert(*tx.to, {.code = sstore(0x4a, OP_BLOBBASEFEE)});

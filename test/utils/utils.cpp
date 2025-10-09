@@ -39,6 +39,14 @@ evmc_revision to_rev(std::string_view s)
         return EVMC_PRAGUE;
     if (s == "Osaka")
         return EVMC_OSAKA;
+    if (s == "OsakaToBPO1AtTime15k")
+        return EVMC_OSAKA;
+    if (s == "BPO1ToBPO2AtTime15k")
+        return EVMC_OSAKA;
+    if (s == "BPO2ToBPO3AtTime15k")
+        return EVMC_OSAKA;
+    if (s == "BPO3ToBPO4AtTime15k")
+        return EVMC_OSAKA;
     if (s == "EOFv1")
         return EVMC_EXPERIMENTAL;
     if (s == "Experimental")

@@ -40,13 +40,14 @@ uint64_t calc_base_fee(
     }
 }
 
-uint64_t max_blob_gas_per_block(evmc_revision rev) noexcept
+uint64_t max_blob_gas_per_block(const BlobParams& blob_params) noexcept
 {
-    return get_blob_schedule(rev).max * GAS_PER_BLOB;
+    return blob_params.max * GAS_PER_BLOB;
 }
 
 
-intx::uint256 compute_blob_gas_price(evmc_revision rev, uint64_t excess_blob_gas) noexcept
+intx::uint256 compute_blob_gas_price(
+    const BlobParams& blob_params, uint64_t excess_blob_gas) noexcept
 {
     /// A helper function approximating `factor * e ** (numerator / denominator)`.
     /// https://eips.ethereum.org/EIPS/eip-4844#helpers
@@ -71,25 +72,24 @@ intx::uint256 compute_blob_gas_price(evmc_revision rev, uint64_t excess_blob_gas
     };
 
     static constexpr auto MIN_BLOB_GASPRICE = 1;
-    const auto fraction = get_blob_schedule(rev).base_fee_update_fraction;
+    const auto fraction = blob_params.base_fee_update_fraction;
     return fake_exponential(MIN_BLOB_GASPRICE, excess_blob_gas, fraction);
 }
 
-uint64_t calc_excess_blob_gas(evmc_revision rev, uint64_t parent_blob_gas_used,
-    uint64_t parent_excess_blob_gas, uint64_t parent_base_fee,
+uint64_t calc_excess_blob_gas(evmc_revision rev, const BlobParams& blob_params,
+    uint64_t parent_blob_gas_used, uint64_t parent_excess_blob_gas, uint64_t parent_base_fee,
     const intx::uint256& parent_blob_base_fee) noexcept
 {
     /// The base cost of a blob (EIP-7918).
     constexpr auto BLOB_BASE_COST = 0x2000;
 
-    const auto schedule = get_blob_schedule(rev);
-    const auto target_blob_gas_per_block = uint64_t{schedule.target} * GAS_PER_BLOB;
+    const auto target_blob_gas_per_block = uint64_t{blob_params.target} * GAS_PER_BLOB;
     if (parent_excess_blob_gas + parent_blob_gas_used < target_blob_gas_per_block)
         return 0;
 
     if (rev >= EVMC_OSAKA && BLOB_BASE_COST * parent_base_fee > GAS_PER_BLOB * parent_blob_base_fee)
         return parent_excess_blob_gas +
-               parent_blob_gas_used * (schedule.max - schedule.target) / schedule.max;
+               parent_blob_gas_used * (blob_params.max - blob_params.target) / blob_params.max;
 
     return parent_excess_blob_gas + parent_blob_gas_used - target_blob_gas_per_block;
 }
