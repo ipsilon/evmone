@@ -315,12 +315,13 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
 template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
-    assert(p != ProjPoint(q));
-
     if (q == 0)
         return p;
     if (p == 0)
         return ProjPoint(q);
+
+    if (const auto jq = ProjPoint{q}; p == jq)
+        return dbl(p);
 
     // Use the "madd" formula for curve in Jacobian coordinates.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
