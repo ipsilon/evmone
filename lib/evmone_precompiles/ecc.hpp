@@ -173,6 +173,15 @@ struct ProjPoint
         return x1 * z2z2 == x2 * z1z1 && y1 * z2z2z2 == y2 * z1z1z1;
     }
 
+    friend constexpr bool operator==(const ProjPoint& p, const AffinePoint<Curve>& q) noexcept
+    {
+        const auto& [x1, y1, z1] = p;
+        const auto& [x2, y2] = q;
+        const auto z1z1 = z1 * z1;
+        const auto z1z1z1 = z1z1 * z1;
+        return x1 == x2 * z1z1 && y1 == y2 * z1z1z1;
+    }
+
     friend constexpr ProjPoint operator-(const ProjPoint& p) noexcept { return {p.x, -p.y, p.z}; }
 };
 
@@ -320,7 +329,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     if (p == 0)
         return ProjPoint(q);
 
-    if (const auto jq = ProjPoint{q}; p == jq)
+    if (p == q)
         return dbl(p);
 
     // Use the "madd" formula for curve in Jacobian coordinates.
