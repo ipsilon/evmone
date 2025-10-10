@@ -35,6 +35,14 @@ const P256VerifyInput VALID_INPUTS[]{
         0,
         0x66485c780e2f83d72433bd5d84a06bb6541c2af31dae871728bf856a174f93f4_u256,
     },
+    {
+        // Point doubling happens in msm.
+        0xbb5a52f42f9c9261ed4361f59422a1e30036e7c32b270c8807a419feca605023_u256,
+        0x7cf27b188d034f7e8a52380304b51ac3c08969e277f21b35a60b48fc47669978_u256,
+        0xb6db6db6249249254924924924924924625bd7a09bec4ca81bcdd9f8fd6b63cc_u256,
+        0xc6a771527024227792170a6f8eee735bf32b7f98af669ead299802e32d7c3107_u256,
+        0xbc3b4b5e65ab887bbd343572b3e5619261fe3a073e2ffd78412f726867db589e_u256,
+    },
 };
 
 const P256VerifyInput INVALID_INPUTS[]{
