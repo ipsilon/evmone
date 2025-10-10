@@ -92,11 +92,7 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
 
     // 6. Calculate public key point Q.
     const auto R = AffinePoint{AffinePoint::FE::wrap(r_mont), AffinePoint::FE::wrap(*y_mont)};
-    const auto T1 = ecc::mul(G, u1);
-    const auto T2 = ecc::mul(R, u2);
-    assert(T2 != 0);  // Because u2 != 0 and R != 0.
-    const auto pQ = ecc::add(T1, T2);
-
+    const auto pQ = ecc::shamir_multiply(u1, G, u2, R);
     const auto Q = ecc::to_affine<Curve>(pQ);
 
     if (Q == 0)
