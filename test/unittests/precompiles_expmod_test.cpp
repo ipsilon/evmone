@@ -168,6 +168,7 @@ TEST(expmod, incomplete_inputs)
 
     // Tests for expmod with raw and incomplete inputs (requires padding input with zero bytes).
     static constexpr auto GAS_LIMIT = 100'000'000;
+    const std::string huge_output(0x20000 * 2, '0');
     const std::vector<TestCase> inputs{
         // clang-format off
         {"", ""},
@@ -185,6 +186,7 @@ TEST(expmod, incomplete_inputs)
         {"0000000000000000000000000000000000000000000000000000000000000000 0000000000000000000000000000000000000000000000000000000000000001 0000000000000000000000000000000000000000000000000000000000000000", ""},
         {"0000000000000000000000000000000000000000000000000000000000000000 0000000000000000000000000000000000000000000000000000000000000002 0000000000000000000000000000000000000000000000000000000000000000 80", ""},
         {"0000000000000000000000000000000000000000000000000000000000000000 0000000000000000000000000000000000000000000000000000000100000000 0000000000000000000000000000000000000000000000000000000000000000 80", ""},
+        {"0000000000000000000000000000000000000000000000000000000000020000 0000000000000000000000000000000000000000000000000000000000000020 0000000000000000000000000000000000000000000000000000000000020000 80", huge_output},
         // clang-format on
     };
 
@@ -192,7 +194,7 @@ TEST(expmod, incomplete_inputs)
     {
         const auto input = evmc::from_spaced_hex(input_hex).value();
         const auto [gas_cost, max_output_size] = evmone::state::expmod_analyze(input, EVMC_PRAGUE);
-        EXPECT_LT(gas_cost, GAS_LIMIT);
+        ASSERT_LT(gas_cost, GAS_LIMIT);
         auto output = std::make_unique_for_overwrite<uint8_t[]>(max_output_size);
         const auto [status, output_size] = evmone::state::expmod_execute(
             input.data(), input.size(), output.get(), max_output_size);
