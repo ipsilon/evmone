@@ -286,7 +286,7 @@ PrecompileAnalysis bls12_map_fp2_to_g2_analyze(bytes_view, evmc_revision) noexce
     return {BLS12_MAP_FP2_TO_G2_PRECOMPILE_GAS, BLS12_G2_POINT_SIZE};
 }
 
-static PrecompileAnalysis p256verify_analyze(bytes_view, evmc_revision) noexcept
+PrecompileAnalysis p256verify_analyze(bytes_view, evmc_revision) noexcept
 {
     return {6900, 32};
 }
@@ -682,7 +682,7 @@ ExecutionResult bls12_map_fp2_to_g2_execute(const uint8_t* input, size_t input_s
     return {EVMC_SUCCESS, BLS12_G2_POINT_SIZE};
 }
 
-static ExecutionResult p256verify_execute(const uint8_t* input, size_t input_size, uint8_t* output,
+ExecutionResult p256verify_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
 {
     assert(output_size >= 32);
