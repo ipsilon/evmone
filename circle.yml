@@ -65,7 +65,7 @@ executors:
   macos-xcode-min:
     resource_class: macos.m1.medium.gen1
     macos:
-      xcode: 16.0.0
+      xcode: 16.2.0
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 6
 
@@ -390,7 +390,7 @@ jobs:
     steps:
       - build
       - download_execution_spec_tests:
-          release: v5.2.0
+          release: v5.3.0
           # develop includes stable
           fixtures_suffix: develop
       - run:
@@ -409,7 +409,7 @@ jobs:
             bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests
             --gtest_filter='-osaka/eip7918_blob_reserve_price.*'
       - collect_coverage_clang:
-          ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(blockchaintest|experimental|statetest|t8n|unittests|utils)
+          ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|t8n|unittests|utils)
       - upload_coverage:
           flags: eest-develop
 
