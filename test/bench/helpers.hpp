@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include "test/state/host.hpp"
+#include "test/state/test_state.hpp"
 #include "test/utils/utils.hpp"
 #include <benchmark/benchmark.h>
 #include <evmc/evmc.hpp>
@@ -10,7 +12,6 @@
 #include <evmone/advanced_analysis.hpp>
 #include <evmone/advanced_execution.hpp>
 #include <evmone/baseline.hpp>
-#include <evmone/eof.hpp>
 #include <evmone/vm.hpp>
 
 namespace evmone::test
@@ -48,24 +49,6 @@ inline baseline::CodeAnalysis baseline_analyse(evmc_revision /*rev*/, bytes_view
 inline FakeCodeAnalysis evmc_analyse(evmc_revision /*rev*/, bytes_view /*code*/)
 {
     return {};
-}
-
-
-inline evmc::Result advanced_execute(evmc::VM& /*vm*/, advanced::AdvancedExecutionState& exec_state,
-    const advanced::AdvancedCodeAnalysis& analysis, const evmc_message& msg, evmc_revision rev,
-    evmc::Host& host, bytes_view code)
-{
-    exec_state.reset(msg, rev, host.get_interface(), host.to_context(), code);
-    return evmc::Result{execute(exec_state, analysis)};
-}
-
-inline evmc::Result baseline_execute(evmc::VM& c_vm, [[maybe_unused]] ExecutionState& exec_state,
-    const baseline::CodeAnalysis& analysis, const evmc_message& msg, evmc_revision rev,
-    evmc::Host& host, [[maybe_unused]] bytes_view code)
-{
-    auto& vm = *static_cast<evmone::VM*>(c_vm.get_raw_pointer());
-    return evmc::Result{
-        baseline::execute(vm, host.get_interface(), host.to_context(), rev, msg, analysis)};
 }
 
 inline evmc::Result evmc_execute(evmc::VM& vm, FakeExecutionState& /*exec_state*/,
@@ -145,12 +128,26 @@ inline void bench_execute(benchmark::State& state, evmc::VM& vm, bytes_view code
     state.counters["gas_rate"] = Counter(static_cast<double>(total_gas_used), Counter::kIsRate);
 }
 
+inline void bench_transition(benchmark::State& state, evmc::VM& vm, const state::Transaction& tx,
+    const state::TransactionProperties& tx_props, const TestState& pre_state,
+    const state::BlockInfo& block_info, const state::BlockHashes& block_hashes,
+    evmc_revision rev) noexcept
+{
+    auto total_gas_used = int64_t{0};
+    auto iteration_gas_used = int64_t{0};
+    for (auto _ : state)
+    {
+        auto receipt =
+            state::transition(pre_state, block_info, block_hashes, tx, rev, vm, tx_props);
 
-constexpr auto bench_advanced_execute = bench_execute<advanced::AdvancedExecutionState,
-    advanced::AdvancedCodeAnalysis, advanced_execute, advanced_analyse>;
+        iteration_gas_used = receipt.gas_used;
+        total_gas_used += iteration_gas_used;
+    }
 
-constexpr auto bench_baseline_execute =
-    bench_execute<ExecutionState, baseline::CodeAnalysis, baseline_execute, baseline_analyse>;
+    using benchmark::Counter;
+    state.counters["gas_used"] = Counter(static_cast<double>(iteration_gas_used));
+    state.counters["gas_rate"] = Counter(static_cast<double>(total_gas_used), Counter::kIsRate);
+}
 
 inline void bench_evmc_execute(benchmark::State& state, evmc::VM& vm, bytes_view code,
     bytes_view input = {}, bytes_view expected_output = {})
