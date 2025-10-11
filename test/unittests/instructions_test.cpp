@@ -210,3 +210,18 @@ TEST(instructions, compare_with_evmc_instruction_names)
         EXPECT_STREQ(instr::traits[i].name, evmc_tbl[i]);
     }
 }
+
+
+TEST(instructions, num_words)
+{
+    EXPECT_EQ(num_words(0), 0);
+    EXPECT_EQ(num_words(1), 1);
+    EXPECT_EQ(num_words(31), 1);
+    EXPECT_EQ(num_words(32), 1);
+    EXPECT_EQ(num_words(33), 2);
+    EXPECT_EQ(num_words(0xFFFFFFFFFFFFFFDF), 0x7FFFFFFFFFFFFFF);
+    EXPECT_EQ(num_words(0xFFFFFFFFFFFFFFE0), 0x7FFFFFFFFFFFFFF);
+    EXPECT_EQ(num_words(0xFFFFFFFFFFFFFFE1), 0x800000000000000);
+    EXPECT_EQ(num_words(0xFFFFFFFFFFFFFFFE), 0x800000000000000);
+    EXPECT_EQ(num_words(0xFFFFFFFFFFFFFFFF), 0x800000000000000);
+}
