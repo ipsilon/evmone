@@ -68,7 +68,7 @@ static auto get_test_values(const Mod& m) noexcept
 [[maybe_unused]] static void constexpr_test()
 {
     // Make sure ModArith works in constexpr.
-    static constexpr ModArith m{BN254Mod};
+    static constexpr ModArith<uint256, true> m{BN254Mod};
     static_assert(m.mod == BN254Mod);
 
     static constexpr auto a = m.to_mont(3);

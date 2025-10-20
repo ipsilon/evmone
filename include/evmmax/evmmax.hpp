@@ -7,9 +7,10 @@
 
 namespace evmmax
 {
+using namespace intx;
 
 /// The modular arithmetic operations for EVMMAX (EVM Modular Arithmetic Extensions).
-template <typename UintT>
+template <typename UintT, bool BN = false>
 class ModArith
 {
 public:
@@ -58,7 +59,10 @@ public:
       : mod{modulus},
         m_r_squared{compute_r_squared(modulus)},
         m_mod_inv{compute_mod_inv(modulus[0])}
-    {}
+    {
+        if constexpr (!BN)
+            assert(mod != 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256);
+    }
 
     /// Converts a value to Montgomery form.
     ///
@@ -79,6 +83,8 @@ public:
     /// The result (abR) is in Montgomery form.
     constexpr UintT mul(const UintT& x, const UintT& y) const noexcept
     {
+        if constexpr (!BN)
+            assert(mod != 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256);
         // Coarsely Integrated Operand Scanning (CIOS) Method
         // Based on 2.3.2 from
         // High-Speed Algorithms & Architectures For Number-Theoretic Cryptosystems
@@ -117,6 +123,8 @@ public:
     /// but are not required to be in Montgomery form.
     constexpr UintT add(const UintT& x, const UintT& y) const noexcept
     {
+        if constexpr (!BN)
+            assert(mod != 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256);
         const auto s = addc(x, y);  // TODO: cannot overflow if modulus is sparse (e.g. 255 bits).
         const auto d = subc(s.value, mod);
         return (!s.carry && d.carry) ? s.value : d.value;
@@ -126,6 +134,8 @@ public:
     /// but are not required to be in Montgomery form.
     constexpr UintT sub(const UintT& x, const UintT& y) const noexcept
     {
+        if constexpr (!BN)
+            assert(mod != 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256);
         const auto d = subc(x, y);
         const auto s = d.value + mod;
         return (d.carry) ? s : d.value;
@@ -135,6 +145,8 @@ public:
     /// If x is not invertible, the result is 0.
     constexpr UintT inv(const UintT& x) const noexcept
     {
+        if constexpr (!BN)
+            assert(mod != 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256);
         assert((mod & 1) == 1);
         assert(mod >= 3);
 

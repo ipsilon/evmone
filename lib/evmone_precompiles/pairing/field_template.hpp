@@ -15,7 +15,7 @@ class BaseFieldElem
 {
     using ValueT = typename ConfigT::ValueT;
 
-    static constexpr ModArith<ValueT> Fp = ConfigT::MOD_ARITH;
+    static constexpr auto Fp = ConfigT::MOD_ARITH;
 
     ValueT m_value;
 
