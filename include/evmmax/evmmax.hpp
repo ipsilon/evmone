@@ -85,6 +85,13 @@ public:
     {
         if constexpr (!BN)
             assert(mod != 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256);
+
+        if constexpr (BN)
+        {
+            if (!std::is_constant_evaluated())
+                std::puts("m");
+        }
+
         // Coarsely Integrated Operand Scanning (CIOS) Method
         // Based on 2.3.2 from
         // High-Speed Algorithms & Architectures For Number-Theoretic Cryptosystems
@@ -125,6 +132,13 @@ public:
     {
         if constexpr (!BN)
             assert(mod != 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256);
+
+        if constexpr (BN)
+        {
+            if (!std::is_constant_evaluated())
+                std::puts("a");
+        }
+
         const auto s = addc(x, y);  // TODO: cannot overflow if modulus is sparse (e.g. 255 bits).
         const auto d = subc(s.value, mod);
         return (!s.carry && d.carry) ? s.value : d.value;
@@ -136,6 +150,13 @@ public:
     {
         if constexpr (!BN)
             assert(mod != 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256);
+
+        if constexpr (BN)
+        {
+            if (!std::is_constant_evaluated())
+                std::puts("s");
+        }
+
         const auto d = subc(x, y);
         const auto s = d.value + mod;
         return (d.carry) ? s : d.value;
@@ -147,6 +168,12 @@ public:
     {
         if constexpr (!BN)
             assert(mod != 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256);
+
+        if constexpr (BN)
+        {
+            std::puts("v");
+        }
+
         assert((mod & 1) == 1);
         assert(mod >= 3);
 
