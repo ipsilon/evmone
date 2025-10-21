@@ -9,7 +9,7 @@ namespace evmone::state
 {
 namespace
 {
-constexpr size_t pad_to_words(size_t size) noexcept
+constexpr uint32_t pad_to_words(uint32_t size) noexcept
 {
     return ((size + 31) / 32) * 32;
 }
@@ -73,25 +73,20 @@ std::optional<Requests> collect_deposit_requests(std::span<const TransactionRece
             // Skip over the first 5 words (offsets of the values) and the pubkey size.
             // Read and validate the ABI offsets and lengths for the dynamic fields
             // according to EIP-6110. If any check fails, collection is considered failed.
-            auto read_word_as_size = [&](size_t pos) -> std::optional<size_t> {
+            auto read_word_as_size = [&](size_t pos) -> std::optional<uint32_t> {
                 assert(log.data.size() >= pos + 32);
-                // ABI words are big-endian. Ensure the high bytes fit into size_t.
-                const size_t bytes_for_size_t = sizeof(size_t);
-                const size_t leading = 32 - bytes_for_size_t;
-                for (size_t i = 0; i < leading; ++i)
-                    if (log.data[pos + i] != 0)
-                        return std::nullopt;  // too large to fit into size_t
-                size_t v = 0;
-                for (size_t i = leading; i < 32; ++i)
-                    v = (v << 8) | static_cast<unsigned char>(log.data[pos + i]);
-                return v;
+                const auto v = intx::be::unsafe::load<intx::uint256>(&log.data[pos]);
+                // Ensure the encoded bytes fit into uint32_t.
+                if (v > std::numeric_limits<uint32_t>::max())
+                    return std::nullopt;
+                return static_cast<uint32_t>(v);
             };
 
-            constexpr size_t WORD = 32;
+            static constexpr uint32_t WORD = 32;
             assert(log.data.size() >= WORD * 5);
 
             // Read the 5 offsets from the head (first 5 words).
-            std::array<size_t, 5> offsets = {};
+            std::array<uint32_t, 5> offsets = {};
             for (size_t i = 0; i < offsets.size(); ++i)
             {
                 const auto w = read_word_as_size(i * WORD);
@@ -101,36 +96,37 @@ std::optional<Requests> collect_deposit_requests(std::span<const TransactionRece
             }
 
             // Compute expected offsets and lengths (hard-coded from the deposit ABI layout).
-            constexpr size_t DATA_SECTION = WORD * 5;  // where the dynamic data area starts
-            constexpr size_t PUBKEY_OFFSET = DATA_SECTION;
-            constexpr size_t PUBKEY_SIZE = 48;
-            constexpr size_t WITHDRAWAL_OFFSET = PUBKEY_OFFSET + WORD + pad_to_words(PUBKEY_SIZE);
-            constexpr size_t WITHDRAWAL_SIZE = 32;
-            constexpr size_t AMOUNT_OFFSET =
+            constexpr uint32_t DATA_SECTION = WORD * 5;  // where the dynamic data area starts
+            constexpr uint32_t PUBKEY_OFFSET = DATA_SECTION;
+            constexpr uint32_t PUBKEY_SIZE = 48;
+            constexpr uint32_t WITHDRAWAL_OFFSET = PUBKEY_OFFSET + WORD + pad_to_words(PUBKEY_SIZE);
+            constexpr uint32_t WITHDRAWAL_SIZE = 32;
+            constexpr uint32_t AMOUNT_OFFSET =
                 WITHDRAWAL_OFFSET + WORD + pad_to_words(WITHDRAWAL_SIZE);
-            constexpr size_t AMOUNT_SIZE = 8;
-            constexpr size_t SIGNATURE_OFFSET = AMOUNT_OFFSET + WORD + pad_to_words(AMOUNT_SIZE);
-            constexpr size_t SIGNATURE_SIZE = 96;
-            constexpr size_t INDEX_OFFSET = SIGNATURE_OFFSET + WORD + pad_to_words(SIGNATURE_SIZE);
-            constexpr size_t INDEX_SIZE = 8;
+            constexpr uint32_t AMOUNT_SIZE = 8;
+            constexpr uint32_t SIGNATURE_OFFSET = AMOUNT_OFFSET + WORD + pad_to_words(AMOUNT_SIZE);
+            constexpr uint32_t SIGNATURE_SIZE = 96;
+            constexpr uint32_t INDEX_OFFSET =
+                SIGNATURE_OFFSET + WORD + pad_to_words(SIGNATURE_SIZE);
+            constexpr uint32_t INDEX_SIZE = 8;
 
             // Offsets in the head point to the length-word of each dynamic field.
-            const std::array<size_t, 5> expected_offsets = {
+            static constexpr std::array<uint32_t, 5> expected_offsets = {
                 PUBKEY_OFFSET, WITHDRAWAL_OFFSET, AMOUNT_OFFSET, SIGNATURE_OFFSET, INDEX_OFFSET};
 
             if (offsets != expected_offsets)
                 return std::nullopt;  // layout does not match expected EIP-6110 deposit layout
 
-            // Validate sizes of each field.
-            auto validate_size = [&](size_t offset, size_t expected_size) -> bool {
+            // Validate sizes of each field encoded in the log.
+            auto validate_size_at = [&](uint32_t offset, uint32_t expected_size) -> bool {
                 const auto size = read_word_as_size(offset);
                 return size.has_value() && (*size == expected_size);
             };
-            if (!validate_size(PUBKEY_OFFSET, PUBKEY_SIZE) ||
-                !validate_size(WITHDRAWAL_OFFSET, WITHDRAWAL_SIZE) ||
-                !validate_size(AMOUNT_OFFSET, AMOUNT_SIZE) ||
-                !validate_size(SIGNATURE_OFFSET, SIGNATURE_SIZE) ||
-                !validate_size(INDEX_OFFSET, INDEX_SIZE))
+            if (!validate_size_at(PUBKEY_OFFSET, PUBKEY_SIZE) ||
+                !validate_size_at(WITHDRAWAL_OFFSET, WITHDRAWAL_SIZE) ||
+                !validate_size_at(AMOUNT_OFFSET, AMOUNT_SIZE) ||
+                !validate_size_at(SIGNATURE_OFFSET, SIGNATURE_SIZE) ||
+                !validate_size_at(INDEX_OFFSET, INDEX_SIZE))
             {
                 return std::nullopt;  // field size does not match expected EIP-6110 deposit
                                       // layout
