@@ -89,7 +89,6 @@ public:
 
     uint8_t& operator[](size_t index) noexcept { return m_data[index]; }
 
-    [[nodiscard]] const uint8_t* data() const noexcept { return m_data.get(); }
     [[nodiscard]] size_t size() const noexcept { return m_size; }
 
     /// Grows the memory to the given size. The extent is filled with zeros.

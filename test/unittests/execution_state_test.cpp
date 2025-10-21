@@ -131,7 +131,7 @@ TEST(execution_state, memory_view)
     evmone::Memory memory;
     memory.grow(32);
 
-    const evmone::bytes_view view{memory.data(), memory.size()};
+    const evmone::bytes_view view{&memory[0], memory.size()};
     ASSERT_EQ(view.size(), 32);
     EXPECT_EQ(view[0], 0x00);
     EXPECT_EQ(view[1], 0x00);
