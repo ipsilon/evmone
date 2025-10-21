@@ -606,8 +606,17 @@ ExecutionResult bls12_g1msm_execute(const uint8_t* input, size_t input_size, uin
 
     assert(output_size == BLS12_G1_POINT_SIZE);
 
-    if (!crypto::bls::g1_msm(output, &output[64], input, input_size))
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+    if (input_size == BLS12_G1_MUL_INPUT_SIZE)
+    {
+        // Optimize single multiplication case.
+        if (!crypto::bls::g1_mul(output, &output[64], input, &input[64], &input[128]))
+            return {EVMC_PRECOMPILE_FAILURE, 0};
+    }
+    else
+    {
+        if (!crypto::bls::g1_msm(output, &output[64], input, input_size))
+            return {EVMC_PRECOMPILE_FAILURE, 0};
+    }
 
     return {EVMC_SUCCESS, BLS12_G1_POINT_SIZE};
 }
@@ -634,8 +643,17 @@ ExecutionResult bls12_g2msm_execute(const uint8_t* input, size_t input_size, uin
 
     assert(output_size == BLS12_G2_POINT_SIZE);
 
-    if (!crypto::bls::g2_msm(output, &output[128], input, input_size))
-        return {EVMC_PRECOMPILE_FAILURE, 0};
+    if (input_size == BLS12_G2_MUL_INPUT_SIZE)
+    {
+        // Optimize single multiplication case.
+        if (!crypto::bls::g2_mul(output, &output[128], input, &input[128], &input[256]))
+            return {EVMC_PRECOMPILE_FAILURE, 0};
+    }
+    else
+    {
+        if (!crypto::bls::g2_msm(output, &output[128], input, input_size))
+            return {EVMC_PRECOMPILE_FAILURE, 0};
+    }
 
     return {EVMC_SUCCESS, BLS12_G2_POINT_SIZE};
 }
