@@ -24,10 +24,10 @@ enum class Kind : bool
 /// TODO(c++26): This is an instance of std::inplace_vector.
 class Path
 {
-    static constexpr size_t max_size = 64;
+    static constexpr size_t MAX_SIZE = 64;
 
     size_t m_size = 0;  // TODO: Can be converted to uint8_t.
-    uint8_t m_nibbles[max_size]{};
+    uint8_t m_nibbles[MAX_SIZE]{};
 
 public:
     Path() = default;
@@ -52,7 +52,6 @@ public:
         }
     }
 
-    [[nodiscard]] static constexpr size_t capacity() noexcept { return max_size; }
     [[nodiscard]] bool empty() const noexcept { return m_size == 0; }
     [[nodiscard]] const uint8_t* begin() const noexcept { return m_nibbles; }
     [[nodiscard]] const uint8_t* end() const noexcept { return m_nibbles + m_size; }
@@ -160,6 +159,8 @@ void MPTNode::insert(const Path& path, bytes&& value)  // NOLINT(misc-no-recursi
 
 bytes MPTNode::encode() const  // NOLINT(misc-no-recursion)
 {
+    static constexpr uint8_t EMPTY = 0x80;  // encoded empty child
+
     static constexpr auto shorten = [](bytes&& b) {
         return (b.size() < 32) ? std::move(b) : rlp::encode(keccak256(b));
     };
@@ -168,22 +169,16 @@ bytes MPTNode::encode() const  // NOLINT(misc-no-recursion)
     switch (m_kind)
     {
     case Kind::leaf:
-    {
         encoded = rlp::encode(m_value);
         break;
-    }
     case Kind::branch:
-    {
-        static constexpr uint8_t empty = 0x80;  // encoded empty child
-
         for (const auto& child : m_children)
-            encoded += child ? shorten(child->encode()) : bytes{empty};
-        encoded += empty;  // end indicator
+            encoded += child ? shorten(child->encode()) : bytes{EMPTY};
+        encoded += EMPTY;  // end indicator
 
         if (!m_path.empty())  // extended node
             encoded = shorten(rlp::internal::wrap_list(encoded));
         break;
-    }
     }
     return rlp::internal::wrap_list(m_path.encode(m_kind) + encoded);
 }
@@ -194,7 +189,6 @@ MPT::~MPT() noexcept = default;
 
 void MPT::insert(bytes_view key, bytes&& value)
 {
-    assert(key.size() <= Path::capacity() / 2);  // must fit the path implementation length limit
     const Path path{key};
 
     if (m_root == nullptr)
