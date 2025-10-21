@@ -116,6 +116,7 @@ std::optional<RequestsResult> system_call_block_end(const StateView& state_view,
         if (rev < since)
             break;  // Because entries are ordered, there are no other contracts for this revision.
 
+        // Fail if the target account doesn't exist. This is by EIP-7002 and EIP-7251 spec.
         const auto code = state_view.get_account_code(addr);
         if (code.empty())
             return std::nullopt;

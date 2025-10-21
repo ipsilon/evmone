@@ -256,10 +256,12 @@ int main(int argc, const char* argv[])
 
             if (!pre_state_only && rev >= EVMC_PRAGUE)
             {
-                // TODO: Report invalid block if system contracts execution fails.
                 auto deposits_result = collect_deposit_requests(receipts);
                 if (deposits_result.has_value())
                     requests.emplace_back(std::move(*deposits_result));
+                else
+                    // Report invalid block in the JSON result when deposit collection fails.
+                    j_result["blockException"] = "invalid deposit event layout";
                 auto requests_result = system_call_block_end(state, block, block_hashes, rev, vm);
                 if (requests_result.has_value())
                     std::ranges::move(*requests_result, std::back_inserter(requests));
