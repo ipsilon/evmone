@@ -9,7 +9,7 @@ namespace evmone::state
 {
 namespace
 {
-constexpr uint32_t pad_to_words(uint32_t size) noexcept
+consteval uint32_t pad_to_words(uint32_t size) noexcept
 {
     return ((size + 31) / 32) * 32;
 }
@@ -73,9 +73,10 @@ std::optional<Requests> collect_deposit_requests(std::span<const TransactionRece
             // Skip over the first 5 words (offsets of the values) and the pubkey size.
             // Read and validate the ABI offsets and lengths for the dynamic fields
             // according to EIP-6110. If any check fails, collection is considered failed.
-            auto read_word_as_size = [&](size_t pos) -> std::optional<uint32_t> {
+
+            const auto read_word_as_size = [&](size_t pos) -> std::optional<uint32_t> {
                 assert(log.data.size() >= pos + 32);
-                const auto v = intx::be::unsafe::load<intx::uint256>(&log.data[pos]);
+                const auto v = intx::be::unsafe::load<uint256>(&log.data[pos]);
                 // Ensure the encoded bytes fit into uint32_t.
                 if (v > std::numeric_limits<uint32_t>::max())
                     return std::nullopt;
@@ -96,29 +97,32 @@ std::optional<Requests> collect_deposit_requests(std::span<const TransactionRece
             }
 
             // Compute expected offsets and lengths (hard-coded from the deposit ABI layout).
-            constexpr uint32_t DATA_SECTION = WORD * 5;  // where the dynamic data area starts
-            constexpr uint32_t PUBKEY_OFFSET = DATA_SECTION;
-            constexpr uint32_t PUBKEY_SIZE = 48;
-            constexpr uint32_t WITHDRAWAL_OFFSET = PUBKEY_OFFSET + WORD + pad_to_words(PUBKEY_SIZE);
-            constexpr uint32_t WITHDRAWAL_SIZE = 32;
-            constexpr uint32_t AMOUNT_OFFSET =
+            static constexpr uint32_t DATA_SECTION =
+                WORD * 5;  // where the dynamic data area starts
+            static constexpr uint32_t PUBKEY_OFFSET = DATA_SECTION;
+            static constexpr uint32_t PUBKEY_SIZE = 48;
+            static constexpr uint32_t WITHDRAWAL_OFFSET =
+                PUBKEY_OFFSET + WORD + pad_to_words(PUBKEY_SIZE);
+            static constexpr uint32_t WITHDRAWAL_SIZE = 32;
+            static constexpr uint32_t AMOUNT_OFFSET =
                 WITHDRAWAL_OFFSET + WORD + pad_to_words(WITHDRAWAL_SIZE);
-            constexpr uint32_t AMOUNT_SIZE = 8;
-            constexpr uint32_t SIGNATURE_OFFSET = AMOUNT_OFFSET + WORD + pad_to_words(AMOUNT_SIZE);
-            constexpr uint32_t SIGNATURE_SIZE = 96;
-            constexpr uint32_t INDEX_OFFSET =
+            static constexpr uint32_t AMOUNT_SIZE = 8;
+            static constexpr uint32_t SIGNATURE_OFFSET =
+                AMOUNT_OFFSET + WORD + pad_to_words(AMOUNT_SIZE);
+            static constexpr uint32_t SIGNATURE_SIZE = 96;
+            static constexpr uint32_t INDEX_OFFSET =
                 SIGNATURE_OFFSET + WORD + pad_to_words(SIGNATURE_SIZE);
-            constexpr uint32_t INDEX_SIZE = 8;
+            static constexpr uint32_t INDEX_SIZE = 8;
 
             // Offsets in the head point to the length-word of each dynamic field.
-            static constexpr std::array<uint32_t, 5> expected_offsets = {
+            static constexpr std::array EXPECTED_OFFSETS{
                 PUBKEY_OFFSET, WITHDRAWAL_OFFSET, AMOUNT_OFFSET, SIGNATURE_OFFSET, INDEX_OFFSET};
 
-            if (offsets != expected_offsets)
+            if (offsets != EXPECTED_OFFSETS)
                 return std::nullopt;  // layout does not match expected EIP-6110 deposit layout
 
             // Validate sizes of each field encoded in the log.
-            auto validate_size_at = [&](uint32_t offset, uint32_t expected_size) -> bool {
+            const auto validate_size_at = [&](uint32_t offset, uint32_t expected_size) -> bool {
                 const auto size = read_word_as_size(offset);
                 return size.has_value() && (*size == expected_size);
             };
@@ -128,9 +132,10 @@ std::optional<Requests> collect_deposit_requests(std::span<const TransactionRece
                 !validate_size_at(SIGNATURE_OFFSET, SIGNATURE_SIZE) ||
                 !validate_size_at(INDEX_OFFSET, INDEX_SIZE))
             {
-                return std::nullopt;  // field size does not match expected EIP-6110 deposit
-                                      // layout
+                // field size does not match expected EIP-6110 deposit layout
+                return std::nullopt;
             }
+
             // Index is padded to the word boundary, so takes 32 bytes.
             assert(log.data.size() == INDEX_OFFSET + WORD + pad_to_words(INDEX_SIZE));
 
