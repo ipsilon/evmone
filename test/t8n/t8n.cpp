@@ -265,6 +265,9 @@ int main(int argc, const char* argv[])
                 auto requests_result = system_call_block_end(state, block, block_hashes, rev, vm);
                 if (requests_result.has_value())
                     std::ranges::move(*requests_result, std::back_inserter(requests));
+                else
+                    // Report invalid block in the JSON result when requests fail.
+                    j_result["blockException"] = "system contract empty or failed";
             }
 
             test::finalize(
