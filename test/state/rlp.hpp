@@ -86,12 +86,6 @@ inline bytes encode(const std::vector<T>& v)
     return internal::encode_container(v.begin(), v.end());
 }
 
-template <typename T, size_t N>
-inline bytes encode(const T (&v)[N])
-{
-    return internal::encode_container(std::begin(v), std::end(v));
-}
-
 /// Encodes the fixed-size collection of heterogeneous values as RLP list.
 template <typename... Types>
 inline bytes encode_tuple(const Types&... elements)

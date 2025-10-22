@@ -65,12 +65,6 @@ TEST(state_rlp, encode_string_long)
     EXPECT_EQ(hex({r4.data(), 10}), "baffffff000000000000");
 }
 
-TEST(state_rlp, encode_c_array)
-{
-    const uint64_t a[]{1, 2, 3};
-    EXPECT_EQ(hex(rlp::encode(a)), "c3010203");
-}
-
 TEST(state_rlp, encode_vector)
 {
     const auto x = 0xe1e2e3e4e5e6e7d0d1d2d3d4d5d6d7c0c1c2c3c4c5c6c7b0b1b2b3b4b5b6b7_u256;
