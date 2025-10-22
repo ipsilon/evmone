@@ -51,8 +51,9 @@ evmc_storage_status Host::set_storage(
         else if (!current_is_zero && value_is_zero)
             status = EVMC_STORAGE_MODIFIED_DELETED;  // X → Y → 0
     }
-    else if (dirty && restored)
+    else if (dirty)
     {
+        assert(restored);  // Always true.
         if (current_is_zero)
             status = EVMC_STORAGE_DELETED_RESTORED;  // X → 0 → X
         else if (value_is_zero)
