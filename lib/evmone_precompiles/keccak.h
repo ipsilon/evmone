@@ -17,7 +17,6 @@ extern "C" {
 #endif
 
 union ethash_hash256 ethash_keccak256(const uint8_t* data, size_t size) noexcept;
-union ethash_hash256 ethash_keccak256_32(const uint8_t data[32]) noexcept;
 
 #ifdef __cplusplus
 }

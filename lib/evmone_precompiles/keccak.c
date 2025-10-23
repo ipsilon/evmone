@@ -377,10 +377,3 @@ union ethash_hash256 ethash_keccak256(const uint8_t* data, size_t size)
     keccak(hash.word64s, 256, data, size);
     return hash;
 }
-
-union ethash_hash256 ethash_keccak256_32(const uint8_t data[32])
-{
-    union ethash_hash256 hash;
-    keccak(hash.word64s, 256, data, 32);
-    return hash;
-}
