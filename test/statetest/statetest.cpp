@@ -146,7 +146,7 @@ int main(int argc, char* argv[])
         app.add_flag("--trace-summary", trace_summary, "Output trace summary only")
             ->excludes(trace_opt);
 
-        CLI11_PARSE(app, argc, argv);
+        CLI11_PARSE(app, argc, argv)
 
         evmc::VM vm{evmc_create_evmone(), {{"O", "0"}}};
 
