@@ -23,6 +23,7 @@ struct UnsupportedTestFeature : std::runtime_error
 struct BlockHeader
 {
     hash256 parent_hash;
+    hash256 uncle_hash;
     address coinbase;
     hash256 state_root;
     hash256 receipts_root;

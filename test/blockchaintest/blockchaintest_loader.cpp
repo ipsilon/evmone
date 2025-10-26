@@ -33,6 +33,7 @@ BlockHeader from_json<BlockHeader>(const json::json& j)
 {
     return {
         .parent_hash = from_json<hash256>(j.at("parentHash")),
+        .uncle_hash = from_json<hash256>(j.at("uncleHash")),
         .coinbase = from_json<address>(j.at("coinbase")),
         .state_root = from_json<hash256>(j.at("stateRoot")),
         .receipts_root = from_json<hash256>(j.at("receiptTrie")),
@@ -68,6 +69,7 @@ static TestBlock load_test_block(
         tb.block_info.timestamp = tb.expected_block_header.timestamp;
         tb.block_info.hash = tb.expected_block_header.hash;
         tb.block_info.parent_hash = tb.expected_block_header.parent_hash;
+        tb.block_info.uncle_hash = tb.expected_block_header.uncle_hash;
 
         const auto rev = to_rev_schedule(network).get_revision(tb.block_info.timestamp);
         const auto blob_params = get_blob_params(network, blob_schedule, tb.block_info.timestamp);

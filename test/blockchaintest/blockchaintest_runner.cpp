@@ -5,6 +5,7 @@
 #include "../state/mpt_hash.hpp"
 #include "../state/requests.hpp"
 #include "../state/rlp.hpp"
+#include "../test/state/ethash_difficulty.hpp"
 #include "../test/statetest/statetest.hpp"
 #include "blockchaintest.hpp"
 #include <gtest/gtest.h>
@@ -120,6 +121,13 @@ bool validate_block(evmc_revision rev, state::BlobParams blob_params, const Test
 
     // Fail if parent header was not found.
     if (parent_header == nullptr)
+        return false;
+
+    const auto expected_difficulty = state::calculate_difficulty(parent_header->difficulty,
+        parent_header->uncle_hash != EmptyListHash, parent_header->timestamp,
+        test_block.block_info.timestamp, test_block.block_info.number, rev);
+
+    if (test_block.block_info.difficulty != expected_difficulty)
         return false;
 
     if (test_block.block_info.gas_used > test_block.block_info.gas_limit)

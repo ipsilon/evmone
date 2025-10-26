@@ -37,6 +37,7 @@ struct BlockInfo
     int64_t timestamp = 0;
     hash256 hash;
     hash256 parent_hash;
+    hash256 uncle_hash;
     int64_t parent_timestamp = 0;
     int64_t gas_limit = 0;
     int64_t gas_used = 0;
