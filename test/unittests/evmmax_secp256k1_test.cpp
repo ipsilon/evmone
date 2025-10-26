@@ -10,6 +10,19 @@ using namespace evmmax::secp256k1;
 using namespace evmc::literals;
 using namespace evmone::test;
 
+namespace
+{
+/// Scalar multiplication in secp256k1.
+///
+/// Computes [c]P for a point in affine coordinate on the secp256k1 curve.
+/// Convenience wrapper for point multiplication test.
+AffinePoint mul(const AffinePoint& p, const uint256& c) noexcept
+{
+    const auto r = evmmax::ecc::mul(p, c);
+    return evmmax::ecc::to_affine<Curve>(r);
+}
+}  // namespace
+
 TEST(secp256k1, field_sqrt)
 {
     const auto& m = Curve::Fp;

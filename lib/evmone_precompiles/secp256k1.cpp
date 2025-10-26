@@ -29,12 +29,6 @@ std::optional<uint256> calculate_y(
     return (candidate_parity == y_parity) ? *y : m.sub(0, *y);
 }
 
-AffinePoint mul(const AffinePoint& p, const uint256& c) noexcept
-{
-    const auto r = ecc::mul(p, c);
-    return ecc::to_affine<Curve>(r);
-}
-
 evmc::address to_address(const AffinePoint& pt) noexcept
 {
     // This performs Ethereum's address hashing on an uncompressed pubkey.

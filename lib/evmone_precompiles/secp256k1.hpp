@@ -43,11 +43,6 @@ std::optional<uint256> field_sqrt(const ModArith<uint256>& m, const uint256& x) 
 std::optional<uint256> calculate_y(
     const ModArith<uint256>& m, const uint256& x, bool y_parity) noexcept;
 
-/// Scalar multiplication in secp256k1.
-///
-/// Computes [c]P for a point in affine coordinate on the secp256k1 curve,
-AffinePoint mul(const AffinePoint& p, const uint256& c) noexcept;
-
 /// Convert the secp256k1 point (uncompressed public key) to Ethereum address.
 evmc::address to_address(const AffinePoint& pt) noexcept;
 
