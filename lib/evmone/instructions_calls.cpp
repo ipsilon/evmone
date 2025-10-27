@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "delegation.hpp"
-#include "eof.hpp"
 #include "instructions.hpp"
 #include <variant>
 
@@ -53,22 +52,16 @@ consteval evmc_call_kind to_call_kind(Opcode op) noexcept
     switch (op)
     {
     case OP_CALL:
-    case OP_EXTCALL:
     case OP_STATICCALL:
-    case OP_EXTSTATICCALL:
         return EVMC_CALL;
     case OP_CALLCODE:
         return EVMC_CALLCODE;
     case OP_DELEGATECALL:
-    case OP_EXTDELEGATECALL:
         return EVMC_DELEGATECALL;
     case OP_CREATE:
         return EVMC_CREATE;
     case OP_CREATE2:
         return EVMC_CREATE2;
-    case OP_EOFCREATE:
-    case OP_TXCREATE:
-        return EVMC_EOFCREATE;
     default:
         intx::unreachable();
     }

@@ -19,8 +19,6 @@ add_library(evmone
     constants.hpp
     delegation.cpp
     delegation.hpp
-    eof.cpp
-    eof.hpp
     instructions.hpp
     instructions_calls.cpp
     instructions_opcodes.hpp

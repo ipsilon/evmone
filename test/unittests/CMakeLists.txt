@@ -10,19 +10,11 @@ target_sources(
     baseline_analysis_test.cpp
     blockchaintest_loader_test.cpp
     bytecode_test.cpp
-    eof_validation_stack_test.cpp
-    eof_example_test.cpp
-    eof_test.cpp
-    eof_validation.hpp
-    eof_validation.cpp
-    eof_validation_test.cpp
     evm_fixture.cpp
     evm_fixture.hpp
     evm_test.cpp
     evm_calls_test.cpp
     evm_control_flow_test.cpp
-    evm_eip663_dupn_swapn_test.cpp
-    evm_eip663_exchange_test.cpp
     evm_eip2929_test.cpp
     evm_eip3198_basefee_test.cpp
     evm_eip3855_push0_test.cpp
@@ -30,10 +22,6 @@ target_sources(
     evm_eip4844_blobhash_test.cpp
     evm_eip7516_blobbasefee_test.cpp
     evm_eip7939_clz_test.cpp
-    evm_eof_test.cpp
-    evm_eof_calls_test.cpp
-    evm_eof_function_test.cpp
-    evm_eof_rjump_test.cpp
     evm_memory_test.cpp
     evm_state_test.cpp
     evm_storage_test.cpp
@@ -77,9 +65,6 @@ target_sources(
     state_transition_create_test.cpp
     state_transition_eip663_test.cpp
     state_transition_eip7702_test.cpp
-    state_transition_eof_calls_test.cpp
-    state_transition_eof_create_test.cpp
-    state_transition_txcreate_test.cpp
     state_transition_extcode_test.cpp
     state_transition_selfdestruct_test.cpp
     state_transition_snippets_test.cpp

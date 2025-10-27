@@ -4,7 +4,6 @@
 
 #include "baseline.hpp"
 #include "baseline_instruction_table.hpp"
-#include "eof.hpp"
 #include "execution_state.hpp"
 #include "instructions.hpp"
 #include "vm.hpp"
@@ -299,7 +298,7 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
 
     state.analysis.baseline = &analysis;  // Assign code analysis for instruction implementations.
 
-    const auto& cost_table = get_baseline_cost_table(state.rev, analysis.eof_header().version);
+    const auto& cost_table = get_baseline_cost_table(state.rev);
 
     auto* tracer = vm.get_tracer();
     if (INTX_UNLIKELY(tracer != nullptr))

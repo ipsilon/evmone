@@ -8,7 +8,6 @@
 #include <test/state/precompiles.hpp>
 
 #include <evmone/delegation.hpp>
-#include <evmone/eof.hpp>
 #include <nlohmann/json.hpp>
 
 namespace evmone::test

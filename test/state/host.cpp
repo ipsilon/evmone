@@ -5,7 +5,6 @@
 #include "host.hpp"
 #include "precompiles.hpp"
 #include <evmone/constants.hpp>
-#include <evmone/eof.hpp>
 
 namespace evmone::state
 {
@@ -77,14 +76,6 @@ uint256be Host::get_balance(const address& addr) const noexcept
 
 namespace
 {
-/// For EXTCODE* instructions if the target is an EOF account, then only return EF00.
-/// While we only do this if the caller is legacy, it is not a problem doing this
-/// unconditionally, because EOF contracts dot no have EXTCODE* instructions.
-bytes_view extcode(bytes_view code) noexcept
-{
-    return is_eof_container(code) ? code.substr(0, 2) : code;
-}
-
 /// Check if an existing account is the "create collision"
 /// as defined in the [EIP-7610](https://eips.ethereum.org/EIPS/eip-7610).
 [[nodiscard]] bool is_create_collision(const Account& acc) noexcept
@@ -110,7 +101,7 @@ bytes_view extcode(bytes_view code) noexcept
 size_t Host::get_code_size(const address& addr) const noexcept
 {
     const auto raw_code = m_state.get_code(addr);
-    return extcode(raw_code).size();
+    return raw_code.size();
 }
 
 bytes32 Host::get_code_hash(const address& addr) const noexcept
@@ -119,19 +110,13 @@ bytes32 Host::get_code_hash(const address& addr) const noexcept
     if (acc == nullptr || acc->is_empty())
         return {};
 
-    // Load code and check if not EOF.
-    // TODO: Optimize the second account lookup here.
-    if (is_eof_container(m_state.get_code(addr)))
-        return EOF_CODE_HASH_SENTINEL;
-
     return acc->code_hash;
 }
 
 size_t Host::copy_code(const address& addr, size_t code_offset, uint8_t* buffer_data,
     size_t buffer_size) const noexcept
 {
-    const auto raw_code = m_state.get_code(addr);
-    const auto code = extcode(raw_code);
+    const auto code = m_state.get_code(addr);
     const auto code_slice = code.substr(std::min(code_offset, code.size()));
     const auto num_bytes = std::min(buffer_size, code_slice.size());
     std::copy_n(code_slice.begin(), num_bytes, buffer_data);
@@ -323,17 +308,6 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     const auto initcode = (msg.kind == EVMC_EOFCREATE ? bytes_view{msg.code, msg.code_size} :
                                                         bytes_view{msg.input_data, msg.input_size});
 
-    if (m_rev >= EVMC_EXPERIMENTAL && msg.kind != EVMC_EOFCREATE && msg.depth == 0)
-    {
-        // EOF initcode is not allowed for legacy creation tx
-        // We cannot let the EVM handle that on the initial `EF` invalid instruction,
-        // b/c it will default to running `initcode` as an EOF container. At the same time setting
-        // the execution mode (legacy vs EOF) deeper down based on `msg.kind` seems awkward.
-        // NOTE: EOF initcode is also not allowed in CREATE/CREATE2, but that is blocked
-        // earlier on the opcode level.
-        if (is_eof_container(initcode))
-            return evmc::Result{EVMC_FAILURE};
-    }
     if (msg.kind != EVMC_EOFCREATE)
     {
         create_msg.input_data = nullptr;
@@ -373,18 +347,9 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     {
         if (code[0] == 0xEF)
         {
-            if (m_rev >= EVMC_EXPERIMENTAL)
+            if (m_rev >= EVMC_LONDON)
             {
-                // Only EOFCREATE/TXCREATE is allowed to deploy code starting with
-                // EF. It must be valid EOF, which was validated before execution.
-                if (msg.kind != EVMC_EOFCREATE)
-                    return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
-                assert(validate_eof(m_rev, ContainerKind::runtime, code) ==
-                       EOFValidationError::success);
-            }
-            else if (m_rev >= EVMC_LONDON)
-            {
-                // EIP-3541: Reject EF code.
+                // EIP-3541: Reject EF-prefixed code.
                 return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
             }
         }

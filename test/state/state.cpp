@@ -8,7 +8,6 @@
 #include "state_view.hpp"
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
-#include <evmone/eof.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
 #include <algorithm>
 

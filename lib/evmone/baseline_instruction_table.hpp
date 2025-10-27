@@ -10,7 +10,5 @@ namespace evmone::baseline
 {
 using CostTable = std::array<int16_t, 256>;
 
-const CostTable& get_baseline_cost_table(evmc_revision rev, uint8_t eof_version) noexcept;
-
-const CostTable& get_baseline_legacy_cost_table(evmc_revision rev) noexcept;
+const CostTable& get_baseline_cost_table(evmc_revision rev) noexcept;
 }  // namespace evmone::baseline

@@ -177,27 +177,6 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
 
     table[EVMC_EXPERIMENTAL] = table[EVMC_OSAKA];
 
-    table[EVMC_EXPERIMENTAL][OP_DUPN] = 3;
-    table[EVMC_EXPERIMENTAL][OP_SWAPN] = 3;
-    table[EVMC_EXPERIMENTAL][OP_EXCHANGE] = 3;
-    table[EVMC_EXPERIMENTAL][OP_RJUMP] = 2;
-    table[EVMC_EXPERIMENTAL][OP_RJUMPI] = 4;
-    table[EVMC_EXPERIMENTAL][OP_RJUMPV] = 4;
-    table[EVMC_EXPERIMENTAL][OP_CALLF] = 5;
-    table[EVMC_EXPERIMENTAL][OP_RETF] = 3;
-    table[EVMC_EXPERIMENTAL][OP_JUMPF] = 5;
-    table[EVMC_EXPERIMENTAL][OP_DATALOAD] = 4;
-    table[EVMC_EXPERIMENTAL][OP_DATALOADN] = 3;
-    table[EVMC_EXPERIMENTAL][OP_DATASIZE] = 2;
-    table[EVMC_EXPERIMENTAL][OP_DATACOPY] = 3;
-    table[EVMC_EXPERIMENTAL][OP_RETURNDATALOAD] = 3;
-    table[EVMC_EXPERIMENTAL][OP_EXTCALL] = warm_storage_read_cost;
-    table[EVMC_EXPERIMENTAL][OP_EXTDELEGATECALL] = warm_storage_read_cost;
-    table[EVMC_EXPERIMENTAL][OP_EXTSTATICCALL] = warm_storage_read_cost;
-    table[EVMC_EXPERIMENTAL][OP_EOFCREATE] = 32000;
-    table[EVMC_EXPERIMENTAL][OP_TXCREATE] = 32000;
-    table[EVMC_EXPERIMENTAL][OP_RETURNCODE] = 0;
-
     return table;
 }();
 
@@ -327,10 +306,6 @@ constexpr inline std::array<Traits, 256> traits = []() noexcept {
     table[OP_MSIZE] = {"MSIZE", 0, false, 0, 1, EVMC_FRONTIER, REV_EOF1};
     table[OP_GAS] = {"GAS", 0, false, 0, 1, EVMC_FRONTIER};
     table[OP_JUMPDEST] = {"JUMPDEST", 0, false, 0, 0, EVMC_FRONTIER, REV_EOF1};
-    table[OP_RJUMP] = {"RJUMP", 2, false, 0, 0, {}, REV_EOF1};
-    table[OP_RJUMPI] = {"RJUMPI", 2, false, 1, -1, {}, REV_EOF1};
-    table[OP_RJUMPV] = {
-        "RJUMPV", 1 /* 1 byte static immediate + dynamic immediate */, false, 1, -1, {}, REV_EOF1};
 
     table[OP_TLOAD] = {"TLOAD", 0, false, 1, 0, EVMC_CANCUN, REV_EOF1};
     table[OP_TSTORE] = {"TSTORE", 0, false, 2, -2, EVMC_CANCUN, REV_EOF1};
@@ -409,14 +384,7 @@ constexpr inline std::array<Traits, 256> traits = []() noexcept {
     table[OP_LOG3] = {"LOG3", 0, false, 5, -5, EVMC_FRONTIER, REV_EOF1};
     table[OP_LOG4] = {"LOG4", 0, false, 6, -6, EVMC_FRONTIER, REV_EOF1};
 
-    table[OP_DUPN] = {"DUPN", 1, false, 0, 1, {}, REV_EOF1};
-    table[OP_SWAPN] = {"SWAPN", 1, false, 0, 0, {}, REV_EOF1};
-    table[OP_EXCHANGE] = {"EXCHANGE", 1, false, 0, 0, {}, REV_EOF1};
     table[OP_MCOPY] = {"MCOPY", 0, false, 3, -3, EVMC_CANCUN, REV_EOF1};
-    table[OP_DATALOAD] = {"DATALOAD", 0, false, 1, 0, {}, REV_EOF1};
-    table[OP_DATALOADN] = {"DATALOADN", 2, false, 0, 1, {}, REV_EOF1};
-    table[OP_DATASIZE] = {"DATASIZE", 0, false, 0, 1, {}, REV_EOF1};
-    table[OP_DATACOPY] = {"DATACOPY", 0, false, 3, -3, {}, REV_EOF1};
 
     table[OP_CREATE] = {"CREATE", 0, false, 3, -2, EVMC_FRONTIER};
     table[OP_CALL] = {"CALL", 0, false, 7, -6, EVMC_FRONTIER};
@@ -424,17 +392,7 @@ constexpr inline std::array<Traits, 256> traits = []() noexcept {
     table[OP_RETURN] = {"RETURN", 0, true, 2, -2, EVMC_FRONTIER, REV_EOF1};
     table[OP_DELEGATECALL] = {"DELEGATECALL", 0, false, 6, -5, EVMC_HOMESTEAD};
     table[OP_CREATE2] = {"CREATE2", 0, false, 4, -3, EVMC_CONSTANTINOPLE};
-    table[OP_RETURNDATALOAD] = {"RETURNDATALOAD", 0, false, 1, 0, {}, REV_EOF1};
-    table[OP_EOFCREATE] = {"EOFCREATE", 1, false, 4, -3, {}, REV_EOF1};
-    table[OP_TXCREATE] = {"TXCREATE", 0, false, 5, -4, EVMC_EXPERIMENTAL, REV_EOF1};
-    table[OP_RETURNCODE] = {"RETURNCODE", 1, true, 2, -2, {}, REV_EOF1};
-    table[OP_EXTCALL] = {"EXTCALL", 0, false, 4, -3, {}, REV_EOF1};
-    table[OP_EXTDELEGATECALL] = {"EXTDELEGATECALL", 0, false, 3, -2, {}, REV_EOF1};
     table[OP_STATICCALL] = {"STATICCALL", 0, false, 6, -5, EVMC_BYZANTIUM};
-    table[OP_EXTSTATICCALL] = {"EXTSTATICCALL", 0, false, 3, -2, {}, REV_EOF1};
-    table[OP_CALLF] = {"CALLF", 2, false, 0, 0, {}, REV_EOF1};
-    table[OP_RETF] = {"RETF", 0, true, 0, 0, {}, REV_EOF1};
-    table[OP_JUMPF] = {"JUMPF", 2, true, 0, 0, {}, REV_EOF1};
     table[OP_REVERT] = {"REVERT", 0, true, 2, -2, EVMC_BYZANTIUM, REV_EOF1};
     table[OP_INVALID] = {"INVALID", 0, true, 0, 0, EVMC_FRONTIER, REV_EOF1};
     table[OP_SELFDESTRUCT] = {"SELFDESTRUCT", 0, true, 1, -1, EVMC_FRONTIER};

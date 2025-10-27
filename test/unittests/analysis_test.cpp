@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <evmone/advanced_analysis.hpp>
-#include <evmone/eof.hpp>
 #include <gtest/gtest.h>
 #include <test/utils/bytecode.hpp>
 

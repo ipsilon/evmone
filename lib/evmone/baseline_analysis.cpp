@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "baseline.hpp"
-#include "eof.hpp"
 #include "instructions.hpp"
 #include <memory>
 
@@ -59,27 +58,10 @@ CodeAnalysis analyze_legacy(bytes_view code)
 
     return {std::move(storage), code.size(), jumpdest_bitset};
 }
-
-CodeAnalysis analyze_eof1(bytes_view container)
-{
-    auto header = read_valid_eof1_header(container);
-
-    // Extract all code sections as single buffer reference.
-    // TODO: It would be much easier if header had code_sections_offset and data_section_offset
-    //       with code_offsets[] being relative to code_sections_offset.
-    const auto code_sections_offset = header.code_offsets[0];
-    const auto code_sections_end = size_t{header.code_offsets.back()} + header.code_sizes.back();
-    const auto executable_code =
-        container.substr(code_sections_offset, code_sections_end - code_sections_offset);
-
-    return CodeAnalysis{container, executable_code, std::move(header)};
-}
 }  // namespace
 
-CodeAnalysis analyze(bytes_view code, bool eof_enabled)
+CodeAnalysis analyze(bytes_view code)
 {
-    if (eof_enabled && is_eof_container(code))
-        return analyze_eof1(code);
     return analyze_legacy(code);
 }
 }  // namespace evmone::baseline

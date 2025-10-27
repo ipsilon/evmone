@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "eof.hpp"
-#include <evmc/evmc.h>
+#include <evmc/evmc.hpp>
 #include <evmc/utils.h>
 #include <memory>
 
@@ -59,7 +58,6 @@ class CodeAnalysis
 private:
     bytes_view m_raw_code;         ///< Unmodified full code.
     bytes_view m_executable_code;  ///< Executable code section.
-    EOF1Header m_eof_header;       ///< The EOF header.
 
     /// Padded code for faster legacy code execution.
     /// If not nullptr the executable_code must point to it.
@@ -76,22 +74,11 @@ public:
         m_jumpdest_bitset{map}
     {}
 
-    /// Constructor for EOF.
-    CodeAnalysis(bytes_view container, bytes_view executable_code, EOF1Header header)
-      : m_raw_code{container}, m_executable_code(executable_code), m_eof_header{std::move(header)}
-    {}
-
     /// The raw code as stored in accounts or passes as initcode. For EOF this is full container.
     [[nodiscard]] bytes_view raw_code() const noexcept { return m_raw_code; }
 
     /// The pre-processed executable code. This is where interpreter should start execution.
     [[nodiscard]] bytes_view executable_code() const noexcept { return m_executable_code; }
-
-    /// Reference to the EOF header.
-    [[nodiscard]] const EOF1Header& eof_header() const noexcept { return m_eof_header; }
-
-    /// Reference to the EOF data section. May be empty.
-    [[nodiscard]] bytes_view eof_data() const noexcept { return m_eof_header.get_data(m_raw_code); }
 
     /// Check if given position is valid jump destination. Use only for legacy code.
     [[nodiscard]] bool check_jumpdest(uint64_t position) const noexcept
@@ -104,12 +91,10 @@ public:
 
 /// Analyze the EVM code in preparation for execution.
 ///
-/// For legacy code this builds the map of valid JUMPDESTs.
-/// If EOF is enabled, it recognizes the EOF code by the code prefix.
+/// This builds the map of valid JUMPDESTs.
 ///
 /// @param code         The reference to the EVM code to be analyzed.
-/// @param eof_enabled  Should the EOF code prefix be recognized as EOF code?
-EVMC_EXPORT CodeAnalysis analyze(bytes_view code, bool eof_enabled);
+EVMC_EXPORT CodeAnalysis analyze(bytes_view code);
 
 /// Executes in Baseline interpreter using EVMC-compatible parameters.
 evmc_result execute(evmc_vm* vm, const evmc_host_interface* host, evmc_host_context* ctx,
