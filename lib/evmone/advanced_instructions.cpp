@@ -294,28 +294,6 @@ constexpr std::array<instruction_exec_fn, 256> instruction_implementations = [](
     table[OP_CREATE2] = op_create<OP_CREATE2>;
     table[OP_STATICCALL] = op_call<OP_STATICCALL>;
 
-    table[OP_RJUMP] = op_undefined;
-    table[OP_RJUMPI] = op_undefined;
-    table[OP_RJUMPV] = op_undefined;
-    table[OP_CALLF] = op_undefined;
-    table[OP_RETF] = op_undefined;
-    table[OP_DATALOAD] = op_undefined;
-    table[OP_DATALOADN] = op_undefined;
-    table[OP_DATASIZE] = op_undefined;
-    table[OP_DATACOPY] = op_undefined;
-    table[OP_RETURNDATALOAD] = op_undefined;
-    table[OP_EXTCALL] = op_undefined;
-    table[OP_EXTSTATICCALL] = op_undefined;
-    table[OP_EXTDELEGATECALL] = op_undefined;
-    table[OP_JUMPF] = op_undefined;
-
-    table[OP_DUPN] = op_undefined;
-    table[OP_SWAPN] = op_undefined;
-    table[OP_EXCHANGE] = op_undefined;
-    table[OP_EOFCREATE] = op_undefined;
-    table[OP_TXCREATE] = op_undefined;
-    table[OP_RETURNCODE] = op_undefined;
-
     return table;
 }();
 }  // namespace

@@ -238,23 +238,6 @@ TEST_F(state_transition, eip7702_delegated_mode_propagation_call)
     expect.post[To].storage[0x01_bytes32] = 0x0a_bytes32;
 }
 
-TEST_F(state_transition, eip7702_delegated_mode_propagation_extcall)
-{
-    rev = EVMC_EXPERIMENTAL;
-
-    constexpr auto delegate = 0xde1e_address;
-    constexpr auto identity_precompile = 0x04_address;
-    pre[delegate] = {
-        .code = eof_bytecode(
-            extcall(identity_precompile).input(0, 10) + sstore(1, returndatasize()) + OP_STOP, 4)};
-    pre[To].code = bytes{0xef, 0x01, 0x00} + hex(delegate);
-
-    tx.to = To;
-
-    expect.post[delegate].exists = true;
-    expect.post[To].storage[0x01_bytes32] = 0x0a_bytes32;
-}
-
 TEST_F(state_transition, eip7702_selfdestruct)
 {
     rev = EVMC_PRAGUE;

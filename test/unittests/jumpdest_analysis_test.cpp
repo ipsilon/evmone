@@ -17,7 +17,7 @@ constexpr auto CODE_PADDING_CHECK_SIZE = 100;
 
 auto baseline_analyze(bytes_view code)
 {
-    return baseline::analyze(code, false);
+    return baseline::analyze(code);
 }
 
 /// The set of test cases for jumpdest analysis.

@@ -38,9 +38,6 @@ consteval bool is_terminating(uint8_t op) noexcept
     {
     case OP_STOP:
     case OP_RETURN:
-    case OP_RETF:
-    case OP_JUMPF:
-    case OP_RETURNCODE:
     case OP_REVERT:
     case OP_INVALID:
     case OP_SELFDESTRUCT:
@@ -58,17 +55,8 @@ consteval void validate_traits_of() noexcept
     // immediate_size
     if constexpr (Op >= OP_PUSH1 && Op <= OP_PUSH32)
         static_assert(tr.immediate_size == Op - OP_PUSH1 + 1);
-    else if constexpr (Op == OP_RJUMP || Op == OP_RJUMPI || Op == OP_CALLF || Op == OP_JUMPF)
-        static_assert(tr.immediate_size == 2);
-    else if constexpr (Op == OP_RJUMPV)
-        static_assert(tr.immediate_size == 1);
-    else if constexpr (Op == OP_DUPN || Op == OP_SWAPN || Op == OP_EXCHANGE || Op == OP_EOFCREATE ||
-                       Op == OP_RETURNCODE)
-        static_assert(tr.immediate_size == 1);
-    else if constexpr (Op == OP_DATALOADN)
-        static_assert(tr.immediate_size == 2);
     else
-        static_assert(tr.immediate_size == 0);  // Including RJUMPV.
+        static_assert(tr.immediate_size == 0);
 
     // is_terminating
     static_assert(tr.is_terminating == is_terminating(Op));
@@ -118,29 +106,9 @@ constexpr bool instruction_only_in_evmone(evmc_revision rev, Opcode op) noexcept
     case OP_CLZ:
     case OP_BLOBHASH:
     case OP_BLOBBASEFEE:
-    case OP_RJUMP:
-    case OP_RJUMPI:
-    case OP_RJUMPV:
-    case OP_CALLF:
-    case OP_RETF:
-    case OP_JUMPF:
-    case OP_DUPN:
-    case OP_SWAPN:
-    case OP_EXCHANGE:
     case OP_MCOPY:
-    case OP_DATALOAD:
-    case OP_DATALOADN:
-    case OP_DATASIZE:
-    case OP_DATACOPY:
-    case OP_RETURNDATALOAD:
     case OP_TLOAD:
     case OP_TSTORE:
-    case OP_EXTCALL:
-    case OP_EXTDELEGATECALL:
-    case OP_EXTSTATICCALL:
-    case OP_EOFCREATE:
-    case OP_TXCREATE:
-    case OP_RETURNCODE:
         return true;
     default:
         return false;

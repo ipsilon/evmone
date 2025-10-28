@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "state_transition.hpp"
-#include <evmone/eof.hpp>
 #include <test/state/mpt_hash.hpp>
 #include <test/statetest/statetest.hpp>
 #include <filesystem>

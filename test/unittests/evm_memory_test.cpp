@@ -122,7 +122,6 @@ static constexpr memory_access_opcode memory_access_opcodes[] = {
     {OP_MSTORE8, 0, -1},
     {OP_MCOPY, 0, 2},
     {OP_MCOPY, 1, 2},
-    {OP_DATACOPY, 0, 2},
     {OP_EXTCODECOPY, 1, 3},
     {OP_RETURNDATACOPY, 0, 2},
     {OP_LOG0, 0, 1},
@@ -207,15 +206,6 @@ TEST_P(evm, memory_access)
                 code += push(0);
 
             code += bytecode{t.opcode};
-
-            if (t.opcode == OP_DATACOPY)
-            {
-                if (is_advanced())
-                    continue;
-
-                code += bytecode{OP_STOP};
-                code = eof_bytecode(code, 3).data(bytes(32, 0));
-            }
 
             const auto gas = 8796294610952;
             execute(gas, code);

@@ -100,103 +100,6 @@ inline bytes big_endian(T value)
         static_cast<uint8_t>(value >> 8), static_cast<uint8_t>(value)};
 }
 
-struct eof_bytecode
-{
-private:
-    std::vector<bytecode> m_codes;
-    std::vector<evmone::EOFCodeType> m_types;
-    bytecode m_data;
-    uint16_t m_data_size = 0;
-    std::vector<bytecode> m_containers;
-
-    /// Constructs EOF header bytes
-    bytecode header() const
-    {
-        assert(!m_codes.empty());
-        assert(m_codes[0].size() <= std::numeric_limits<uint16_t>::max());
-        assert(m_data.size() <= std::numeric_limits<uint16_t>::max());
-        assert(m_codes.size() == m_types.size());
-        assert(m_containers.size() <= std::numeric_limits<uint16_t>::max());
-
-        constexpr uint8_t version = 0x01;
-
-        bytecode out{bytes{0xEF, 0x00, version}};
-
-        // type header
-        const auto types_size = static_cast<uint16_t>(m_types.size() * 4);
-        out += "01" + big_endian(types_size);
-
-        // codes header
-        const auto code_count = static_cast<uint16_t>(m_codes.size());
-        out += "02"_hex + big_endian(code_count);
-        for (const auto& code : m_codes)
-        {
-            const auto code_size = static_cast<uint16_t>(code.size());
-            out += big_endian(code_size);
-        }
-
-        // containers header
-        if (!m_containers.empty())
-        {
-            const auto container_count = static_cast<uint16_t>(m_containers.size());
-            out += "03"_hex + big_endian(container_count);
-            for (const auto& container : m_containers)
-            {
-                assert(container.size() <= std::numeric_limits<uint32_t>::max());
-                const auto container_size = static_cast<uint32_t>(container.size());
-                out += big_endian(container_size);
-            }
-        }
-
-        // data header
-        const auto data_size =
-            (m_data_size == 0 ? static_cast<uint16_t>(m_data.size()) : m_data_size);
-        out += "ff" + big_endian(data_size);
-        out += "00";  // terminator
-
-        // types section
-        for (const auto& type : m_types)
-            out += bytes{type.inputs, type.outputs} + big_endian(type.max_stack_increase);
-        return out;
-    }
-
-public:
-    explicit eof_bytecode(bytecode code, uint16_t max_stack_increase = 0)
-      : m_codes{std::move(code)}, m_types{{0, 0x80, max_stack_increase}}
-    {}
-
-    auto& code(bytecode c, uint8_t inputs, uint8_t outputs, uint16_t max_stack_increase = 0)
-    {
-        m_codes.emplace_back(std::move(c));
-        m_types.emplace_back(inputs, outputs, max_stack_increase);
-        return *this;
-    }
-
-    auto& data(bytecode d, uint16_t size = 0)
-    {
-        m_data = std::move(d);
-        m_data_size = size;
-        return *this;
-    }
-
-    auto& container(bytecode c)
-    {
-        m_containers.emplace_back(std::move(c));
-        return *this;
-    }
-
-    operator bytecode() const
-    {
-        bytecode out{header()};
-        for (const auto& code : m_codes)
-            out += code;
-        for (const auto& container : m_containers)
-            out += container;
-        out += m_data;
-        return out;
-    }
-};
-
 inline bytecode push0()
 {
     return OP_PUSH0;
@@ -345,40 +248,6 @@ inline bytecode jumpi(bytecode target, bytecode condition)
     return condition + target + OP_JUMPI;
 }
 
-inline bytecode rjump(int16_t offset)
-{
-    return OP_RJUMP + big_endian(offset);
-}
-
-inline bytecode rjumpi(int16_t offset, bytecode condition)
-{
-    return condition + (OP_RJUMPI + big_endian(offset));
-}
-
-inline bytecode rjumpv(const std::initializer_list<int16_t> offsets, bytecode condition)
-{
-    assert(offsets.size() > 0);
-    bytecode ret = condition + OP_RJUMPV + static_cast<Opcode>(offsets.size() - 1);
-    for (const auto offset : offsets)
-        ret += bytecode{big_endian(offset)};
-    return ret;
-}
-
-inline bytecode dataloadn(uint16_t index)
-{
-    return OP_DATALOADN + big_endian(index);
-}
-
-inline bytecode callf(uint16_t target)
-{
-    return OP_CALLF + big_endian(target);
-}
-
-inline bytecode jumpf(uint16_t target)
-{
-    return OP_JUMPF + big_endian(target);
-}
-
 inline bytecode ret(bytecode index, bytecode size)
 {
     return size + index + OP_RETURN;
@@ -392,12 +261,6 @@ inline bytecode ret_top()
 inline bytecode ret(bytecode c)
 {
     return c + ret_top();
-}
-
-inline bytecode returncode(
-    uint8_t container_index, bytecode aux_data_offset, bytecode aux_data_size)
-{
-    return aux_data_size + aux_data_offset + OP_RETURNCODE + bytecode{bytes{container_index}};
 }
 
 inline bytecode revert(bytecode index, bytecode size)
@@ -428,11 +291,6 @@ inline bytecode calldatasize()
 inline bytecode calldatacopy(bytecode dst, bytecode src, bytecode size)
 {
     return std::move(size) + std::move(src) + std::move(dst) + OP_CALLDATACOPY;
-}
-
-inline bytecode returndataload(bytecode index)
-{
-    return index + OP_RETURNDATALOAD;
 }
 
 inline bytecode returndatasize()
@@ -555,60 +413,6 @@ inline call_instruction<OP_CALLCODE> callcode(bytecode address)
 }
 
 template <Opcode kind>
-struct extcall_instruction
-{
-private:
-    bytecode m_address = 0;
-    bytecode m_value = 0;
-    bytecode m_input = 0;
-    bytecode m_input_size = 0;
-
-public:
-    explicit extcall_instruction(bytecode address) : m_address{std::move(address)} {}
-
-
-    template <Opcode k = kind>
-        requires(k == OP_EXTCALL)
-    extcall_instruction& value(bytecode v)
-    {
-        m_value = std::move(v);
-        return *this;
-    }
-
-    auto& input(bytecode index, bytecode size)
-    {
-        m_input = std::move(index);
-        m_input_size = std::move(size);
-        return *this;
-    }
-
-    operator bytecode() const
-    {
-        auto code = bytecode{};
-        if constexpr (kind == OP_EXTCALL)
-            code += m_value;
-        code += m_input_size + m_input + m_address + kind;
-        return code;
-    }
-};
-
-inline extcall_instruction<OP_EXTDELEGATECALL> extdelegatecall(bytecode address)
-{
-    return extcall_instruction<OP_EXTDELEGATECALL>{std::move(address)};
-}
-
-inline extcall_instruction<OP_EXTSTATICCALL> extstaticcall(bytecode address)
-{
-    return extcall_instruction<OP_EXTSTATICCALL>{std::move(address)};
-}
-
-inline extcall_instruction<OP_EXTCALL> extcall(bytecode address)
-{
-    return extcall_instruction<OP_EXTCALL>{std::move(address)};
-}
-
-
-template <Opcode kind>
 struct create_instruction
 {
 private:
@@ -634,26 +438,10 @@ public:
     }
 
     template <Opcode k = kind>
-        requires(k == OP_CREATE2 || k == OP_EOFCREATE || k == OP_TXCREATE)
+        requires(k == OP_CREATE2)
     create_instruction& salt(bytecode salt)
     {
         m_salt = std::move(salt);
-        return *this;
-    }
-
-    template <Opcode k = kind>
-        requires(k == OP_EOFCREATE)
-    create_instruction& container(uint8_t index)
-    {
-        m_container_index = index;
-        return *this;
-    }
-
-    template <Opcode k = kind>
-        requires(k == OP_TXCREATE)
-    create_instruction& initcode(bytecode hash)
-    {
-        m_initcode_hash = std::move(hash);
         return *this;
     }
 
@@ -664,14 +452,8 @@ public:
             code += m_input_size + m_input + m_value;
         else if constexpr (kind == OP_CREATE2)
             code += m_salt + m_input_size + m_input + m_value;
-        else if constexpr (kind == OP_EOFCREATE)
-            code += m_value + m_input_size + m_input + m_salt;
-        else if constexpr (kind == OP_TXCREATE)
-            code += m_value + m_input_size + m_input + m_salt + m_initcode_hash;
 
         code += bytecode{kind};
-        if constexpr (kind == OP_EOFCREATE)
-            code += bytecode{bytes{m_container_index}};  // immediate argument
         return code;
     }
 };
@@ -684,16 +466,6 @@ inline auto create()
 inline auto create2()
 {
     return create_instruction<OP_CREATE2>{};
-}
-
-inline auto eofcreate()
-{
-    return create_instruction<OP_EOFCREATE>{};
-}
-
-inline auto txcreate()
-{
-    return create_instruction<OP_TXCREATE>{};
 }
 
 inline std::string hex(Opcode opcode) noexcept
