@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "blob_schedule.hpp"
+#include "blob_params.hpp"
 #include "hash_utils.hpp"
 #include <intx/intx.hpp>
 #include <vector>

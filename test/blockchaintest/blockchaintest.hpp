@@ -7,6 +7,7 @@
 #include "../state/bloom_filter.hpp"
 #include "../state/test_state.hpp"
 #include "../state/transaction.hpp"
+#include "../utils/blob_schedule.hpp"
 #include "../utils/utils.hpp"
 #include <evmc/evmc.hpp>
 #include <span>
@@ -70,7 +71,7 @@ struct BlockchainTest
     TestState pre_state;
     RevisionSchedule rev;
     std::string network;
-    state::BlobSchedule blob_schedule;
+    BlobSchedule blob_schedule;
 
     Expectation expectation;
 };

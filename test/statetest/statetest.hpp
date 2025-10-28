@@ -7,6 +7,7 @@
 #include "../state/errors.hpp"
 #include "../state/test_state.hpp"
 #include "../state/transaction.hpp"
+#include "../utils/blob_schedule.hpp"
 #include <nlohmann/json.hpp>
 
 namespace json = nlohmann;
@@ -63,7 +64,7 @@ struct StateTransitionTest
     TestMultiTransaction multi_tx;
     std::vector<Case> cases;
     std::unordered_map<uint64_t, std::string> input_labels;
-    state::BlobSchedule blob_schedule;
+    BlobSchedule blob_schedule;
 };
 
 template <typename T>
@@ -109,7 +110,7 @@ template <>
 state::BlobParams from_json<state::BlobParams>(const json::json& j);
 
 template <>
-state::BlobSchedule from_json<state::BlobSchedule>(const json::json& j);
+BlobSchedule from_json<BlobSchedule>(const json::json& j);
 
 /// Exports the State (accounts) to JSON format (aka pre/post/alloc state).
 json::json to_json(const TestState& state);

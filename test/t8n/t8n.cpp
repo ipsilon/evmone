@@ -103,7 +103,7 @@ int main(int argc, const char* argv[])
         else
         {
             // Use hardcoded blob schedule if no blob config file is provided.
-            blob_params = state::get_blob_params(rev);
+            blob_params = get_blob_params(rev);
         }
 
         if (!alloc_file.empty())

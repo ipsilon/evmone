@@ -2,6 +2,7 @@
 // Copyright 2023 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "../utils/blob_schedule.hpp"
 #include "../utils/bytecode.hpp"
 #include "state_transition.hpp"
 
@@ -70,7 +71,7 @@ TEST_F(state_transition, eip7516_blob_base_fee)
     // 0x1d is the result of ref implementation in EIP-4844
     static constexpr auto price = 0x1d;
     block.blob_base_fee = price;
-    assert(state::compute_blob_gas_price(state::get_blob_params(rev), *block.excess_blob_gas) ==
+    assert(state::compute_blob_gas_price(get_blob_params(rev), *block.excess_blob_gas) ==
            *block.blob_base_fee);
 
     tx.to = To;

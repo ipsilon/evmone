@@ -179,9 +179,9 @@ state::BlobParams from_json<state::BlobParams>(const json::json& j)
 }
 
 template <>
-state::BlobSchedule from_json<state::BlobSchedule>(const json::json& j)
+BlobSchedule from_json<BlobSchedule>(const json::json& j)
 {
-    state::BlobSchedule blob_schedule;
+    BlobSchedule blob_schedule;
     assert(j.is_object());
     for (const auto& [name, jschedule] : j.items())
     {
@@ -530,12 +530,12 @@ static void from_json(const json::json& j_t, StateTransitionTest& o)
     if (const auto config_it = j_t.find("config"); config_it != j_t.end())
     {
         if (const auto bs_it = config_it->find("blobSchedule"); bs_it != config_it->end())
-            o.blob_schedule = from_json<state::BlobSchedule>(*bs_it);
+            o.blob_schedule = from_json<BlobSchedule>(*bs_it);
     }
 
     for (const auto& [rev_name, expectations] : j_t.at("post").items())
     {
-        const auto blob_params = state::get_blob_params(to_rev(rev_name), o.blob_schedule);
+        const auto blob_params = get_blob_params(to_rev(rev_name), o.blob_schedule);
         o.cases.emplace_back(to_rev(rev_name),
             expectations.get<std::vector<StateTransitionTest::Case::Expectation>>(),
             from_json_with_rev(j_t.at("env"), to_rev(rev_name), blob_params));

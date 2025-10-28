@@ -12,6 +12,8 @@ target_include_directories(testutils INTERFACE ${PROJECT_SOURCE_DIR} ${evmone_pr
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
     target_sources(
         testutils PRIVATE
+        blob_schedule.hpp
+        blob_schedule.cpp
         bytecode.hpp
         stdx/utility.hpp
         utils.hpp

@@ -2,7 +2,6 @@
 // Copyright 2023 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "../state/blob_schedule.hpp"
 #include "../statetest/statetest.hpp"
 #include "../utils/utils.hpp"
 #include "blockchaintest.hpp"
@@ -56,7 +55,7 @@ BlockHeader from_json<BlockHeader>(const json::json& j)
 }
 
 static TestBlock load_test_block(
-    const json::json& j, const std::string& network, const state::BlobSchedule& blob_schedule)
+    const json::json& j, const std::string& network, const BlobSchedule& blob_schedule)
 {
     using namespace state;
     TestBlock tb;

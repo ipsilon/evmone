@@ -6,6 +6,7 @@
 #include <test/state/errors.hpp>
 #include <test/state/state.hpp>
 #include <test/state/test_state.hpp>
+#include <test/utils/blob_schedule.hpp>
 #include <test/utils/utils.hpp>
 
 using namespace evmc::literals;

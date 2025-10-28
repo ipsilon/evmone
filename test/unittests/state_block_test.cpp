@@ -4,8 +4,10 @@
 
 #include <gtest/gtest.h>
 #include <test/state/state.hpp>
+#include <test/utils/blob_schedule.hpp>
 
 using namespace evmone::state;
+using namespace evmone::test;
 using namespace intx::literals;
 
 TEST(state_block, blob_gas_price)
