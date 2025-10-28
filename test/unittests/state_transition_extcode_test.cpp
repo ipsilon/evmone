@@ -8,26 +8,6 @@
 using namespace evmc::literals;
 using namespace evmone::test;
 
-namespace
-{
-/// A minimal valid EOF container doing nothing.
-const auto eof_code = bytecode(
-    //                                                  Code section: STOP
-    //               Header: 1 code section 1 byte long |
-    //               |                                  |
-    //    version    |                    Header terminator
-    //    |          |___________         |             |
-    "EF00 01 01 0004 02 0001 0001 FF 0000 00 00 80 0000 00"
-    //       |‾‾‾‾‾‾              |‾‾‾‾‾‾    |‾‾‾‾‾‾‾‾‾
-    //       |                    Header: data section 0 bytes long
-    //       |                               |
-    //       Header: types section 4 bytes long
-    //                                       |
-    //                                       Types section: first code section 0 inputs,
-    //                                       non-returning, max stack height 0
-);
-}  // namespace
-
 TEST_F(state_transition, extcodehash_existent)
 {
     rev = EVMC_ISTANBUL;  // before account access
@@ -56,49 +36,4 @@ TEST_F(state_transition, extcodesize_existent)
 
     expect.post[EXT].exists = true;
     expect.post[To].storage[0x00_bytes32] = 0x03_bytes32;
-}
-
-constexpr auto target = 0xfffffffffffffffffffffffffffffffffffffffe_address;
-
-TEST_F(state_transition, legacy_extcodesize_eof)
-{
-    pre[target] = {.code = eof_code};
-
-    rev = EVMC_EXPERIMENTAL;
-    tx.to = To;
-    pre[*tx.to] = {
-        .code = bytecode(push(target) + sstore(1, OP_EXTCODESIZE)),
-    };
-    expect.post[*tx.to].storage[0x01_bytes32] = 0x02_bytes32;
-    expect.post[target].exists = true;
-}
-
-TEST_F(state_transition, legacy_extcodehash_eof)
-{
-    pre[target] = {.code = eof_code};
-
-    rev = EVMC_EXPERIMENTAL;
-    tx.to = To;
-    pre[*tx.to] = {
-        .code = bytecode(push(target) + sstore(1, OP_EXTCODEHASH)),
-    };
-    expect.post[*tx.to].storage[0x01_bytes32] = keccak256(bytecode("EF00"));
-    expect.post[target].exists = true;
-}
-
-TEST_F(state_transition, legacy_extcodecopy_eof)
-{
-    constexpr auto ones =
-        0x1111111111111111111111111111111111111111111111111111111111111111_bytes32;
-    pre[target] = {.code = eof_code};
-
-    rev = EVMC_EXPERIMENTAL;
-    tx.to = To;
-    pre[*tx.to] = {
-        .code = bytecode(mstore(0, ones) + push(20) + push0() + push0() + push(target) +
-                         OP_EXTCODECOPY + sstore(1, mload(0))),
-    };
-    expect.post[*tx.to].storage[0x01_bytes32] =
-        0xef00000000000000000000000000000000000000111111111111111111111111_bytes32;
-    expect.post[target].exists = true;
 }
