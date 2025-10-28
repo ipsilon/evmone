@@ -162,23 +162,6 @@ TEST(statetest_loader, load_minimal_test)
     EXPECT_EQ(st.input_labels.size(), 0);
 }
 
-TEST(statetest_loader, validate_state_invalid_eof)
-{
-    TestState state{{0xadd4_address, {.code = "EF0001010000020001000103000100FEDA"_hex}}};
-    EXPECT_THAT([&] { validate_state(state, EVMC_EXPERIMENTAL); },
-        ThrowsMessage<std::invalid_argument>(
-            "EOF container at 0x000000000000000000000000000000000000add4 is invalid: "
-            "zero_section_size"));
-}
-
-TEST(statetest_loader, validate_state_unexpected_eof)
-{
-    TestState state{{0xadd4_address, {.code = "EF00"_hex}}};
-    EXPECT_THAT([&] { validate_state(state, EVMC_CANCUN); },
-        ThrowsMessage<std::invalid_argument>(
-            "unexpected code starting with 0xEF at 0x000000000000000000000000000000000000add4"));
-}
-
 TEST(statetest_loader, validate_state_zero_storage_slot)
 {
     TestState state{{0xadd4_address, {.storage = {{0x01_bytes32, 0x00_bytes32}}}}};
