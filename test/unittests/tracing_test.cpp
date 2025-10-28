@@ -300,19 +300,6 @@ TEST_F(tracing, trace_code_containing_zero)
     EXPECT_EQ(tracer.get_last_code().size(), code.size());
 }
 
-TEST_F(tracing, trace_eof)
-{
-    vm.add_tracer(evmone::create_instruction_tracer(trace_stream));
-
-    trace_stream << '\n';
-    EXPECT_EQ(trace(bytecode{eof_bytecode(add(2, 3) + OP_STOP, 2)}, 0, 0, EVMC_EXPERIMENTAL), R"(
-{"pc":0,"op":96,"gas":"0xf4240","gasCost":"0x3","memSize":0,"stack":[],"depth":1,"refund":0,"opName":"PUSH1"}
-{"pc":2,"op":96,"gas":"0xf423d","gasCost":"0x3","memSize":0,"stack":["0x3"],"depth":1,"refund":0,"opName":"PUSH1"}
-{"pc":4,"op":1,"gas":"0xf423a","gasCost":"0x3","memSize":0,"stack":["0x3","0x2"],"depth":1,"refund":0,"opName":"ADD"}
-{"pc":5,"op":0,"gas":"0xf4237","gasCost":"0x0","memSize":0,"stack":["0x5"],"depth":1,"refund":0,"opName":"STOP"}
-)");
-}
-
 TEST_F(tracing, trace_create_instruction)
 {
     using namespace evmc::literals;

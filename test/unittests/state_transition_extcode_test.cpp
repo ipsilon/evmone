@@ -8,6 +8,26 @@
 using namespace evmc::literals;
 using namespace evmone::test;
 
+namespace
+{
+/// A minimal valid EOF container doing nothing.
+const auto eof_code = bytecode(
+    //                                                  Code section: STOP
+    //               Header: 1 code section 1 byte long |
+    //               |                                  |
+    //    version    |                    Header terminator
+    //    |          |___________         |             |
+    "EF00 01 01 0004 02 0001 0001 FF 0000 00 00 80 0000 00"
+    //       |‾‾‾‾‾‾              |‾‾‾‾‾‾    |‾‾‾‾‾‾‾‾‾
+    //       |                    Header: data section 0 bytes long
+    //       |                               |
+    //       Header: types section 4 bytes long
+    //                                       |
+    //                                       Types section: first code section 0 inputs,
+    //                                       non-returning, max stack height 0
+);
+}  // namespace
+
 TEST_F(state_transition, extcodehash_existent)
 {
     rev = EVMC_ISTANBUL;  // before account access
@@ -42,7 +62,7 @@ constexpr auto target = 0xfffffffffffffffffffffffffffffffffffffffe_address;
 
 TEST_F(state_transition, legacy_extcodesize_eof)
 {
-    pre[target] = {.code = eof_bytecode("FE")};
+    pre[target] = {.code = eof_code};
 
     rev = EVMC_EXPERIMENTAL;
     tx.to = To;
@@ -55,7 +75,7 @@ TEST_F(state_transition, legacy_extcodesize_eof)
 
 TEST_F(state_transition, legacy_extcodehash_eof)
 {
-    pre[target] = {.code = eof_bytecode("FE")};
+    pre[target] = {.code = eof_code};
 
     rev = EVMC_EXPERIMENTAL;
     tx.to = To;
@@ -70,7 +90,7 @@ TEST_F(state_transition, legacy_extcodecopy_eof)
 {
     constexpr auto ones =
         0x1111111111111111111111111111111111111111111111111111111111111111_bytes32;
-    pre[target] = {.code = eof_bytecode("FE")};
+    pre[target] = {.code = eof_code};
 
     rev = EVMC_EXPERIMENTAL;
     tx.to = To;
