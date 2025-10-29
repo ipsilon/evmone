@@ -16,8 +16,7 @@ namespace evmone::state
 
 [[nodiscard]] bytes rlp_encode(const Transaction& tx)
 {
-    // There is no Transaction::Type 5 - reserved for Authorization List encoding in EIP-7702.
-    assert(tx.type <= Transaction::Type::initcodes && stdx::to_underlying(tx.type) != 5);
+    assert(tx.type <= Transaction::Type::set_code);
 
     // TODO: Refactor this function. For all type of transactions most of the code is similar.
     if (tx.type == Transaction::Type::legacy)
@@ -58,8 +57,9 @@ namespace evmone::state
                    tx.to.has_value() ? tx.to.value() : bytes_view(), tx.value, tx.data,
                    tx.access_list, tx.max_blob_gas_price, tx.blob_hashes, tx.v, tx.r, tx.s);
     }
-    else if (tx.type == Transaction::Type::set_code)
+    else
     {
+        assert(tx.type == Transaction::Type::set_code);
         // tx_type +
         // rlp [chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, to, value,
         // data, access_list, authorization_list, sig_parity, r, s];
@@ -68,17 +68,6 @@ namespace evmone::state
                    static_cast<uint64_t>(tx.gas_limit),
                    tx.to.has_value() ? tx.to.value() : bytes_view(), tx.value, tx.data,
                    tx.access_list, tx.authorization_list, tx.v, tx.r, tx.s);
-    }
-    else  // Transaction::Type::initcodes
-    {
-        // tx_type +
-        // rlp [chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, to, value,
-        // data, access_list, initcodes, sig_parity, r, s];
-        return bytes{0x06} +  // Transaction type (initcodes type == 6)
-               rlp::encode_tuple(tx.chain_id, tx.nonce, tx.max_priority_gas_price, tx.max_gas_price,
-                   static_cast<uint64_t>(tx.gas_limit),
-                   tx.to.has_value() ? tx.to.value() : bytes_view(), tx.value, tx.data,
-                   tx.access_list, tx.initcodes, tx.v, tx.r, tx.s);
     }
 }
 

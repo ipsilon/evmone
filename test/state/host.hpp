@@ -43,22 +43,12 @@ class Host : public evmc::Host
     const BlockHashes& m_block_hashes;
     const Transaction& m_tx;
     std::vector<Log> m_logs;
-    std::vector<evmc_tx_initcode> m_tx_initcodes;
 
 public:
     Host(evmc_revision rev, evmc::VM& vm, State& state, const BlockInfo& block,
         const BlockHashes& block_hashes, const Transaction& tx) noexcept
       : m_rev{rev}, m_vm{vm}, m_state{state}, m_block{block}, m_block_hashes{block_hashes}, m_tx{tx}
-    {
-        if (tx.type == Transaction::Type::initcodes)
-        {
-            for (const auto& initcode : tx.initcodes)
-            {
-                const auto hash = keccak256({initcode.data(), initcode.size()});
-                m_tx_initcodes.push_back({hash, initcode.data(), initcode.size()});
-            }
-        }
-    }
+    {}
 
     [[nodiscard]] std::vector<Log>&& take_logs() noexcept { return std::move(m_logs); }
 

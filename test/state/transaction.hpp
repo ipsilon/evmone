@@ -58,10 +58,6 @@ struct Transaction
         /// The typed set code transaction (with authorization list).
         /// Introduced by EIP-7702 https://eips.ethereum.org/EIPS/eip-7702.
         set_code = 4,
-
-        /// The typed transaction with initcode list.
-        /// Introduced by EIP-7873 https://eips.ethereum.org/EIPS/eip-7873.
-        initcodes = 6,
     };
 
     /// Returns amount of blob gas used by this transaction
@@ -84,7 +80,6 @@ struct Transaction
     intx::uint256 s;
     uint8_t v = 0;
     AuthorizationList authorization_list;
-    std::vector<bytes> initcodes;
 };
 
 /// Transaction properties computed during the validation needed for the execution.

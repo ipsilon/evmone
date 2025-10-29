@@ -136,13 +136,6 @@ json::json to_state_test(std::string_view test_name, const state::BlockInfo& blo
         jtx["gasPrice"] = hex0x(tx.max_gas_price);
     }
 
-    if (tx.type == Transaction::Type::initcodes)
-    {
-        auto& jinitcodes = jtx["initcodes"] = json::json::array();
-        for (const auto& initcode : tx.initcodes)
-            jinitcodes.emplace_back(hex0x(initcode));
-    }
-
     jtx["data"][0] = hex0x(tx.data);
     jtx["gasLimit"][0] = hex0x(tx.gas_limit);
     jtx["value"][0] = hex0x(tx.value);

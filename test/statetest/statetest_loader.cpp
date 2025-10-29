@@ -417,12 +417,6 @@ static void from_json_tx_common(const json::json& j, state::Transaction& o)
         o.type = state::Transaction::Type::set_code;
         o.authorization_list = from_json<state::AuthorizationList>(*au_it);
     }
-    else if (const auto it_initcodes = j.find("initcodes"); it_initcodes != j.end())
-    {
-        o.type = state::Transaction::Type::initcodes;
-        for (const auto& initcode : *it_initcodes)
-            o.initcodes.push_back(from_json<bytes>(initcode));
-    }
 }
 
 template <>
