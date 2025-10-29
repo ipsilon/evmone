@@ -1,24 +1,33 @@
 # Cable: CMake Bootstrap Library <https://github.com/ethereum/cable>
-# Copyright 2018-2020 Pawel Bylica.
+# Copyright 2018 Pawel Bylica.
 # Licensed under the Apache License, Version 2.0.
 
-# Cable Compiler Settings, version 1.0.1
+# Cable Compiler Settings, version 1.2.0
 #
 # This CMake module provides default configuration (with some options)
 # for C/C++ compilers. Use cable_configure_compiler().
 #
 # CHANGELOG
 #
+# 1.2.0 - 2023-02-24
+# - Do not set -Werror nor /WX. This has been standardized in CMake 3.24 as CMAKE_COMPILE_WARNING_AS_ERROR.
+# - Keep compiler warnings about unknown pragmas.
+# - Keep MSVC warning C5030: attribute is not recognized. It should be disabled in source code.
+# - Do not try to erase MSVC default warning level /W3. This is not set since CMake 3.15 (CMP0092).
+# - Drop explicit -Wimplicit-fallthrough. It is a part of -Wextra.
+# - Use PROJECT_IS_TOP_LEVEL if available (or define it).
+#
+# 1.1.0 - 2020-06-20
+# - Allow unknown C++ attributes in MSVC compiler.
+# - Option -DEXCEPTIONS=OFF to disable C++ exceptions support (GCC, clang).
+# - Option -DRTTI=OFF to disable RTTI support (GCC, clang).
+#
 # 1.0.1 - 2020-01-30
 # - Do not explicitly set -mtune=generic, this is default anyway.
 #
 # 1.0.0 - 2019-12-20
 
-if(cable_compiler_settings_included)
-    return()
-endif()
-set(cable_compiler_settings_included TRUE)
-
+include_guard()
 include(CheckCXXCompilerFlag)
 
 # Adds CXX compiler flag if the flag is supported by the compiler.
@@ -50,15 +59,13 @@ macro(cable_configure_compiler)
         message(FATAL_ERROR "cable_configure_compiler() must be used after project()")
     endif()
 
-    # Determine if this is the main or a subproject. Leave this variable available for later use.
-    if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
-        set(PROJECT_IS_MAIN TRUE)
-    else()
-        set(PROJECT_IS_MAIN FALSE)
+    if(NOT DEFINED PROJECT_IS_TOP_LEVEL)
+        # Define PROJECT_IS_TOP_LEVEL (since CMake 3.21) if not available.
+        string(COMPARE EQUAL ${CMAKE_SOURCE_DIR} ${PROJECT_SOURCE_DIR} PROJECT_IS_TOP_LEVEL)
     endif()
 
-    if(PROJECT_IS_MAIN)
-        # Do this configuration only in the main project.
+    if(PROJECT_IS_TOP_LEVEL)
+        # Do this configuration only in the top level project.
 
         cmake_parse_arguments(cable "NO_CONVERSION_WARNINGS;NO_STACK_PROTECTION;NO_PEDANTIC" "" "" ${ARGN})
 
@@ -84,16 +91,13 @@ macro(cable_configure_compiler)
                 add_compile_options(-Wpedantic)
             endif()
 
-            # Enable basing warnings set and treat them as errors.
-            add_compile_options(-Werror -Wall -Wextra -Wshadow)
+            # Enable basic warnings.
+            add_compile_options(-Wall -Wextra -Wshadow)
 
             if(NOT cable_NO_CONVERSION_WARNINGS)
                 # Enable conversion warnings if not explicitly disabled.
                 add_compile_options(-Wconversion -Wsign-conversion)
             endif()
-
-            # Allow unknown pragmas, we don't want to wrap them with #ifdefs.
-            add_compile_options(-Wno-unknown-pragmas)
 
             # Stack protection.
             check_cxx_compiler_flag(-fstack-protector fstack-protector)
@@ -113,20 +117,21 @@ macro(cable_configure_compiler)
                 endif()
             endif()
 
-            cable_add_cxx_compiler_flag_if_supported(-Wimplicit-fallthrough)
-
         elseif(MSVC)
 
-            # Get rid of default warning level.
-            string(REPLACE " /W3" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-            string(REPLACE " /W3" "" CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+            # Enable basic warnings.
+            add_compile_options(/W4)
 
-            # Enable basing warnings set and treat them as errors.
-            add_compile_options(/W4 /WX)
+        endif()
 
-            # Allow unknown pragmas, we don't want to wrap them with #ifdefs.
-            add_compile_options(/wd4068)
+        option(EXCEPTIONS "Build with exceptions support" ON)
+        if(NOT EXCEPTIONS)
+            add_compile_options(-fno-exceptions)
+        endif()
 
+        option(RTTI "Build with RTTI support" ON)
+        if(NOT RTTI)
+            add_compile_options(-fno-rtti)
         endif()
 
         # Option for arch=native.
@@ -158,6 +163,13 @@ macro(cable_configure_compiler)
                 cable_add_cxx_compiler_flag_if_supported(-fsanitize-blacklist=${blacklist_file})
             endif()
             unset(blacklist_file)
+        endif()
+
+        # The "Coverage" build type.
+        if(CABLE_COMPILER_CLANG)
+            set(CMAKE_CXX_FLAGS_COVERAGE "-fprofile-instr-generate -fcoverage-mapping")
+        elseif(CABLE_COMPILER_GNU)
+            set(CMAKE_CXX_FLAGS_COVERAGE "--coverage")
         endif()
     endif()
 endmacro()

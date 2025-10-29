@@ -183,7 +183,7 @@ commands:
             if [ "$TOOLCHAIN" ]; then
               export toolchain_option="-DTOOLCHAIN=$TOOLCHAIN"
             fi
-            cmake ../project $toolchain_option -DCMAKE_INSTALL_PREFIX=~/install -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DEVMONE_TESTING=ON $CMAKE_OPTIONS
+            cmake ../project $toolchain_option -DCMAKE_INSTALL_PREFIX=~/install -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_COMPILE_WARNING_AS_ERROR=TRUE -DEVMONE_TESTING=ON $CMAKE_OPTIONS
       - save_cache:
           name: "Save Hunter cache"
           key: *hunter-cache-key
