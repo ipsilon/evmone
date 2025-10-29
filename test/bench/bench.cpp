@@ -61,7 +61,7 @@ BenchmarkCase load_benchmark(const fs::path& path, const std::string& name_prefi
     auto state_test = std::move(load_state_tests(f).at(0));
 
     const auto name = name_prefix + path.stem().string();
-    const auto code = state_test.pre_state.get(state_test.multi_tx.to.value()).code;
+    const auto code = state_test.pre_state[state_test.multi_tx.to.value()].code;
     const auto inputs = load_inputs(state_test);
 
     return BenchmarkCase{name, code, inputs};

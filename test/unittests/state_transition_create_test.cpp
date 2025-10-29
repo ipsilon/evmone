@@ -19,7 +19,7 @@ TEST_F(state_transition, create2_factory)
     pre[*tx.to] = {.nonce = 1, .code = factory_code};
 
     const auto create_address = compute_create2_address(*tx.to, {}, initcode);
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;  // CREATE caller's nonce must be bumped
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce + 1;  // CREATE caller's nonce must be bumped
     expect.post[create_address].code = bytes{0xFE};
 }
 
@@ -27,8 +27,7 @@ TEST_F(state_transition, create_tx_empty)
 {
     // The default transaction without "to" address is a create transaction.
 
-    expect.post[compute_create_address(Sender, pre.get(Sender).nonce)] = {
-        .nonce = 1, .code = bytes{}};
+    expect.post[compute_create_address(Sender, pre[Sender].nonce)] = {.nonce = 1, .code = bytes{}};
 
     // Example of checking the expected the post state MPT root hash.
     expect.state_hash = 0x8ae438f7a4a14dbc25410dfaa12e95e7b36f311ab904b4358c3b544e06df4c50_bytes32;
@@ -38,7 +37,7 @@ TEST_F(state_transition, create_tx)
 {
     tx.data = mstore8(0, push(0xFE)) + ret(0, 1);
 
-    const auto create_address = compute_create_address(Sender, pre.get(Sender).nonce);
+    const auto create_address = compute_create_address(Sender, pre[Sender].nonce);
     expect.post[create_address].code = bytes{0xFE};
 }
 
@@ -57,7 +56,7 @@ TEST_F(state_transition, create2_max_nonce)
     tx.to = To;
     pre[*tx.to] = {.nonce = ~uint64_t{0}, .code = create2()};
 
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;  // Nonce is unchanged.
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce;  // Nonce is unchanged.
 }
 
 TEST_F(state_transition, code_deployment_out_of_gas_tw)
@@ -87,7 +86,7 @@ TEST_F(state_transition, code_deployment_out_of_gas_f)
     pre[To] = {.code = mstore(0, push(initcode)) +
                        sstore(0, create().input(32 - initcode.size(), initcode.size()))};
 
-    const auto created = compute_create_address(To, pre.get(To).nonce);
+    const auto created = compute_create_address(To, pre[To].nonce);
     expect.post[created].code = bytes{};  // code deployment failure creates empty account
     expect.post[created].nonce = 0;
     expect.post[To].storage[0x00_bytes32] = to_bytes32(created);  // address of created empty
@@ -123,7 +122,7 @@ TEST_F(state_transition, code_deployment_out_of_gas_storage_f)
                        sstore(0, create().input(32 - initcode.size(), initcode.size()))};
 
     expect.post[To].exists = true;
-    const auto created = compute_create_address(To, pre.get(To).nonce);
+    const auto created = compute_create_address(To, pre[To].nonce);
     expect.post[created].code = bytes{};  // code deployment failure creates empty account
     expect.post[created].nonce = 0;
     expect.post[created].storage[0x00_bytes32] = 0x01_bytes32;  // storage stays
@@ -164,7 +163,7 @@ TEST_F(state_transition, code_deployment_out_of_gas_refund_f)
                        sstore(0, create().input(32 - initcode.size(), initcode.size()))};
 
     expect.post[To].exists = true;
-    const auto created = compute_create_address(To, pre.get(To).nonce);
+    const auto created = compute_create_address(To, pre[To].nonce);
     expect.post[created].code = bytes{};  // code deployment failure creates empty account
     expect.post[created].nonce = 0;
     expect.post[created].storage[0x00_bytes32] = 0x00_bytes32;
@@ -202,8 +201,8 @@ TEST_F(state_transition, create_collision)
     pre[*tx.to] = {.code = create()};
     pre[CREATED] = {.nonce = 2};
 
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
-    expect.post[CREATED].nonce = pre.get(CREATED).nonce;
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce + 1;
+    expect.post[CREATED].nonce = pre[CREATED].nonce;
 }
 
 TEST_F(state_transition, create_collision_storage)
@@ -230,8 +229,8 @@ TEST_F(state_transition, create_collision_revert)
     pre[CREATED] = {.nonce = 2};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
-    expect.post[CREATED].nonce = pre.get(CREATED).nonce;
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce;
+    expect.post[CREATED].nonce = pre[CREATED].nonce;
 }
 
 TEST_F(state_transition, create_prefunded_revert)
@@ -243,8 +242,8 @@ TEST_F(state_transition, create_prefunded_revert)
     pre[CREATED] = {.balance = 2};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
-    expect.post[CREATED].nonce = pre.get(CREATED).nonce;
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce;
+    expect.post[CREATED].nonce = pre[CREATED].nonce;
 }
 
 TEST_F(state_transition, create_revert)
@@ -255,7 +254,7 @@ TEST_F(state_transition, create_revert)
     pre[*tx.to] = {.code = create() + OP_INVALID};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce;
     expect.post[CREATED].exists = false;
 }
 
@@ -270,7 +269,7 @@ TEST_F(state_transition, create_revert_sd)
     pre[*tx.to] = {.code = create() + OP_INVALID};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce;
     expect.post[CREATED].exists = false;
 }
 
@@ -285,7 +284,7 @@ TEST_F(state_transition, create_revert_tw)
     pre[*tx.to] = {.code = create() + OP_INVALID};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce;
     expect.post[CREATED].exists = false;
 }
 
@@ -298,7 +297,7 @@ TEST_F(state_transition, create_collision_empty_revert)
     pre[CREATED] = {};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce;
     expect.post[CREATED].exists = true;
 }
 
@@ -314,7 +313,7 @@ TEST_F(state_transition, create_collision_empty_revert_tw)
     pre[CREATED] = {};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce;
     expect.post[CREATED].exists = true;
 }
 
@@ -327,7 +326,7 @@ TEST_F(state_transition, touch_create_collision_empty_revert)
     pre[*tx.to] = {.code = call(CREATED) + call(REVERT_PROXY).gas(0xffff)};
     pre[REVERT_PROXY] = {.code = create() + OP_INVALID};
 
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce;
     expect.post[CREATED].exists = false;
     expect.post[REVERT_PROXY].exists = true;
 }
@@ -344,7 +343,7 @@ TEST_F(state_transition, touch_create_collision_empty_revert_tw)
     pre[*tx.to] = {.code = call(CREATED) + call(REVERT_PROXY).gas(0xffff)};
     pre[REVERT_PROXY] = {.code = create() + OP_INVALID};
 
-    expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
+    expect.post[*tx.to].nonce = pre[*tx.to].nonce;
     expect.post[CREATED].exists = true;
     expect.post[REVERT_PROXY].exists = true;
 }
@@ -359,7 +358,7 @@ TEST_F(state_transition, created_code_hash)
                        create().input(32 - initcode.size(), initcode.size()) +
                        sstore(0, bytecode{OP_EXTCODEHASH})};
 
-    const auto created = compute_create_address(To, pre.get(To).nonce);
+    const auto created = compute_create_address(To, pre[To].nonce);
     expect.post[created].code = runtime_code;
     expect.post[To].storage[0x00_bytes32] = keccak256(runtime_code);
 }

@@ -55,13 +55,6 @@ public:
     bytes get_account_code(const address& addr) const noexcept override;
     bytes32 get_storage(const address& addr, const bytes32& key) const noexcept override;
 
-    /// Gets the reference to an existing account.
-    ///
-    /// This method is for compatibility with state::State::get().
-    /// Don't use it in new tests, use std::map interface instead.
-    /// TODO: deprecate this method.
-    TestAccount& get(const address& addr) { return (*this)[addr]; }
-
     /// Apply the state changes.
     void apply(const state::StateDiff& diff);
 };

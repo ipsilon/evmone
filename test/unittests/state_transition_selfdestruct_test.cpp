@@ -42,7 +42,7 @@ TEST_F(state_transition, selfdestruct_same_tx_cancun)
     rev = EVMC_CANCUN;
     tx.value = 0x4e;
     tx.data = selfdestruct(0xbe_address);
-    pre.get(Sender).balance += 0x4e;
+    pre[Sender].balance += 0x4e;
 
     expect.post[0xbe_address].balance = 0x4e;
 }
@@ -133,7 +133,7 @@ TEST_F(state_transition, massdestruct_shanghai)
     tx.gas_limit = 30'000'000;
     block.gas_limit = tx.gas_limit;
 
-    pre.get(tx.sender).balance = tx.gas_limit * tx.max_gas_price;
+    pre[tx.sender].balance = tx.gas_limit * tx.max_gas_price;
     pre[*tx.to] = {.code = driver_code};
     expect.post[*tx.to].exists = true;
 
@@ -163,7 +163,7 @@ TEST_F(state_transition, massdestruct_cancun)
     tx.gas_limit = 30'000'000;
     block.gas_limit = tx.gas_limit;
 
-    pre.get(tx.sender).balance = tx.gas_limit * tx.max_gas_price;
+    pre[tx.sender].balance = tx.gas_limit * tx.max_gas_price;
     pre[*tx.to] = {.code = driver_code};
     expect.post[*tx.to].exists = true;
 

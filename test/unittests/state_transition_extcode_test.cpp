@@ -20,7 +20,7 @@ TEST_F(state_transition, extcodehash_existent)
     pre[EXT] = {.code = bytecode{"1234"}};
 
     expect.post[EXT].exists = true;
-    expect.post[To].storage[0x00_bytes32] = keccak256(pre.get(EXT).code);
+    expect.post[To].storage[0x00_bytes32] = keccak256(pre[EXT].code);
 }
 
 TEST_F(state_transition, extcodesize_existent)
