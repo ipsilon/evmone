@@ -126,9 +126,7 @@ json::json to_state_test(std::string_view test_name, const state::BlockInfo& blo
 
 std::vector<StateTransitionTest> load_state_tests(std::istream& input);
 
-/// Validates an Ethereum state:
-/// - checks that there are no zero-value storage entries,
-/// - checks that there are no invalid EOF codes.
+/// Validates the invariants of the Ethereum state (e.g. no zero-value storage entries).
 /// Throws std::invalid_argument exception.
 void validate_state(const TestState& state, evmc_revision rev);
 
