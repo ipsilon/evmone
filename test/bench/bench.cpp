@@ -2,13 +2,13 @@
 // Copyright 2019 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "../statetest/statetest.hpp"
 #include "helpers.hpp"
 #include "synthetic_benchmarks.hpp"
 #include <benchmark/benchmark.h>
 #include <evmc/evmc.hpp>
-#include <evmc/loader.h>
 #include <evmone/evmone.h>
+#include <gtest/gtest.h>
+#include <test/statetest/statetest.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -26,45 +26,27 @@ namespace
 {
 struct BenchmarkCase
 {
-    struct Input
-    {
-        std::string name;
-        bytes input;
-        bytes expected_output;
-
-        Input(std::string _name, bytes _input, bytes _expected_output = {}) noexcept
-          : name{std::move(_name)},
-            input{std::move(_input)},
-            expected_output{std::move(_expected_output)}
-        {}
-    };
-
+    StateTransitionTest state_test;
     std::string name;
-    bytes code;
-    std::vector<Input> inputs;
 };
 
-/// Loads the benchmark case's inputs from the inputs file at the given path.
-std::vector<BenchmarkCase::Input> load_inputs(const StateTransitionTest& state_test)
-{
-    std::vector<BenchmarkCase::Input> inputs;
-    inputs.reserve(state_test.multi_tx.inputs.size());
-    for (size_t i = 0; i < state_test.multi_tx.inputs.size(); ++i)
-        inputs.emplace_back(state_test.input_labels.at(i), state_test.multi_tx.inputs[i]);
-    return inputs;
-}
-
 /// Loads a benchmark case from a file at `path` and all its inputs from the matching inputs file.
-BenchmarkCase load_benchmark(const fs::path& path, const std::string& name_prefix)
+std::vector<BenchmarkCase> load_benchmark(const fs::path& path, const std::string& name_prefix)
 {
     std::ifstream f{path};
-    auto state_test = std::move(load_state_tests(f).at(0));
+    std::vector<BenchmarkCase> result;
 
-    const auto name = name_prefix + path.stem().string();
-    const auto code = state_test.pre_state.get(state_test.multi_tx.to.value()).code;
-    const auto inputs = load_inputs(state_test);
+    auto state_tests = load_state_tests(f);
+    result.reserve(state_tests.size());
+    for (const auto& state_test : state_tests)
+    {
+        // If a file has a single test, skip its name.
+        auto name = name_prefix + path.stem().string() +
+                    (state_tests.size() > 1 ? "/" + state_test.name : "");
+        result.emplace_back(BenchmarkCase{state_test, std::move(name)});
+    }
 
-    return BenchmarkCase{name, code, inputs};
+    return result;
 }
 
 /// Loads all benchmark cases from the given directory and all its subdirectories.
@@ -72,24 +54,27 @@ std::vector<BenchmarkCase> load_benchmarks_from_dir(  // NOLINT(misc-no-recursio
     const fs::path& path, const std::string& name_prefix = {})
 {
     std::vector<fs::path> subdirs;
-    std::vector<fs::path> code_files;
+    std::vector<fs::path> files;
 
     for (auto& e : fs::directory_iterator{path})
     {
         if (e.is_directory())
             subdirs.emplace_back(e);
         else if (e.path().extension() == ".json")
-            code_files.emplace_back(e);
+            files.emplace_back(e);
     }
 
     std::ranges::sort(subdirs);
-    std::ranges::sort(code_files);
+    std::ranges::sort(files);
 
     std::vector<BenchmarkCase> benchmark_cases;
 
-    benchmark_cases.reserve(std::size(code_files));
-    for (const auto& f : code_files)
-        benchmark_cases.emplace_back(load_benchmark(f, name_prefix));
+    for (const auto& f : files)
+    {
+        auto t = load_benchmark(f, name_prefix);
+        benchmark_cases.insert(benchmark_cases.end(), std::make_move_iterator(t.begin()),
+            std::make_move_iterator(t.end()));
+    }
 
     for (const auto& d : subdirs)
     {
@@ -105,66 +90,75 @@ void register_benchmarks(std::span<const BenchmarkCase> benchmark_cases)
 {
     evmc::VM* advanced_vm = nullptr;
     evmc::VM* baseline_vm = nullptr;
-    evmc::VM* basel_cg_vm = nullptr;
     if (const auto it = registered_vms.find("advanced"); it != registered_vms.end())
         advanced_vm = &it->second;
     if (const auto it = registered_vms.find("baseline"); it != registered_vms.end())
         baseline_vm = &it->second;
-    if (const auto it = registered_vms.find("bnocgoto"); it != registered_vms.end())
-        basel_cg_vm = &it->second;
+
+    evmc::VM check_test_vm = evmc::VM{evmc_create_evmone()};
 
     for (const auto& b : benchmark_cases)
     {
-        if (advanced_vm != nullptr)
-        {
-            RegisterBenchmark("advanced/analyse/" + b.name, [&b](State& state) {
-                bench_analyse<advanced::AdvancedCodeAnalysis, advanced_analyse>(
-                    state, default_revision, b.code);
-            })->Unit(kMicrosecond);
-        }
+        run_state_test(b.state_test, check_test_vm, false);
 
-        if (baseline_vm != nullptr)
-        {
-            RegisterBenchmark("baseline/analyse/" + b.name, [&b](State& state) {
-                bench_analyse<baseline::CodeAnalysis, baseline_analyse>(
-                    state, default_revision, b.code);
-            })->Unit(kMicrosecond);
-        }
+        if (::testing::Test::HasFailure())
+            throw std::invalid_argument{"State test you want to bench failed."};
 
-        for (const auto& input : b.inputs)
+        const auto code = b.state_test.pre_state.get_account_code(b.state_test.multi_tx.to.value());
+        for (const auto& [rev, cases, block_info] : b.state_test.cases)
         {
-            const auto case_name = b.name + (!input.name.empty() ? '/' + input.name : "");
-
             if (advanced_vm != nullptr)
             {
-                const auto name = "advanced/execute/" + case_name;
-                RegisterBenchmark(name, [&vm = *advanced_vm, &b, &input](State& state) {
-                    bench_advanced_execute(state, vm, b.code, input.input, input.expected_output);
+                RegisterBenchmark("advanced/analyse/" + b.name, [code, &rev](State& state) {
+                    bench_analyse<advanced::AdvancedCodeAnalysis, advanced_analyse>(
+                        state, rev, code);
                 })->Unit(kMicrosecond);
             }
 
             if (baseline_vm != nullptr)
             {
-                const auto name = "baseline/execute/" + case_name;
-                RegisterBenchmark(name, [&vm = *baseline_vm, &b, &input](State& state) {
-                    bench_baseline_execute(state, vm, b.code, input.input, input.expected_output);
+                RegisterBenchmark("baseline/analyse/" + b.name, [code, &rev](State& state) {
+                    bench_analyse<baseline::CodeAnalysis, baseline_analyse>(state, rev, code);
                 })->Unit(kMicrosecond);
             }
 
-            if (basel_cg_vm != nullptr)
+            for (size_t case_index = 0; case_index != cases.size(); ++case_index)
             {
-                const auto name = "bnocgoto/execute/" + case_name;
-                RegisterBenchmark(name, [&vm = *basel_cg_vm, &b, &input](State& state) {
-                    bench_baseline_execute(state, vm, b.code, input.input, input.expected_output);
-                })->Unit(kMicrosecond);
-            }
+                const auto& expected = cases[case_index];
+                const auto tx = b.state_test.multi_tx.get(expected.indexes);
 
-            for (auto& [vm_name, vm] : registered_vms)
-            {
-                const auto name = std::string{vm_name} + "/total/" + case_name;
-                RegisterBenchmark(name, [&vm, &b, &input](State& state) {
-                    bench_evmc_execute(state, vm, b.code, input.input, input.expected_output);
-                })->Unit(kMicrosecond);
+                std::string case_name;
+                if (const auto it = b.state_test.input_labels.find(case_index);
+                    it != b.state_test.input_labels.end())
+                {
+                    case_name = it->second;
+                }
+                else
+                    case_name = std::to_string(case_index);
+
+
+                for (auto& [vm_name, vm] : registered_vms)
+                {
+                    const auto name = std::string{vm_name} + "/execute/" + b.name + '/' + case_name;
+
+                    const auto tx_props_or_error = state::validate_transaction(
+                        b.state_test.pre_state, block_info, tx, rev, block_info.gas_limit,
+                        static_cast<int64_t>(state::max_blob_gas_per_block(rev)));
+                    if (const auto err = get_if<std::error_code>(&tx_props_or_error))
+                    {
+                        throw std::invalid_argument{
+                            "Transaction validation failure: " + err->message()};
+                    }
+
+                    const auto tx_props = get<state::TransactionProperties>(tx_props_or_error);
+
+                    // `tx` and `tx_props` are temporary.
+                    RegisterBenchmark(name, [tx, tx_props, &vm, &b, &block_info, &rev](
+                                                State& state) {
+                        bench_transition(state, vm, tx, tx_props, b.state_test.pre_state,
+                            block_info, b.state_test.block_hashes, rev);
+                    })->Unit(kMicrosecond);
+                }
             }
         }
     }
@@ -181,22 +175,13 @@ constexpr auto cli_parsing_error = -3;
 ///
 /// 1: evmone-bench
 ///    Uses evmone VMs, only synthetic benchmarks are available.
-/// 2: evmone-bench benchmarks_dir
-///    Uses evmone VMs, loads all benchmarks from benchmarks_dir.
-/// 3: evmone-bench evmc_config benchmarks_dir
-///    The same as (2) but loads additional custom EVMC VM.
-/// 4: evmone-bench code_hex_file input_hex expected_output_hex.
-///    Uses evmone VMs, registers custom benchmark with the code from the given file,
-///    and the given input. The benchmark will compare the output with the provided
-///    expected one.
-std::tuple<int, std::vector<BenchmarkCase>> parseargs(int argc, char** argv)
+/// 2: evmone-bench benchmarks_path
+///    Uses evmone VMs, loads all benchmarks from benchmarks_path. If benchmarks_path is a `json`
+///    file, single test is run.
+std::variant<int, std::vector<BenchmarkCase>> parseargs(int argc, char** argv)
 {
-    // Arguments' placeholders:
-    std::string evmc_config;
-    std::string benchmarks_dir;
-    std::string code_hex_file;
-    std::string input_hex;
-    std::string expected_output_hex;
+    // Argument's placeholder:
+    std::string benchmarks_path;
 
     switch (argc)
     {
@@ -204,56 +189,21 @@ std::tuple<int, std::vector<BenchmarkCase>> parseargs(int argc, char** argv)
         // Run with built-in synthetic benchmarks only.
         break;
     case 2:
-        benchmarks_dir = argv[1];
-        break;
-    case 3:
-        evmc_config = argv[1];
-        benchmarks_dir = argv[2];
-        break;
-    case 4:
-        code_hex_file = argv[1];
-        input_hex = argv[2];
-        expected_output_hex = argv[3];
+        benchmarks_path = argv[1];
         break;
     default:
-        std::cerr << "Too many arguments\n";
-        return {cli_parsing_error, {}};
+        return cli_parsing_error;
     }
 
-    if (!evmc_config.empty())
+    if (!benchmarks_path.empty())
     {
-        auto ec = evmc_loader_error_code{};
-        registered_vms["external"] = evmc::VM{evmc_load_and_configure(evmc_config.c_str(), &ec)};
-
-        if (ec != EVMC_LOADER_SUCCESS)
-        {
-            if (const auto error = evmc_last_error_msg())
-                std::cerr << "EVMC loading error: " << error << "\n";
-            else
-                std::cerr << "EVMC loading error " << ec << "\n";
-            return {static_cast<int>(ec), {}};
-        }
-
-        std::cout << "External VM: " << evmc_config << "\n";
+        if (fs::is_directory(benchmarks_path))
+            return load_benchmarks_from_dir(benchmarks_path);
+        else
+            return load_benchmark(benchmarks_path, {});
     }
 
-    if (!benchmarks_dir.empty())
-    {
-        return {0, load_benchmarks_from_dir(benchmarks_dir)};
-    }
-
-    if (!code_hex_file.empty())
-    {
-        std::ifstream file{code_hex_file};
-        return {0, {BenchmarkCase{code_hex_file,
-                       from_spaced_hex(
-                           std::istreambuf_iterator<char>{file}, std::istreambuf_iterator<char>{})
-                           .value(),
-                       {BenchmarkCase::Input{"", from_hex(input_hex).value(),
-                           from_hex(expected_output_hex).value()}}}}};
-    }
-
-    return {0, {}};
+    return std::vector<BenchmarkCase>{};
 }
 }  // namespace
 }  // namespace evmone::test
@@ -266,20 +216,28 @@ int main(int argc, char** argv)
     try
     {
         Initialize(&argc, argv);  // Consumes --benchmark_ options.
-        const auto [ec, benchmark_cases] = parseargs(argc, argv);
-        if (ec == cli_parsing_error && ReportUnrecognizedArguments(argc, argv))
-            return ec;
+        const auto ec_or_benchmark_cases = parseargs(argc, argv);
+        if (std::holds_alternative<int>(ec_or_benchmark_cases))
+        {
+            const auto ec = std::get<int>(ec_or_benchmark_cases);
+            if (ec == cli_parsing_error && ReportUnrecognizedArguments(argc, argv))
+                return ec;
 
-        if (ec != 0)
-            return ec;
-
-        registered_vms["advanced"] = evmc::VM{evmc_create_evmone(), {{"advanced", ""}}};
-        registered_vms["baseline"] = evmc::VM{evmc_create_evmone()};
-        registered_vms["bnocgoto"] = evmc::VM{evmc_create_evmone(), {{"cgoto", "no"}}};
-        register_benchmarks(benchmark_cases);
-        register_synthetic_benchmarks();
-        RunSpecifiedBenchmarks();
-        return 0;
+            if (ec != 0)
+                return ec;
+        }
+        else
+        {
+            const auto benchmark_cases =
+                std::get<std::vector<BenchmarkCase>>(ec_or_benchmark_cases);
+            registered_vms["advanced"] = evmc::VM{evmc_create_evmone(), {{"advanced", ""}}};
+            registered_vms["baseline"] = evmc::VM{evmc_create_evmone()};
+            registered_vms["bnocgoto"] = evmc::VM{evmc_create_evmone(), {{"cgoto", "no"}}};
+            register_benchmarks(benchmark_cases);
+            register_synthetic_benchmarks();
+            RunSpecifiedBenchmarks();
+            return 0;
+        }
     }
     catch (const std::exception& ex)
     {
