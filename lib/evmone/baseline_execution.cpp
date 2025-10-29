@@ -128,41 +128,10 @@ struct Position
 }
 
 [[release_inline]] inline code_iterator invoke(
-    code_iterator (*instr_fn)(StackTop, code_iterator) noexcept, Position pos, int64_t& /*gas*/,
-    ExecutionState& /*state*/) noexcept
-{
-    return instr_fn(pos.stack_end, pos.code_it);
-}
-
-[[release_inline]] inline code_iterator invoke(
     TermResult (*instr_fn)(StackTop, int64_t, ExecutionState&) noexcept, Position pos, int64_t& gas,
     ExecutionState& state) noexcept
 {
     const auto result = instr_fn(pos.stack_end, gas, state);
-    gas = result.gas_left;
-    state.status = result.status;
-    return nullptr;
-}
-
-[[release_inline]] inline code_iterator invoke(
-    Result (*instr_fn)(StackTop, int64_t, ExecutionState&, code_iterator&) noexcept, Position pos,
-    int64_t& gas, ExecutionState& state) noexcept
-{
-    const auto result = instr_fn(pos.stack_end, gas, state, pos.code_it);
-    gas = result.gas_left;
-    if (result.status != EVMC_SUCCESS)
-    {
-        state.status = result.status;
-        return nullptr;
-    }
-    return pos.code_it;
-}
-
-[[release_inline]] inline code_iterator invoke(
-    TermResult (*instr_fn)(StackTop, int64_t, ExecutionState&, code_iterator) noexcept,
-    Position pos, int64_t& gas, ExecutionState& state) noexcept
-{
-    const auto result = instr_fn(pos.stack_end, gas, state, pos.code_it);
     gas = result.gas_left;
     state.status = result.status;
     return nullptr;
