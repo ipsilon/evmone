@@ -74,7 +74,8 @@ public:
         m_jumpdest_bitset{map}
     {}
 
-    /// The raw code as stored in accounts or passes as initcode. For EOF this is full container.
+    /// The raw code as stored in accounts or passes as initcode.
+    /// TODO: Merge back raw_code() and executable_code() after EOF removal.
     [[nodiscard]] bytes_view raw_code() const noexcept { return m_raw_code; }
 
     /// The pre-processed executable code. This is where interpreter should start execution.

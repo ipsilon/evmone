@@ -320,13 +320,8 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
     const auto gas_refund = (state.status == EVMC_SUCCESS) ? state.gas_refund : 0;
 
     assert(state.output_size != 0 || state.output_offset == 0);
-    const auto result =
-        (state.deploy_container.has_value() ?
-                evmc::make_result(state.status, gas_left, gas_refund,
-                    state.deploy_container->data(), state.deploy_container->size()) :
-                evmc::make_result(state.status, gas_left, gas_refund,
-                    state.output_size != 0 ? &state.memory[state.output_offset] : nullptr,
-                    state.output_size));
+    const auto result = evmc::make_result(state.status, gas_left, gas_refund,
+        state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size);
 
     if (INTX_UNLIKELY(tracer != nullptr))
         tracer->notify_execution_end(result);

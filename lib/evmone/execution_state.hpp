@@ -144,21 +144,15 @@ public:
     evmc_revision rev = {};
     bytes return_data;
 
-    /// Reference to original EVM code container.
-    /// For legacy code this is a reference to entire original code.
-    /// For EOF-formatted code this is a reference to entire container.
+    /// Reference to original EVM code.
     bytes_view original_code;
 
     evmc_status_code status = EVMC_SUCCESS;
     size_t output_offset = 0;
     size_t output_size = 0;
 
-    /// Container to be deployed returned from RETURNCODE, used only inside EOFCREATE execution.
-    std::optional<bytes> deploy_container;
-
 private:
     evmc_tx_context m_tx = {};
-    std::optional<std::unordered_map<evmc::bytes32, TransactionInitcode>> m_initcodes;
 
 public:
     /// Pointer to code analysis.
@@ -168,8 +162,6 @@ public:
         const baseline::CodeAnalysis* baseline = nullptr;
         const advanced::AdvancedCodeAnalysis* advanced;
     } analysis{};
-
-    std::vector<const uint8_t*> call_stack;
 
     /// Stack space allocation.
     ///
@@ -199,10 +191,7 @@ public:
         status = EVMC_SUCCESS;
         output_offset = 0;
         output_size = 0;
-        deploy_container = {};
         m_tx = {};
-        m_initcodes.reset();
-        call_stack = {};
     }
 
     [[nodiscard]] bool in_static_mode() const { return (msg->flags & EVMC_STATIC) != 0; }
@@ -212,27 +201,6 @@ public:
         if (INTX_UNLIKELY(m_tx.block_timestamp == 0))
             m_tx = host.get_tx_context();
         return m_tx;
-    }
-
-    /// Get initcode by its hash from transaction initcodes.
-    ///
-    /// Returns nullptr if no such initcode was found.
-    [[nodiscard]] TransactionInitcode* get_tx_initcode_by_hash(const evmc_bytes32& hash)
-    {
-        if (!m_initcodes.has_value())
-        {
-            m_initcodes.emplace();
-            const auto& tx_context = get_tx_context();
-            for (size_t i = 0; i < tx_context.initcodes_count; ++i)
-            {
-                const auto& initcode = tx_context.initcodes[i];
-                m_initcodes->insert({initcode.hash,
-                    {.code = {initcode.code, initcode.code_size}, .is_valid = std::nullopt}});
-            }
-        }
-
-        const auto it = m_initcodes->find(hash);
-        return it != m_initcodes->end() ? &it->second : nullptr;
     }
 };
 }  // namespace evmone
