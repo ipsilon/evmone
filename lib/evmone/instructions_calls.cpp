@@ -6,14 +6,8 @@
 #include "instructions.hpp"
 #include <variant>
 
-constexpr int64_t MIN_RETAINED_GAS = 5000;
-constexpr int64_t MIN_CALLEE_GAS = 2300;
 constexpr int64_t CALL_VALUE_COST = 9000;
 constexpr int64_t ACCOUNT_CREATION_COST = 25000;
-
-constexpr auto EXTCALL_SUCCESS = 0;
-constexpr auto EXTCALL_REVERT = 1;
-constexpr auto EXTCALL_ABORT = 2;
 
 namespace evmone::instr::core
 {
