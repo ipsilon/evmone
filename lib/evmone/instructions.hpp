@@ -572,25 +572,6 @@ inline Result extcodecopy(StackTop stack, int64_t gas_left, ExecutionState& stat
     return {EVMC_SUCCESS, gas_left};
 }
 
-inline void returndataload(StackTop stack, ExecutionState& state) noexcept
-{
-    auto& index = stack.top();
-
-    if (state.return_data.size() < index)
-        index = 0;
-    else
-    {
-        const auto begin = static_cast<size_t>(index);
-        const auto end = std::min(begin + 32, state.return_data.size());
-
-        uint8_t data[32] = {};
-        for (size_t i = 0; i < (end - begin); ++i)
-            data[i] = state.return_data[begin + i];
-
-        index = intx::be::unsafe::load<uint256>(data);
-    }
-}
-
 inline void returndatasize(StackTop stack, ExecutionState& state) noexcept
 {
     stack.push(state.return_data.size());
@@ -898,28 +879,6 @@ inline void swap(StackTop stack) noexcept
     a[1] = t1;
     a[2] = t2;
     a[3] = t3;
-}
-
-inline code_iterator dupn(StackTop stack, code_iterator pos) noexcept
-{
-    stack.push(stack[pos[1]]);
-    return pos + 2;
-}
-
-inline code_iterator swapn(StackTop stack, code_iterator pos) noexcept
-{
-    // TODO: This may not be optimal, see instr::core::swap().
-    std::swap(stack.top(), stack[pos[1] + 1]);
-    return pos + 2;
-}
-
-inline code_iterator exchange(StackTop stack, code_iterator pos) noexcept
-{
-    const auto n = (pos[1] >> 4) + 1;
-    const auto m = (pos[1] & 0x0f) + 1;
-    // TODO: This may not be optimal, see instr::core::swap().
-    std::swap(stack[n], stack[n + m]);
-    return pos + 2;
 }
 
 inline Result mcopy(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
