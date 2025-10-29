@@ -22,7 +22,7 @@ namespace
 {
 constexpr int unspecified = -1000000;
 
-constexpr int get_revision_defined_in(uint8_t op) noexcept
+consteval int get_revision_defined_in(uint8_t op) noexcept
 {
     for (size_t r = EVMC_FRONTIER; r <= EVMC_MAX_REVISION; ++r)
     {
@@ -32,7 +32,7 @@ constexpr int get_revision_defined_in(uint8_t op) noexcept
     return unspecified;
 }
 
-constexpr bool is_terminating(uint8_t op) noexcept
+consteval bool is_terminating(uint8_t op) noexcept
 {
     switch (op)
     {
@@ -51,7 +51,7 @@ constexpr bool is_terminating(uint8_t op) noexcept
 }
 
 template <uint8_t Op>
-constexpr void validate_traits_of() noexcept
+consteval void validate_traits_of() noexcept
 {
     constexpr auto tr = instr::traits[Op];
 
@@ -84,7 +84,7 @@ constexpr void validate_traits_of() noexcept
 }
 
 template <std::size_t... Ops>
-constexpr bool validate_traits(std::index_sequence<Ops...>)
+consteval bool validate_traits(std::index_sequence<Ops...>)
 {
     // Instantiate validate_traits_of for each opcode.
     // Validation errors are going to be reported via static_asserts.
