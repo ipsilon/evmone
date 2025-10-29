@@ -37,24 +37,3 @@ set_tests_properties(
     ${PREFIX}/execute_exported_state_tests PROPERTIES
     FIXTURES_REQUIRED EXPORT_STATE_TESTS
 )
-
-add_test(
-    NAME ${PREFIX}/export_eof_tests
-    COMMAND evmone-unittests --gtest_filter=eof_validation.*
-)
-set_tests_properties(
-    ${PREFIX}/export_eof_tests PROPERTIES
-    ENVIRONMENT "EVMONE_EXPORT_TESTS=${EXPORT_DIR}/eof_tests;LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw"
-    FIXTURES_SETUP EXPORT_EOF_TESTS
-    FIXTURES_REQUIRED EXPORT_PREPARATION
-)
-
-add_test(
-    NAME ${PREFIX}/execute_exported_eof_tests
-    COMMAND evmone-eoftest ${EXPORT_DIR}/eof_tests
-)
-set_tests_properties(
-    ${PREFIX}/execute_exported_eof_tests PROPERTIES
-    ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw
-    FIXTURES_REQUIRED EXPORT_EOF_TESTS
-)
