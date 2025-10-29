@@ -66,34 +66,10 @@ inline TermResult impl(AdvancedExecutionState& state) noexcept
 }
 
 template <Opcode Op,
-    Result CoreFn(StackTop, int64_t, ExecutionState&, code_iterator&) noexcept = core::impl<Op>>
-inline Result impl(AdvancedExecutionState& state, code_iterator pos) noexcept
-{
-    // Stack height adjustment may be omitted.
-    return CoreFn(state.stack, state.gas_left, state, pos);
-}
-
-template <Opcode Op,
-    TermResult CoreFn(StackTop, int64_t, ExecutionState&, code_iterator) noexcept = core::impl<Op>>
-inline TermResult impl(AdvancedExecutionState& state, code_iterator pos) noexcept
-{
-    // Stack height adjustment may be omitted.
-    return CoreFn(state.stack, state.gas_left, state, pos);
-}
-
-template <Opcode Op,
     code_iterator CoreFn(StackTop, ExecutionState&, code_iterator) noexcept = core::impl<Op>>
 inline code_iterator impl(AdvancedExecutionState& state, code_iterator pos) noexcept
 {
     const auto new_pos = CoreFn(state.stack, state, pos);
-    state.adjust_stack_size(instr::traits[Op].stack_height_change);
-    return new_pos;
-}
-
-template <Opcode Op, code_iterator CoreFn(StackTop, code_iterator) noexcept = core::impl<Op>>
-inline code_iterator impl(AdvancedExecutionState& state, code_iterator pos) noexcept
-{
-    const auto new_pos = CoreFn(state.stack, pos);
     state.adjust_stack_size(instr::traits[Op].stack_height_change);
     return new_pos;
 }
