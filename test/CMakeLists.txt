@@ -31,9 +31,8 @@ add_subdirectory(unittests)
 set(targets evmone-bench evmone-bench-internal evmone-blockchaintest evmone-precompiles-bench evmone-state evmone-statetest evmone-t8n evmone-unittests)
 
 if(EVMONE_FUZZING)
-    add_subdirectory(eofparsefuzz)
     add_subdirectory(fuzzer)
-    list(APPEND targets evmone-eofparsefuzz evmone-fuzzer)
+    list(APPEND targets evmone-fuzzer)
 endif()
 
 set_target_properties(
