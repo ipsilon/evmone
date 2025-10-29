@@ -11,7 +11,7 @@ using namespace evmone::test;
 TEST_F(state_transition, trace_example)
 {
     tx.to = To;
-    pre.insert(To, {.code = revert(0, 1)});
+    pre[To] = {.code = revert(0, 1)};
 
     expect.status = EVMC_REVERT;
     expect.post[To].exists = true;

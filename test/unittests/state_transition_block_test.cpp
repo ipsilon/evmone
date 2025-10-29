@@ -27,7 +27,7 @@ TEST_F(state_transition, known_block_hash)
     block.number = 5;
 
     tx.to = To;
-    pre.insert(*tx.to, {.nonce = 1, .code = sstore(0, blockhash(1)) + sstore(1, blockhash(2))});
+    pre[*tx.to] = {.nonce = 1, .code = sstore(0, blockhash(1)) + sstore(1, blockhash(2))};
     expect.post[To].storage[0x00_bytes32] =
         0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421_bytes32;
     expect.post[To].storage[0x01_bytes32] =
@@ -38,7 +38,7 @@ TEST_F(state_transition, known_block_hash_fake)
 {
     block.number = 2;
     tx.to = To;
-    pre.insert(*tx.to, {.nonce = 1, .code = sstore(0, blockhash(0)) + sstore(1, blockhash(1))});
+    pre[*tx.to] = {.nonce = 1, .code = sstore(0, blockhash(0)) + sstore(1, blockhash(1))};
     expect.post[To].storage[0x00_bytes32] =
         0x044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d_bytes32;
     expect.post[To].storage[0x01_bytes32] =
@@ -75,7 +75,7 @@ TEST_F(state_transition, eip7516_blob_base_fee)
            *block.blob_base_fee);
 
     tx.to = To;
-    pre.insert(*tx.to, {.code = sstore(0x4a, OP_BLOBBASEFEE)});
+    pre[*tx.to] = {.code = sstore(0x4a, OP_BLOBBASEFEE)};
 
     expect.post[To].storage[0x4a_bytes32] = bytes32(price);
 }

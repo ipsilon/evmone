@@ -16,8 +16,8 @@ TEST_F(state_transition, touch_empty_sd)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(EMPTY)});
-    pre.insert(EMPTY, {});
+    pre[*tx.to] = {.code = call(EMPTY)};
+    pre[EMPTY] = {};
 
     expect.post[*tx.to].exists = true;
     expect.post[EMPTY].exists = false;
@@ -31,8 +31,8 @@ TEST_F(state_transition, touch_empty_tw)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(EMPTY)});
-    pre.insert(EMPTY, {});
+    pre[*tx.to] = {.code = call(EMPTY)};
+    pre[EMPTY] = {};
 
     expect.post[*tx.to].exists = true;
     expect.post[EMPTY].exists = true;
@@ -46,7 +46,7 @@ TEST_F(state_transition, touch_nonexistent_tw)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(NONEXISTENT)});
+    pre[*tx.to] = {.code = call(NONEXISTENT)};
 
     expect.post[*tx.to].exists = true;
     expect.post[NONEXISTENT].exists = true;
@@ -60,7 +60,7 @@ TEST_F(state_transition, touch_nonexistent_sd)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(NONEXISTENT)});
+    pre[*tx.to] = {.code = call(NONEXISTENT)};
 
     expect.post[*tx.to].exists = true;
 }
@@ -73,8 +73,8 @@ TEST_F(state_transition, touch_nonempty_tw)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(WITH_BALANCE)});
-    pre.insert(WITH_BALANCE, {.balance = 1});
+    pre[*tx.to] = {.code = call(WITH_BALANCE)};
+    pre[WITH_BALANCE] = {.balance = 1};
 
     expect.post[*tx.to].exists = true;
     expect.post[WITH_BALANCE].exists = true;
@@ -88,8 +88,8 @@ TEST_F(state_transition, touch_revert_empty)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(EMPTY) + revert(0, 0)});
-    pre.insert(EMPTY, {});
+    pre[*tx.to] = {.code = call(EMPTY) + revert(0, 0)};
+    pre[EMPTY] = {};
 
     expect.status = EVMC_REVERT;
     expect.post[*tx.to].exists = true;
@@ -104,7 +104,7 @@ TEST_F(state_transition, touch_revert_nonexistent_istanbul)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(EMPTY) + revert(0, 0)});
+    pre[*tx.to] = {.code = call(EMPTY) + revert(0, 0)};
 
     expect.status = EVMC_REVERT;
     expect.post[*tx.to].exists = true;
@@ -119,7 +119,7 @@ TEST_F(state_transition, touch_revert_nonexistent_tw)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(EMPTY) + OP_INVALID});
+    pre[*tx.to] = {.code = call(EMPTY) + OP_INVALID};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
     expect.post[*tx.to].exists = true;
@@ -134,8 +134,8 @@ TEST_F(state_transition, touch_revert_nonempty_tw)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(WITH_BALANCE) + OP_INVALID});
-    pre.insert(WITH_BALANCE, {.balance = 1});
+    pre[*tx.to] = {.code = call(WITH_BALANCE) + OP_INVALID};
+    pre[WITH_BALANCE] = {.balance = 1};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
     expect.post[*tx.to].exists = true;
@@ -151,8 +151,8 @@ TEST_F(state_transition, touch_revert_nonexistent_touch_again_tw)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(REVERT_PROXY, {.code = call(EMPTY) + OP_INVALID});
-    pre.insert(*tx.to, {.code = call(REVERT_PROXY).gas(0xffff) + call(EMPTY)});
+    pre[REVERT_PROXY] = {.code = call(EMPTY) + OP_INVALID};
+    pre[*tx.to] = {.code = call(REVERT_PROXY).gas(0xffff) + call(EMPTY)};
 
     expect.post[*tx.to].exists = true;
     expect.post[REVERT_PROXY].exists = true;
@@ -168,8 +168,8 @@ TEST_F(state_transition, touch_touch_revert_nonexistent_tw)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(REVERT_PROXY, {.code = call(EMPTY) + OP_INVALID});
-    pre.insert(*tx.to, {.code = call(EMPTY) + call(REVERT_PROXY).gas(0xffff)});
+    pre[REVERT_PROXY] = {.code = call(EMPTY) + OP_INVALID};
+    pre[*tx.to] = {.code = call(EMPTY) + call(REVERT_PROXY).gas(0xffff)};
 
     expect.post[*tx.to].exists = true;
     expect.post[REVERT_PROXY].exists = true;
@@ -185,8 +185,8 @@ TEST_F(state_transition, touch_revert_touch_revert_nonexistent_tw)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(REVERT_PROXY, {.code = call(EMPTY) + OP_INVALID});
-    pre.insert(*tx.to, {.code = 2 * call(REVERT_PROXY).gas(0xffff)});
+    pre[REVERT_PROXY] = {.code = call(EMPTY) + OP_INVALID};
+    pre[*tx.to] = {.code = 2 * call(REVERT_PROXY).gas(0xffff)};
 
     expect.post[*tx.to].exists = true;
     expect.post[REVERT_PROXY].exists = true;
@@ -201,7 +201,7 @@ TEST_F(state_transition, touch_touch_revert_nonexistent_tw_2)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(EMPTY) + call(EMPTY) + OP_INVALID});
+    pre[*tx.to] = {.code = call(EMPTY) + call(EMPTY) + OP_INVALID};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
     expect.post[*tx.to].exists = true;
@@ -217,8 +217,8 @@ TEST_F(state_transition, touch_revert_selfdestruct_to_nonexistient_tw)
 
     tx.type = Transaction::Type::legacy;
     tx.to = To;
-    pre.insert(*tx.to, {.code = call(DESTRUCTOR).gas(0xffff) + OP_INVALID});
-    pre.insert(DESTRUCTOR, {.code = selfdestruct(BENEFICIARY)});
+    pre[*tx.to] = {.code = call(DESTRUCTOR).gas(0xffff) + OP_INVALID};
+    pre[DESTRUCTOR] = {.code = selfdestruct(BENEFICIARY)};
 
     expect.status = EVMC_INVALID_INSTRUCTION;
     expect.post[*tx.to].exists = true;

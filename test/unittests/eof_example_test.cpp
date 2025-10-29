@@ -37,9 +37,7 @@ TEST_F(state_transition, eof_examples_minimal)
 
     // Tests the code is valid EOF and does nothing.
     tx.to = To;
-    pre.insert(*tx.to, {
-                           .code = eof_code,
-                       });
+    pre[*tx.to] = {.code = eof_code};
 
     expect.post[*tx.to].exists = true;
 }
@@ -72,9 +70,7 @@ TEST_F(state_transition, eof_examples_static_relative_jump_loop)
 
     // Tests the code is valid EOF and the infinite loop runs out of gas.
     tx.to = To;
-    pre.insert(*tx.to, {
-                           .code = eof_code,
-                       });
+    pre[*tx.to] = {.code = eof_code};
 
     expect.status = EVMC_OUT_OF_GAS;
     expect.post[*tx.to].exists = true;
@@ -112,9 +108,7 @@ TEST_F(state_transition, eof_examples_callf)
 
     // Tests the code is valid EOF.
     tx.to = To;
-    pre.insert(*tx.to, {
-                           .code = eof_code,
-                       });
+    pre[*tx.to] = {.code = eof_code};
 
     expect.post[*tx.to].exists = true;
 }
@@ -172,9 +166,7 @@ TEST_F(state_transition, eof_examples_eofcreate)
 
     // Tests the code is valid EOF and when called with initcodes creates a new contract.
     tx.to = To;
-    pre.insert(*tx.to, {
-                           .code = factory,
-                       });
+    pre[*tx.to] = {.code = factory};
 
     // Address of the newly created contract is calculated using the salt and deployer address.
     expect.post[0xa36d08aa64ae9bcf54b8d880838a077090eca26e_address].exists = true;
@@ -210,9 +202,7 @@ TEST_F(state_transition, eof_examples_data)
 
     // Tests the code is valid EOF and does nothing.
     tx.to = To;
-    pre.insert(*tx.to, {
-                           .code = eof_code,
-                       });
+    pre[*tx.to] = {.code = eof_code};
 
     expect.post[*tx.to].exists = true;
 }

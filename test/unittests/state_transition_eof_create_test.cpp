@@ -43,7 +43,7 @@ TEST_F(state_transition, create_with_eof_initcode)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_code});
+    pre[*tx.to] = {.nonce = 1, .code = factory_code};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -65,7 +65,7 @@ TEST_F(state_transition, create_with_eof_initcode_cancun)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_code});
+    pre[*tx.to] = {.nonce = 1, .code = factory_code};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;  // fails by EF execution, nonce bumped.
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -88,7 +88,7 @@ TEST_F(state_transition, create2_with_eof_initcode)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_code});
+    pre[*tx.to] = {.nonce = 1, .code = factory_code};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -111,7 +111,7 @@ TEST_F(state_transition, create2_with_eof_initcode_cancun)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_code});
+    pre[*tx.to] = {.nonce = 1, .code = factory_code};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;  // fails by EF execution, nonce bumped.
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -154,7 +154,7 @@ TEST_F(state_transition, create_deploying_eof)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_code});
+    pre[*tx.to] = {.nonce = 1, .code = factory_code};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -181,7 +181,7 @@ TEST_F(state_transition, create2_deploying_eof)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_code});
+    pre[*tx.to] = {.nonce = 1, .code = factory_code};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -202,7 +202,7 @@ TEST_F(state_transition, eofcreate_empty_auxdata)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     const auto create_address = compute_eofcreate_address(*tx.to, Salt);
@@ -231,7 +231,7 @@ TEST_F(state_transition, eofcreate_auxdata_equal_to_declared)
 
     tx.data = aux_data;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     const auto expected_container = eof_bytecode(bytecode(OP_INVALID)).data(deploy_data + aux_data);
 
@@ -263,7 +263,7 @@ TEST_F(state_transition, eofcreate_auxdata_longer_than_declared)
 
     tx.data = aux_data1 + aux_data2;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     const auto expected_container =
         eof_bytecode(bytecode(OP_INVALID)).data(deploy_data + aux_data1 + aux_data2);
@@ -295,7 +295,7 @@ TEST_F(state_transition, eofcreate_auxdata_shorter_than_declared)
 
     tx.data = aux_data;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -320,7 +320,7 @@ TEST_F(state_transition, eofcreate_dataloadn_referring_to_auxdata)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     const auto expected_container = eof_bytecode(deploy_code, 2).data(deploy_data + aux_data);
 
@@ -355,7 +355,7 @@ TEST_F(state_transition, eofcreate_with_auxdata_and_subcontainer)
 
     tx.data = aux_data;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     const auto expected_container = eof_bytecode(eofcreate() + OP_STOP, 4)
                                         .container(eof_bytecode(OP_INVALID))
@@ -382,7 +382,7 @@ TEST_F(state_transition, eofcreate_revert_empty_returndata)
     const auto factory_container = eof_bytecode(factory_code, 4).container(init_container);
 
     tx.to = To;
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -402,7 +402,7 @@ TEST_F(state_transition, eofcreate_revert_non_empty_returndata)
     const auto factory_container = eof_bytecode(factory_code, 4).container(init_container);
 
     tx.to = To;
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -421,7 +421,7 @@ TEST_F(state_transition, eofcreate_initcontainer_aborts)
     const auto factory_container = eof_bytecode(factory_code, 4).container(init_container);
 
     tx.to = To;
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -450,7 +450,7 @@ TEST_F(state_transition, eofcreate_deploy_container_max_size)
     const auto factory_container = eof_bytecode(factory_code, 4).container(init_container);
 
     tx.to = To;
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     const auto create_address = compute_eofcreate_address(*tx.to, Salt);
@@ -481,7 +481,7 @@ TEST_F(state_transition, eofcreate_deploy_container_too_large)
     const auto factory_container = eof_bytecode(factory_code, 4).container(init_container);
 
     tx.to = To;
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -514,7 +514,7 @@ TEST_F(state_transition, eofcreate_appended_data_size_larger_than_64K)
 
     tx.data = aux_data;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 2;  // 1 successful creation + 1 hard fail
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -547,7 +547,7 @@ TEST_F(state_transition, eofcreate_deploy_container_with_aux_data_too_large)
     const auto factory_container = eof_bytecode(factory_code, 4).container(init_container);
 
     tx.to = To;
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -576,7 +576,7 @@ TEST_F(state_transition, eofcreate_nested_eofcreate)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     const auto create_address = compute_eofcreate_address(*tx.to, Salt);
@@ -609,7 +609,7 @@ TEST_F(state_transition, eofcreate_nested_eofcreate_revert)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -631,7 +631,7 @@ TEST_F(state_transition, eofcreate_caller_balance_too_low)
     const auto factory_container = eof_bytecode(factory_code, 4).container(init_container);
 
     tx.to = To;
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -658,7 +658,7 @@ TEST_F(state_transition, eofcreate_not_enough_gas_for_initcode_charge)
     // tx intrinsic cost + EOFCREATE cost + initcode charge - not enough for pushes before EOFCREATE
     tx.gas_limit = 21'000 + 32'000 + (std::numeric_limits<uint16_t>::max() / 2 + 31) / 32 * 6;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.status = EVMC_OUT_OF_GAS;
 
@@ -692,7 +692,7 @@ TEST_F(state_transition, eofcreate_not_enough_gas_for_mem_expansion)
     tx.gas_limit = 21'000 + 32'000 + static_cast<uint16_t>(6 * initcode_size_words) +
                    3 * aux_data_size_words + aux_data_size_words * aux_data_size_words / 512;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.status = EVMC_OUT_OF_GAS;
 
@@ -729,7 +729,7 @@ TEST_F(state_transition, returncode_not_enough_gas_for_mem_expansion)
     tx.gas_limit = 21'000 + 32'000 + static_cast<uint16_t>(6 * initcode_size_words) +
                    3 * aux_data_size_words + aux_data_size_words * aux_data_size_words / 512;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -754,8 +754,8 @@ TEST_F(state_transition, eofcreate_clears_returndata)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
-    pre.insert(returning_address, {.nonce = 1, .code = returning_code});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
+    pre[returning_address] = {.nonce = 1, .code = returning_code};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = 0x00_bytes32;
@@ -788,7 +788,7 @@ TEST_F(state_transition, eofcreate_failure_after_eofcreate_success)
 
     tx.to = To;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 2;
     const auto create_address = compute_eofcreate_address(*tx.to, Salt);
@@ -837,7 +837,7 @@ TEST_F(state_transition, eofcreate_call_created_contract)
 
     tx.data = static_aux_data + dynamic_aux_data;
 
-    pre.insert(*tx.to, {.nonce = 1, .code = factory_container});
+    pre[*tx.to] = {.nonce = 1, .code = factory_container};
 
     expect.post[*tx.to].nonce = pre.get(*tx.to).nonce + 1;
     expect.post[*tx.to].storage[0x00_bytes32] = to_bytes32(create_address);

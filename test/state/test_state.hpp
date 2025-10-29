@@ -55,13 +55,6 @@ public:
     bytes get_account_code(const address& addr) const noexcept override;
     bytes32 get_storage(const address& addr, const bytes32& key) const noexcept override;
 
-    /// Inserts new account to the state.
-    ///
-    /// This method is for compatibility with state::State::insert().
-    /// Don't use it in new tests, use std::map interface instead.
-    /// TODO: deprecate this method.
-    void insert(const address& addr, TestAccount&& acc) { (*this)[addr] = std::move(acc); }
-
     /// Gets the reference to an existing account.
     ///
     /// This method is for compatibility with state::State::get().
