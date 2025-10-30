@@ -315,14 +315,9 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     if (!code.empty())
     {
-        if (code[0] == 0xEF)
-        {
-            if (m_rev >= EVMC_LONDON)
-            {
-                // EIP-3541: Reject EF-prefixed code.
-                return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
-            }
-        }
+        // EIP-3541: Reject new contract code starting with the 0xEF byte.
+        if (m_rev >= EVMC_LONDON && code[0] == 0xEF)
+            return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
 
         new_acc->code_hash = keccak256(code);
         new_acc->code = code;
