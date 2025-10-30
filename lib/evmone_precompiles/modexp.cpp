@@ -149,6 +149,8 @@ void modexp(std::span<const uint8_t> base, std::span<const uint8_t> exp,
         modexp_impl<16>(base, exp, mod, output);
     else if (size <= 32)
         modexp_impl<32>(base, exp, mod, output);
+    else if (size <= 48)
+        modexp_impl<48>(base, exp, mod, output);
     else if (size <= 64)
         modexp_impl<64>(base, exp, mod, output);
     else if (size <= 128)
