@@ -286,26 +286,6 @@ TEST_P(evm, eof_eofcreate)
     EXPECT_EQ(output, "000000000000000000000000cc010203040506070809010203040506070809ce"_hex);
 }
 
-TEST_P(evm, eofcreate_undefined_in_legacy)
-{
-    rev = EVMC_CANCUN;
-    const auto code = calldatacopy(0, 0, OP_CALLDATASIZE) +
-                      eofcreate().input(0, OP_CALLDATASIZE).salt(0xff) + ret_top();
-
-    execute(code);
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}
-
-TEST_P(evm, returncode_undefined_in_legacy)
-{
-    rev = EVMC_CANCUN;
-    const auto code =
-        calldatacopy(0, 0, OP_CALLDATASIZE) + OP_CALLDATASIZE + 0 + OP_RETURNCODE + Opcode{0};
-
-    execute(code);
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}
-
 TEST_P(evm, eofcreate_staticmode)
 {
     if (is_advanced())

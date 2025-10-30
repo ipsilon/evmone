@@ -225,27 +225,3 @@ TEST_P(evm, eof1_rjumpv_long_jumps)
     EXPECT_STATUS(EVMC_SUCCESS);
     EXPECT_OUTPUT_INT(7);
 }
-
-TEST_P(evm, rjump_undefined_in_legacy)
-{
-    rev = EVMC_EXPERIMENTAL;
-    const auto code = rjump(1) + OP_INVALID + mstore8(0, 1) + ret(0, 1);
-    execute(code);
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}
-
-TEST_P(evm, rjumpi_undefined_in_legacy)
-{
-    rev = EVMC_EXPERIMENTAL;
-    const auto code = rjumpi(10, 1) + mstore8(0, 2) + ret(0, 1) + mstore8(0, 1) + ret(0, 1);
-    execute(code);
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}
-
-TEST_P(evm, rjumpv_undefined_in_legacy)
-{
-    rev = EVMC_EXPERIMENTAL;
-    const auto code = rjumpv({0}, calldataload(0)) + OP_STOP;
-    execute(code);
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}

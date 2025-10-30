@@ -101,11 +101,3 @@ TEST_P(evm, exchange_deep_stack)
     EXPECT_STATUS(EVMC_SUCCESS);
     EXPECT_OUTPUT_INT(17);
 }
-
-TEST_P(evm, exchange_undefined_in_legacy)
-{
-    rev = EVMC_EXPERIMENTAL;
-
-    execute(push(1) + push(2) + push(3) + OP_EXCHANGE + "00");
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}

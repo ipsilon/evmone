@@ -175,14 +175,3 @@ TEST_P(evm, swapn_swap_consistency)
     EXPECT_STATUS(EVMC_SUCCESS);
     EXPECT_OUTPUT_INT(17);
 }
-
-TEST_P(evm, dupn_swapn_undefined_in_legacy)
-{
-    rev = EVMC_EXPERIMENTAL;
-
-    execute(push(1) + push(2) + OP_SWAPN + "00");
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-
-    execute(push(1) + OP_DUPN + "00");
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}

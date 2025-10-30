@@ -762,34 +762,6 @@ TEST_P(evm, returndatacopy_outofrange_highbits)
     EXPECT_EQ(result.status_code, EVMC_INVALID_MEMORY_ACCESS);
 }
 
-TEST_P(evm, returndataload_undefined_in_legacy)
-{
-    rev = EVMC_EXPERIMENTAL;
-    execute(staticcall(0) + returndataload(0));
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}
-
-TEST_P(evm, extcall_undefined_in_legacy)
-{
-    rev = EVMC_EXPERIMENTAL;
-    execute(extcall(0));
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}
-
-TEST_P(evm, extdelegatecall_undefined_in_legacy)
-{
-    rev = EVMC_EXPERIMENTAL;
-    execute(extdelegatecall(0));
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}
-
-TEST_P(evm, extstaticcall_undefined_in_legacy)
-{
-    rev = EVMC_EXPERIMENTAL;
-    execute(extstaticcall(0));
-    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
-}
-
 TEST_P(evm, call_gas_refund_propagation)
 {
     rev = EVMC_LONDON;
