@@ -8,6 +8,22 @@
 namespace evmmax
 {
 
+/// Compute the modulus inverse for Montgomery multiplication, i.e. N': mod⋅N' = 2⁶⁴-1.
+///
+/// @param mod0  The least significant word of the modulus.
+constexpr uint64_t compute_mod_inv(uint64_t mod0) noexcept
+{
+    // TODO: Find what is this algorithm and why it works.
+    uint64_t base = 0 - mod0;
+    uint64_t result = 1;
+    for (auto i = 0; i < 64; ++i)
+    {
+        result *= base;
+        base *= base;
+    }
+    return result;
+}
+
 /// The modular arithmetic operations for EVMMAX (EVM Modular Arithmetic Extensions).
 template <typename UintT>
 class ModArith
@@ -20,22 +36,6 @@ private:
 
     /// The modulus inversion, i.e. the number N' such that mod⋅N' = 2⁶⁴-1.
     const uint64_t m_mod_inv;
-
-    /// Compute the modulus inverse for Montgomery multiplication, i.e. N': mod⋅N' = 2⁶⁴-1.
-    ///
-    /// @param mod0  The least significant word of the modulus.
-    static constexpr uint64_t compute_mod_inv(uint64_t mod0) noexcept
-    {
-        // TODO: Find what is this algorithm and why it works.
-        uint64_t base = 0 - mod0;
-        uint64_t result = 1;
-        for (auto i = 0; i < 64; ++i)
-        {
-            result *= base;
-            base *= base;
-        }
-        return result;
-    }
 
     /// Compute R² % mod.
     static constexpr UintT compute_r_squared(const UintT& mod) noexcept
