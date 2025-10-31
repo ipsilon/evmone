@@ -8,20 +8,23 @@
 namespace evmmax
 {
 
-/// Compute the modulus inverse for Montgomery multiplication, i.e. N': mod⋅N' = 2⁶⁴-1.
+/// Compute the modulus inverse for Montgomery multiplication, i.e., N': mod⋅N' = 2⁶⁴-1.
 ///
 /// @param mod0  The least significant word of the modulus.
 constexpr uint64_t compute_mod_inv(uint64_t mod0) noexcept
 {
-    // TODO: Find what is this algorithm and why it works.
-    uint64_t base = 0 - mod0;
-    uint64_t result = 1;
-    for (auto i = 0; i < 64; ++i)
-    {
-        result *= base;
-        base *= base;
-    }
-    return result;
+    assert(mod0 % 2 == 1);
+    // Compute inversion mod 2⁶⁴ (inv⋅mod0 = 1) using the Newton–Raphson numeric method.
+    // Each iteration doubles the number of correct bits: 2, 4, 8, ...
+    // so for 64-bit value we need 6 iterations.
+    // TODO(C++23): static
+    constexpr auto ITERATIONS = std::countr_zero(sizeof(mod0) * 8);
+    uint64_t inv = 1;  // Start with inversion mod 2.
+    for (auto i = 0; i < ITERATIONS; ++i)
+        inv *= 2 - mod0 * inv;
+
+    // The final result is N' = -mod0⁻¹ because this gives mod⋅N' = -1 = 2⁶⁴-1.
+    return -inv;
 }
 
 /// The modular arithmetic operations for EVMMAX (EVM Modular Arithmetic Extensions).
