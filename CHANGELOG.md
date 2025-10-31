@@ -5,6 +5,20 @@ Documentation of all notable changes to the **evmone** project.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.18.0] — 2025-10-31
+
+Bye, bye, EOF.
+
+### Removed
+
+- The implementation of EVM Object Format version 1 (EOFv1) has been completely removed.
+  [#1321](https://github.com/ipsilon/evmone/pull/1321)
+  - implementation of EOF validation and execution,
+  - implementation of DUPN, SWAPN and EXCHANGE instructions,
+  - "initcodes" transaction type,
+  - additional testing tools: eofparse, eoftest and eofparsefuzz,
+  - unit tests, integration tests, benchmarks and test helpers.
+
 ## [0.17.0] — 2025-10-29
 
 This release provides full [Osaka] compatibility by implementing 3 remaining EIPs.
