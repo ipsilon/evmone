@@ -925,8 +925,11 @@ inline Result log(StackTop stack, int64_t gas_left, ExecutionState& state) noexc
         return {EVMC_OUT_OF_GAS, gas_left};
 
     std::array<evmc::bytes32, NumTopics> topics;  // NOLINT(cppcoreguidelines-pro-type-member-init)
-    for (auto& topic : topics)
-        topic = intx::be::store<evmc::bytes32>(stack.pop());
+    if constexpr (NumTopics > 0)
+    {
+        for (auto& topic : topics)
+            topic = intx::be::store<evmc::bytes32>(stack.pop());
+    }
 
     const auto data = s != 0 ? &state.memory[o] : nullptr;
     state.host.emit_log(state.msg->recipient, data, s, topics.data(), NumTopics);
