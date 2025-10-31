@@ -4,24 +4,30 @@
 #pragma once
 
 #include <intx/intx.hpp>
+#include <cassert>
 
 namespace evmmax
 {
-
-/// Compute the modulus inverse for Montgomery multiplication, i.e. N': mod⋅N' = 2⁶⁴-1.
-///
-/// @param mod0  The least significant word of the modulus.
-constexpr uint64_t compute_mod_inv(uint64_t mod0) noexcept
+/// Compute the modular inverse of the number modulo 2⁶⁴: inv⋅a = 1 mod 2⁶⁴.
+constexpr uint64_t inv_mod(uint64_t a) noexcept
 {
-    // TODO: Find what is this algorithm and why it works.
-    uint64_t base = 0 - mod0;
-    uint64_t result = 1;
-    for (auto i = 0; i < 64; ++i)
-    {
-        result *= base;
-        base *= base;
-    }
-    return result;
+    assert(a % 2 == 1);  // The argument must be odd, otherwise the inverse does not exist.
+
+    // Use the Newton–Raphson numeric method, see e.g.
+    // https://gmplib.org/~tege/divcnst-pldi94.pdf#page=9, formula (9.2)
+    // Each iteration doubles the number of correct bits:
+    // 2, 4, 8, ..., so for 64-bit value we need 6 iterations.
+    // TODO(C++23): static
+    constexpr auto ITERATIONS = std::countr_zero(sizeof(a) * 8);
+
+    // Start with inversion mod 2.
+    // TODO: This can be further accelerated by:
+    //   - computing the inversion with smaller type (e.g. uint32_t) first,
+    //   - using a better initial approximation (e.g. via lookup table for 4 bits).
+    uint64_t inv = 1;
+    for (auto i = 0; i < ITERATIONS; ++i)
+        inv *= 2 - a * inv;  // Overflows are fine because they wrap around modulo 2⁶⁴.
+    return inv;
 }
 
 /// The modular arithmetic operations for EVMMAX (EVM Modular Arithmetic Extensions).
@@ -44,6 +50,14 @@ class ModArith
         return intx::udivrem(RR, mod).rem;
     }
 
+    /// Compute the modulus inverse for Montgomery multiplication, i.e., N': mod⋅N' = 2⁶⁴-1.
+    static constexpr uint64_t compute_mont_mod_inv(const UintT& mod) noexcept
+    {
+        // Compute the inversion mod[0]⁻¹ mod 2⁶⁴, then the final result is N' = -mod[0]⁻¹
+        // because this gives mod⋅N' = -1 mod 2⁶⁴ = 2⁶⁴-1.
+        return -inv_mod(mod[0]);
+    }
+
     static constexpr std::pair<uint64_t, uint64_t> addmul(
         uint64_t t, uint64_t a, uint64_t b, uint64_t c) noexcept
     {
@@ -53,7 +67,7 @@ class ModArith
 
 public:
     constexpr explicit ModArith(const UintT& mod) noexcept
-      : mod_{mod}, r_squared_{compute_r_squared(mod)}, mod_inv_{compute_mod_inv(mod[0])}
+      : mod_{mod}, r_squared_{compute_r_squared(mod)}, mod_inv_{compute_mont_mod_inv(mod)}
     {}
 
     /// Returns the modulus.
