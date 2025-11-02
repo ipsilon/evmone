@@ -319,7 +319,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     assert(p != ProjPoint(q));
 
     if (q == 0)
-        // TODO: Untested and untestable via precompile call (for secp256k1 and secp256r1).
+        // TODO: Untested and untestable via precompile call (for secp256r1).
         return p;
     if (p == 0)
         return ProjPoint(q);
@@ -445,7 +445,7 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
         const auto [reduced_c, less_than] = subc(c, Curve::ORDER);
         if (less_than) [[likely]]
             break;
-        // TODO: Untested and untestable via precompile call (for secp256k1 and secp256r1).
+        // TODO: Untested and untestable via precompile call (for secp256r1).
         c = reduced_c;
     }
 
