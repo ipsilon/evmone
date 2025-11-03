@@ -53,12 +53,6 @@ std::string_view to_test_fork_name(evmc_revision rev) noexcept
         return "SenderNotEOA";
     case INIT_CODE_SIZE_LIMIT_EXCEEDED:
         return "TR_InitCodeLimitExceeded";
-    case INIT_CODE_EMPTY:
-        return "TR_InitCodeEmpty";
-    case INIT_CODE_COUNT_LIMIT_EXCEEDED:
-        return "TR_InitCodeCountLimitExceeded";
-    case INIT_CODE_COUNT_ZERO:
-        return "TR_InitCodeCountZero";
     case CREATE_BLOB_TX:
         return "TR_BLOBCREATE";
     case EMPTY_BLOB_HASHES_LIST:
