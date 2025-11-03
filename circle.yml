@@ -227,13 +227,16 @@ commands:
       ignore_filename_regex:
         type: string
         default: ""
+      binaries:
+        type: string
+        default: evmone-unittests evmone-statetest evmone-blockchaintest evmone-t8n
     steps:
       - run:
           name: "Collect coverage data (clang)"
           working_directory: ~/build
           command: |
             IGNORE_FILENAME_REGEX='include/evmc<<#parameters.ignore_filename_regex>>|<<parameters.ignore_filename_regex>><</parameters.ignore_filename_regex>>'
-            OBJECTS="-object bin/evmone-unittests -object bin/evmone-statetest -object bin/evmone-blockchaintest -object bin/evmone-t8n"
+            OBJECTS=$(printf -- '-object bin/%s ' <<parameters.binaries>>)
             ARGS="lib/libevmone.so $OBJECTS -Xdemangler llvm-cxxfilt -instr-profile=evmone.profdata -ignore-filename-regex=$IGNORE_FILENAME_REGEX"
 
             rm -rf ~/coverage
@@ -409,6 +412,7 @@ jobs:
             bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests
       - collect_coverage_clang:
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|t8n|unittests|utils)
+          binaries: evmone-statetest evmone-blockchaintest
       - upload_coverage:
           flags: eest-develop
 
