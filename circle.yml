@@ -246,7 +246,7 @@ commands:
             
             llvm-cov export -format=lcov $ARGS -skip-expansions > ~/coverage/coverage.lcov
             
-            llvm-cov show $ARGS -format=html -show-line-counts-or-regions -show-mcdc -show-mcdc-summary -o ~/coverage/html
+            llvm-cov show $ARGS -format=html -show-line-counts-or-regions -show-mcdc -show-mcdc-summary -show-branches=count -o ~/coverage/html
 
             llvm-cov report $ARGS -show-mcdc-summary > ~/coverage/report.txt
             llvm-cov report $ARGS -use-color -show-mcdc-summary
