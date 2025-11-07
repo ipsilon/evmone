@@ -18,8 +18,8 @@ hash256 mpt_hash(const std::map<bytes32, bytes32>& storage)
     MPT trie;
     for (const auto& [key, value] : storage)
     {
-        if (!is_zero(value))  // Skip "deleted" values.
-            trie.insert(keccak256(key), rlp::encode(rlp::trim(value)));
+        assert(!is_zero(value));  // Zero values should not be in the storage.
+        trie.insert(keccak256(key), rlp::encode(rlp::trim(value)));
     }
     return trie.hash();
 }
