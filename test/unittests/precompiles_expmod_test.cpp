@@ -43,6 +43,42 @@ TEST(expmod, test_vectors)
         {"03", "1c93", "61", "5f"},
         {
             "03",
+            "52",
+            "ffffffffffffffff0000000000000000",
+            "e8ca816be3ddb8a1243d253d80487649",
+        },
+        {
+            "03",
+            "83",
+            "ffffffffffffffff00000000000000000000000000000000",
+            "b05147078624b9661557222e8610fb9986f829a99c2ede1b",
+        },
+        {
+            "03",
+            "0100",
+            "ffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000",
+            "4af58b4c59a562ee7345b3805ed8b417fed242815e55bc8375a205de07597d51d2105f2f0730f401",
+        },
+        {
+            "03",
+            "0200",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000000000000",
+            "e33fcb0f1a5abfca90c5036512aca2cb657acf53b0e31fed3e122d5dec19ee8c2e60be065d0b77059483760fbd2a7e5335bd075f4d13ebbd7679ef1b4306890c1d660d1276f1e801",
+        },
+        {
+            "03",
+            "0300",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "4059444789547ff685087bca8a144d32556b2251613171aa4cf05d8a005015d9b8408ba5f7c89595e76d925173cf80e552a856b1ce217c1f33940f8241e6adcf76b672c4935a40f4bb36410ee24654c114cd718bea878742c703dc5abddbdbfa17d12328a2a6bb9d6e80dc0bc224eef03128625977a1e2c1d189336e303567d7442488538f42dc01",
+        },
+        {
+            "03",
+            "0600",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+            "b2eb4387ee3ad0b4cfe1e05b3962718e2de238b02cc2c2ce80ae1a3c13ffe3872a5b829fc77634ec4b2d07f57862a019d4e7a3dc035851d60a4dabfed7bc5a2d44d5f7840e621678a3dbfeb9c37a78350e7f98e1440cc8d7d601be78db75e3ed79a1b5200f3290263da23ee75df076a34b600b670226e21aee2ccfaa51aa7ad276b55e50ca6c4854070e5f115a377f2b4177fd5f3803408989454bf61789f4b14241d7e0cf2606929f8d5da04c743e3b44a9d692e60bfcd077ab7cc8ad3d70eceac9a053acb9f436612e986706f715c3580fbe4b0485724f9363912131c1dedb9706f4241afc62d706153951fe69b5b5b754d8301063494791b58250ebf50ad9a78f7be54b95b801",
+        },
+        {
+            "03",
             "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e",
             "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
             "0000000000000000000000000000000000000000000000000000000000000001",
