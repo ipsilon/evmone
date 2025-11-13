@@ -9,7 +9,7 @@
 namespace evmone::state
 {
 
-enum ErrorCode : int
+enum ErrorCode : int  // NOLINT(*-use-enum-class)
 {
     SUCCESS = 0,
     INTRINSIC_GAS_TOO_LOW,

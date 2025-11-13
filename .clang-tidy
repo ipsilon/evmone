@@ -58,6 +58,7 @@ Checks:
   - "performance-*"
   - "-performance-enum-size"
   - "portability-*"
+  - "-portability-avoid-pragma-once"
   - "readability-*"
   - "-readability-braces-around-statements"
   # Sometimes we actually want to take the address of the first element.

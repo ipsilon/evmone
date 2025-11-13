@@ -15,7 +15,7 @@
 #define release_inline
 #endif
 
-#if defined(__GNUC__)
+#ifdef __GNUC__
 #define ASM_COMMENT(COMMENT) asm("# " #COMMENT)  // NOLINT(hicpp-no-assembler)
 #else
 #define ASM_COMMENT(COMMENT)

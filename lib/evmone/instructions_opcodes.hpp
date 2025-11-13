@@ -12,7 +12,7 @@ namespace evmone
 ///
 /// This is not enum class because we want implicit conversion to integers,
 /// e.g. for usage as an array index.
-enum Opcode : uint8_t
+enum Opcode : uint8_t  // NOLINT(*-use-enum-class)
 {
     OP_STOP = 0x00,
     OP_ADD = 0x01,
