@@ -139,7 +139,7 @@ public:
         assert(mod >= 3);
 
         // Precompute inverse of 2 modulo mod: inv2 * 2 % mod == 1.
-        // The 1/2 is inexact division which can be fixed by adding "0" to the numerator
+        // The 1/2 is inexact division that can be fixed by adding "0" to the numerator
         // and making it even: (mod + 1) / 2. To avoid potential overflow of (1 + mod)
         // we rewrite it further to (mod - 1 + 2) / 2 = (mod - 1) / 2 + 1 = ⌊mod / 2⌋ + 1.
         const auto inv2 = (mod >> 1) + 1;
@@ -164,7 +164,7 @@ public:
         {
             if ((a & 1) != 0)
             {
-                // if a is odd update it to a - b.
+                // if a is odd, update it to a - b.
                 if (const auto [d, less] = subc(a, b); less)
                 {
                     // swap a and b in case a < b.
@@ -184,16 +184,16 @@ public:
             // Compute a / 2 % mod, a is even so division is exact and can be computed as ⌊a / 2⌋.
             a >>= 1;
 
-            // Compute u / 2 % mod. If u is even this can be computed as ⌊u / 2⌋.
+            // Compute u / 2 % mod. If u is even, this can be computed as ⌊u / 2⌋.
             // Otherwise, (u - 1 + 1) / 2 = ⌊u / 2⌋ + (1 / 2 % mod).
             const auto u_odd = (u & 1) != 0;
             u >>= 1;
             if (u_odd)
-                u += inv2;  // if u is odd add back ½ % mod.
+                u += inv2;  // if u is odd, add back ½ % mod.
         }
 
-        if (b != 1)
-            return 0;  // not invertible
+        if (b != 1) [[unlikely]]
+            v = 0;  // not invertible
         return v;
     }
 };
