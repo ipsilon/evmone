@@ -18,22 +18,6 @@ void trunc(std::span<uint8_t> dst, const intx::uint<N>& x) noexcept
     std::copy_n(&as_bytes(d)[sizeof(d) - dst.size()], dst.size(), dst.begin());
 }
 
-template <unsigned N>
-constexpr unsigned ctz(const intx::uint<N>& x) noexcept
-{
-    unsigned tz = 0;
-    for (size_t i = 0; i < intx::uint<N>::num_words; ++i)
-    {
-        if (x[i] != 0)
-        {
-            tz += static_cast<unsigned>(std::countr_zero(x[i]));
-            break;
-        }
-        tz += intx::uint<N>::word_num_bits;
-    }
-    return tz;
-}
-
 /// Represents the exponent value of the modular exponentiation operation.
 ///
 /// This is a view type of the big-endian bytes representing the bits of the exponent.

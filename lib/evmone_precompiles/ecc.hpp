@@ -420,19 +420,6 @@ ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
     }
 }
 
-/// Tests if a specific bit is set in an integer type.
-/// Bits are indexed from the least significant. Checking beyond the bit-width is undefined.
-/// TODO: Move to intx.
-template <typename IntT>
-bool test_bit(const IntT& v, size_t bit_index) noexcept
-{
-    using word_type = IntT::word_type;
-    static constexpr auto WORD_BITS = sizeof(word_type) * 8;
-    const auto word = v[(bit_index / WORD_BITS)];
-    const auto b = bit_index % WORD_BITS;
-    return (word & (uint64_t{1} << b)) != 0;
-}
-
 template <typename Curve>
 ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) noexcept
 {
@@ -454,7 +441,7 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
     for (auto i = bit_width; i != 0; --i)
     {
         r = ecc::dbl(r);
-        if (test_bit(c, i - 1))
+        if (bit_test(c, i - 1))
             r = ecc::add(r, p);
     }
     return r;
