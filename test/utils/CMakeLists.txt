@@ -4,13 +4,13 @@
 
 find_package(intx CONFIG REQUIRED)
 
-add_library(testutils STATIC)
-add_library(evmone::testutils ALIAS testutils)
-target_link_libraries(testutils PUBLIC evmc::evmc_cpp)
-target_include_directories(testutils INTERFACE ${PROJECT_SOURCE_DIR} ${evmone_private_include_dir})
+add_library(evmone.testutils STATIC)
+add_library(evmone::testutils ALIAS evmone.testutils)
+target_link_libraries(evmone.testutils PUBLIC evmc::evmc_cpp)
+target_include_directories(evmone.testutils INTERFACE ${PROJECT_SOURCE_DIR} ${evmone_private_include_dir})
 
 target_sources(
-    testutils
+    evmone.testutils
     PRIVATE
     blob_schedule.hpp
     blob_schedule.cpp
