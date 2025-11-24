@@ -1,5 +1,5 @@
 # evmone: Fast Ethereum Virtual Machine implementation
-# Copyright 2018-2020 The evmone Authors.
+# Copyright 2018 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 # The internal evmone unit tests. The generic EVM ones are also built in.
@@ -79,13 +79,8 @@ target_sources(
     statetest_withdrawals_test.cpp
     tracing_test.cpp
 )
-target_link_libraries(evmone-unittests PRIVATE evmone evmone::evmmax evmone::experimental evmone::state evmone::statetestutils testutils GTest::gtest GTest::gtest_main)
+target_link_libraries(evmone-unittests PRIVATE evmone evmone::evmmax evmone::experimental evmone::state evmone::statetestutils evmone::testutils GTest::gtest GTest::gtest_main)
 target_include_directories(evmone-unittests PRIVATE ${evmone_private_include_dir})
-target_compile_options(evmone-unittests PRIVATE
-    # Disable false positive C4789
-    # https://developercommunity.visualstudio.com/t/False-positive-buffer-overrun-warning-C/10666762
-    $<$<CXX_COMPILER_ID:MSVC>:-wd4789>
-)
 
 gtest_discover_tests(
     evmone-unittests
@@ -93,13 +88,6 @@ gtest_discover_tests(
     PROPERTIES
     ENVIRONMENT LLVM_PROFILE_FILE=${PROJECT_BINARY_DIR}/unittests-%p.profraw
 )
-
-option(EVMONE_EVM_TEST_TOOL "Enable EVM unit testing tool for EVMC implementations (not maintained)" OFF)
-if(EVMONE_EVM_TEST_TOOL)
-    # The evm-test tool that contains the all evm-unittests and loads VMs as EVMC modules.
-    add_executable(evm-test main.cpp)
-    target_link_libraries(evm-test PRIVATE evm-unittests testutils evmc::evmc evmc::loader GTest::gtest)
-endif()
 
 # Provide the project version to selected source files.
 set_source_files_properties(
