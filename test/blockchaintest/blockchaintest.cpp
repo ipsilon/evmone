@@ -2,7 +2,7 @@
 // Copyright 2023 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "blockchaintest.hpp"
+#include "blockchaintest_runner.hpp"
 #include <CLI/CLI.hpp>
 #include <evmone/evmone.h>
 #include <evmone/version.h>

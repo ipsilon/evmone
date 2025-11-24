@@ -16,6 +16,9 @@ find_package(benchmark CONFIG REQUIRED)
 hunter_add_package(nlohmann_json)
 find_package(nlohmann_json CONFIG REQUIRED)
 
+include(CableBuildInfo)
+cable_add_buildinfo_library(PROJECT_NAME evmone)
+
 add_subdirectory(utils)
 add_subdirectory(bench)
 add_subdirectory(blockchaintest)

@@ -4,7 +4,7 @@
 
 #include <gmock/gmock.h>
 #include <intx/intx.hpp>
-#include <test/statetest/statetest.hpp>
+#include <test/utils/statetest.hpp>
 
 using namespace evmone;
 using namespace intx::literals;

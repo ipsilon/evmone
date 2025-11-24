@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "../state/block.hpp"
-#include "../state/bloom_filter.hpp"
-#include "../state/test_state.hpp"
-#include "../state/transaction.hpp"
-#include "../utils/blob_schedule.hpp"
-#include "../utils/utils.hpp"
 #include <evmc/evmc.hpp>
+#include <test/state/block.hpp>
+#include <test/state/bloom_filter.hpp>
+#include <test/state/test_state.hpp>
+#include <test/state/transaction.hpp>
+#include <test/utils/blob_schedule.hpp>
+#include <test/utils/utils.hpp>
 #include <span>
 #include <vector>
 
@@ -77,7 +77,4 @@ struct BlockchainTest
 };
 
 std::vector<BlockchainTest> load_blockchain_tests(std::istream& input);
-
-void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm);
-
 }  // namespace evmone::test

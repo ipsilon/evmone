@@ -2,11 +2,11 @@
 // Copyright 2022 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "statetest.hpp"
 #include <CLI/CLI.hpp>
 #include <evmone/evmone.h>
 #include <evmone/version.h>
 #include <gtest/gtest.h>
+#include <test/utils/statetest.hpp>
 #include <iostream>
 
 namespace fs = std::filesystem;

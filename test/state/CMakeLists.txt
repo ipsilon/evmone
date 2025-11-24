@@ -4,8 +4,9 @@
 
 add_library(evmone-state STATIC)
 add_library(evmone::state ALIAS evmone-state)
+target_compile_features(evmone-state PUBLIC cxx_std_20)
 target_link_libraries(evmone-state PUBLIC evmone::precompiles evmc::evmc_cpp PRIVATE evmone)
-target_include_directories(evmone-state PRIVATE ${evmone_private_include_dir})
+target_include_directories(evmone-state PUBLIC ${PROJECT_SOURCE_DIR})
 target_sources(
     evmone-state PRIVATE
     account.hpp

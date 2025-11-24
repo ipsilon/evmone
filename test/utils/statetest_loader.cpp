@@ -2,13 +2,12 @@
 // Copyright 2022 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "../utils/stdx/utility.hpp"
-#include "../utils/utils.hpp"
 #include "statetest.hpp"
-#include <test/state/precompiles.hpp>
-
+#include "stdx/utility.hpp"
+#include "utils.hpp"
 #include <evmone/delegation.hpp>
 #include <nlohmann/json.hpp>
+#include <test/state/precompiles.hpp>
 
 namespace evmone::test
 {

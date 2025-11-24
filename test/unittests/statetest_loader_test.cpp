@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <gmock/gmock.h>
-#include <test/statetest/statetest.hpp>
+#include <test/utils/statetest.hpp>
 #include <test/utils/utils.hpp>
 
 using namespace evmone;

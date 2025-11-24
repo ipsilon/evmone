@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "../state/block.hpp"
-#include "../state/errors.hpp"
-#include "../state/test_state.hpp"
-#include "../state/transaction.hpp"
-#include "../utils/blob_schedule.hpp"
+#include "blob_schedule.hpp"
 #include <nlohmann/json.hpp>
+#include <test/state/block.hpp>
+#include <test/state/errors.hpp>
+#include <test/state/test_state.hpp>
+#include <test/state/transaction.hpp>
 
 namespace json = nlohmann;
 

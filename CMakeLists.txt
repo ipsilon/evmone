@@ -132,6 +132,9 @@ if(EVMONE_FUZZING)
     endif()
 endif()
 
+hunter_add_package(intx)
+find_package(intx CONFIG REQUIRED)
+
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_subdirectory(lib)

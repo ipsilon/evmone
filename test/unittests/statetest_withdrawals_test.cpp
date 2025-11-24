@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 #include <test/state/mpt_hash.hpp>
-#include <test/statetest/statetest.hpp>
+#include <test/utils/statetest.hpp>
 
 using namespace evmone;
 using namespace evmone::state;

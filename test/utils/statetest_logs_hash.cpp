@@ -2,8 +2,8 @@
 // Copyright 2022 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "../state/rlp.hpp"
 #include "statetest.hpp"
+#include <test/state/rlp.hpp>
 
 namespace evmone::test
 {

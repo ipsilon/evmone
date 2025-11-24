@@ -2,13 +2,13 @@
 // Copyright 2023 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "../state/ethash_difficulty.hpp"
-#include "../state/mpt_hash.hpp"
-#include "../state/requests.hpp"
-#include "../state/rlp.hpp"
-#include "../test/statetest/statetest.hpp"
-#include "blockchaintest.hpp"
+#include "blockchaintest_runner.hpp"
 #include <gtest/gtest.h>
+#include <test/state/ethash_difficulty.hpp>
+#include <test/state/mpt_hash.hpp>
+#include <test/state/requests.hpp>
+#include <test/state/rlp.hpp>
+#include <test/utils/statetest.hpp>
 
 namespace evmone::test
 {

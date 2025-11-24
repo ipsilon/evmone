@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <gmock/gmock.h>
-#include <test/blockchaintest/blockchaintest.hpp>
+#include <test/utils/blockchaintest.hpp>
 #include <test/utils/utils.hpp>
 
 using namespace evmone;
