@@ -127,7 +127,7 @@ int main(int argc, char* argv[])
         bool trace_flag = false;
         app.add_flag("--trace", trace_flag, "Enable EVM tracing");
 
-        CLI11_PARSE(app, argc, argv);
+        CLI11_PARSE(app, argc, argv)
 
         evmc::VM vm{evmc_create_evmone()};
 
