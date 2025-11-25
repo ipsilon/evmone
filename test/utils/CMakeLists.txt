@@ -9,12 +9,16 @@ target_link_libraries(evmone.testutils PUBLIC evmone::state evmc::evmc_cpp nlohm
 target_sources(
     evmone.testutils
     PRIVATE
+    stdx/utility.hpp
     blob_schedule.hpp
     blob_schedule.cpp
     blockchaintest.hpp
     blockchaintest_loader.cpp
     bytecode.hpp
-    stdx/utility.hpp
+    mpt.hpp
+    mpt.cpp
+    mpt_hash.hpp
+    mpt_hash.cpp
     statetest.hpp
     statetest_export.cpp
     statetest_loader.cpp

@@ -4,10 +4,10 @@
 
 #include <gtest/gtest.h>
 #include <test/state/bloom_filter.hpp>
-#include <test/state/mpt.hpp>
-#include <test/state/mpt_hash.hpp>
 #include <test/state/rlp.hpp>
 #include <test/state/state.hpp>
+#include <test/utils/mpt.hpp>
+#include <test/utils/mpt_hash.hpp>
 #include <test/utils/test_state.hpp>
 #include <test/utils/utils.hpp>
 #include <array>

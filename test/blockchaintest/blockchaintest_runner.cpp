@@ -5,9 +5,9 @@
 #include "blockchaintest_runner.hpp"
 #include <gtest/gtest.h>
 #include <test/state/ethash_difficulty.hpp>
-#include <test/state/mpt_hash.hpp>
 #include <test/state/requests.hpp>
 #include <test/state/rlp.hpp>
+#include <test/utils/mpt_hash.hpp>
 #include <test/utils/statetest.hpp>
 
 namespace evmone::test

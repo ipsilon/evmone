@@ -2,8 +2,8 @@
 // Copyright 2023 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "mpt_hash.hpp"
 #include "statetest.hpp"
-#include <test/state/mpt_hash.hpp>
 
 namespace evmone::test
 {

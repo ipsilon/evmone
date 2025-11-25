@@ -21,10 +21,6 @@ target_sources(
     hash_utils.hpp
     host.hpp
     host.cpp
-    mpt.hpp
-    mpt.cpp
-    mpt_hash.hpp
-    mpt_hash.cpp
     precompiles.hpp
     precompiles.cpp
     precompiles_internal.hpp

@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "mpt_hash.hpp"
-#include "block.hpp"
 #include "mpt.hpp"
-#include "rlp.hpp"
-#include "transaction.hpp"
-#include <test/utils/test_state.hpp>
+#include "test_state.hpp"
+#include <test/state/block.hpp>
+#include <test/state/rlp.hpp>
+#include <test/state/transaction.hpp>
 
 namespace evmone::state
 {

@@ -8,9 +8,9 @@
 #include <nlohmann/json.hpp>
 #include <test/state/errors.hpp>
 #include <test/state/ethash_difficulty.hpp>
-#include <test/state/mpt_hash.hpp>
 #include <test/state/requests.hpp>
 #include <test/state/rlp.hpp>
+#include <test/utils/mpt_hash.hpp>
 #include <test/utils/statetest.hpp>
 #include <test/utils/utils.hpp>
 #include <filesystem>
