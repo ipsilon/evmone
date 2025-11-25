@@ -4,7 +4,6 @@
 
 #include <gtest/gtest.h>
 #include <test/state/bloom_filter.hpp>
-#include <test/state/rlp.hpp>
 #include <test/state/state.hpp>
 #include <test/utils/mpt.hpp>
 #include <test/utils/mpt_hash.hpp>

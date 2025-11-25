@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 #include <test/state/host.hpp>
-#include <test/state/rlp.hpp>
+#include <test/utils/rlp.hpp>
 
 using namespace evmc;
 using namespace evmc::literals;

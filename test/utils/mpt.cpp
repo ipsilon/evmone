@@ -4,7 +4,7 @@
 
 #include "mpt.hpp"
 #include "mpt_hash.hpp"
-#include <test/state/rlp.hpp>
+#include "rlp.hpp"
 #include <algorithm>
 #include <cassert>
 

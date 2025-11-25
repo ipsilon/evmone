@@ -28,7 +28,6 @@ target_sources(
     precompiles_stubs.cpp
     requests.hpp
     requests.cpp
-    rlp.hpp
     state.hpp
     state.cpp
     state_diff.hpp
@@ -36,7 +35,6 @@ target_sources(
     system_contracts.hpp
     system_contracts.cpp
     transaction.hpp
-    transaction.cpp
 )
 
 option(EVMONE_PRECOMPILES_SILKPRE "Enable precompiles from silkpre library (for benchmarking only)" OFF)

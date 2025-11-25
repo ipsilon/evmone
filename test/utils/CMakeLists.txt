@@ -19,6 +19,9 @@ target_sources(
     mpt.cpp
     mpt_hash.hpp
     mpt_hash.cpp
+    rlp.hpp
+    rlp_encode.hpp
+    rlp_encode.cpp
     statetest.hpp
     statetest_export.cpp
     statetest_loader.cpp
