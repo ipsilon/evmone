@@ -7,7 +7,7 @@
 #include <evmone/evmone.h>
 #include <test/state/errors.hpp>
 #include <test/state/host.hpp>
-#include <test/state/test_state.hpp>
+#include <test/utils/test_state.hpp>
 
 namespace evmone::test
 {

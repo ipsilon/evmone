@@ -6,8 +6,8 @@
 #include "block.hpp"
 #include "mpt.hpp"
 #include "rlp.hpp"
-#include "test_state.hpp"
 #include "transaction.hpp"
+#include <test/utils/test_state.hpp>
 
 namespace evmone::state
 {

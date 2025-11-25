@@ -7,8 +7,8 @@
 #include <nlohmann/json.hpp>
 #include <test/state/block.hpp>
 #include <test/state/errors.hpp>
-#include <test/state/test_state.hpp>
 #include <test/state/transaction.hpp>
+#include <test/utils/test_state.hpp>
 
 namespace json = nlohmann;
 

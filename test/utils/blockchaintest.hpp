@@ -6,11 +6,10 @@
 #include <evmc/evmc.hpp>
 #include <test/state/block.hpp>
 #include <test/state/bloom_filter.hpp>
-#include <test/state/test_state.hpp>
 #include <test/state/transaction.hpp>
 #include <test/utils/blob_schedule.hpp>
+#include <test/utils/test_state.hpp>
 #include <test/utils/utils.hpp>
-#include <span>
 #include <vector>
 
 namespace evmone::test

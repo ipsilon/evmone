@@ -19,6 +19,8 @@ target_sources(
     statetest_export.cpp
     statetest_loader.cpp
     statetest_logs_hash.cpp
+    test_state.hpp
+    test_state.cpp
     utils.hpp
     utils.cpp
 )

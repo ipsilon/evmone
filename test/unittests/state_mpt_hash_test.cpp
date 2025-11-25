@@ -8,7 +8,7 @@
 #include <test/state/mpt_hash.hpp>
 #include <test/state/rlp.hpp>
 #include <test/state/state.hpp>
-#include <test/state/test_state.hpp>
+#include <test/utils/test_state.hpp>
 #include <test/utils/utils.hpp>
 #include <array>
 

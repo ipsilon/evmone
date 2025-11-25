@@ -39,8 +39,6 @@ target_sources(
     state_view.hpp
     system_contracts.hpp
     system_contracts.cpp
-    test_state.hpp
-    test_state.cpp
     transaction.hpp
     transaction.cpp
 )
