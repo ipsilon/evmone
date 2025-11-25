@@ -119,6 +119,8 @@ endif()
             -Wno-deprecated-copy-with-dtor
             -Wno-switch-enum
             -Wno-used-but-marked-unused
+            -Wno-switch-default
+            -Wno-ctad-maybe-unsupported
         )
     endif()
 
