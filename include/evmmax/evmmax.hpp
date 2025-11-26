@@ -83,7 +83,12 @@ public:
         // Based on 2.3.2 from
         // High-Speed Algorithms & Architectures For Number-Theoretic Cryptosystems
         // https://www.microsoft.com/en-us/research/wp-content/uploads/1998/06/97Acar.pdf
+        // and on 2.2 from
+        // EdMSM: Multi-Scalar-Multiplication for SNARKs and Faster Montgomery multiplication
+        // https://eprint.iacr.org/2022/1400.pdf
 
+        constexpr uint64_t most_significant_mod_word_limit{
+            std::numeric_limits<uint64_t>::max() >> 1};
         constexpr auto S = UintT::num_words;  // TODO(C++23): Make it static
 
         intx::uint<UintT::num_bits + 64> t;
@@ -93,18 +98,35 @@ public:
 #pragma GCC unroll 8
             for (size_t j = 0; j != S; ++j)
                 std::tie(c, t[j]) = addmul(t[j], x[j], y[i], c);
-            auto tmp = intx::addc(t[S], c);
-            t[S] = tmp.value;
-            const auto d = tmp.carry;  // TODO: Carry is 0 for sparse modulus.
+
+            uint64_t carry = 0;
+            if (mod[S - 1] < most_significant_mod_word_limit)
+            {
+                carry = c;
+            }
+            else
+            {
+                auto tmp = intx::addc(t[S], c);
+                t[S] = tmp.value;
+                carry = tmp.carry;
+            }
 
             const auto m = t[0] * m_mod_inv;
             std::tie(c, std::ignore) = addmul(t[0], m, mod[0], 0);
 #pragma GCC unroll 8
             for (size_t j = 1; j != S; ++j)
                 std::tie(c, t[j - 1]) = addmul(t[j], m, mod[j], c);
-            tmp = intx::addc(t[S], c);
-            t[S - 1] = tmp.value;
-            t[S] = d + tmp.carry;  // TODO: Carry is 0 for sparse modulus.
+
+            if (mod[S - 1] < most_significant_mod_word_limit)
+            {
+                t[S - 1] = carry + c;
+            }
+            else
+            {
+                auto tmp = intx::addc(t[S], c);
+                t[S - 1] = tmp.value;
+                t[S] = carry + tmp.carry;
+            }
         }
 
         if (t >= mod)
