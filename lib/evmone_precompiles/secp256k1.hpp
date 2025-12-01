@@ -27,6 +27,14 @@ struct Curve
     static constexpr ModArith Fp{FIELD_PRIME};
 
     static constexpr auto A = 0;
+
+    static constexpr auto LAMBDA = 0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72_u256;
+    static constexpr auto X1 = 64502973549206556628585045361533709077_u256;
+    static constexpr auto MINUS_Y1 = 303414439467246543595250775667605759171_u256;
+    static constexpr auto X2 = 367917413016453100223835821029139468248_u256;
+    static constexpr auto Y2 = 64502973549206556628585045361533709077_u256;
+    static constexpr auto BETA = ecc::FieldElement<Curve>::wrap(
+        55313291615161283318657529331139468956476901535073802794763309073431015819598_u256);
 };
 
 using AffinePoint = ecc::AffinePoint<Curve>;

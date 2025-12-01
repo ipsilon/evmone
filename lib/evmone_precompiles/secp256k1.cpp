@@ -57,6 +57,8 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> 
     if (r == 0 || r >= Curve::ORDER || s == 0 || s >= Curve::ORDER) [[unlikely]]
         return std::nullopt;
 
+    // static_assert(Curve::BETA.value() == 0x851695D49A83F8F47C65C9F7A2F5D6C71AE3A4617C510EA45F0E1E4A1E6D8B63_u256);
+
     // 3. Hash of the message is already calculated in e.
     // 4. Convert hash e to z field element by doing z = e % n.
     //    https://www.rfc-editor.org/rfc/rfc6979#section-2.3.2
@@ -85,8 +87,20 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> 
         return std::nullopt;
 
     // 6. Calculate public key point Q = u1×G + u2×R.
-    const auto R = AffinePoint{r_mont, *y};
-    const auto Q = msm(u1, G, u2, R);
+    const auto R = AffinePoint{r_mont, *y_mont};
+
+    // u1 and u2 are less than `Curve::ORDER`, so the multiplications will not reduce.
+    const auto [u1k1, u1k2] = ecc::decompose<Curve>(u1);
+    const auto [u2k1, u2k2] = ecc::decompose<Curve>(u2);
+
+    const auto LG = AffinePoint{Curve::BETA * G.x, !u1k2.sign ? G.y : -G.y};
+    const auto LR = AffinePoint{Curve::BETA * R.x, !u2k2.sign ? R.y : -R.y};
+
+    const auto T1 = msm(u1k1.value, !u1k1.sign ? G : AffinePoint{G.x, -G.y}, u1k2.value, LG);
+    const auto T2 = msm(u2k1.value, !u2k1.sign ? R : AffinePoint{R.x, -R.y}, u2k2.value, LR);
+    assert(T2 != 0);  // Because u2 != 0 and R != 0.
+
+    const auto Q = ecc::add(T1, T2);
 
     // The public key mustn't be the point at infinity. This check is cheaper on a non-affine point.
     if (Q == 0) [[unlikely]]

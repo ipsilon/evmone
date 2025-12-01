@@ -625,6 +625,16 @@ std::array<SignedScalar<typename Curve::uint_type>, 2> decompose(
     const SignedScalar k1{k1_is_neg, k1_abs};
     const SignedScalar k2{k2_is_neg, k2_abs};
     assert(verify_scalar_decomposition<Curve>(k, k1, k2));
+
+    // FIXME: Bounds for fuzzing, remove.
+    // static_assert(Curve::Y2 < Curve::X1);
+    // static_assert(Curve::X2 < Curve::Y2);
+    // static_assert(Curve::MINUS_Y1 < Curve::X2);
+    // [[maybe_unused]] static constexpr auto K1_MAX = Curve::Y2;
+    // [[maybe_unused]] static constexpr auto K2_MAX = Curve::X2 - 1;
+    // assert(k1.value <= K1_MAX);
+    // assert(k2.value <= K2_MAX);
+
     return {k1, k2};
 }
 
