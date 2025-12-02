@@ -316,12 +316,10 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
 /// Mixed addition of elliptic curve points.
 ///
 /// Computes P ⊕ Q for a point P in Jacobian coordinates and a point Q in affine coordinates.
-/// This procedure is for use in point multiplication and not all inputs are supported.
+/// This procedure handles all inputs (e.g. doubling or points at infinity).
 template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
-    assert(p != ProjPoint(q));
-
     if (q == 0)
         // TODO: Untested and untestable via precompile call (for secp256r1).
         return p;
@@ -330,6 +328,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
 
     // Use the "madd" formula for curve in Jacobian coordinates.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
+    // Modified to properly support adding the same point.
 
     const auto& [x1, y1, z1] = p;
     const auto& [x2, y2] = q;
@@ -343,6 +342,11 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     const auto i = t1 * t1;
     const auto j = h * i;
     const auto t2 = s2 - y1;
+    // Handle point doubling in case p == q.
+    // p == q (in jacobian coordinates) if and only if x1 == x2 * z1z1 and y1 = y2 * z1z1z1
+    if (h == 0 && t2 == 0) [[unlikly]]
+        return dbl(p);
+
     const auto r = t2 + t2;
     const auto v = x1 * i;
     const auto t3 = r * r;
@@ -450,4 +454,38 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
     }
     return r;
 }
+
+// Computes uG + vQ using "Shamir's trick". https://eprint.iacr.org/2003/257.pdf (page 7)
+// Input arguments must be in Montgomery form, and it returns result in Montgomery form.
+template <typename Curve>
+inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u,
+    const AffinePoint<Curve>& g, const typename Curve::uint_type& v, const AffinePoint<Curve>& q)
+{
+    ProjPoint<Curve> r;
+
+    const auto w = u | v;
+    const auto bit_width = sizeof(w) * 8 - intx::clz(w);
+    if (bit_width == 0)
+        return r;
+
+    // This overload works well when adding the same point.
+    const AffinePoint h = add(g, q);
+
+    const AffinePoint<Curve>* const points[]{nullptr, &g, &q, &h};
+
+    for (auto i = bit_width; i != 0; --i)
+    {
+        r = dbl(r);
+
+        const auto u_bit = bit_test(u, i - 1);
+        const auto v_bit = bit_test(v, i - 1);
+        const auto idx = (v_bit << 1) | u_bit;
+        if (idx == 0)
+            continue;
+        r = add(r, *points[idx]);
+    }
+
+    return r;
+}
+
 }  // namespace evmmax::ecc
