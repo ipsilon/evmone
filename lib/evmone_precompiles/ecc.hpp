@@ -455,11 +455,11 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
     return r;
 }
 
-/// Computes multi-scalar multiplication of  uP + vQ.
+/// Computes multi-scalar multiplication of u×P ⊕ v×Q.
 ///
-/// The implementation uses the "Shamir's trick": https://eprint.iacr.org/2003/257.pdf (page 7).
+/// The implementation uses the "Straus-Shamir trick": https://eprint.iacr.org/2003/257.pdf#page=7.
 template <typename Curve>
-ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u, const AffinePoint<Curve>& p,
+ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve>& p,
     const typename Curve::uint_type& v, const AffinePoint<Curve>& q)
 {
     ProjPoint<Curve> r;

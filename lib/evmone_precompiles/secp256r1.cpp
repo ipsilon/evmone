@@ -50,7 +50,7 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     const auto u2 = n.from_mont(n.mul(n.to_mont(r), s_inv));
 
     // 5. Calculate the curve point R = (x₁, y₁) = u₁×G + u₂×Q.
-    const auto R = ecc::to_affine(shamir_multiply(u1, G, u2, Q));
+    const auto R = ecc::to_affine(msm(u1, G, u2, Q));
 
     //    If R is at infinity, the signature is invalid.
     //    In this case x₁ is 0 and cannot be equal to r.
