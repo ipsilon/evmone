@@ -115,14 +115,10 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
 
     const auto LG = AffinePoint{BETA * G.x, !u1k2.first ? G.y : -G.y};
     const auto LR = AffinePoint{BETA * R.x, !u2k2.first ? R.y : -R.y};
+    
+    const auto Q = shamir_multiply(u1k1.second, !u1k1.first ? G : AffinePoint{G.x, -G.y},
+        u1k2.second, LG, u2k1.second, !u2k1.first ? R : AffinePoint{R.x, -R.y}, u2k2.second, LR);
 
-    const auto T1 =
-        shamir_multiply(u1k1.second, !u1k1.first ? G : AffinePoint{G.x, -G.y}, u1k2.second, LG);
-    const auto T2 =
-        shamir_multiply(u2k1.second, !u2k1.first ? R : AffinePoint{R.x, -R.y}, u2k2.second, LR);
-    assert(T2 != 0);  // Because u2 != 0 and R != 0.
-
-    const auto Q = ecc::add(T1, T2);
     // Any other validity check needed?
     if (Q == 0)
         return std::nullopt;
