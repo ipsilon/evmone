@@ -516,6 +516,71 @@ ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve
     return r;
 }
 
+template <typename Curve>
+inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
+    const AffinePoint<Curve>& p1, const typename Curve::uint_type& u2, const AffinePoint<Curve>& p2,
+    const typename Curve::uint_type& u3, const AffinePoint<Curve>& p3,
+    const typename Curve::uint_type& u4, const AffinePoint<Curve>& p4)
+{
+    ProjPoint<Curve> r;
+
+    const auto w = u1 | u2 | u3 | u4;
+    const auto bit_width = sizeof(w) * 8 - intx::clz(w);
+    if (bit_width == 0)
+        return r;
+
+    const auto p1p2 = add(p1, p2);
+    const auto p1p3 = add(p1, p3);
+    const auto p1p4 = add(p1, p4);
+    const auto p2p3 = add(p2, p3);
+    const auto p2p4 = add(p2, p4);
+    const auto p3p4 = add(p3, p4);
+
+    const auto p1p2p3 = add(p1p2, p3);
+    const auto p1p2p4 = add(p1p2, p4);
+
+    const auto p1p3p4 = add(p1p3, p4);
+
+    const auto p2p3p4 = add(p2p3, p4);
+
+    const auto p1p2p3p4 = add(p1p2, p3p4);
+
+    const AffinePoint<Curve>* const points[]{
+        nullptr,
+        &p1,        // 0001
+        &p2,        // 0010
+        &p1p2,      // 0011
+        &p3,        // 0100
+        &p1p3,      // 0101
+        &p2p3,      // 0110
+        &p1p2p3,    // 0111
+        &p4,        // 1000
+        &p1p4,      // 1001
+        &p2p4,      // 1010
+        &p1p2p4,    // 1011
+        &p3p4,      // 1100
+        &p1p3p4,    // 1101
+        &p2p3p4,    // 1110
+        &p1p2p3p4,  // 1111
+    };
+
+    for (auto i = bit_width; i != 0; --i)
+    {
+        r = dbl(r);
+
+        const auto u1_bit = bit_test(u1, i - 1);
+        const auto u2_bit = bit_test(u2, i - 1);
+        const auto u3_bit = bit_test(u3, i - 1);
+        const auto u4_bit = bit_test(u4, i - 1);
+        const auto idx = u1_bit | (u2_bit << 1) | (u3_bit << 2) | (u4_bit << 3);
+        if (idx == 0)
+            continue;
+        r = add(r, *points[idx]);
+    }
+
+    return r;
+}
+
 template <typename UIntT>
 struct SignedScalar
 {
