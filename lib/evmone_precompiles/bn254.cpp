@@ -6,6 +6,32 @@
 
 namespace evmmax::bn254
 {
+namespace
+{
+
+struct Config
+{
+    // Linearly independent short vectors (𝑣₁=(𝑥₁, 𝑦₁), 𝑣₂=(x₂, 𝑦₂)) such that f(𝑣₁) = f(𝑣₂) = 0,
+    // where f : ℤ×ℤ → ℤₙ is defined as (𝑖,𝑗) → (𝑖+𝑗λ), where λ² + λ ≡ -1 mod n. n is bn245 curve
+    // order. Here λ = 0xb3c4d79d41a917585bfc41088d8daaa78b17ea66b99c90dd. DET is (𝑣₁, 𝑣₂) matrix
+    // determinant. For more details see https://www.iacr.org/archive/crypto2001/21390189.pdf
+    static constexpr auto X1 = 147946756881789319020627676272574806254_u512;
+    // Y1 should be negative, hence we calculate the determinant below adding operands instead of
+    // subtracting.
+    static constexpr auto Y1 = 147946756881789318990833708069417712965_u512;
+    static constexpr auto X2 = 147946756881789319000765030803803410728_u512;
+    static constexpr auto Y2 = 147946756881789319010696353538189108491_u512;
+    static constexpr auto DET =
+        43776485743678550444492811490514550177096728800832068687396408373151616991234_u256;
+    static constexpr auto HALF = DET / 2;
+};
+
+// For bn254 curve and β ∈ 𝔽ₚ endomorphism ϕ : E₂ → E₂ defined as (𝑥,𝑦) → (β𝑥,𝑦) calculates [λ](𝑥,𝑦)
+// with only one multiplication in 𝔽ₚ. BETA value in Montgomery form;
+inline constexpr auto BETA = ecc::FieldElement<Curve>::wrap(
+    20006444479023397533370224967097343182639219473961804911780625968796493078869_u256);
+}  // namespace
+
 static_assert(AffinePoint{} == 0, "default constructed is the point at infinity");
 
 bool validate(const AffinePoint& pt) noexcept
@@ -18,7 +44,19 @@ bool validate(const AffinePoint& pt) noexcept
 
 AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept
 {
-    const auto pr = ecc::mul(pt, c);
+    if (pt == 0)
+        return pt;
+
+    if (c == 0)
+        return {};
+
+    const auto [k1, k2] = ecc::decompose<Config>(c);
+
+    const auto q = AffinePoint{BETA * pt.x, !k2.first ? pt.y : -pt.y};
+    const auto p = !k1.first ? pt : AffinePoint{pt.x, -pt.y};
+
+    const auto pr = msm(k1.second, p, k2.second, q);
+
     return ecc::to_affine(pr);
 }
 }  // namespace evmmax::bn254
