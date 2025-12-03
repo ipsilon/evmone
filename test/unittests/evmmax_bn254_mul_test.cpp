@@ -9,6 +9,192 @@
 using namespace evmmax::bn254;
 using namespace evmone::test;
 
+TEST(evmmax, bn254_decompose)
+{
+    struct TestCase
+    {
+        uint256 k;
+        bool sign1 = false;
+        uint256 k1;
+        bool sign2 = false;
+        uint256 k2;
+    };
+
+    static const std::vector<TestCase> TEST_CASES = {
+        {0, false, 0, false, 0},
+        {1, false, 1, false, 0},
+        {
+            // For k = LAMBDA, the optimal decomposition is (0, 1)
+            // but the algorithm returns some other solution.
+            Curve::LAMBDA,
+            false,
+            0x89d3256894d213e3,
+            true,
+            Curve::X2 - 1,
+        },
+        {
+            Curve::ORDER - Curve::LAMBDA,
+            false,
+            0,
+            true,
+            1,
+        },
+        {
+            2 * Curve::ORDER,  // DET
+            false,
+            0,
+            false,
+            0,
+        },
+        {
+            2 * Curve::ORDER - 1,  // DET-1
+            true,
+            1,
+            false,
+            0,
+        },
+        {
+            2 * Curve::ORDER + 1,  // DET+1
+            false,
+            1,
+            false,
+            0,
+        },
+        {
+            Curve::ORDER,  // DET/2
+            false,
+            Curve::Y2,
+            false,
+            0x89d3256894d213e3,
+        },
+        {
+            Curve::ORDER - 1,  // DET/2-1
+            false,
+            Curve::Y2 - 1,
+            false,
+            0x89d3256894d213e3,
+        },
+        {
+            Curve::ORDER + 1,  // DET/2+1
+            true,
+            Curve::Y2 - 1,
+            true,
+            0x89d3256894d213e3,
+        },
+        {
+            0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff_u256,
+            true,
+            0x272d9e49b8c8ca4335756fc61411a7a3_u128,
+            false,
+            0x3f296ebc4b455178a6a2b71572d476d6_u128,
+        },
+        {
+            0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff_u256 % Curve::ORDER,
+            true,
+            0x272d9e49b8c8ca42aba24a5d7f3f93c0_u128,
+            true,
+            0x3024138ca3730883db6f04d60a7a9a52_u128,
+        },
+        {
+            0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff_u256 %
+                Curve::FIELD_PRIME,
+            true,
+            0x272d9e49b8c8ca3dd335f9b043dce0ca_u128,
+            false,
+            0x3f296ebc4b45517b57c272205aeeda45_u128,
+        },
+        {
+            Curve::X1,
+            false,
+            0,
+            false,
+            Curve::MINUS_Y1,
+        },
+        {
+            Curve::X2,
+            false,
+            Curve::X2,
+            false,
+            0,
+        },
+        {
+            Curve::MINUS_Y1,
+            false,
+            Curve::MINUS_Y1,
+            false,
+            0,
+        },
+        {
+            Curve::Y2,
+            true,
+            0x89d3256894d213e3,
+            false,
+            Curve::MINUS_Y1,
+        },
+        // Fuzzer finds:
+        {
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1fd91c6ea5404_u256,
+            true,
+            0x6f4d8248eeb859fd0be4d9563b36d108_u128,
+            true,
+            0x89d3256894d213e3,
+        },
+        {
+            0x30644e72e131a029b85045b68181585d9781875b000000000000000000000000_u256,
+            false,
+            0x1cc9978e3571b0392917fddedaf4_u128,
+            true,
+            0x89d3256894d213e3,
+        },
+        {
+            0x00b3c4d79d41a917585bfc41088d8daaa78b17e6af48a03bbfd25e8cd0364141_u256,
+            true,
+            0x3b770fc551d2da1732fc9bebf_u128,
+            false,
+            0x100000000000000,
+        },
+        {
+            0x30644e72e131a02a6c151d53c32a6fb58431295107473e18805b7c56ba7d94de_u256,
+            false,
+            0x10000000022dfb1619c5c10e10400_u128,
+            false,
+            1,
+        },
+        {
+            0xfffffffffc2f0000000000000000000000000000000000000000000000000000_u256,
+            true,
+            0x4b3beb451625cff3c66c0effee355638_u128,
+            true,
+            0x11e8b394e6bd3d13de2f7f7d38887a8c_u128,
+        },
+        {
+            0x000000000000000059e26bcea0d48bac65a4e1a8be2302524b7e65dd65dedb2a_u256,
+            false,
+            0x36,
+            true,
+            0x44e992b44a6909f1,
+        },
+    };
+
+    static constexpr auto decompose = evmmax::ecc::decompose<Curve>;
+
+    for (const auto& t : TEST_CASES)
+    {
+        const auto& [first, second] = decompose(t.k);
+        const auto& [sign1, k1] = first;
+        const auto& [sign2, k2] = second;
+
+        SCOPED_TRACE(hex(t.k));
+
+        EXPECT_EQ(sign1, t.sign1);
+        EXPECT_EQ(k1, t.k1) << hex(k1) << " != " << hex(t.k1);
+        EXPECT_EQ(sign2, t.sign2);
+        EXPECT_EQ(k2, t.k2) << hex(k2) << " != " << hex(t.k2);
+
+        EXPECT_TRUE(verify_scalar_decomposition<Curve>(t.k, first, second));
+    }
+}
+
 namespace
 {
 struct TestCase

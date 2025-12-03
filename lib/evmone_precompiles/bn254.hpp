@@ -31,6 +31,23 @@ struct Curve
 
     static constexpr auto A = 0;
     static constexpr auto B = ecc::FieldElement<Curve>(3);
+
+    /// Endomorphism parameters. See ecc::decompose().
+    /// @{
+    /// λ
+    static constexpr auto LAMBDA = 0xb3c4d79d41a917585bfc41088d8daaa78b17ea66b99c90dd_u256;
+    /// β
+    static constexpr ecc::FieldElement<Curve> BETA{
+        0x59e26bcea0d48bacd4f263f1acdb5c4f5763473177fffffe_u256};
+    /// x₁
+    static constexpr auto X1 = 0x6f4d8248eeb859fd95b806bca6f338ee_u256;
+    /// -y₁
+    static constexpr auto MINUS_Y1 = 0x6f4d8248eeb859fbf83e9682e87cfd45_u256;
+    /// x₂
+    static constexpr auto X2 = 0x6f4d8248eeb859fc8211bbeb7d4f1128_u256;
+    /// y₂
+    static constexpr auto Y2 = 0x6f4d8248eeb859fd0be4e1541221250b_u256;
+    /// @}
 };
 
 using AffinePoint = ecc::AffinePoint<Curve>;

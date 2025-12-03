@@ -513,4 +513,116 @@ ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve
     return r;
 }
 
+template <typename UIntT>
+struct SignedScalar
+{
+    bool sign = false;  // The sign of the scalar: false = positive, true = negative.
+    UIntT value;
+};
+
+
+/// Verifies k ≡ k₁ + k₂·λ (mod N) and checks that k₁ and k₂ are "short" scalars.
+template <typename Curve>
+[[maybe_unused, nodiscard]] bool verify_scalar_decomposition(const typename Curve::uint_type& k,
+    const SignedScalar<typename Curve::uint_type>& k1,
+    const SignedScalar<typename Curve::uint_type>& k2) noexcept
+{
+    // Verify k ≡ k₁ + k₂·λ (mod N).
+    {
+        static constexpr ModArith N{Curve::ORDER};
+        auto r_k1 = N.to_mont(k1.value);
+        if (k1.sign)
+            r_k1 = N.sub(0, r_k1);
+        auto r_k2 = N.to_mont(k2.value);
+        if (k2.sign)
+            r_k2 = N.sub(0, r_k2);
+
+        const auto r_k = N.to_mont(k);
+
+        const auto right = N.add(r_k1, N.mul(r_k2, N.to_mont(Curve::LAMBDA)));
+        if (r_k != right)
+            return false;
+    }
+
+    // Verify for u = (k₁, k₂) that ‖u‖ <= max(‖v₁‖, ‖v₂‖).
+    {
+        static constexpr auto V1_NORM_SQUARED =
+            Curve::X1 * Curve::X1 + Curve::MINUS_Y1 * Curve::MINUS_Y1;
+        static constexpr auto V2_NORM_SQUARED = Curve::X2 * Curve::X2 + Curve::Y2 * Curve::Y2;
+        static constexpr auto MAX_NORM_SQUARED = std::max(V1_NORM_SQUARED, V2_NORM_SQUARED);
+        const auto u_norm_squared = k1.value * k1.value + k2.value * k2.value;
+        return u_norm_squared <= MAX_NORM_SQUARED;
+    }
+}
+
+/// Decomposes a scalar k into "short" scalars k₁ and k₂ such that k₁ + k₂·λ ≡ k (mod N).
+///
+/// This decomposition allows more efficient scalar multiplication by using the multi-scalar
+/// multiplication (MSM) and the GLV endomorphism.
+/// The endomorphism ϕ: E → E defined as (x,y) → (βx,y) with eigenvalue λ allows computing
+/// [λ](x,y) = (βx,y) with only one multiplication in 𝔽ₚ instead of a full scalar multiplication.
+///
+/// Moreover, to compute the short scalars k₁ and k₂, we need linearly independent short vectors
+/// (v₁=(x₁,y₁), v₂=(x₂,y₂)) such that f(v₁) = f(v₂) = 0,
+/// where f: ℤ×ℤ → ℤₙ is defined as (x,y) → (x + y·λ), where λ² + λ ≡ -1 mod N.
+///
+/// See https://www.iacr.org/archive/crypto2001/21390189.pdf for details.
+///
+/// The Curve type must provide the endomorphism parameters: LAMBDA, BETA, X1, MINUS_Y1, X2, Y2.
+template <typename Curve>
+std::array<SignedScalar<typename Curve::uint_type>, 2> decompose(
+    const typename Curve::uint_type& k) noexcept
+{
+    using UIntT = Curve::uint_type;
+
+    // Validate the provided setup parameters.
+    // λ² + λ ≡ -1 mod n
+    static_assert((umul(Curve::LAMBDA, Curve::LAMBDA) + Curve::LAMBDA + 1) % Curve::ORDER == 0);
+    // f: (x, y) → (x + λy) mod N
+    // f(v₁) = 0
+    static_assert(
+        (Curve::X1 + umul(Curve::ORDER - Curve::MINUS_Y1, Curve::LAMBDA)) % Curve::ORDER == 0);
+    // f(v₂) = 0
+    static_assert((Curve::X2 + umul(Curve::Y2, Curve::LAMBDA)) % Curve::ORDER == 0);
+
+    static constexpr auto round_div = [](const auto& a) noexcept {
+        // DET is the (v₁, v₂) matrix determinant.
+        static constexpr auto WIDE_DET =
+            umul(Curve::X1, Curve::Y2) + umul(Curve::X2, Curve::MINUS_Y1);
+        static_assert(WIDE_DET <= std::numeric_limits<UIntT>::max());
+        static constexpr auto DET = static_cast<UIntT>(WIDE_DET);
+        static constexpr auto HALF_DET = DET / 2;
+
+        const auto [wide_q, r] = udivrem(a, DET);
+        // Division reduces the quotient enough to fit into a single uint.
+        // This can be shown at compile-time by inspecting the DET and Y2/-Y1 values.
+        assert(wide_q < std::numeric_limits<UIntT>::max());
+        const auto q = static_cast<UIntT>(wide_q);
+        return q + (r > HALF_DET);  // Round to nearest.
+    };
+
+    // Solve a system of two equations using Cramer method.
+    // ⎡X1 X2⎤ * ⎡b1⎤ = ⎡k⎤
+    // ⎣Y1 Y2⎦   ⎣b2⎦   ⎣0⎦
+    // and then approximate to the nearest integers:
+    // b1 = ⌊ Y2·k ÷ DET⌉
+    // b2 = ⌊-Y1·k ÷ DET⌉
+    const auto b1 = round_div(umul(k, Curve::Y2));
+    const auto b2 = round_div(umul(k, Curve::MINUS_Y1));
+
+    // k1 = k - (x1*b1 + x2*b2)
+    const auto x1b1_x2b2 = umul(b1, Curve::X1) + umul(b2, Curve::X2);
+    const auto [wide_k1, k1_is_neg] = subc(decltype(x1b1_x2b2){k}, x1b1_x2b2);
+    const auto k1_abs = k1_is_neg ? -static_cast<UIntT>(wide_k1) : static_cast<UIntT>(wide_k1);
+
+    // k2 = 0 - (y1*b1 + y2*b2)
+    const auto [wide_k2, k2_is_neg] = subc(umul(b1, Curve::MINUS_Y1), umul(b2, Curve::Y2));
+    const auto k2_abs = k2_is_neg ? -static_cast<UIntT>(wide_k2) : static_cast<UIntT>(wide_k2);
+
+    const SignedScalar k1{k1_is_neg, k1_abs};
+    const SignedScalar k2{k2_is_neg, k2_abs};
+    assert(verify_scalar_decomposition<Curve>(k, k1, k2));
+    return {k1, k2};
+}
+
 }  // namespace evmmax::ecc
