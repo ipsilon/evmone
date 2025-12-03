@@ -246,6 +246,8 @@ AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q)
         // For coincident points find the slope of the tangent line.
         const auto xx = x1 * x1;
         dy = xx + xx + xx;
+        if constexpr (Curve::A != 0)
+            dy = dy + FieldElement<Curve>{Curve::A};
         dx = y1 + y1;
     }
     const auto slope = dy / dx;
