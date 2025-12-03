@@ -455,11 +455,12 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
     return r;
 }
 
-// Computes uG + vQ using "Shamir's trick". https://eprint.iacr.org/2003/257.pdf (page 7)
-// Input arguments must be in Montgomery form, and it returns result in Montgomery form.
+/// Computes multi-scalar multiplication of  uP + vQ.
+///
+/// The implementation uses the "Shamir's trick": https://eprint.iacr.org/2003/257.pdf (page 7).
 template <typename Curve>
-inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u,
-    const AffinePoint<Curve>& g, const typename Curve::uint_type& v, const AffinePoint<Curve>& q)
+ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u, const AffinePoint<Curve>& p,
+    const typename Curve::uint_type& v, const AffinePoint<Curve>& q)
 {
     ProjPoint<Curve> r;
 
@@ -468,10 +469,12 @@ inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u,
     if (bit_width == 0)
         return r;
 
-    // This overload works well when adding the same point.
-    const AffinePoint h = add(g, q);
+    // Precompute affine P + Q. Works correctly if P == Q.
+    const auto h = add(p, q);
 
-    const AffinePoint<Curve>* const points[]{nullptr, &g, &q, &h};
+    // Create lookup table for points. The index 0 is unused.
+    // TODO: Put 0 at index 0 and use it in the loop to avoid the branch.
+    const AffinePoint<Curve>* const points[]{nullptr, &p, &q, &h};
 
     for (auto i = bit_width; i != 0; --i)
     {
@@ -479,7 +482,7 @@ inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u,
 
         const auto u_bit = bit_test(u, i - 1);
         const auto v_bit = bit_test(v, i - 1);
-        const auto idx = (v_bit << 1) | u_bit;
+        const auto idx = 2 * size_t{v_bit} + size_t{u_bit};
         if (idx == 0)
             continue;
         r = add(r, *points[idx]);
