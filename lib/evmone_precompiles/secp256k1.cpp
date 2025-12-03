@@ -84,13 +84,10 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
     if (!y_mont.has_value())
         return std::nullopt;
 
-    // 6. Calculate public key point Q.
+    // 6. Calculate public key point Q = u1×G + u2×R.
     const auto R = AffinePoint{AffinePoint::FE::wrap(r_mont), AffinePoint::FE::wrap(*y_mont)};
-
-    // u1 and u2 are less than `Curve::ORDER`, so the multiplications will not reduce.
     const auto Q = ecc::to_affine(msm(u1, G, u2, R));
 
-    // Any other validity check needed?
     if (Q == 0)
         return std::nullopt;
 
