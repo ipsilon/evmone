@@ -316,12 +316,10 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
 /// Mixed addition of elliptic curve points.
 ///
 /// Computes P ⊕ Q for a point P in Jacobian coordinates and a point Q in affine coordinates.
-/// This procedure is for use in point multiplication and not all inputs are supported.
+/// This procedure handles all inputs (e.g. doubling or points at infinity).
 template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
-    assert(p != ProjPoint(q));
-
     if (q == 0)
         // TODO: Untested and untestable via precompile call (for secp256r1).
         return p;
@@ -330,6 +328,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
 
     // Use the "madd" formula for curve in Jacobian coordinates.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
+    // Modified to properly support adding the same point.
 
     const auto& [x1, y1, z1] = p;
     const auto& [x2, y2] = q;
@@ -343,6 +342,11 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     const auto i = t1 * t1;
     const auto j = h * i;
     const auto t2 = s2 - y1;
+    // Handle point doubling in case p == q.
+    // p == q (in jacobian coordinates) if and only if x1 == x2 * z1z1 and y1 = y2 * z1z1z1
+    if (h == 0 && t2 == 0) [[unlikly]]
+        return dbl(p);
+
     const auto r = t2 + t2;
     const auto v = x1 * i;
     const auto t3 = r * r;
@@ -450,4 +454,141 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
     }
     return r;
 }
+
+// Computes uG + vQ using "Shamir's trick". https://eprint.iacr.org/2003/257.pdf (page 7)
+// Input arguments must be in Montgomery form, and it returns result in Montgomery form.
+template <typename Curve>
+inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u,
+    const AffinePoint<Curve>& g, const typename Curve::uint_type& v, const AffinePoint<Curve>& q)
+{
+    ProjPoint<Curve> r;
+
+    const auto w = u | v;
+    const auto bit_width = sizeof(w) * 8 - intx::clz(w);
+    if (bit_width == 0)
+        return r;
+
+    // This overload works well when adding the same point.
+    const AffinePoint h = add(g, q);
+
+    const AffinePoint<Curve>* const points[]{nullptr, &g, &q, &h};
+
+    for (auto i = bit_width; i != 0; --i)
+    {
+        r = dbl(r);
+
+        const auto u_bit = bit_test(u, i - 1);
+        const auto v_bit = bit_test(v, i - 1);
+        const auto idx = (v_bit << 1) | u_bit;
+        if (idx == 0)
+            continue;
+        r = add(r, *points[idx]);
+    }
+
+    return r;
+}
+
+template <typename Curve>
+inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
+    const AffinePoint<Curve>& p1, const typename Curve::uint_type& u2, const AffinePoint<Curve>& p2,
+    const typename Curve::uint_type& u3, const AffinePoint<Curve>& p3,
+    const typename Curve::uint_type& u4, const AffinePoint<Curve>& p4)
+{
+    ProjPoint<Curve> r;
+
+    const auto w = u1 | u2 | u3 | u4;
+    const auto bit_width = sizeof(w) * 8 - intx::clz(w);
+    if (bit_width == 0)
+        return r;
+
+    const auto p1p2 = add(p1, p2);
+    const auto p1p3 = add(p1, p3);
+    const auto p1p4 = add(p1, p4);
+    const auto p2p3 = add(p2, p3);
+    const auto p2p4 = add(p2, p4);
+    const auto p3p4 = add(p3, p4);
+
+    const auto p1p2p3 = add(p1p2, p3);
+    const auto p1p2p4 = add(p1p2, p4);
+
+    const auto p1p3p4 = add(p1p3, p4);
+
+    const auto p2p3p4 = add(p2p3, p4);
+
+    const auto p1p2p3p4 = add(p1p2, p3p4);
+
+    const AffinePoint<Curve>* const points[]{
+        nullptr,
+        &p1,        // 0001
+        &p2,        // 0010
+        &p1p2,      // 0011
+        &p3,        // 0100
+        &p1p3,      // 0101
+        &p2p3,      // 0110
+        &p1p2p3,    // 0111
+        &p4,        // 1000
+        &p1p4,      // 1001
+        &p2p4,      // 1010
+        &p1p2p4,    // 1011
+        &p3p4,      // 1100
+        &p1p3p4,    // 1101
+        &p2p3p4,    // 1110
+        &p1p2p3p4,  // 1111
+    };
+
+    for (auto i = bit_width; i != 0; --i)
+    {
+        r = dbl(r);
+
+        const auto u1_bit = bit_test(u1, i - 1);
+        const auto u2_bit = bit_test(u2, i - 1);
+        const auto u3_bit = bit_test(u3, i - 1);
+        const auto u4_bit = bit_test(u4, i - 1);
+        const auto idx = u1_bit | (u2_bit << 1) | (u3_bit << 2) | (u4_bit << 3);
+        if (idx == 0)
+            continue;
+        r = add(r, *points[idx]);
+    }
+
+    return r;
+}
+
+// Decomposes scalar k into k₁ and k₂ such that k₁ + k₂λ ≡ k mod n
+// Returns ((is_negative, k1), (is_negative, k2))
+template <typename ConfigT, typename UIntT>
+inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const UIntT& k) noexcept
+{
+    using DIntT = intx::uint<2 * UIntT::num_bits>;
+
+    const auto round_div = [](const DIntT& n) {
+        const auto [q, r] = udivrem(n, ConfigT::DET);
+
+        return (r <= ConfigT::HALF) ? q : (q + 1);
+    };
+
+    const auto z1 = round_div(ConfigT::Y2 * k);
+    const auto z2 = round_div(ConfigT::Y1 * k);
+
+    auto const z1x1_z2x2 = z1 * ConfigT::X1 + z2 * ConfigT::X2;
+
+    auto k1_is_neg = false;
+    auto k2_is_neg = false;
+
+    auto tk = k;
+    if (tk < z1x1_z2x2)
+        k1_is_neg = true;
+
+    const auto k1 = !k1_is_neg ? (tk - z1x1_z2x2) : z1x1_z2x2 - tk;
+
+    const DIntT z2y2 = z2 * ConfigT::Y2;
+    const DIntT z1y1 = z1 * ConfigT::Y1;
+
+    if (z1y1 < z2y2)
+        k2_is_neg = true;
+
+    const DIntT k2 = !k2_is_neg ? (z1y1 - z2y2) : z2y2 - z1y1;
+
+    return {{k1_is_neg, UIntT{k1}}, {k2_is_neg, UIntT{k2}}};
+}
+
 }  // namespace evmmax::ecc

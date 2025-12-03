@@ -12,6 +12,28 @@ constexpr auto B = Curve::Fp.to_mont(7);
 
 constexpr AffinePoint G{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256,
     0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256};
+
+struct Config
+{
+    // Linearly independent short vectors (𝑣₁=(𝑥₁, 𝑦₁), 𝑣₂=(x₂, 𝑦₂)) such that f(𝑣₁) = f(𝑣₂) = 0,
+    // where f : ℤ×ℤ → ℤₙ is defined as (𝑖,𝑗) → (𝑖+𝑗λ), where λ² + λ ≡ -1 mod n. n is secp256k1
+    // curve order. Here λ = 0x5363ad4cc05c30e0a5261c028812645a122e22ea20816678df02967c1b23bd72. DET
+    // is (𝑣₁, 𝑣₂) matrix determinant. For more details see
+    // https://www.iacr.org/archive/crypto2001/21390189.pdf
+    static constexpr auto X1 = 64502973549206556628585045361533709077_u512;
+    // Y1 should be negative, hence we calculate the determinant below adding operands instead of
+    // subtracting.
+    static constexpr auto Y1 = 303414439467246543595250775667605759171_u512;
+    static constexpr auto X2 = 367917413016453100223835821029139468248_u512;
+    static constexpr auto Y2 = 64502973549206556628585045361533709077_u512;
+    // For secp256k1 the determinant equals curve order.
+    static constexpr auto DET = uint512(Curve::ORDER);
+    static constexpr auto HALF = Curve::ORDER / 2;
+};
+// For secp256k1 curve and β ∈ 𝔽ₚ endomorphism ϕ : E₂ → E₂ defined as (𝑥,𝑦) → (β𝑥,𝑦) calculates
+// [λ](𝑥,𝑦) with only one multiplication in 𝔽ₚ. BETA value in Montgomery form;
+inline constexpr auto BETA = ecc::FieldElement<Curve>::wrap(
+    55313291615161283318657529331139468956476901535073802794763309073431015819598_u256);
 }  // namespace
 
 // FIXME: Change to "uncompress_point".
@@ -86,18 +108,22 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
 
     // 6. Calculate public key point Q.
     const auto R = AffinePoint{AffinePoint::FE::wrap(r_mont), AffinePoint::FE::wrap(*y_mont)};
+
     // u1 and u2 are less than `Curve::ORDER`, so the multiplications will not reduce.
-    const auto T1 = ecc::mul(G, u1);
-    const auto T2 = ecc::mul(R, u2);
-    assert(T2 != 0);  // Because u2 != 0 and R != 0.
-    const auto pQ = ecc::add(T1, T2);
+    const auto [u1k1, u1k2] = ecc::decompose<Config>(u1);
+    const auto [u2k1, u2k2] = ecc::decompose<Config>(u2);
 
-    const auto Q = ecc::to_affine<Curve>(pQ);
+    const auto LG = AffinePoint{BETA * G.x, !u1k2.first ? G.y : -G.y};
+    const auto LR = AffinePoint{BETA * R.x, !u2k2.first ? R.y : -R.y};
+    
+    const auto Q = shamir_multiply(u1k1.second, !u1k1.first ? G : AffinePoint{G.x, -G.y},
+        u1k2.second, LG, u2k1.second, !u2k1.first ? R : AffinePoint{R.x, -R.y}, u2k2.second, LR);
 
+    // Any other validity check needed?
     if (Q == 0)
         return std::nullopt;
 
-    return Q;
+    return ecc::to_affine(Q);
 }
 
 std::optional<evmc::address> ecrecover(
