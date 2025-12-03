@@ -67,6 +67,12 @@ struct FieldElement
         return wrap(Fp.add(a.value_, b.value_));
     }
 
+    FieldElement& operator+=(const FieldElement& b) noexcept
+    {
+        value_ = Fp.add(value_, b.value_);
+        return *this;
+    }
+
     friend constexpr auto operator-(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.sub(a.value_, b.value_));
@@ -247,7 +253,7 @@ AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q)
         const auto xx = x1 * x1;
         dy = xx + xx + xx;
         if constexpr (Curve::A != 0)
-            dy = dy + FieldElement<Curve>{Curve::A};
+            dy += FieldElement<Curve>{Curve::A};
         dx = y1 + y1;
     }
     const auto slope = dy / dx;
