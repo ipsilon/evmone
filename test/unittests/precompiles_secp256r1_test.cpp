@@ -42,8 +42,7 @@ const P256VerifyInput VALID_INPUTS[]{
         0x830D84E672FCB08275ADC7FCFB4AE53BFC5D90CB2F25834F4DAE81C6B4FC8BD9_u256,
         G.x.value(),
         G.y.value(),
-    }
-};
+    }};
 
 const P256VerifyInput INVALID_INPUTS[]{
     {0, 0, 0, 0, 0},
