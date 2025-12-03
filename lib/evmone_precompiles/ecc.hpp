@@ -350,9 +350,10 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     const auto i = t1 * t1;
     const auto j = h * i;
     const auto t2 = s2 - y1;
+
     // Handle point doubling in case p == q.
     // p == q (in jacobian coordinates) if and only if x1 == x2 * z1z1 and y1 = y2 * z1z1z1
-    if (h == 0 && t2 == 0) [[unlikly]]
+    if (h == 0 && t2 == 0) [[unlikely]]
         return dbl(p);
 
     const auto r = t2 + t2;
