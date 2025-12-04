@@ -526,28 +526,36 @@ inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const
         return (r <= ConfigT::HALF) ? q : (q + 1);
     };
 
+    // Solve a system of two equations using Cramer method.
+    // | X1  X2 | * |z1| = |k|
+    // | Y1  Y2 |   |z2|   |0|
+    // then
+    // z1 = (Y2 * k) / DET
+    // z2 = (-Y1 * k) / DET
     const auto z1 = round_div(ConfigT::Y2 * k);
-    const auto z2 = round_div(ConfigT::Y1 * k);
+    const auto z2 = round_div(ConfigT::MINUS_Y1 * k);  // two minuses give plus
 
-    auto const z1x1_z2x2 = z1 * ConfigT::X1 + z2 * ConfigT::X2;
+    // k1 = k - (x1*z1 + x2*z2)
+    const auto x1z1 = z1 * ConfigT::X1;
+    const auto x2z2 = z2 * ConfigT::X2;
+    const auto x1z1_x2z2 = x1z1 + x2z2;
 
     auto k1_is_neg = false;
-    auto k2_is_neg = false;
-
-    auto tk = k;
-    if (tk < z1x1_z2x2)
+    if (k < x1z1_x2z2)
         k1_is_neg = true;
 
-    const auto k1 = !k1_is_neg ? (tk - z1x1_z2x2) : z1x1_z2x2 - tk;
+    auto k1 = k1_is_neg ? (x1z1_x2z2 - k) : (k - x1z1_x2z2);
 
-    const DIntT z2y2 = z2 * ConfigT::Y2;
-    const DIntT z1y1 = z1 * ConfigT::Y1;
+    // k2 = 0 - (y1*z1 + y2*z2)
+    const DIntT minus_y1z1 = ConfigT::MINUS_Y1 * z1;
+    const DIntT y2z2 = ConfigT::Y2 * z2;
 
-    if (z1y1 < z2y2)
+    // -(y1z1 + y2z2) = -(-minus_y1z1 + y2z2) = (minus_y1z1 - y2z2)
+    auto k2_is_neg = false;
+    if (minus_y1z1 < y2z2)
         k2_is_neg = true;
 
-    const DIntT k2 = !k2_is_neg ? (z1y1 - z2y2) : z2y2 - z1y1;
-
+    const auto k2 = k2_is_neg ? (y2z2 - minus_y1z1) : (minus_y1z1 - y2z2);
     // Sanity checks
     assert(k1 < std::numeric_limits<intx::uint<UIntT::num_bits / 2>>::max());
     assert(k2 < std::numeric_limits<intx::uint<UIntT::num_bits / 2>>::max());
