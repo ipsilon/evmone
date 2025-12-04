@@ -21,13 +21,9 @@ struct Config
     static constexpr auto MINUS_Y1 = 147946756881789318990833708069417712965_u512;
     static constexpr auto X2 = 147946756881789319000765030803803410728_u512;
     static constexpr auto Y2 = 147946756881789319010696353538189108491_u512;
-    static constexpr auto DET =
-        43776485743678550444492811490514550177096728800832068687396408373151616991234_u256;
-    static constexpr auto HALF = DET / 2;
     static constexpr auto LAMBDA = 0xb3c4d79d41a917585bfc41088d8daaa78b17ea66b99c90dd_u512;
 
     // Sanity checks. More details in the paper.
-    static_assert(X1 * Y2 + X2 * MINUS_Y1 == DET);
     static_assert((LAMBDA * LAMBDA + LAMBDA + 1) % Curve::ORDER == 0);
     static_assert((X1 + (Curve::ORDER - MINUS_Y1) * LAMBDA) % Curve::ORDER == 0);
     static_assert((X2 + Y2 * LAMBDA) % Curve::ORDER == 0);
