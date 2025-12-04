@@ -518,12 +518,14 @@ ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve
 template <typename ConfigT, typename UIntT>
 inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const UIntT& k) noexcept
 {
+    static constexpr auto DET = ConfigT::X1 * ConfigT::Y2 + ConfigT::X2 * ConfigT::MINUS_Y1;
+    static constexpr auto HALF = DET / 2;
+
     using DIntT = intx::uint<2 * UIntT::num_bits>;
 
     const auto round_div = [](const DIntT& n) {
-        const auto [q, r] = udivrem(n, ConfigT::DET);
-
-        return (r <= ConfigT::HALF) ? q : (q + 1);
+        const auto [q, r] = udivrem(n, DET);
+        return (r <= HALF) ? q : (q + 1);
     };
 
     // Solve a system of two equations using Cramer method.
