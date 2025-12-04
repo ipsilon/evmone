@@ -517,7 +517,9 @@ inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const
 
     const auto round_div = [](const auto& n) noexcept {
         const auto [q, r] = udivrem(n, DET);
-        return (r <= HALF) ? q : (q + 1);
+        assert(q < std::numeric_limits<UIntT>::max());
+        const auto q2 = static_cast<UIntT>(q);
+        return (r <= HALF) ? q2 : (q2 + 1);
     };
 
     // Solve a system of two equations using Cramer method.
@@ -530,8 +532,8 @@ inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const
     const auto z2 = round_div(umul(ConfigT::MINUS_Y1, k));  // two minuses give plus
 
     // k1 = k - (x1*z1 + x2*z2)
-    const auto x1z1 = z1 * ConfigT::X1;
-    const auto x2z2 = z2 * ConfigT::X2;
+    const auto x1z1 = umul(z1, ConfigT::X1);
+    const auto x2z2 = umul(z2, ConfigT::X2);
     const auto x1z1_x2z2 = x1z1 + x2z2;
 
     auto k1_is_neg = false;
