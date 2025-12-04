@@ -544,24 +544,19 @@ inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const
     const auto x2z2 = umul(z2, ConfigT::X2);
     const auto x1z1_x2z2 = x1z1 + x2z2;
 
-    auto k1_is_neg = false;
-    if (k < x1z1_x2z2)
-        k1_is_neg = true;
-
-    auto k1 = k1_is_neg ? (x1z1_x2z2 - k) : (k - x1z1_x2z2);
+    const auto k1_is_neg = (k < x1z1_x2z2);
+    const auto k1 = k1_is_neg ? (x1z1_x2z2 - k) : (k - x1z1_x2z2);
 
     // k2 = 0 - (y1*z1 + y2*z2)
     const auto minus_y1z1 = ConfigT::MINUS_Y1 * z1;
     const auto y2z2 = ConfigT::Y2 * z2;
 
     // -(y1z1 + y2z2) = -(-minus_y1z1 + y2z2) = (minus_y1z1 - y2z2)
-    auto k2_is_neg = false;
-    if (minus_y1z1 < y2z2)
-        k2_is_neg = true;
-
+    const auto k2_is_neg = minus_y1z1 < y2z2;
     const auto k2 = k2_is_neg ? (y2z2 - minus_y1z1) : (minus_y1z1 - y2z2);
+
     // Sanity checks
-    assert(k1 < std::numeric_limits<intx::uint<UIntT::num_bits / 2>>::max());
+    assert(k1 < std::numeric_limits<intx::uint<UIntT::num_bits / 2>>::max());  // FIXME: not <=?
     assert(k2 < std::numeric_limits<intx::uint<UIntT::num_bits / 2>>::max());
 
     return {{k1_is_neg, UIntT{k1}}, {k2_is_neg, UIntT{k2}}};
