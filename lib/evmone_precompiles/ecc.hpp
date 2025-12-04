@@ -505,12 +505,12 @@ ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve
 template <typename ConfigT, typename UIntT>
 inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const UIntT& k) noexcept
 {
+    // TODO: This should not overflow because X1, X2, Y1, Y2 are 128-bit numbers.
+    //    But we can add additional static_assert to check that at compile time.
     static constexpr auto DET = ConfigT::X1 * ConfigT::Y2 + ConfigT::X2 * ConfigT::MINUS_Y1;
     static constexpr auto HALF = DET / 2;
 
-    using DIntT = intx::uint<2 * UIntT::num_bits>;
-
-    const auto round_div = [](const DIntT& n) {
+    const auto round_div = [](const auto& n) noexcept {
         const auto [q, r] = udivrem(n, DET);
         return (r <= HALF) ? q : (q + 1);
     };
@@ -521,8 +521,8 @@ inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const
     // then
     // z1 = (Y2 * k) / DET
     // z2 = (-Y1 * k) / DET
-    const auto z1 = round_div(ConfigT::Y2 * k);
-    const auto z2 = round_div(ConfigT::MINUS_Y1 * k);  // two minuses give plus
+    const auto z1 = round_div(umul(ConfigT::Y2, k));
+    const auto z2 = round_div(umul(ConfigT::MINUS_Y1, k));  // two minuses give plus
 
     // k1 = k - (x1*z1 + x2*z2)
     const auto x1z1 = z1 * ConfigT::X1;
@@ -536,8 +536,8 @@ inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const
     auto k1 = k1_is_neg ? (x1z1_x2z2 - k) : (k - x1z1_x2z2);
 
     // k2 = 0 - (y1*z1 + y2*z2)
-    const DIntT minus_y1z1 = ConfigT::MINUS_Y1 * z1;
-    const DIntT y2z2 = ConfigT::Y2 * z2;
+    const auto minus_y1z1 = ConfigT::MINUS_Y1 * z1;
+    const auto y2z2 = ConfigT::Y2 * z2;
 
     // -(y1z1 + y2z2) = -(-minus_y1z1 + y2z2) = (minus_y1z1 - y2z2)
     auto k2_is_neg = false;
