@@ -15,12 +15,12 @@ struct Config
     // where f : ℤ×ℤ → ℤₙ is defined as (𝑖,𝑗) → (𝑖+𝑗λ), where λ² + λ ≡ -1 mod n. n is bn245 curve
     // order. Here λ = 0xb3c4d79d41a917585bfc41088d8daaa78b17ea66b99c90dd. DET is (𝑣₁, 𝑣₂) matrix
     // determinant. For more details see https://www.iacr.org/archive/crypto2001/21390189.pdf
-    static constexpr auto X1 = 147946756881789319020627676272574806254_u512;
+    static constexpr auto X1 = 0x6f4d8248eeb859fd95b806bca6f338ee_u512;
     // Y1 should be negative, hence we calculate the determinant below adding operands instead of
     // subtracting.
-    static constexpr auto MINUS_Y1 = 147946756881789318990833708069417712965_u512;
-    static constexpr auto X2 = 147946756881789319000765030803803410728_u512;
-    static constexpr auto Y2 = 147946756881789319010696353538189108491_u512;
+    static constexpr auto MINUS_Y1 = 0x6f4d8248eeb859fbf83e9682e87cfd45_u512;
+    static constexpr auto X2 = 0x6f4d8248eeb859fc8211bbeb7d4f1128_u512;
+    static constexpr auto Y2 = 0x6f4d8248eeb859fd0be4e1541221250b_u512;
     static constexpr auto LAMBDA = 0xb3c4d79d41a917585bfc41088d8daaa78b17ea66b99c90dd_u512;
 
     // Sanity checks. More details in the paper.
