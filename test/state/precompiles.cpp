@@ -444,6 +444,18 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
 
     using namespace evmmax::bn254;
 
+    if (intx::be::unsafe::load<uint256>(input_buffer + 0) >= Curve::FIELD_PRIME)
+        return {EVMC_PRECOMPILE_FAILURE, 0};
+
+    if (intx::be::unsafe::load<uint256>(input_buffer + 32) >= Curve::FIELD_PRIME)
+        return {EVMC_PRECOMPILE_FAILURE, 0};
+
+    if (intx::be::unsafe::load<uint256>(input_buffer + 64) >= Curve::FIELD_PRIME)
+        return {EVMC_PRECOMPILE_FAILURE, 0};
+
+    if (intx::be::unsafe::load<uint256>(input_buffer + 96) >= Curve::FIELD_PRIME)
+        return {EVMC_PRECOMPILE_FAILURE, 0};
+
     const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
     const auto q = AffinePoint::from_bytes(input_span.subspan<64, 64>());
 
@@ -470,6 +482,12 @@ ExecutionResult ecmul_execute(const uint8_t* input, size_t input_size, uint8_t* 
     const auto input_span = std::span{input_buffer};
 
     using namespace evmmax::bn254;
+
+    if (intx::be::unsafe::load<uint256>(input_buffer + 0) >= Curve::FIELD_PRIME)
+        return {EVMC_PRECOMPILE_FAILURE, 0};
+
+    if (intx::be::unsafe::load<uint256>(input_buffer + 32) >= Curve::FIELD_PRIME)
+        return {EVMC_PRECOMPILE_FAILURE, 0};
 
     const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
     const auto c = intx::be::unsafe::load<intx::uint256>(input_buffer + 64);
