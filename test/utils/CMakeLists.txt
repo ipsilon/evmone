@@ -2,21 +2,32 @@
 # Copyright 2019 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-find_package(intx CONFIG REQUIRED)
+add_library(evmone.testutils STATIC)
+add_library(evmone::testutils ALIAS evmone.testutils)
+target_link_libraries(evmone.testutils PUBLIC evmone::state evmc::evmc_cpp nlohmann_json::nlohmann_json)
 
-add_library(testutils STATIC)
-add_library(evmone::testutils ALIAS testutils)
-target_link_libraries(testutils PUBLIC evmc::evmc_cpp)
-target_include_directories(testutils INTERFACE ${PROJECT_SOURCE_DIR} ${evmone_private_include_dir})
-
-if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
-    target_sources(
-        testutils PRIVATE
-        blob_schedule.hpp
-        blob_schedule.cpp
-        bytecode.hpp
-        stdx/utility.hpp
-        utils.hpp
-    )
-endif()
-target_sources(testutils PRIVATE utils.cpp)
+target_sources(
+    evmone.testutils
+    PRIVATE
+    stdx/utility.hpp
+    blob_schedule.hpp
+    blob_schedule.cpp
+    blockchaintest.hpp
+    blockchaintest_loader.cpp
+    bytecode.hpp
+    mpt.hpp
+    mpt.cpp
+    mpt_hash.hpp
+    mpt_hash.cpp
+    rlp.hpp
+    rlp_encode.hpp
+    rlp_encode.cpp
+    statetest.hpp
+    statetest_export.cpp
+    statetest_loader.cpp
+    statetest_logs_hash.cpp
+    test_state.hpp
+    test_state.cpp
+    utils.hpp
+    utils.cpp
+)

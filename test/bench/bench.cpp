@@ -2,7 +2,7 @@
 // Copyright 2019 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "../statetest/statetest.hpp"
+#include "../utils/statetest.hpp"
 #include "helpers.hpp"
 #include "synthetic_benchmarks.hpp"
 #include <benchmark/benchmark.h>

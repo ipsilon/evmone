@@ -4,8 +4,9 @@
 
 add_library(evmone-state STATIC)
 add_library(evmone::state ALIAS evmone-state)
+target_compile_features(evmone-state PUBLIC cxx_std_20)
 target_link_libraries(evmone-state PUBLIC evmone::precompiles evmc::evmc_cpp PRIVATE evmone)
-target_include_directories(evmone-state PRIVATE ${evmone_private_include_dir})
+target_include_directories(evmone-state PUBLIC ${PROJECT_SOURCE_DIR})
 target_sources(
     evmone-state PRIVATE
     account.hpp
@@ -20,10 +21,6 @@ target_sources(
     hash_utils.hpp
     host.hpp
     host.cpp
-    mpt.hpp
-    mpt.cpp
-    mpt_hash.hpp
-    mpt_hash.cpp
     precompiles.hpp
     precompiles.cpp
     precompiles_internal.hpp
@@ -31,17 +28,13 @@ target_sources(
     precompiles_stubs.cpp
     requests.hpp
     requests.cpp
-    rlp.hpp
     state.hpp
     state.cpp
     state_diff.hpp
     state_view.hpp
     system_contracts.hpp
     system_contracts.cpp
-    test_state.hpp
-    test_state.cpp
     transaction.hpp
-    transaction.cpp
 )
 
 option(EVMONE_PRECOMPILES_SILKPRE "Enable precompiles from silkpre library (for benchmarking only)" OFF)

@@ -67,6 +67,12 @@ struct FieldElement
         return wrap(Fp.add(a.value_, b.value_));
     }
 
+    FieldElement& operator+=(const FieldElement& b) noexcept
+    {
+        value_ = Fp.add(value_, b.value_);
+        return *this;
+    }
+
     friend constexpr auto operator-(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.sub(a.value_, b.value_));
@@ -246,6 +252,8 @@ AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q)
         // For coincident points find the slope of the tangent line.
         const auto xx = x1 * x1;
         dy = xx + xx + xx;
+        if constexpr (Curve::A != 0)
+            dy += FieldElement<Curve>{Curve::A};
         dx = y1 + y1;
     }
     const auto slope = dy / dx;
@@ -268,9 +276,6 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
         // TODO: Untested and untestable via precompile call (for secp256k1 and secp256r1).
         return p;
 
-    if (p == q)
-        return dbl(p);
-
     // Use the "add-1998-cmo-2" formula for curve in Jacobian coordinates.
     // The cost is 12M + 4S + 6add + 1*2.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-add-1998-cmo-2
@@ -291,7 +296,14 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     const auto s2 = y2 * z1z1z1;
     const auto h = u2 - u1;
     const auto r = s2 - s1;
-    assert(h != 0 || r != 0);  // We already handled p == q case above.
+
+    // Handle point doubling in case p == q, i.e. when u1 == u2 and s1 == s2.
+    // TODO: Untested case of two points having the same y coordinate but different x.
+    //       The following assertion (r == 0) => (h == 0) should fail in that case.
+    assert(r != 0 || h == 0);
+    if (h == 0 && r == 0) [[unlikely]]
+        return dbl(p);
+
     const auto hh = h * h;
     const auto hhh = h * hh;
     const auto v = u1 * hh;
@@ -312,12 +324,10 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
 /// Mixed addition of elliptic curve points.
 ///
 /// Computes P ⊕ Q for a point P in Jacobian coordinates and a point Q in affine coordinates.
-/// This procedure is for use in point multiplication and not all inputs are supported.
+/// This procedure handles all inputs (e.g. doubling or points at infinity).
 template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
-    assert(p != ProjPoint(q));
-
     if (q == 0)
         // TODO: Untested and untestable via precompile call (for secp256r1).
         return p;
@@ -326,6 +336,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
 
     // Use the "madd" formula for curve in Jacobian coordinates.
     // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-madd
+    // Modified to properly support adding the same point.
 
     const auto& [x1, y1, z1] = p;
     const auto& [x2, y2] = q;
@@ -339,6 +350,12 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     const auto i = t1 * t1;
     const auto j = h * i;
     const auto t2 = s2 - y1;
+
+    // Handle point doubling in case p == q.
+    // p == q (in jacobian coordinates) if and only if x1 == x2 * z1z1 and y1 = y2 * z1z1z1
+    if (h == 0 && t2 == 0) [[unlikely]]
+        return dbl(p);
+
     const auto r = t2 + t2;
     const auto v = x1 * i;
     const auto t3 = r * r;
@@ -446,4 +463,41 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
     }
     return r;
 }
+
+/// Computes multi-scalar multiplication of u×P ⊕ v×Q.
+///
+/// The implementation uses the "Straus-Shamir trick": https://eprint.iacr.org/2003/257.pdf#page=7.
+template <typename Curve>
+ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve>& p,
+    const typename Curve::uint_type& v, const AffinePoint<Curve>& q)
+{
+    ProjPoint<Curve> r;
+
+    const auto w = u | v;
+    const auto bit_width = sizeof(w) * 8 - intx::clz(w);
+    if (bit_width == 0)
+        return r;
+
+    // Precompute affine P + Q. Works correctly if P == Q.
+    const auto h = add(p, q);
+
+    // Create lookup table for points. The index 0 is unused.
+    // TODO: Put 0 at index 0 and use it in the loop to avoid the branch.
+    const AffinePoint<Curve>* const points[]{nullptr, &p, &q, &h};
+
+    for (auto i = bit_width; i != 0; --i)
+    {
+        r = dbl(r);
+
+        const auto u_bit = bit_test(u, i - 1);
+        const auto v_bit = bit_test(v, i - 1);
+        const auto idx = 2 * size_t{v_bit} + size_t{u_bit};
+        if (idx == 0)
+            continue;
+        r = add(r, *points[idx]);
+    }
+
+    return r;
+}
+
 }  // namespace evmmax::ecc

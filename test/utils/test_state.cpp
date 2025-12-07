@@ -2,8 +2,8 @@
 // Copyright 2024 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 #include "test_state.hpp"
-#include "state.hpp"
-#include "system_contracts.hpp"
+#include <test/state/state.hpp>
+#include <test/state/system_contracts.hpp>
 
 namespace evmone::test
 {

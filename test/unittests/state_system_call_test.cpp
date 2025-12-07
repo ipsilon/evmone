@@ -6,8 +6,8 @@
 #include <gtest/gtest.h>
 #include <test/state/state.hpp>
 #include <test/state/system_contracts.hpp>
-#include <test/state/test_state.hpp>
 #include <test/utils/bytecode.hpp>
+#include <test/utils/test_state.hpp>
 
 using namespace evmc::literals;
 using namespace evmone::state;

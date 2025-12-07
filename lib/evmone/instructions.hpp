@@ -111,9 +111,13 @@ inline bool check_memory(
 
     const auto new_size = static_cast<uint64_t>(offset) + size;
     if (new_size > memory.size())
+    {
         gas_left = grow_memory(gas_left, memory, new_size);
+        if (gas_left < 0) [[unlikely]]
+            return false;
+    }
 
-    return gas_left >= 0;  // Always true for no-grow case.
+    return true;
 }
 
 /// Check memory requirements for "copy" instructions.

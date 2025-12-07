@@ -65,7 +65,7 @@ struct Transaction
 
     Type type = Type::legacy;
     bytes data;
-    int64_t gas_limit;
+    int64_t gas_limit = 0;
     intx::uint256 max_gas_price;
     intx::uint256 max_priority_gas_price;
     intx::uint256 max_blob_gas_price;
@@ -126,15 +126,4 @@ struct TransactionReceipt
     std::optional<bytes32> post_state;
 };
 
-/// Defines how to RLP-encode a Transaction.
-[[nodiscard]] bytes rlp_encode(const Transaction& tx);
-
-/// Defines how to RLP-encode a TransactionReceipt.
-[[nodiscard]] bytes rlp_encode(const TransactionReceipt& receipt);
-
-/// Defines how to RLP-encode a Log.
-[[nodiscard]] bytes rlp_encode(const Log& log);
-
-/// Defines how to RLP-encode an Authorization (EIP-7702).
-[[nodiscard]] bytes rlp_encode(const Authorization& authorization);
 }  // namespace evmone::state

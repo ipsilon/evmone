@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "../state/blob_params.hpp"
+#include <test/state/blob_params.hpp>
 
 namespace evmone::test
 {

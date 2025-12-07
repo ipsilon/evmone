@@ -4,7 +4,7 @@
 
 add_executable(evmone-bench)
 target_include_directories(evmone-bench PRIVATE ${evmone_private_include_dir})
-target_link_libraries(evmone-bench PRIVATE evmone evmone::testutils evmone::statetestutils evmc::loader benchmark::benchmark)
+target_link_libraries(evmone-bench PRIVATE evmone evmone::testutils evmc::loader benchmark::benchmark)
 target_sources(
     evmone-bench PRIVATE
     bench.cpp

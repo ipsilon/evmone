@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "hash_utils.hpp"
+#include <test/state/hash_utils.hpp>
 #include <memory>
 
 namespace evmone::state

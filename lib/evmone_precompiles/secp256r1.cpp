@@ -50,12 +50,7 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     const auto u2 = n.from_mont(n.mul(n.to_mont(r), s_inv));
 
     // 5. Calculate the curve point R = (x₁, y₁) = u₁×G + u₂×Q.
-    // u1 and u2 are less than `Curve::ORDER`, so the multiplications will not reduce.
-    const auto T1 = ecc::mul(G, u1);
-    const auto T2 = ecc::mul(Q, u2);
-    assert(T2 != 0);  // Because u2 != 0 and R != 0.
-    const auto jR = ecc::add(T1, T2);
-    const auto R = ecc::to_affine(jR);
+    const auto R = ecc::to_affine(msm(u1, G, u2, Q));
 
     //    If R is at infinity, the signature is invalid.
     //    In this case x₁ is 0 and cannot be equal to r.

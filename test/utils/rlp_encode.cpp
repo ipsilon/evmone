@@ -2,9 +2,9 @@
 // Copyright 2022 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "transaction.hpp"
-#include "../utils/stdx/utility.hpp"
+#include "rlp_encode.hpp"
 #include "rlp.hpp"
+#include "stdx/utility.hpp"
 
 
 namespace evmone::state
@@ -97,5 +97,11 @@ namespace evmone::state
 {
     return rlp::encode_tuple(authorization.chain_id, authorization.addr, authorization.nonce,
         authorization.v, authorization.r, authorization.s);
+}
+
+[[nodiscard]] bytes rlp_encode(const Withdrawal& withdrawal)
+{
+    return rlp::encode_tuple(withdrawal.index, withdrawal.validator_index, withdrawal.recipient,
+        withdrawal.amount_in_gwei);
 }
 }  // namespace evmone::state
