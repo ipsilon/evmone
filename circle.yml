@@ -393,7 +393,7 @@ jobs:
     steps:
       - build
       - download_execution_spec_tests:
-          release: v5.3.0
+          release: v5.4.0
           # develop includes stable
           fixtures_suffix: develop
       - run:
@@ -473,8 +473,8 @@ jobs:
           command: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
       - build
       - download_execution_spec_tests:
-          release: v4.5.0
-          fixtures_suffix: develop
+          release: v5.4.0
+          fixtures_suffix: stable
       - run:
           name: "Execution spec tests (state_tests)"
           working_directory: ~/build
