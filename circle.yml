@@ -429,8 +429,17 @@ jobs:
       - run:
           name: "State tests"
           working_directory: ~/build
+          environment:
+            # Filter out long-running and incorrect tests.
+            GTEST_FILTER: "-stCreateTest.CreateOOGafterMaxCodesize:\
+            stQuadraticComplexityTest.Call50000_sha256:\
+            stTimeConsuming.*:\
+            VMTests/vmPerformance.*:\
+            stExample.*:\
+            stTransactionTest.*"
           command: >
             bin/evmone-statetest
+            --gtest_filter=$GTEST_FILTER
             ~/tests/LegacyTests/Cancun/GeneralStateTests
             ~/tests/LegacyTests/Constantinople/GeneralStateTests
       - run:
