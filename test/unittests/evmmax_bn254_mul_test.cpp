@@ -9,6 +9,53 @@
 using namespace evmmax::bn254;
 using namespace evmone::test;
 
+TEST(evmmax, bn254_decompose)
+{
+    struct TestCase
+    {
+        uint256 k;
+        bool sign1 = false;
+        uint128 k1;
+        bool sign2 = false;
+        uint128 k2;
+    };
+
+    static const std::vector<TestCase> TEST_CASES = {
+        {0, false, 0, false, 0},
+        {1, false, 1, false, 0},
+        {
+            // FIXME: Shouldn't these be (0, 1)?
+            Curve::LAMBDA,
+            false,
+            0x89d3256894d213e3,
+            true,
+            0x6f4d8248eeb859fc8211bbeb7d4f1127_u128,
+        },
+        {
+            0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff_u256,
+            true,
+            0x272d9e49b8c8ca4335756fc61411a7a3_u128,
+            false,
+            0x3f296ebc4b455178a6a2b71572d476d6_u128,
+        },
+    };
+
+    static constexpr auto decompose = evmmax::ecc::decompose<Curve, uint256>;
+
+    for (const auto& t : TEST_CASES)
+    {
+        const auto [sign1, k1] = decompose(t.k).first;
+        const auto [sign2, k2] = decompose(t.k).second;
+
+        SCOPED_TRACE(hex(t.k));
+
+        EXPECT_EQ(sign1, t.sign1);
+        EXPECT_EQ(k1, t.k1) << hex(k1) << " != " << hex(t.k1);
+        EXPECT_EQ(sign2, t.sign2);
+        EXPECT_EQ(k2, t.k2) << hex(k2) << " != " << hex(t.k2);
+    }
+}
+
 namespace
 {
 struct TestCase
