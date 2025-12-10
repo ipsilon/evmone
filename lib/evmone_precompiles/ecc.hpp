@@ -515,12 +515,12 @@ ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve
 
 // Decomposes scalar k into k₁ and k₂ such that k₁ + k₂λ ≡ k mod n
 // Returns ((is_negative, k1), (is_negative, k2))
-template <typename ConfigT, typename UIntT>
+template <typename Curve, typename UIntT>
 inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const UIntT& k) noexcept
 {
     // TODO: This should not overflow because X1, X2, Y1, Y2 are 128-bit numbers.
     //    But we can add additional static_assert to check that at compile time.
-    static constexpr auto DET = ConfigT::X1 * ConfigT::Y2 + ConfigT::X2 * ConfigT::MINUS_Y1;
+    static constexpr auto DET = Curve::X1 * Curve::Y2 + Curve::X2 * Curve::MINUS_Y1;
     static constexpr auto HALF = DET / 2;
 
     const auto round_div = [](const auto& n) noexcept {
@@ -536,20 +536,20 @@ inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const
     // then
     // z1 = (Y2 * k) / DET
     // z2 = (-Y1 * k) / DET
-    const auto z1 = round_div(umul(ConfigT::Y2, k));
-    const auto z2 = round_div(umul(ConfigT::MINUS_Y1, k));  // two minuses give plus
+    const auto z1 = round_div(umul(Curve::Y2, k));
+    const auto z2 = round_div(umul(Curve::MINUS_Y1, k));  // two minuses give plus
 
     // k1 = k - (x1*z1 + x2*z2)
-    const auto x1z1 = umul(z1, ConfigT::X1);
-    const auto x2z2 = umul(z2, ConfigT::X2);
+    const auto x1z1 = umul(z1, Curve::X1);
+    const auto x2z2 = umul(z2, Curve::X2);
     const auto x1z1_x2z2 = x1z1 + x2z2;
 
     const auto k1_is_neg = (k < x1z1_x2z2);
     const auto k1 = k1_is_neg ? (x1z1_x2z2 - k) : (k - x1z1_x2z2);
 
     // k2 = 0 - (y1*z1 + y2*z2)
-    const auto minus_y1z1 = ConfigT::MINUS_Y1 * z1;
-    const auto y2z2 = ConfigT::Y2 * z2;
+    const auto minus_y1z1 = Curve::MINUS_Y1 * z1;
+    const auto y2z2 = Curve::Y2 * z2;
 
     // -(y1z1 + y2z2) = -(-minus_y1z1 + y2z2) = (minus_y1z1 - y2z2)
     const auto k2_is_neg = minus_y1z1 < y2z2;
