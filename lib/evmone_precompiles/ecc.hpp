@@ -510,6 +510,15 @@ ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve
 template <typename Curve, typename UIntT>
 inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const UIntT& k) noexcept
 {
+    using namespace intx;
+
+    // Sanity checks. More details in the paper.
+    static_assert((uint512{Curve::LAMBDA} * Curve::LAMBDA + Curve::LAMBDA + 1) % Curve::ORDER == 0);
+    static_assert(
+        (Curve::X1 + (Curve::ORDER - Curve::MINUS_Y1) * uint512{Curve::LAMBDA}) % Curve::ORDER ==
+        0);
+    static_assert((Curve::X2 + Curve::Y2 * uint512{Curve::LAMBDA}) % Curve::ORDER == 0);
+
     // TODO: This should not overflow because X1, X2, Y1, Y2 are 128-bit numbers.
     //    But we can add additional static_assert to check that at compile time.
     static constexpr auto DET = Curve::X1 * Curve::Y2 + Curve::X2 * Curve::MINUS_Y1;
