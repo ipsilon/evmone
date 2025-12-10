@@ -32,6 +32,48 @@ TEST(evmmax, bn254_decompose)
             0x6f4d8248eeb859fc8211bbeb7d4f1127_u128,
         },
         {
+            0x60c89ce5c263405370a08b6d0302b0ba5067d090f372e12287c3eb27e0000002_u256,  // DET
+            false,
+            0,
+            false,
+            0,
+        },
+        {
+            0x60c89ce5c263405370a08b6d0302b0ba5067d090f372e12287c3eb27e0000001_u256,  // DET-1
+            true,
+            1,
+            false,
+            0,
+        },
+        {
+            0x60c89ce5c263405370a08b6d0302b0ba5067d090f372e12287c3eb27e0000003_u256,  // DET+1
+            false,
+            1,
+            false,
+            0,
+        },
+        {
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001_u256,  // DET/2
+            false,
+            0x6f4d8248eeb859fd0be4e1541221250b_u128,  // Y2
+            false,
+            0x89d3256894d213e3,
+        },
+        {
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000_u256,  // DET/2-1
+            false,
+            0x6f4d8248eeb859fd0be4e1541221250a_u128,
+            false,
+            0x89d3256894d213e3,
+        },
+        {
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000002_u256,  // DET/2+1
+            true,
+            0x6f4d8248eeb859fd0be4e1541221250a_u128,
+            true,
+            0x89d3256894d213e3,
+        },
+        {
             0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff_u256,
             true,
             0x272d9e49b8c8ca4335756fc61411a7a3_u128,
