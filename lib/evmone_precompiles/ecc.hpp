@@ -532,9 +532,16 @@ inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const
     static constexpr auto DET = Curve::X1 * Curve::Y2 + Curve::X2 * Curve::MINUS_Y1;
     static constexpr auto HALF = DET / 2;
 
+    static_assert(HALF == Curve::ORDER);  // Surprise!!!
+
     const auto round_div = [](const auto& n) noexcept {
         const auto [q, r] = udivrem(n, DET);
         assert(q < std::numeric_limits<UIntT>::max());
+        // assert(r != 0);  // covered with k = DET
+        assert(r != DET - 1);
+        // assert(r != HALF); // covered with k = HALF
+        assert(r != HALF - 1);
+        assert(r != HALF + 1);
         const auto q2 = static_cast<UIntT>(q);
         return (r <= HALF) ? q2 : (q2 + 1);
     };
