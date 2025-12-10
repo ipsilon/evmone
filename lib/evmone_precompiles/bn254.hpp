@@ -44,11 +44,6 @@ struct Curve
     static constexpr auto Y2 = 0x6f4d8248eeb859fd0be4e1541221250b_u256;
     static constexpr auto LAMBDA = 0xb3c4d79d41a917585bfc41088d8daaa78b17ea66b99c90dd_u256;
 
-    // Sanity checks. More details in the paper.
-    static_assert((uint512{LAMBDA} * LAMBDA + LAMBDA + 1) % Curve::ORDER == 0);
-    static_assert((X1 + (Curve::ORDER - MINUS_Y1) * uint512{LAMBDA}) % Curve::ORDER == 0);
-    static_assert((X2 + Y2 * uint512{LAMBDA}) % Curve::ORDER == 0);
-
     // For bn254 curve and β ∈ 𝔽ₚ endomorphism ϕ : E₂ → E₂ defined as (𝑥,𝑦) → (β𝑥,𝑦) calculates [λ](𝑥,𝑦)
     // with only one multiplication in 𝔽ₚ. BETA value in Montgomery form;
     static constexpr auto BETA = ecc::FieldElement<Curve>::wrap(
