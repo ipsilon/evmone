@@ -86,8 +86,9 @@ TEST(evmmax, bn254_decompose)
 
     for (const auto& t : TEST_CASES)
     {
-        const auto [sign1, k1] = decompose(t.k).first;
-        const auto [sign2, k2] = decompose(t.k).second;
+        const auto& [first, second] = decompose(t.k);
+        const auto& [sign1, k1] = first;
+        const auto& [sign2, k2] = second;
 
         SCOPED_TRACE(hex(t.k));
 
