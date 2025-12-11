@@ -572,8 +572,11 @@ inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const
     const auto k2 = k2_is_neg ? (y2z2 - minus_y1z1) : (minus_y1z1 - y2z2);
 
     // Sanity checks
-    static constexpr auto K1_MAX = 0x6fffffffffffffffffffffffffffffff_u128;
-    static constexpr auto K2_MAX = 0x6fffffffffffffffffffffffffffffff_u128;
+    static_assert(Curve::Y2 < Curve::X1);
+    static_assert(Curve::X2 < Curve::Y2);
+    static_assert(Curve::MINUS_Y1 < Curve::X2);
+    static constexpr auto K1_MAX = Curve::Y2;
+    static constexpr auto K2_MAX = Curve::X2;
     assert(k1 <= K1_MAX);
     assert(k2 <= K2_MAX);
 
