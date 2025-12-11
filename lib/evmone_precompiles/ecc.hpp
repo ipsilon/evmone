@@ -564,8 +564,10 @@ inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const
     const auto k2 = k2_is_neg ? (y2z2 - minus_y1z1) : (minus_y1z1 - y2z2);
 
     // Sanity checks
-    assert(k1 < std::numeric_limits<intx::uint<UIntT::num_bits / 2>>::max());  // FIXME: not <=?
-    assert(k2 < std::numeric_limits<intx::uint<UIntT::num_bits / 2>>::max());
+    static constexpr auto K1_MAX = 0x6fffffffffffffffffffffffffffffff_u128;
+    static constexpr auto K2_MAX = 0x6fffffffffffffffffffffffffffffff_u128;
+    assert(k1 <= K1_MAX);
+    assert(k2 <= K2_MAX);
 
     return {{k1_is_neg, UIntT{k1}}, {k2_is_neg, UIntT{k2}}};
 }
