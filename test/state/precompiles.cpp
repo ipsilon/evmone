@@ -446,16 +446,15 @@ ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* 
 
     const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
     const auto q = AffinePoint::from_bytes(input_span.subspan<64, 64>());
-
-    if (validate(p) && validate(q))
-    {
-        const auto res = evmmax::ecc::add(p, q);
-        const std::span<uint8_t, 64> output_span{output, 64};
-        res.to_bytes(output_span);
-        return {EVMC_SUCCESS, output_span.size()};
-    }
-    else
+    if (!p.has_value() || !q.has_value()) [[unlikely]]
         return {EVMC_PRECOMPILE_FAILURE, 0};
+    if (!validate(*p) || !validate(*q)) [[unlikely]]
+        return {EVMC_PRECOMPILE_FAILURE, 0};
+
+    const auto res = evmmax::ecc::add(*p, *q);
+    const std::span<uint8_t, 64> output_span{output, 64};
+    res.to_bytes(output_span);
+    return {EVMC_SUCCESS, output_span.size()};
 }
 
 ExecutionResult ecmul_execute(const uint8_t* input, size_t input_size, uint8_t* output,
@@ -472,17 +471,15 @@ ExecutionResult ecmul_execute(const uint8_t* input, size_t input_size, uint8_t* 
     using namespace evmmax::bn254;
 
     const auto p = AffinePoint::from_bytes(input_span.subspan<0, 64>());
-    const auto c = intx::be::unsafe::load<intx::uint256>(input_buffer + 64);
-
-    if (validate(p))
-    {
-        const auto res = evmmax::bn254::mul(p, c);
-        const std::span<uint8_t, 64> output_span{output, 64};
-        res.to_bytes(output_span);
-        return {EVMC_SUCCESS, output_span.size()};
-    }
-    else
+    if (!p.has_value() || !validate(*p)) [[unlikely]]
         return {EVMC_PRECOMPILE_FAILURE, 0};
+
+    const auto c = intx::be::unsafe::load<uint256>(input_buffer + 64);
+
+    const auto res = evmmax::bn254::mul(*p, c);
+    const std::span<uint8_t, 64> output_span{output, 64};
+    res.to_bytes(output_span);
+    return {EVMC_SUCCESS, output_span.size()};
 }
 
 ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8_t* output,

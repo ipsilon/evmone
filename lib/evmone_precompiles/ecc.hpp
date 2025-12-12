@@ -4,6 +4,7 @@
 #pragma once
 
 #include <evmmax/evmmax.hpp>
+#include <optional>
 #include <span>
 
 namespace evmmax::ecc
@@ -38,10 +39,14 @@ struct FieldElement
 
     constexpr uint_type value() const noexcept { return Fp.from_mont(value_); }
 
-    static constexpr FieldElement from_bytes(std::span<const uint8_t, sizeof(uint_type)> b) noexcept
+    static constexpr std::optional<FieldElement> from_bytes(
+        std::span<const uint8_t, sizeof(uint_type)> b) noexcept
     {
         // TODO: Add intx::load from std::span.
-        return FieldElement{intx::be::unsafe::load<uint_type>(b.data())};
+        const auto x = intx::be::unsafe::load<uint_type>(b.data());
+        if (x >= Curve::FIELD_PRIME) [[unlikely]]
+            return std::nullopt;
+        return FieldElement{x};
     }
 
     constexpr void to_bytes(std::span<uint8_t, sizeof(uint_type)> b) const noexcept
@@ -137,11 +142,14 @@ struct AffinePoint
         return p == AffinePoint{};
     }
 
-    static constexpr AffinePoint from_bytes(std::span<const uint8_t, sizeof(FE) * 2> b) noexcept
+    static constexpr std::optional<AffinePoint> from_bytes(
+        std::span<const uint8_t, sizeof(FE) * 2> b) noexcept
     {
         const auto x = FE::from_bytes(b.template subspan<0, sizeof(FE)>());
         const auto y = FE::from_bytes(b.template subspan<sizeof(FE), sizeof(FE)>());
-        return {x, y};
+        if (!x.has_value() || !y.has_value()) [[unlikely]]
+            return std::nullopt;
+        return AffinePoint{*x, *y};
     }
 
     constexpr void to_bytes(std::span<uint8_t, sizeof(FE) * 2> b) const noexcept

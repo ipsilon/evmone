@@ -162,10 +162,12 @@ TEST(evmmax, bn254_mul)
         const auto e =
             AffinePoint::from_bytes(std::span<const uint8_t, 64>{&expected_output[0], 64});
 
-        ASSERT_TRUE(validate(p));
-        ASSERT_TRUE(validate(e));
+        ASSERT_TRUE(p.has_value());
+        ASSERT_TRUE(validate(*p));
+        ASSERT_TRUE(e.has_value());
+        ASSERT_TRUE(validate(*e));
 
-        const auto r = mul(p, k);
+        const auto r = mul(*p, k);
         EXPECT_EQ(r, e);
     }
 }
