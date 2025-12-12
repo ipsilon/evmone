@@ -29,6 +29,7 @@ target_sources(
     evm_benchmark_test.cpp
     evm_undefined_instructions_test.cpp
     evmmax_bn254_add_test.cpp
+    evmmax_bn254_from_bytes.cpp
     evmmax_bn254_mul_test.cpp
     evmmax_bn254_pairing_test.cpp
     evmmax_test.cpp
