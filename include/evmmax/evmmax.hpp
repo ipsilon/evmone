@@ -7,21 +7,21 @@
 
 namespace evmmax
 {
-
-/// Compute the modulus inverse for Montgomery multiplication, i.e. N': mod⋅N' = 2⁶⁴-1.
-///
-/// @param mod0  The least significant word of the modulus.
-constexpr uint64_t compute_mod_inv(uint64_t mod0) noexcept
+/// Compute the modular inverse of the number modulo 2⁶⁴: inv⋅a = 1 mod 2⁶⁴.
+constexpr uint64_t mod_inv(uint64_t a) noexcept
 {
-    // TODO: Find what is this algorithm and why it works.
-    uint64_t base = 0 - mod0;
-    uint64_t result = 1;
-    for (auto i = 0; i < 64; ++i)
-    {
-        result *= base;
-        base *= base;
-    }
-    return result;
+    assert(a % 2 == 1);  // The argument must be odd, otherwise the inverse does not exist.
+
+    // Use the Newton–Raphson numeric method, see e.g.
+    // https://maths-people.anu.edu.au/~brent/pd/mca-cup-0.5.9.pdf#section.4.2
+    // Each iteration doubles the number of correct bits:
+    // 2, 4, 8, ..., so for 64-bit value we need 6 iterations.
+    // TODO(C++23): static
+    constexpr auto ITERATIONS = std::countr_zero(sizeof(a) * 8);
+    uint64_t inv = 1;  // Start with inversion mod 2.
+    for (auto i = 0; i < ITERATIONS; ++i)
+        inv *= 2 - a * inv;  // Overflows are fine because they wrap around modulo 2⁶⁴.
+    return inv;
 }
 
 /// The modular arithmetic operations for EVMMAX (EVM Modular Arithmetic Extensions).
@@ -44,6 +44,16 @@ private:
         // rounded to 2*num_bits+64) for intx requirements.
         constexpr auto r2 = intx::uint<UintT::num_bits * 2 + 64>{1} << (UintT::num_bits * 2);
         return intx::udivrem(r2, mod).rem;
+    }
+
+    /// Compute the modulus inverse for Montgomery multiplication, i.e., N': mod⋅N' = 2⁶⁴-1.
+    ///
+    /// @param mod0  The least significant word of the modulus.
+    constexpr uint64_t compute_mod_inv(uint64_t mod0) noexcept
+    {
+        // Compute the inversion mod0⁻¹ = mod 2⁶⁴.
+        // The final result is N' = -mod0⁻¹ because this gives mod⋅N' = -1 = 2⁶⁴-1.
+        return -mod_inv(mod0);
     }
 
     static constexpr std::pair<uint64_t, uint64_t> addmul(
