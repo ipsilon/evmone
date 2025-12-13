@@ -31,6 +31,23 @@ struct Curve
 
     static constexpr auto A = 0;
     static constexpr auto B = ecc::FieldElement<Curve>(3);
+
+    // Linearly independent short vectors (𝑣₁=(𝑥₁, 𝑦₁), 𝑣₂=(x₂, 𝑦₂)) such that f(𝑣₁) = f(𝑣₂) = 0,
+    // where f : ℤ×ℤ → ℤₙ is defined as (𝑖,𝑗) → (𝑖+𝑗λ), where λ² + λ ≡ -1 mod n. n is bn245 curve
+    // order. Here λ = 0xb3c4d79d41a917585bfc41088d8daaa78b17ea66b99c90dd. DET is (𝑣₁, 𝑣₂) matrix
+    // determinant. For more details see https://www.iacr.org/archive/crypto2001/21390189.pdf
+    static constexpr auto X1 = 0x6f4d8248eeb859fd95b806bca6f338ee_u256;
+    // Y1 should be negative, hence we calculate the determinant below adding operands instead of
+    // subtracting.
+    static constexpr auto MINUS_Y1 = 0x6f4d8248eeb859fbf83e9682e87cfd45_u256;
+    static constexpr auto X2 = 0x6f4d8248eeb859fc8211bbeb7d4f1128_u256;
+    static constexpr auto Y2 = 0x6f4d8248eeb859fd0be4e1541221250b_u256;
+    static constexpr auto LAMBDA = 0xb3c4d79d41a917585bfc41088d8daaa78b17ea66b99c90dd_u256;
+
+    // For bn254 curve and β ∈ 𝔽ₚ endomorphism ϕ : E₂ → E₂ defined as (𝑥,𝑦) → (β𝑥,𝑦) calculates [λ](𝑥,𝑦)
+    // with only one multiplication in 𝔽ₚ. BETA value in Montgomery form;
+    static constexpr auto BETA = ecc::FieldElement<Curve>::wrap(
+        20006444479023397533370224967097343182639219473961804911780625968796493078869_u256);
 };
 
 using AffinePoint = ecc::AffinePoint<Curve>;

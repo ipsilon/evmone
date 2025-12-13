@@ -9,6 +9,167 @@
 using namespace evmmax::bn254;
 using namespace evmone::test;
 
+TEST(evmmax, bn254_decompose)
+{
+    struct TestCase
+    {
+        uint256 k;
+        bool sign1 = false;
+        uint256 k1;
+        bool sign2 = false;
+        uint256 k2;
+    };
+
+    static const std::vector<TestCase> TEST_CASES = {
+        {0, false, 0, false, 0},
+        {1, false, 1, false, 0},
+        {
+            // FIXME: Shouldn't these be (0, 1)?
+            Curve::LAMBDA,
+            false,
+            0x89d3256894d213e3,
+            true,
+            Curve::X2 - 1,
+        },
+        {
+            Curve::ORDER - Curve::LAMBDA,
+            false,
+            0,
+            true,
+            1,
+        },
+        {
+            0x60c89ce5c263405370a08b6d0302b0ba5067d090f372e12287c3eb27e0000002_u256,  // DET
+            false,
+            0,
+            false,
+            0,
+        },
+        {
+            0x60c89ce5c263405370a08b6d0302b0ba5067d090f372e12287c3eb27e0000001_u256,  // DET-1
+            true,
+            1,
+            false,
+            0,
+        },
+        {
+            0x60c89ce5c263405370a08b6d0302b0ba5067d090f372e12287c3eb27e0000003_u256,  // DET+1
+            false,
+            1,
+            false,
+            0,
+        },
+        {
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001_u256,  // DET/2
+            false,
+            Curve::Y2,
+            false,
+            0x89d3256894d213e3,
+        },
+        {
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000000_u256,  // DET/2-1
+            false,
+            Curve::Y2 - 1,
+            false,
+            0x89d3256894d213e3,
+        },
+        {
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000002_u256,  // DET/2+1
+            true,
+            Curve::Y2 - 1,
+            true,
+            0x89d3256894d213e3,
+        },
+        {
+            0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff_u256,
+            true,
+            0x272d9e49b8c8ca4335756fc61411a7a3_u128,
+            false,
+            0x3f296ebc4b455178a6a2b71572d476d6_u128,
+        },
+        {
+            Curve::X1,
+            false,
+            0,
+            false,
+            Curve::MINUS_Y1,
+        },
+        {
+            Curve::X2,
+            false,
+            Curve::X2,
+            false,
+            0,
+        },
+        {
+            Curve::MINUS_Y1,
+            false,
+            Curve::MINUS_Y1,
+            false,
+            0,
+        },
+        {
+            Curve::Y2,
+            true,
+            0x89d3256894d213e3,
+            false,
+            Curve::MINUS_Y1,
+        },
+        // Fuzzer finds:
+        {
+            0x30644e72e131a029b85045b68181585d2833e84879b9709143e1fd91c6ea5404_u256,
+            true,
+            0x6f4d8248eeb859fd0be4d9563b36d108_u128,
+            true,
+            0x89d3256894d213e3,
+        },
+        {
+            0x30644e72e131a029b85045b68181585d9781875b000000000000000000000000_u256,
+            false,
+            0x1cc9978e3571b0392917fddedaf4_u128,
+            true,
+            0x89d3256894d213e3,
+        },
+        {
+            0x00b3c4d79d41a917585bfc41088d8daaa78b17e6af48a03bbfd25e8cd0364141_u256,
+            true,
+            0x3b770fc551d2da1732fc9bebf_u128,
+            false,
+            0x100000000000000,
+        },
+        {
+            0x30644e72e131a02a6c151d53c32a6fb58431295107473e18805b7c56ba7d94de_u256,
+            false,
+            0x10000000022dfb1619c5c10e10400_u128,
+            false,
+            1,
+        },
+        {
+            Curve::ORDER - Curve::LAMBDA,
+            false,
+            0,
+            true,
+            1,
+        },
+    };
+
+    static constexpr auto decompose = evmmax::ecc::decompose<Curve, uint256>;
+
+    for (const auto& t : TEST_CASES)
+    {
+        const auto& [first, second] = decompose(t.k);
+        const auto& [sign1, k1] = first;
+        const auto& [sign2, k2] = second;
+
+        SCOPED_TRACE(hex(t.k));
+
+        EXPECT_EQ(sign1, t.sign1);
+        EXPECT_EQ(k1, t.k1) << hex(k1) << " != " << hex(t.k1);
+        EXPECT_EQ(sign2, t.sign2);
+        EXPECT_EQ(k2, t.k2) << hex(k2) << " != " << hex(t.k2);
+    }
+}
+
 namespace
 {
 struct TestCase

@@ -18,7 +18,37 @@ bool validate(const AffinePoint& pt) noexcept
 
 AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept
 {
-    const auto pr = ecc::mul(pt, c);
+    if (pt == 0)
+        return pt;
+
+    if (c == 0)
+        return {};
+
+    const auto [k1, k2] = ecc::decompose<Curve>(c);
+
+    // Verify k ≡ k1 + λ·k2 (mod r)
+#ifndef NDEBUG
+    {
+        constexpr ModArith r{Curve::ORDER};
+        auto r_k1 = r.to_mont(k1.second);
+        if (k1.first)
+            r_k1 = r.sub(0, r_k1);
+        auto r_k2 = r.to_mont(k2.second);
+        if (k2.first)
+            r_k2 = r.sub(0, r_k2);
+
+        const auto r_k = r.to_mont(c);
+
+        const auto right = r.add(r_k1, r.mul(r_k2, r.to_mont(Curve::LAMBDA)));
+        assert(r_k == right);
+    }
+#endif
+
+    const auto q = AffinePoint{Curve::BETA * pt.x, !k2.first ? pt.y : -pt.y};
+    const auto p = !k1.first ? pt : AffinePoint{pt.x, -pt.y};
+
+    const auto pr = msm(k1.second, p, k2.second, q);
+
     return ecc::to_affine(pr);
 }
 }  // namespace evmmax::bn254

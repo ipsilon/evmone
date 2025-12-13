@@ -513,4 +513,74 @@ ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve
     return r;
 }
 
+// Decomposes scalar k into k₁ and k₂ such that k₁ + k₂λ ≡ k mod n
+// Returns ((is_negative, k1), (is_negative, k2))
+template <typename Curve, typename UIntT>
+inline std::pair<std::pair<bool, UIntT>, std::pair<bool, UIntT>> decompose(const UIntT& k) noexcept
+{
+    using namespace intx;
+
+    // Sanity checks. More details in the paper.
+    static_assert((uint512{Curve::LAMBDA} * Curve::LAMBDA + Curve::LAMBDA + 1) % Curve::ORDER == 0);
+    static_assert(
+        (Curve::X1 + (Curve::ORDER - Curve::MINUS_Y1) * uint512{Curve::LAMBDA}) % Curve::ORDER ==
+        0);
+    static_assert((Curve::X2 + Curve::Y2 * uint512{Curve::LAMBDA}) % Curve::ORDER == 0);
+
+    // TODO: This should not overflow because X1, X2, Y1, Y2 are 128-bit numbers.
+    //    But we can add additional static_assert to check that at compile time.
+    static constexpr auto DET = Curve::X1 * Curve::Y2 + Curve::X2 * Curve::MINUS_Y1;
+    static constexpr auto HALF = DET / 2;
+
+    static_assert(HALF == Curve::ORDER);  // Surprise!!!
+
+    const auto round_div = [](const auto& n) noexcept {
+        const auto [q, r] = udivrem(n, DET);
+        assert(q < std::numeric_limits<UIntT>::max());
+        // assert(r != 0);  // covered with k = DET
+        assert(r != DET - 1);
+        // assert(r != HALF); // covered with k = HALF
+        assert(r != HALF - 1);
+        assert(r != HALF + 1);
+        const auto q2 = static_cast<UIntT>(q);
+        return (r <= HALF) ? q2 : (q2 + 1);
+    };
+
+    // Solve a system of two equations using Cramer method.
+    // | X1  X2 | * |z1| = |k|
+    // | Y1  Y2 |   |z2|   |0|
+    // then
+    // z1 = (Y2 * k) / DET
+    // z2 = (-Y1 * k) / DET
+    const auto z1 = round_div(umul(Curve::Y2, k));
+    const auto z2 = round_div(umul(Curve::MINUS_Y1, k));  // two minuses give plus
+
+    // k1 = k - (x1*z1 + x2*z2)
+    const auto x1z1 = umul(z1, Curve::X1);
+    const auto x2z2 = umul(z2, Curve::X2);
+    const auto x1z1_x2z2 = x1z1 + x2z2;
+
+    const auto k1_is_neg = (k < x1z1_x2z2);
+    const auto k1 = k1_is_neg ? (x1z1_x2z2 - k) : (k - x1z1_x2z2);
+
+    // k2 = 0 - (y1*z1 + y2*z2)
+    const auto minus_y1z1 = Curve::MINUS_Y1 * z1;
+    const auto y2z2 = Curve::Y2 * z2;
+
+    // -(y1z1 + y2z2) = -(-minus_y1z1 + y2z2) = (minus_y1z1 - y2z2)
+    const auto k2_is_neg = minus_y1z1 < y2z2;
+    const auto k2 = k2_is_neg ? (y2z2 - minus_y1z1) : (minus_y1z1 - y2z2);
+
+    // Sanity checks
+    static_assert(Curve::Y2 < Curve::X1);
+    static_assert(Curve::X2 < Curve::Y2);
+    static_assert(Curve::MINUS_Y1 < Curve::X2);
+    static constexpr auto K1_MAX = Curve::Y2;
+    static constexpr auto K2_MAX = Curve::X2 - 1;
+    assert(k1 <= K1_MAX);
+    assert(k2 <= K2_MAX);
+
+    return {{k1_is_neg, UIntT{k1}}, {k2_is_neg, UIntT{k2}}};
+}
+
 }  // namespace evmmax::ecc
