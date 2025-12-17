@@ -695,10 +695,10 @@ std::array<SignedScalar<typename Curve::uint_type>, 2> decompose(
     // static_assert(Curve::Y2 < Curve::X1);
     // static_assert(Curve::X2 < Curve::Y2);
     // static_assert(Curve::MINUS_Y1 < Curve::X2);
-    // [[maybe_unused]] static constexpr auto K1_MAX = Curve::Y2;
-    // [[maybe_unused]] static constexpr auto K2_MAX = Curve::X2 - 1;
-    // assert(k1.value <= K1_MAX);
-    // assert(k2.value <= K2_MAX);
+    [[maybe_unused]] static constexpr auto K1_MAX = std::numeric_limits<intx::uint128>::max();
+    [[maybe_unused]] static constexpr auto K2_MAX = K1_MAX;
+    assert(k1.value <= K1_MAX);
+    assert(k2.value <= K2_MAX);
 
     return {k1, k2};
 }
