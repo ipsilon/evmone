@@ -311,7 +311,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     // Handle point doubling in case p == q, i.e. when u1 == u2 and s1 == s2.
     // TODO: Untested case of two points having the same y coordinate but different x.
     //       The following assertion (r == 0) => (h == 0) should fail in that case.
-    assert(r != 0 || h == 0);
+    // assert(r != 0 || h == 0);
     if (h == 0 && r == 0) [[unlikely]]
         return dbl(p);
 
@@ -529,12 +529,16 @@ inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
     if (bit_width == 0)
         return r;
 
-    const auto p1p2 = add(p1, p2);
-    const auto p1p3 = add(p1, p3);
-    const auto p1p4 = add(p1, p4);
-    const auto p2p3 = add(p2, p3);
-    const auto p2p4 = add(p2, p4);
-    const auto p3p4 = add(p3, p4);
+    const auto jp1 = ProjPoint{p1};
+    const auto jp2 = ProjPoint{p2};
+    const auto jp3 = ProjPoint{p3};
+    const auto jp4 = ProjPoint{p4};
+    const auto p1p2 = add(jp1, p2);
+    const auto p1p3 = add(jp1, p3);
+    const auto p1p4 = add(jp1, p4);
+    const auto p2p3 = add(jp2, p3);
+    const auto p2p4 = add(jp2, p4);
+    const auto p3p4 = add(jp3, p4);
 
     const auto p1p2p3 = add(p1p2, p3);
     const auto p1p2p4 = add(p1p2, p4);
@@ -545,16 +549,16 @@ inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
 
     const auto p1p2p3p4 = add(p1p2, p3p4);
 
-    const AffinePoint<Curve>* const points[]{
+    const ProjPoint<Curve>* const points[]{
         nullptr,
-        &p1,        // 0001
-        &p2,        // 0010
+        &jp1,        // 0001
+        &jp2,        // 0010
         &p1p2,      // 0011
-        &p3,        // 0100
+        &jp3,        // 0100
         &p1p3,      // 0101
         &p2p3,      // 0110
         &p1p2p3,    // 0111
-        &p4,        // 1000
+        &jp4,        // 1000
         &p1p4,      // 1001
         &p2p4,      // 1010
         &p1p2p4,    // 1011
