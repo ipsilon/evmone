@@ -119,7 +119,7 @@ TEST(evmmax, bn254_add)
         ASSERT_TRUE(e.has_value());
         ASSERT_TRUE(validate(*e));
 
-        const auto r = add(*p, *q);
+        const auto r = add_affine(*p, *q);
         EXPECT_EQ(r, e);
     }
 }

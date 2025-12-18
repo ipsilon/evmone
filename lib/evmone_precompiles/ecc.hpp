@@ -236,8 +236,11 @@ inline AffinePoint<Curve> to_affine(const ProjPoint<Curve>& p) noexcept
 /// Elliptic curve point addition in affine coordinates.
 ///
 /// Computes P ⊕ Q for two points in affine coordinates on the elliptic curve.
+/// This procedure handles all inputs (e.g. doubling or points at infinity).
+/// The produced result is also in affine coordinates. Therefore, this is useful only for one-off
+/// additions, as otherwise multiple additions would be inefficient due to repeated inversions.
 template <typename Curve>
-AffinePoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
+AffinePoint<Curve> add_affine(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
     if (p == 0)
         return q;
@@ -492,7 +495,7 @@ ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve
         return r;
 
     // Precompute affine P + Q. Works correctly if P == Q.
-    const auto h = add(p, q);
+    const auto h = add_affine(p, q);
 
     // Create lookup table for points. The index 0 is unused.
     // TODO: Put 0 at index 0 and use it in the loop to avoid the branch.

@@ -158,9 +158,9 @@ TEST(evmmax, secp256k1_pt_add_inf)
     const AffinePoint inf;
     ASSERT_TRUE(inf == 0);
 
-    EXPECT_EQ(add(p1, inf), p1);
-    EXPECT_EQ(add(inf, p1), p1);
-    EXPECT_EQ(add(inf, inf), inf);
+    EXPECT_EQ(add_affine(p1, inf), p1);
+    EXPECT_EQ(add_affine(inf, p1), p1);
+    EXPECT_EQ(add_affine(inf, inf), inf);
 }
 
 TEST(evmmax, secp256k1_pt_add)
@@ -177,22 +177,22 @@ TEST(evmmax, secp256k1_pt_add)
     {
         const AffinePoint e{0x40468d7704db3d11961ab9c222e35919d7e5d1baef59e0f46255d66bec3bd1d3_u256,
             0x6fff88d9f575236b6cc5c74e7d074832a460c2792fba888aea7b9986429dd7f7_u256};
-        EXPECT_EQ(add(p1, p2), e);
+        EXPECT_EQ(add_affine(p1, p2), e);
     }
     {
         const AffinePoint e{0xd8e7b42b8c82e185bf0669ce0754697a6eb46c156497d5d1971bd6a23f38ed9e_u256,
             0x628c3107fc73c92e7b8c534e239257fb2de95bd6b965dc1021f636da086a7e99_u256};
-        EXPECT_EQ(add(p1, p1), e);
+        EXPECT_EQ(add_affine(p1, p1), e);
     }
     {
         const AffinePoint e{0xdf592d726f42759020da10d3106db3880e514c783d6970d2a9085fb16879b37f_u256,
             0x10aa0ef9fe224e3797792b4b286b9f63542d4c11fe26d449a845b9db0f5993f9_u256};
-        EXPECT_EQ(add(p1, p3), e);
+        EXPECT_EQ(add_affine(p1, p3), e);
     }
     {
         const AffinePoint e{0x12a5fd099bcd30e7290e58d63f8d5008287239500e6d0108020040497c5cb9c9_u256,
             0x7f6bd83b5ac46e3b59e24af3bc9bfbb213ed13e21d754e4950ae635961742574_u256};
-        EXPECT_EQ(add(p1, p4), e);
+        EXPECT_EQ(add_affine(p1, p4), e);
     }
 }
 
