@@ -389,7 +389,7 @@ ProjPoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q) n
 {
     if (q == 0)
         // TODO: Untested and untestable via precompile call (for secp256r1).
-            return ProjPoint(p);
+        return ProjPoint(p);
     if (p == 0)
         return ProjPoint(q);
 
@@ -593,23 +593,23 @@ inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
 
     const auto p1p2p3p4 = add(p1p2, p3p4);
 
-    const ProjPoint<Curve>* const points[]{
-        nullptr,
-        &jp1,        // 0001
-        &jp2,        // 0010
-        &p1p2,      // 0011
-        &jp3,        // 0100
-        &p1p3,      // 0101
-        &p2p3,      // 0110
-        &p1p2p3,    // 0111
-        &jp4,        // 1000
-        &p1p4,      // 1001
-        &p2p4,      // 1010
-        &p1p2p4,    // 1011
-        &p3p4,      // 1100
-        &p1p3p4,    // 1101
-        &p2p3p4,    // 1110
-        &p1p2p3p4,  // 1111
+    const ProjPoint<Curve> points[]{
+        ProjPoint<Curve>{},
+        jp1,       // 0001
+        jp2,       // 0010
+        p1p2,      // 0011
+        jp3,       // 0100
+        p1p3,      // 0101
+        p2p3,      // 0110
+        p1p2p3,    // 0111
+        jp4,       // 1000
+        p1p4,      // 1001
+        p2p4,      // 1010
+        p1p2p4,    // 1011
+        p3p4,      // 1100
+        p1p3p4,    // 1101
+        p2p3p4,    // 1110
+        p1p2p3p4,  // 1111
     };
 
     for (auto i = bit_width; i != 0; --i)
@@ -623,7 +623,7 @@ inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
         const auto idx = u1_bit | (u2_bit << 1) | (u3_bit << 2) | (u4_bit << 3);
         if (idx == 0)
             continue;
-        r = add(r, *points[idx]);
+        r = add(r, points[idx]);
     }
 
     return r;
