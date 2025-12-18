@@ -385,6 +385,49 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
 }
 
 template <typename Curve>
+ProjPoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
+{
+    if (q == 0)
+        // TODO: Untested and untestable via precompile call (for secp256r1).
+            return ProjPoint(p);
+    if (p == 0)
+        return ProjPoint(q);
+
+    // Use the "mmadd" formula for curve in Jacobian coordinates.
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-mmadd-2007-bl
+    // Modified to properly support adding the same point.
+
+    const auto& [x1, y1] = p;
+    const auto& [x2, y2] = q;
+
+    const auto h = x2 - x1;
+    const auto t1 = h + h;
+    const auto i = t1 * t1;
+    const auto j = h * i;
+    const auto t2 = y2 - y1;
+
+    // Handle point doubling in case p == q.
+    // p == q if and only if x1 == x2 and y1 = y2
+    if (h == 0 && t2 == 0) [[unlikely]]
+        return dbl(ProjPoint(p));
+
+    const auto r = t2 + t2;
+    const auto v = x1 * i;
+    const auto t3 = r * r;
+    const auto t4 = v + v;
+    const auto t5 = t3 - j;
+    const auto x3 = t5 - t4;
+    const auto t6 = v - x3;
+    const auto t7 = y1 * j;
+    const auto t8 = t7 + t7;
+    const auto t9 = r * t6;
+    const auto y3 = t9 - t8;
+    const auto z3 = h + h;
+
+    return {x3, y3, z3};
+}
+
+template <typename Curve>
 ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
 {
     const auto& [x1, y1, z1] = p;
