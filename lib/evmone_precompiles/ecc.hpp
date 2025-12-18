@@ -401,27 +401,27 @@ ProjPoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q) n
     const auto& [x2, y2] = q;
 
     const auto h = x2 - x1;
-    const auto t1 = h + h;
-    const auto i = t1 * t1;
+    const auto h2 = h + h;
+    const auto i = h2 * h2;
     const auto j = h * i;
-    const auto t2 = y2 - y1;
+    const auto t0 = y2 - y1;
 
     // Handle point doubling in case p == q.
     // p == q if and only if x1 == x2 and y1 = y2
-    if (h == 0 && t2 == 0) [[unlikely]]
+    if (h == 0 && t0 == 0) [[unlikely]]
         return dbl(ProjPoint(p));
 
-    const auto r = t2 + t2;
+    const auto r = t0 + t0;
     const auto v = x1 * i;
-    const auto t3 = r * r;
-    const auto t4 = v + v;
-    const auto t5 = t3 - j;
-    const auto x3 = t5 - t4;
-    const auto t6 = v - x3;
-    const auto t7 = y1 * j;
-    const auto t8 = t7 + t7;
-    const auto t9 = r * t6;
-    const auto y3 = t9 - t8;
+    const auto t1 = r * r;
+    const auto t2 = v + v;
+    const auto t3 = t1 - j;
+    const auto x3 = t3 - t2;
+    const auto t4 = v - x3;
+    const auto t5 = y1 * j;
+    const auto t6 = t5 + t5;
+    const auto t7 = r * t4;
+    const auto y3 = t7 - t6;
     const auto z3 = h + h;
 
     return {x3, y3, z3};
