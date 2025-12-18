@@ -21,14 +21,20 @@ struct Constant : std::integral_constant<int, N>
 using zero_t = Constant<0>;
 using one_t = Constant<1>;
 
+template <typename T>
+concept FieldSpec = requires
+{
+    T::PRIME;
+};
+
 /// A representation of an element in a prime field.
 ///
 /// TODO: Combine with BaseFieldElem.
-template <typename Curve>
+template <FieldSpec Spec>
 struct FieldElement
 {
-    using uint_type = Curve::uint_type;
-    static constexpr auto& Fp = Curve::Fp;
+    using uint_type = std::remove_const_t<decltype(Spec::PRIME)>;
+    static constexpr ModArith<uint_type> Fp{Spec::PRIME};
 
     // TODO: Make this private.
     uint_type value_{};
@@ -44,7 +50,7 @@ struct FieldElement
     {
         // TODO: Add intx::load from std::span.
         const auto x = intx::be::unsafe::load<uint_type>(b.data());
-        if (x >= Curve::FIELD_PRIME) [[unlikely]]
+        if (x >= Spec::PRIME) [[unlikely]]
             return std::nullopt;
         return FieldElement{x};
     }
@@ -122,7 +128,7 @@ struct Point
 template <typename Curve>
 struct AffinePoint
 {
-    using FE = FieldElement<Curve>;
+    using FE = Curve::Fp;
 
     FE x;
     FE y;
@@ -165,7 +171,7 @@ struct AffinePoint
 template <typename Curve>
 struct ProjPoint
 {
-    using FE = FieldElement<Curve>;
+    using FE = Curve::Fp;
     FE x;
     FE y{1};  // TODO: Make sure this is compile-time constant.
     FE z;
@@ -264,7 +270,7 @@ AffinePoint<Curve> add_affine(const AffinePoint<Curve>& p, const AffinePoint<Cur
         const auto xx = x1 * x1;
         dy = xx + xx + xx;
         if constexpr (Curve::A != 0)
-            dy += FieldElement<Curve>{Curve::A};
+            dy += typename Curve::Fp{Curve::A};
         dx = y1 + y1;
     }
     const auto slope = dy / dx;

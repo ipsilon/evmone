@@ -22,7 +22,11 @@ struct Curve
     static constexpr auto ORDER =
         0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551_u256;
 
-    static constexpr ModArith Fp{FIELD_PRIME};
+    struct FpSpec {
+        static constexpr auto PRIME = FIELD_PRIME;
+    };
+
+    using Fp = ecc::FieldElement<FpSpec>;
 
     static constexpr auto A = FIELD_PRIME - 3;
 

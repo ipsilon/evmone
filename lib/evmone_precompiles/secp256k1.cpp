@@ -8,15 +8,15 @@ namespace evmmax::secp256k1
 {
 namespace
 {
-constexpr auto B = ecc::FieldElement<Curve>{7};
+constexpr auto B = Curve::Fp{7};
 
 constexpr AffinePoint G{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256,
     0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256};
 }  // namespace
 
 // FIXME: Change to "uncompress_point".
-std::optional<ecc::FieldElement<Curve>> calculate_y(
-    const ecc::FieldElement<Curve>& x, bool y_parity) noexcept
+std::optional<Curve::Fp> calculate_y(
+    const Curve::Fp& x, bool y_parity) noexcept
 {
     // Calculate y = √(x³ + 7).
     const auto xxx = x * x * x;
@@ -79,9 +79,9 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> 
     assert(u2 != 0);  // Because s != 0 and r_inv != 0.
 
     // 2. Calculate y coordinate of R from r and v.
-    const auto r_mont = ecc::FieldElement<Curve>{r};
+    const auto r_mont = Curve::Fp{r};
     const auto y = calculate_y(r_mont, parity);
-    if (!y.has_value()) [[unlikely]]
+    if (!y.has_value())
         return std::nullopt;
 
     // 6. Calculate public key point Q = u1×G + u2×R.
@@ -107,7 +107,7 @@ std::optional<evmc::address> ecrecover(std::span<const uint8_t, 32> hash,
     return to_address(*pubkey);
 }
 
-std::optional<ecc::FieldElement<Curve>> field_sqrt(const ecc::FieldElement<Curve>& x) noexcept
+std::optional<Curve::Fp> field_sqrt(const Curve::Fp& x) noexcept
 {
     // Computes modular exponentiation
     // x^0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c
@@ -138,11 +138,11 @@ std::optional<ecc::FieldElement<Curve>> field_sqrt(const ecc::FieldElement<Curve
     // return     ((x223 << 23 + x22) << 6 + _11) << 2
 
     // Allocate Temporaries.
-    ecc::FieldElement<Curve> z;
-    ecc::FieldElement<Curve> t0;
-    ecc::FieldElement<Curve> t1;
-    ecc::FieldElement<Curve> t2;
-    ecc::FieldElement<Curve> t3;
+    Curve::Fp z;
+    Curve::Fp t0;
+    Curve::Fp t1;
+    Curve::Fp t2;
+    Curve::Fp t3;
 
 
     // Step 1: z = x^0x2
