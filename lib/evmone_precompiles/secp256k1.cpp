@@ -88,7 +88,7 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> 
         return std::nullopt;
 
     // 6. Calculate public key point Q = u1×G + u2×R.
-    const auto R = AffinePoint{r_mont, *y_mont};
+    const auto R = AffinePoint{r_mont, *y};
 
     // u1 and u2 are less than `Curve::ORDER`, so the multiplications will not reduce.
     const auto [u1k1, u1k2] = ecc::decompose<Curve>(u1);
