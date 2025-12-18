@@ -576,12 +576,13 @@ inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
     const auto jp2 = ProjPoint{p2};
     const auto jp3 = ProjPoint{p3};
     const auto jp4 = ProjPoint{p4};
-    const auto p1p2 = add(jp1, p2);
-    const auto p1p3 = add(jp1, p3);
-    const auto p1p4 = add(jp1, p4);
-    const auto p2p3 = add(jp2, p3);
-    const auto p2p4 = add(jp2, p4);
-    const auto p3p4 = add(jp3, p4);
+
+    const auto p1p2 = add(p1, p2);
+    const auto p1p3 = add(p1, p3);
+    const auto p1p4 = add(p1, p4);
+    const auto p2p3 = add(p2, p3);
+    const auto p2p4 = add(p2, p4);
+    const auto p3p4 = add(p3, p4);
 
     const auto p1p2p3 = add(p1p2, p3);
     const auto p1p2p4 = add(p1p2, p4);
