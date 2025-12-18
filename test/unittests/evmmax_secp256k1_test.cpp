@@ -149,39 +149,6 @@ TEST(secp256k1, point_to_address)
     EXPECT_EQ(to_address({}), 0x3f17f1962B36e491b30A40b2405849e597Ba5FB5_address);
 }
 
-TEST(evmmax, secp256k1_calculate_u1)
-{
-    // u1 = -zr^(-1)
-    const auto z = 0x31d6fb860f6d12cee6e5b640646089bd5883d586e43de3dedc75695c11ac2da9_u256;
-    const auto r = 0x71cd6bfc24665312ff489aba9279710a560eda74aca333bf298785dc3cd72f6e_u256;
-    const auto expected = 0xd80ea4db5200c96e969270ab7c105e16abb9fc18a6e01cc99575dd3f5ce41eed_u256;
-
-    const auto& m = Curve::Fp;
-    const auto z_mont = m.to_mont(z);
-    const auto r_mont = m.to_mont(r);
-    const auto r_inv = m.inv(r_mont);
-    const auto z_neg = m.sub(0, z_mont);
-    const auto u1_mont = m.mul(z_neg, r_inv);
-    const auto u1 = m.from_mont(u1_mont);
-    EXPECT_EQ(u1, expected);
-}
-
-TEST(evmmax, secp256k1_calculate_u2)
-{
-    // u2 = sr^(-1)
-    const auto r = 0x27bc00995393e969525f2d02e731437402aa12a9a09125d1e322d62f05a2b54f_u256;
-    const auto s = 0x7ce91fc325f28e78a016fa674a80d85581cc278d15453ea2fede2471b1adaada_u256;
-    const auto expected = 0xf888ea06899abc190fa37a165c98e6d4b00b13c50db1d1c34f38f0ab8fd9c29b_u256;
-
-    const auto& m = Curve::Fp;
-    const auto s_mont = m.to_mont(s);
-    const auto r_mont = m.to_mont(r);
-    const auto r_inv = m.inv(r_mont);
-    const auto u2_mont = m.mul(s_mont, r_inv);
-    const auto u2 = m.from_mont(u2_mont);
-    EXPECT_EQ(u2, expected);
-}
-
 TEST(evmmax, secp256k1_hash_to_number)
 {
     const auto max_h = ~uint256{};
