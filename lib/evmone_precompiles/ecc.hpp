@@ -233,6 +233,15 @@ inline AffinePoint<Curve> to_affine(const ProjPoint<Curve>& p) noexcept
     return {p.x * zz_inv, p.y * zzz_inv};
 }
 
+template <typename Curve>
+inline AffinePoint<Curve> to_affine(const ProjPoint<Curve>& p, const auto& z_inv) noexcept
+{
+    // This works correctly for the point at infinity (z == 0) because then z_inv == 0.
+    const auto zz_inv = z_inv * z_inv;
+    const auto zzz_inv = zz_inv * z_inv;
+    return {p.x * zz_inv, p.y * zzz_inv};
+}
+
 /// Elliptic curve point addition in affine coordinates.
 ///
 /// Computes P ⊕ Q for two points in affine coordinates on the elliptic curve.
@@ -588,23 +597,77 @@ inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
 
     const auto jp1p2p3p4 = add(jp1p2, jp3p4);
 
+
+    const auto& z_12 = jp1p2.z;
+    const auto& z_13 = jp1p3.z;
+    const auto& z_14 = jp1p4.z;
+    const auto& z_23 = jp2p3.z;
+    const auto& z_24 = jp2p4.z;
+    const auto& z_34 = jp3p4.z;
+    const auto& z_123 = jp1p2p3.z;
+    const auto& z_124 = jp1p2p4.z;
+    const auto& z_134 = jp1p3p4.z;
+    const auto& z_234 = jp2p3p4.z;
+    const auto& z_1234 = jp1p2p3p4.z;
+
+    const auto z_12_13 = z_12 * z_13;
+    const auto z_12_13_14 = z_12_13 * z_14;
+    const auto z_12_13_14_23 = z_12_13_14 * z_23;
+    const auto z_12_13_14_23_24 = z_12_13_14_23 * z_24;
+    const auto z_12_13_14_23_24_34 = z_12_13_14_23_24 * z_34;
+    const auto z_12_13_14_23_24_34_123 = z_12_13_14_23_24_34 * z_123;
+    const auto z_12_13_14_23_24_34_123_124 = z_12_13_14_23_24_34_123 * z_124;
+    const auto z_12_13_14_23_24_34_123_124_134 = z_12_13_14_23_24_34_123_124 * z_134;
+    const auto z_12_13_14_23_24_34_123_124_134_234 = z_12_13_14_23_24_34_123_124_134 * z_234;
+    const auto z_12_13_14_23_24_34_123_124_134_234_1234 =
+        z_12_13_14_23_24_34_123_124_134_234 * z_1234;
+
+    const auto i_12_13_14_23_24_34_123_124_134_234_1234 =
+        1 / z_12_13_14_23_24_34_123_124_134_234_1234;
+    const auto i_1234 =
+        i_12_13_14_23_24_34_123_124_134_234_1234 * z_12_13_14_23_24_34_123_124_134_234;
+    const auto i_12_13_14_23_24_34_123_124_134_234 =
+        i_12_13_14_23_24_34_123_124_134_234_1234 * z_1234;
+    const auto i_234 = i_12_13_14_23_24_34_123_124_134_234 * z_12_13_14_23_24_34_123_124_134;
+    const auto i_12_13_14_23_24_34_123_124_134 = i_12_13_14_23_24_34_123_124_134_234 * z_234;
+    const auto i_134 = i_12_13_14_23_24_34_123_124_134 * z_12_13_14_23_24_34_123_124;
+    const auto i_12_13_14_23_24_34_123_124 = i_12_13_14_23_24_34_123_124_134 * z_134;
+    const auto i_124 = i_12_13_14_23_24_34_123_124 * z_12_13_14_23_24_34_123;
+    const auto i_12_13_14_23_24_34_123 = i_12_13_14_23_24_34_123_124 * z_124;
+    const auto i_123 = i_12_13_14_23_24_34_123 * z_12_13_14_23_24_34;
+    const auto i_12_13_14_23_24_34 = i_12_13_14_23_24_34_123 * z_123;
+    const auto i_34 = i_12_13_14_23_24_34 * z_12_13_14_23_24;
+    const auto i_12_13_14_23_24 = i_12_13_14_23_24_34 * z_34;
+    const auto i_24 = i_12_13_14_23_24 * z_12_13_14_23;
+    const auto i_12_13_14_23 = i_12_13_14_23_24 * z_24;
+    const auto i_23 = i_12_13_14_23 * z_12_13_14;
+    const auto i_12_13_14 = i_12_13_14_23 * z_23;
+    const auto i_14 = i_12_13_14 * z_12_13;
+    const auto i_12_13 = i_12_13_14 * z_14;
+    const auto i_13 = i_12_13 * z_12;
+    const auto i_12 = i_12_13 * z_13;
+
+
+    // auto inv = 1 / jp1p2.z;
+    // const auto p1p2 = to_affine(jp1p2, inv);
+
     const AffinePoint<Curve> points[]{
         AffinePoint<Curve>{},
-        p1,                    // 0001
-        p2,                    // 0010
-        to_affine(jp1p2),      // 0011
-        p3,                    // 0100
-        to_affine(jp1p3),      // 0101
-        to_affine(jp2p3),      // 0110
-        to_affine(jp1p2p3),    // 0111
-        p4,                    // 1000
-        to_affine(jp1p4),      // 1001
-        to_affine(jp2p4),      // 1010
-        to_affine(jp1p2p4),    // 1011
-        to_affine(jp3p4),      // 1100
-        to_affine(jp1p3p4),    // 1101
-        to_affine(jp2p3p4),    // 1110
-        to_affine(jp1p2p3p4),  // 1111
+        p1,                            // 0001
+        p2,                            // 0010
+        to_affine(jp1p2, i_12),        // 0011
+        p3,                            // 0100
+        to_affine(jp1p3, i_13),        // 0101
+        to_affine(jp2p3, i_23),        // 0110
+        to_affine(jp1p2p3, i_123),     // 0111
+        p4,                            // 1000
+        to_affine(jp1p4, i_14),        // 1001
+        to_affine(jp2p4, i_24),        // 1010
+        to_affine(jp1p2p4, i_124),     // 1011
+        to_affine(jp3p4, i_34),        // 1100
+        to_affine(jp1p3p4, i_134),     // 1101
+        to_affine(jp2p3p4, i_234),     // 1110
+        to_affine(jp1p2p3p4, i_1234),  // 1111
     };
 
     for (auto i = bit_width; i != 0; --i)
