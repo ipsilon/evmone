@@ -621,8 +621,6 @@ inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
         const auto u3_bit = bit_test(u3, i - 1);
         const auto u4_bit = bit_test(u4, i - 1);
         const auto idx = u1_bit | (u2_bit << 1) | (u3_bit << 2) | (u4_bit << 3);
-        if (idx == 0)
-            continue;
         r = add(r, points[idx]);
     }
 
