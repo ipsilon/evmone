@@ -37,11 +37,11 @@ using AffinePoint = ecc::AffinePoint<Curve>;
 /// where P is ::FieldPrime.
 ///
 /// @return Square root of x if it exists, std::nullopt otherwise.
-std::optional<uint256> field_sqrt(const ModArith<uint256>& m, const uint256& x) noexcept;
+std::optional<ecc::FieldElement<Curve>> field_sqrt(const ecc::FieldElement<Curve>& x) noexcept;
 
 /// Calculate y coordinate of a point having x coordinate and y parity.
-std::optional<uint256> calculate_y(
-    const ModArith<uint256>& m, const uint256& x, bool y_parity) noexcept;
+std::optional<ecc::FieldElement<Curve>> calculate_y(
+    const ecc::FieldElement<Curve>& x, bool y_parity) noexcept;
 
 /// Convert the secp256k1 point (uncompressed public key) to Ethereum address.
 evmc::address to_address(const AffinePoint& pt) noexcept;

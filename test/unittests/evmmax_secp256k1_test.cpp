@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <test/utils/utils.hpp>
 
+using namespace evmmax;
 using namespace evmmax::secp256k1;
 using namespace evmc::literals;
 using namespace evmone::test;
@@ -25,9 +26,7 @@ AffinePoint mul(const AffinePoint& p, const uint256& c) noexcept
 
 TEST(secp256k1, field_sqrt)
 {
-    const auto& m = Curve::Fp;
-
-    for (const auto& t : std::array{
+    for (const auto& t : {
              1_u256,
              0x6e140df17432311190232a91a38daed3ee9ed7f038645dd0278da7ca6e497de_u256,
              0xf3b9accc43dc8919ba3b4f1e14c8f7c72e7c4c013a404e9fd35e9c9a5b7b228_u256,
@@ -43,29 +42,26 @@ TEST(secp256k1, field_sqrt)
              Curve::FIELD_PRIME - 1,
          })
     {
-        const auto a = m.to_mont(t);
-        const auto a2 = m.mul(a, a);
-        const auto a2_sqrt = field_sqrt(m, a2);
+        const auto a = ecc::FieldElement<Curve>{t};
+        const auto a2_sqrt = field_sqrt(a * a);
         ASSERT_TRUE(a2_sqrt.has_value()) << to_string(t);
-        EXPECT_TRUE(a2_sqrt == a || a2_sqrt == m.sub(0, a)) << to_string(t);
+        EXPECT_TRUE(a2_sqrt == a || a2_sqrt == -a) << to_string(t);
     }
 }
 
 TEST(secp256k1, field_sqrt_invalid)
 {
-    const auto& m = Curve::Fp;
-
-    for (const auto& t : std::array{3_u256, Curve::FIELD_PRIME - 1})
+    for (const auto& t : {3_u256, Curve::FIELD_PRIME - 1})
     {
-        EXPECT_FALSE(field_sqrt(m, m.to_mont(t)).has_value());
+        EXPECT_FALSE(field_sqrt(ecc::FieldElement<Curve>{t}).has_value());
     }
 }
 
 TEST(secp256k1, scalar_inv)
 {
-    const evmmax::ModArith n{Curve::ORDER};
+    const ModArith n{Curve::ORDER};
 
-    for (const auto& t : std::array{
+    for (const auto& t : {
              1_u256,
              0x6e140df17432311190232a91a38daed3ee9ed7f038645dd0278da7ca6e497de_u256,
              Curve::ORDER - 1,
@@ -81,8 +77,6 @@ TEST(secp256k1, scalar_inv)
 
 TEST(secp256k1, calculate_y)
 {
-    const auto& m = Curve::Fp;
-
     struct TestCase
     {
         uint256 x;
@@ -110,33 +104,31 @@ TEST(secp256k1, calculate_y)
 
     for (const auto& t : test_cases)
     {
-        const auto x = m.to_mont(t.x);
+        const auto x = ecc::FieldElement<Curve>{t.x};
 
-        const auto y_even = calculate_y(m, x, false);
+        const auto y_even = calculate_y(x, false);
         ASSERT_TRUE(y_even.has_value());
-        EXPECT_EQ(m.from_mont(*y_even), t.y_even);
+        EXPECT_EQ(y_even->value(), t.y_even);
 
-        const auto y_odd = calculate_y(m, x, true);
+        const auto y_odd = calculate_y(x, true);
         ASSERT_TRUE(y_odd.has_value());
-        EXPECT_EQ(m.from_mont(*y_odd), t.y_odd);
+        EXPECT_EQ(y_odd->value(), t.y_odd);
     }
 }
 
 TEST(secp256k1, calculate_y_invalid)
 {
-    const auto& m = Curve::Fp;
-
-    for (const auto& t : std::array{
+    for (const auto& t : {
              0x207ea538f1835f6de40c793fc23d22b14da5a80015a0fecddf56f146b21d7949_u256,
              Curve::FIELD_PRIME - 1,
          })
     {
-        const auto x = m.to_mont(t);
+        const auto x = ecc::FieldElement<Curve>{t};
 
-        const auto y_even = calculate_y(m, x, false);
+        const auto y_even = calculate_y(x, false);
         ASSERT_FALSE(y_even.has_value());
 
-        const auto y_odd = calculate_y(m, x, true);
+        const auto y_odd = calculate_y(x, true);
         ASSERT_FALSE(y_odd.has_value());
     }
 }

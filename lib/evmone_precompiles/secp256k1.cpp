@@ -8,25 +8,26 @@ namespace evmmax::secp256k1
 {
 namespace
 {
-constexpr auto B = Curve::Fp.to_mont(7);
+constexpr auto B = ecc::FieldElement<Curve>{7};
 
 constexpr AffinePoint G{0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256,
     0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256};
 }  // namespace
 
 // FIXME: Change to "uncompress_point".
-std::optional<uint256> calculate_y(
-    const ModArith<uint256>& m, const uint256& x, bool y_parity) noexcept
+std::optional<ecc::FieldElement<Curve>> calculate_y(
+    const ecc::FieldElement<Curve>& x, bool y_parity) noexcept
 {
-    // Calculate sqrt(x^3 + 7)
-    const auto x3 = m.mul(m.mul(x, x), x);
-    const auto y = field_sqrt(m, m.add(x3, B));
-    if (!y.has_value())
+    // Calculate y = √(x³ + 7).
+    const auto xxx = x * x * x;
+    const auto opt_y = field_sqrt(xxx + B);
+    if (!opt_y.has_value())
         return std::nullopt;
 
-    // Negate if different parity requested
-    const auto candidate_parity = (m.from_mont(*y) & 1) != 0;
-    return (candidate_parity == y_parity) ? *y : m.sub(0, *y);
+    // Negate if different parity requested.
+    const auto& y = *opt_y;
+    const auto candidate_parity = (y.value() & 1) != 0;
+    return (candidate_parity == y_parity) ? y : -y;
 }
 
 evmc::address to_address(const AffinePoint& pt) noexcept
@@ -78,14 +79,13 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
     assert(u2 != 0);  // Because s != 0 and r_inv != 0.
 
     // 2. Calculate y coordinate of R from r and v.
-    static constexpr auto& Fp = Curve::Fp;
-    const auto r_mont = Fp.to_mont(r);
-    const auto y_mont = calculate_y(Fp, r_mont, v);
-    if (!y_mont.has_value())
+    const auto r_mont = ecc::FieldElement<Curve>{r};
+    const auto y = calculate_y(r_mont, v);
+    if (!y.has_value())
         return std::nullopt;
 
     // 6. Calculate public key point Q = u1×G + u2×R.
-    const auto R = AffinePoint{AffinePoint::FE::wrap(r_mont), AffinePoint::FE::wrap(*y_mont)};
+    const auto R = AffinePoint{r_mont, *y};
     const auto Q = ecc::to_affine(msm(u1, G, u2, R));
 
     if (Q == 0)
@@ -104,7 +104,7 @@ std::optional<evmc::address> ecrecover(
     return to_address(*point);
 }
 
-std::optional<uint256> field_sqrt(const ModArith<uint256>& m, const uint256& x) noexcept
+std::optional<ecc::FieldElement<Curve>> field_sqrt(const ecc::FieldElement<Curve>& x) noexcept
 {
     // Computes modular exponentiation
     // x^0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c
@@ -135,115 +135,115 @@ std::optional<uint256> field_sqrt(const ModArith<uint256>& m, const uint256& x) 
     // return     ((x223 << 23 + x22) << 6 + _11) << 2
 
     // Allocate Temporaries.
-    uint256 z;
-    uint256 t0;
-    uint256 t1;
-    uint256 t2;
-    uint256 t3;
+    ecc::FieldElement<Curve> z;
+    ecc::FieldElement<Curve> t0;
+    ecc::FieldElement<Curve> t1;
+    ecc::FieldElement<Curve> t2;
+    ecc::FieldElement<Curve> t3;
 
 
     // Step 1: z = x^0x2
-    z = m.mul(x, x);
+    z = x * x;
 
     // Step 2: z = x^0x3
-    z = m.mul(x, z);
+    z = x * z;
 
     // Step 4: t0 = x^0xc
-    t0 = m.mul(z, z);
+    t0 = z * z;
     for (int i = 1; i < 2; ++i)
-        t0 = m.mul(t0, t0);
+        t0 = t0 * t0;
 
     // Step 5: t0 = x^0xf
-    t0 = m.mul(z, t0);
+    t0 = z * t0;
 
     // Step 6: t1 = x^0x1e
-    t1 = m.mul(t0, t0);
+    t1 = t0 * t0;
 
     // Step 7: t2 = x^0x1f
-    t2 = m.mul(x, t1);
+    t2 = x * t1;
 
     // Step 9: t1 = x^0x7c
-    t1 = m.mul(t2, t2);
+    t1 = t2 * t2;
     for (int i = 1; i < 2; ++i)
-        t1 = m.mul(t1, t1);
+        t1 = t1 * t1;
 
     // Step 10: t1 = x^0x7f
-    t1 = m.mul(z, t1);
+    t1 = z * t1;
 
     // Step 14: t3 = x^0x7f0
-    t3 = m.mul(t1, t1);
+    t3 = t1 * t1;
     for (int i = 1; i < 4; ++i)
-        t3 = m.mul(t3, t3);
+        t3 = t3 * t3;
 
     // Step 15: t0 = x^0x7ff
-    t0 = m.mul(t0, t3);
+    t0 = t0 * t3;
 
     // Step 26: t3 = x^0x3ff800
-    t3 = m.mul(t0, t0);
+    t3 = t0 * t0;
     for (int i = 1; i < 11; ++i)
-        t3 = m.mul(t3, t3);
+        t3 = t3 * t3;
 
     // Step 27: t0 = x^0x3fffff
-    t0 = m.mul(t0, t3);
+    t0 = t0 * t3;
 
     // Step 32: t3 = x^0x7ffffe0
-    t3 = m.mul(t0, t0);
+    t3 = t0 * t0;
     for (int i = 1; i < 5; ++i)
-        t3 = m.mul(t3, t3);
+        t3 = t3 * t3;
 
     // Step 33: t2 = x^0x7ffffff
-    t2 = m.mul(t2, t3);
+    t2 = t2 * t3;
 
     // Step 60: t3 = x^0x3ffffff8000000
-    t3 = m.mul(t2, t2);
+    t3 = t2 * t2;
     for (int i = 1; i < 27; ++i)
-        t3 = m.mul(t3, t3);
+        t3 = t3 * t3;
 
     // Step 61: t2 = x^0x3fffffffffffff
-    t2 = m.mul(t2, t3);
+    t2 = t2 * t3;
 
     // Step 115: t3 = x^0xfffffffffffffc0000000000000
-    t3 = m.mul(t2, t2);
+    t3 = t2 * t2;
     for (int i = 1; i < 54; ++i)
-        t3 = m.mul(t3, t3);
+        t3 = t3 * t3;
 
     // Step 116: t2 = x^0xfffffffffffffffffffffffffff
-    t2 = m.mul(t2, t3);
+    t2 = t2 * t3;
 
     // Step 224: t3 = x^0xfffffffffffffffffffffffffff000000000000000000000000000
-    t3 = m.mul(t2, t2);
+    t3 = t2 * t2;
     for (int i = 1; i < 108; ++i)
-        t3 = m.mul(t3, t3);
+        t3 = t3 * t3;
 
     // Step 225: t2 = x^0xffffffffffffffffffffffffffffffffffffffffffffffffffffff
-    t2 = m.mul(t2, t3);
+    t2 = t2 * t3;
 
     // Step 232: t2 = x^0x7fffffffffffffffffffffffffffffffffffffffffffffffffffff80
     for (int i = 0; i < 7; ++i)
-        t2 = m.mul(t2, t2);
+        t2 = t2 * t2;
 
     // Step 233: t1 = x^0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffff
-    t1 = m.mul(t1, t2);
+    t1 = t1 * t2;
 
     // Step 256: t1 = x^0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffff800000
     for (int i = 0; i < 23; ++i)
-        t1 = m.mul(t1, t1);
+        t1 = t1 * t1;
 
     // Step 257: t0 = x^0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff
-    t0 = m.mul(t0, t1);
+    t0 = t0 * t1;
 
     // Step 263: t0 = x^0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc0
     for (int i = 0; i < 6; ++i)
-        t0 = m.mul(t0, t0);
+        t0 = t0 * t0;
 
     // Step 264: z = x^0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc3
-    z = m.mul(z, t0);
+    z = z * t0;
 
     // Step 266: z = x^0x3fffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffff0c
     for (int i = 0; i < 2; ++i)
-        z = m.mul(z, z);
+        z = z * z;
 
-    if (m.mul(z, z) != x)
+    if (z * z != x)
         return std::nullopt;  // Computed value is not the square root.
 
     return z;
