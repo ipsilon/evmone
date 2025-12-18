@@ -1,0 +1,2 @@
+/usr/bin/ar qc libevmc-instructions.a CMakeFiles/instructions.dir/instruction_metrics.c.o CMakeFiles/instructions.dir/instruction_names.c.o
+/usr/bin/ranlib libevmc-instructions.a

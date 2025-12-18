@@ -1,0 +1,4 @@
++ /home/runner/work/evmone/.codeql-scratch/dbs/cpp/working/autobuild/bin/cc -O2 -fno-builtin -fPIC -Wall -Wextra -Werror -D__ADX__ -c ./src/server.c
++ /home/runner/work/evmone/.codeql-scratch/dbs/cpp/working/autobuild/bin/cc -O2 -fno-builtin -fPIC -Wall -Wextra -Werror -D__ADX__ -c ./build/assembly.S
++ /usr/bin/ar rc libblst.a assembly.o server.o
++ /usr/bin/ranlib libblst.a

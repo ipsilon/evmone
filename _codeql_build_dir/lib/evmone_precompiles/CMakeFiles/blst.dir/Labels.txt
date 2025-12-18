@@ -1,0 +1,13 @@
+# Target labels
+ blst
+# Source files and their labels
+/home/runner/work/evmone/evmone/_codeql_build_dir/lib/evmone_precompiles/CMakeFiles/blst
+/home/runner/work/evmone/evmone/_codeql_build_dir/lib/evmone_precompiles/CMakeFiles/blst.rule
+/home/runner/work/evmone/evmone/_codeql_build_dir/lib/evmone_precompiles/CMakeFiles/blst-complete.rule
+/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-build.rule
+/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-configure.rule
+/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-download.rule
+/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-install.rule
+/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-mkdir.rule
+/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-patch.rule
+/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-update.rule

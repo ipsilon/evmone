@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/runner/work/evmone/evmone/_codeql_build_dir/lib/evmone_precompiles/CMakeFiles/blst"
+		},
+		{
+			"file" : "/home/runner/work/evmone/evmone/_codeql_build_dir/lib/evmone_precompiles/CMakeFiles/blst.rule"
+		},
+		{
+			"file" : "/home/runner/work/evmone/evmone/_codeql_build_dir/lib/evmone_precompiles/CMakeFiles/blst-complete.rule"
+		},
+		{
+			"file" : "/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-build.rule"
+		},
+		{
+			"file" : "/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-configure.rule"
+		},
+		{
+			"file" : "/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-download.rule"
+		},
+		{
+			"file" : "/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-install.rule"
+		},
+		{
+			"file" : "/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-mkdir.rule"
+		},
+		{
+			"file" : "/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-patch.rule"
+		},
+		{
+			"file" : "/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/blst-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"blst"
+		],
+		"name" : "blst"
+	}
+}

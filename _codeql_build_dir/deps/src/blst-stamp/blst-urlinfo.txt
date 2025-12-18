@@ -1,0 +1,12 @@
+# This is a generated file and its contents are an internal implementation detail.
+# The download step will be re-executed if anything in this file changes.
+# No other meaning or use of this file is supported.
+
+method=url
+command=/usr/local/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/download-blst.cmake;COMMAND;/usr/local/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/verify-blst.cmake;COMMAND;/usr/local/bin/cmake;-DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE;-P;/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst-stamp/extract-blst.cmake
+source_dir=/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src/blst
+work_dir=/home/runner/work/evmone/evmone/_codeql_build_dir/deps/src
+url(s)=https://github.com/supranational/blst/archive/refs/tags/v0.3.15.tar.gz
+hash=SHA256=9e503ff6b50e044efb075d260c81c751702b3ed6f2e45394b0833834e71c3afa
+      no_extract=
+

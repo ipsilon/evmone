@@ -1,0 +1,2 @@
+/usr/bin/ar qc libtooling.a CMakeFiles/tooling.dir/run.cpp.o
+/usr/bin/ranlib libtooling.a
