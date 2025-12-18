@@ -572,44 +572,39 @@ inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
     if (bit_width == 0)
         return r;
 
-    const auto jp1 = ProjPoint{p1};
-    const auto jp2 = ProjPoint{p2};
-    const auto jp3 = ProjPoint{p3};
-    const auto jp4 = ProjPoint{p4};
+    const auto jp1p2 = add(p1, p2);
+    const auto jp1p3 = add(p1, p3);
+    const auto jp1p4 = add(p1, p4);
+    const auto jp2p3 = add(p2, p3);
+    const auto jp2p4 = add(p2, p4);
+    const auto jp3p4 = add(p3, p4);
 
-    const auto p1p2 = add(p1, p2);
-    const auto p1p3 = add(p1, p3);
-    const auto p1p4 = add(p1, p4);
-    const auto p2p3 = add(p2, p3);
-    const auto p2p4 = add(p2, p4);
-    const auto p3p4 = add(p3, p4);
+    const auto jp1p2p3 = add(jp1p2, p3);
+    const auto jp1p2p4 = add(jp1p2, p4);
 
-    const auto p1p2p3 = add(p1p2, p3);
-    const auto p1p2p4 = add(p1p2, p4);
+    const auto jp1p3p4 = add(jp1p3, p4);
 
-    const auto p1p3p4 = add(p1p3, p4);
+    const auto jp2p3p4 = add(jp2p3, p4);
 
-    const auto p2p3p4 = add(p2p3, p4);
+    const auto jp1p2p3p4 = add(jp1p2, jp3p4);
 
-    const auto p1p2p3p4 = add(p1p2, p3p4);
-
-    const ProjPoint<Curve> points[]{
-        ProjPoint<Curve>{},
-        jp1,       // 0001
-        jp2,       // 0010
-        p1p2,      // 0011
-        jp3,       // 0100
-        p1p3,      // 0101
-        p2p3,      // 0110
-        p1p2p3,    // 0111
-        jp4,       // 1000
-        p1p4,      // 1001
-        p2p4,      // 1010
-        p1p2p4,    // 1011
-        p3p4,      // 1100
-        p1p3p4,    // 1101
-        p2p3p4,    // 1110
-        p1p2p3p4,  // 1111
+    const AffinePoint<Curve> points[]{
+        AffinePoint<Curve>{},
+        p1,                    // 0001
+        p2,                    // 0010
+        to_affine(jp1p2),      // 0011
+        p3,                    // 0100
+        to_affine(jp1p3),      // 0101
+        to_affine(jp2p3),      // 0110
+        to_affine(jp1p2p3),    // 0111
+        p4,                    // 1000
+        to_affine(jp1p4),      // 1001
+        to_affine(jp2p4),      // 1010
+        to_affine(jp1p2p4),    // 1011
+        to_affine(jp3p4),      // 1100
+        to_affine(jp1p3p4),    // 1101
+        to_affine(jp2p3p4),    // 1110
+        to_affine(jp1p2p3p4),  // 1111
     };
 
     for (auto i = bit_width; i != 0; --i)
