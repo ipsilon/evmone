@@ -28,22 +28,20 @@ constexpr uint64_t compute_mod_inv(uint64_t mod0) noexcept
 template <typename UintT>
 class ModArith
 {
-public:
-    const UintT mod;  ///< The modulus.
+    const UintT mod_;  ///< The modulus.
 
-private:
-    const UintT m_r_squared;  ///< R² % mod.
+    const UintT r_squared_;  ///< R² % mod.
 
     /// The modulus inversion, i.e. the number N' such that mod⋅N' = 2⁶⁴-1.
-    const uint64_t m_mod_inv;
+    const uint64_t mod_inv_;
 
     /// Compute R² % mod.
     static constexpr UintT compute_r_squared(const UintT& mod) noexcept
     {
         // R is 2^num_bits, R² is 2^(2*num_bits) and needs 2*num_bits+1 bits to represent,
-        // rounded to 2*num_bits+64) for intx requirements.
-        constexpr auto r2 = intx::uint<UintT::num_bits * 2 + 64>{1} << (UintT::num_bits * 2);
-        return intx::udivrem(r2, mod).rem;
+        // rounded to 2*num_bits+64 for intx requirements.
+        constexpr auto RR = intx::uint<UintT::num_bits * 2 + 64>{1} << (UintT::num_bits * 2);
+        return intx::udivrem(RR, mod).rem;
     }
 
     static constexpr std::pair<uint64_t, uint64_t> addmul(
@@ -54,17 +52,18 @@ private:
     }
 
 public:
-    constexpr explicit ModArith(const UintT& modulus) noexcept
-      : mod{modulus},
-        m_r_squared{compute_r_squared(modulus)},
-        m_mod_inv{compute_mod_inv(modulus[0])}
+    constexpr explicit ModArith(const UintT& mod) noexcept
+      : mod_{mod}, r_squared_{compute_r_squared(mod)}, mod_inv_{compute_mod_inv(mod[0])}
     {}
+
+    /// Returns the modulus.
+    constexpr const UintT& mod() const noexcept { return mod_; }
 
     /// Converts a value to Montgomery form.
     ///
     /// This is done by using Montgomery multiplication mul(x, R²)
     /// what gives aR²R⁻¹ % mod = aR % mod.
-    constexpr UintT to_mont(const UintT& x) const noexcept { return mul(x, m_r_squared); }
+    constexpr UintT to_mont(const UintT& x) const noexcept { return mul(x, r_squared_); }
 
     /// Converts a value in Montgomery form back to normal value.
     ///
@@ -97,18 +96,18 @@ public:
             t[S] = tmp.value;
             const auto d = tmp.carry;  // TODO: Carry is 0 for sparse modulus.
 
-            const auto m = t[0] * m_mod_inv;
-            std::tie(c, std::ignore) = addmul(t[0], m, mod[0], 0);
+            const auto m = t[0] * mod_inv_;
+            std::tie(c, std::ignore) = addmul(t[0], m, mod_[0], 0);
 #pragma GCC unroll 8
             for (size_t j = 1; j != S; ++j)
-                std::tie(c, t[j - 1]) = addmul(t[j], m, mod[j], c);
+                std::tie(c, t[j - 1]) = addmul(t[j], m, mod_[j], c);
             tmp = intx::addc(t[S], c);
             t[S - 1] = tmp.value;
             t[S] = d + tmp.carry;  // TODO: Carry is 0 for sparse modulus.
         }
 
-        if (t >= mod)
-            t -= mod;
+        if (t >= mod_)
+            t -= mod_;
 
         return static_cast<UintT>(t);
     }
@@ -118,7 +117,7 @@ public:
     constexpr UintT add(const UintT& x, const UintT& y) const noexcept
     {
         const auto s = addc(x, y);  // TODO: cannot overflow if modulus is sparse (e.g. 255 bits).
-        const auto d = subc(s.value, mod);
+        const auto d = subc(s.value, mod_);
         return (!s.carry && d.carry) ? s.value : d.value;
     }
 
@@ -127,7 +126,7 @@ public:
     constexpr UintT sub(const UintT& x, const UintT& y) const noexcept
     {
         const auto d = subc(x, y);
-        const auto s = d.value + mod;
+        const auto s = d.value + mod_;
         return (d.carry) ? s : d.value;
     }
 
@@ -135,14 +134,14 @@ public:
     /// If x is not invertible, the result is 0.
     constexpr UintT inv(const UintT& x) const noexcept
     {
-        assert((mod & 1) == 1);
-        assert(mod >= 3);
+        assert((mod_ & 1) == 1);
+        assert(mod_ >= 3);
 
         // Precompute inverse of 2 modulo mod: inv2 * 2 % mod == 1.
         // The 1/2 is inexact division that can be fixed by adding "0" to the numerator
         // and making it even: (mod + 1) / 2. To avoid potential overflow of (1 + mod)
         // we rewrite it further to (mod - 1 + 2) / 2 = (mod - 1) / 2 + 1 = ⌊mod / 2⌋ + 1.
-        const auto inv2 = (mod >> 1) + 1;
+        const auto inv2 = (mod_ >> 1) + 1;
 
         // Use extended binary Euclidean algorithm. This evolves variables a and b until a is 0.
         // Then GCD(x, mod) is in b. If GCD(x, mod) == 1 then the inversion exists and is in v.
@@ -151,13 +150,13 @@ public:
         // https://eprint.iacr.org/2020/972.pdf#algorithm.1
         // TODO: The same paper has additional optimizations that could be applied.
         UintT a = x;
-        UintT b = mod;
+        UintT b = mod_;
 
         // Bézout's coefficients are originally initialized to 1 and 0. But because the input x
         // is in Montgomery form XR the algorithm would compute X⁻¹R⁻¹. To get the expected X⁻¹R,
         // we need to multiply the result by R². We can achieve the same effect "for free"
         // by initializing u to R² instead of 1.
-        UintT u = m_r_squared;
+        UintT u = r_squared_;
         UintT v = 0;
 
         while (a != 0)

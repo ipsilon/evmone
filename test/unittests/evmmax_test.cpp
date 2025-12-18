@@ -52,13 +52,13 @@ TYPED_TEST(evmmax_test, to_from_mont_0)
 template <typename Mod>
 static auto get_test_values(const Mod& m) noexcept
 {
-    using Uint = typename Mod::uint;
+    using Uint = Mod::uint;
     return std::array{
-        m.mod - 1,
-        m.mod - 2,
-        m.mod / 2 + 1,
-        m.mod / 2,
-        m.mod / 2 - 1,
+        m.mod() - 1,
+        m.mod() - 2,
+        m.mod() / 2 + 1,
+        m.mod() / 2,
+        m.mod() / 2 - 1,
         Uint{2},
         Uint{1},
         Uint{0},
@@ -69,7 +69,7 @@ static auto get_test_values(const Mod& m) noexcept
 {
     // Make sure ModArith works in constexpr.
     static constexpr ModArith m{BN254Mod};
-    static_assert(m.mod == BN254Mod);
+    static_assert(m.mod() == BN254Mod);
 
     static constexpr auto a = m.to_mont(3);
     static constexpr auto b = m.to_mont(11);
@@ -89,7 +89,7 @@ TYPED_TEST(evmmax_test, add)
         for (const auto& y : values)
         {
             const auto expected =
-                udivrem(intx::uint<TypeParam::uint::num_bits + 64>{x} + y, m.mod).rem;
+                udivrem(intx::uint<TypeParam::uint::num_bits + 64>{x} + y, m.mod()).rem;
 
             const auto ym = m.to_mont(y);
             const auto s1m = m.add(xm, ym);
@@ -114,7 +114,7 @@ TYPED_TEST(evmmax_test, sub)
         for (const auto& y : values)
         {
             const auto expected =
-                udivrem(intx::uint<TypeParam::uint::num_bits + 64>{x} + m.mod - y, m.mod).rem;
+                udivrem(intx::uint<TypeParam::uint::num_bits + 64>{x} + m.mod() - y, m.mod()).rem;
 
             const auto ym = m.to_mont(y);
             const auto d1m = m.sub(xm, ym);
@@ -138,7 +138,7 @@ TYPED_TEST(evmmax_test, mul)
         const auto xm = m.to_mont(x);
         for (const auto& y : values)
         {
-            const auto expected = udivrem(umul(x, y), m.mod).rem;
+            const auto expected = udivrem(umul(x, y), m.mod()).rem;
 
             const auto ym = m.to_mont(y);
             const auto pm = m.mul(xm, ym);
@@ -157,7 +157,7 @@ TYPED_TEST(evmmax_test, inv)
         const auto xm_inv = m.inv(xm);
         if (xm_inv == 0)  // not invertible
         {
-            if (m.mod != M256)  // mod is prime
+            if (m.mod() != M256)  // mod is prime
             {
                 EXPECT_EQ(x, 0);
             }
