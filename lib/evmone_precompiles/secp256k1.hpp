@@ -30,6 +30,12 @@ struct Curve
     };
     using Fp = ecc::FieldElement<FpSpec>;
 
+    struct FrSpec
+    {
+        static constexpr auto PRIME = ORDER;
+    };
+    using Fr = ecc::FieldElement<FrSpec>;
+
     static constexpr auto A = 0;
 };
 
