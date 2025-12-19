@@ -22,10 +22,7 @@ using zero_t = Constant<0>;
 using one_t = Constant<1>;
 
 template <typename T>
-concept FieldSpec = requires
-{
-    T::PRIME;
-};
+concept FieldSpec = requires { T::PRIME; };
 
 /// A representation of an element in a prime field.
 ///
@@ -52,6 +49,14 @@ struct FieldElement
         const auto x = intx::be::unsafe::load<uint_type>(b.data());
         if (x >= Spec::PRIME) [[unlikely]]
             return std::nullopt;
+        return FieldElement{x};
+    }
+
+    static constexpr FieldElement reduce_from_bytes(
+        std::span<const uint8_t, sizeof(uint_type)> b) noexcept
+    {
+        // TODO: Add intx::load from std::span.
+        const auto x = intx::be::unsafe::load<uint_type>(b.data());
         return FieldElement{x};
     }
 

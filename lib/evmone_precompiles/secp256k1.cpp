@@ -64,8 +64,7 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> 
     // 3. Hash of the message is already calculated in e.
     // 4. Convert hash e to z field element by doing z = e % n.
     //    https://www.rfc-editor.org/rfc/rfc6979#section-2.3.2
-    //    Converting to Montgomery form performs the e % n reduction.
-    const auto z = Curve::Fr{intx::be::unsafe::load<uint256>(hash.data())};
+    const auto z = Curve::Fr::reduce_from_bytes(hash);
 
     // 5. Calculate u1 and u2.
     const auto r_inv = 1 / r;
