@@ -47,14 +47,14 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> 
     std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes,
     bool parity) noexcept
 {
-    // Follows
+    // Follows "Elliptic Curve Digital Signature Algorithm - Public key recovery"
     // https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm#Public_key_recovery
 
     const auto r = intx::be::unsafe::load<uint256>(r_bytes.data());
     const auto s = intx::be::unsafe::load<uint256>(s_bytes.data());
 
     // 1. Validate r and s are within [1, n-1].
-    if (r == 0 || r >= Curve::ORDER || s == 0 || s >= Curve::ORDER)
+    if (r == 0 || r >= Curve::ORDER || s == 0 || s >= Curve::ORDER) [[unlikely]]
         return std::nullopt;
 
     // 3. Hash of the message is already calculated in e.
@@ -85,17 +85,18 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> 
     // 2. Calculate y coordinate of R from r and v.
     const auto r_mont = ecc::FieldElement<Curve>{r};
     const auto y = calculate_y(r_mont, parity);
-    if (!y.has_value())
+    if (!y.has_value()) [[unlikely]]
         return std::nullopt;
 
     // 6. Calculate public key point Q = u1×G + u2×R.
     const auto R = AffinePoint{r_mont, *y};
-    const auto Q = ecc::to_affine(msm(u1, G, u2, R));
+    const auto Q = msm(u1, G, u2, R);
 
-    if (Q == 0)
+    // The public key mustn't be the point at infinity. This check is cheaper on a non-affine point.
+    if (Q == 0) [[unlikely]]
         return std::nullopt;
 
-    return Q;
+    return to_affine(Q);
 }
 
 std::optional<evmc::address> ecrecover(std::span<const uint8_t, 32> hash,
