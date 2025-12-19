@@ -43,11 +43,15 @@ evmc::address to_address(const AffinePoint& pt) noexcept
     return ret;
 }
 
-std::optional<AffinePoint> secp256k1_ecdsa_recover(
-    const ethash::hash256& e, const uint256& r, const uint256& s, bool v) noexcept
+std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> hash,
+    std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes,
+    bool parity) noexcept
 {
     // Follows
     // https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm#Public_key_recovery
+
+    const auto r = intx::be::unsafe::load<uint256>(r_bytes.data());
+    const auto s = intx::be::unsafe::load<uint256>(s_bytes.data());
 
     // 1. Validate r and s are within [1, n-1].
     if (r == 0 || r >= Curve::ORDER || s == 0 || s >= Curve::ORDER)
@@ -58,7 +62,7 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
     //    https://www.rfc-editor.org/rfc/rfc6979#section-2.3.2
     //    We can do this by n - e because n > 2^255.
     static_assert(Curve::ORDER > 1_u256 << 255);
-    auto z = intx::be::load<uint256>(e.bytes);
+    auto z = intx::be::unsafe::load<uint256>(hash.data());
     if (z >= Curve::ORDER)
         z -= Curve::ORDER;
 
@@ -80,7 +84,7 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
 
     // 2. Calculate y coordinate of R from r and v.
     const auto r_mont = ecc::FieldElement<Curve>{r};
-    const auto y = calculate_y(r_mont, v);
+    const auto y = calculate_y(r_mont, parity);
     if (!y.has_value())
         return std::nullopt;
 
@@ -94,14 +98,16 @@ std::optional<AffinePoint> secp256k1_ecdsa_recover(
     return Q;
 }
 
-std::optional<evmc::address> ecrecover(
-    const ethash::hash256& e, const uint256& r, const uint256& s, bool v) noexcept
+std::optional<evmc::address> ecrecover(std::span<const uint8_t, 32> hash,
+    std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes,
+    bool parity) noexcept
 {
-    const auto point = secp256k1_ecdsa_recover(e, r, s, v);
-    if (!point.has_value())
+    // TODO(C++23): use std::optional::and_then.
+    const auto pubkey = secp256k1_ecdsa_recover(hash, r_bytes, s_bytes, parity);
+    if (!pubkey.has_value())
         return std::nullopt;
 
-    return to_address(*point);
+    return to_address(*pubkey);
 }
 
 std::optional<ecc::FieldElement<Curve>> field_sqrt(const ecc::FieldElement<Curve>& x) noexcept

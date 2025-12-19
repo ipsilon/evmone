@@ -46,10 +46,12 @@ std::optional<ecc::FieldElement<Curve>> calculate_y(
 /// Convert the secp256k1 point (uncompressed public key) to Ethereum address.
 evmc::address to_address(const AffinePoint& pt) noexcept;
 
-std::optional<AffinePoint> secp256k1_ecdsa_recover(
-    const ethash::hash256& e, const uint256& r, const uint256& s, bool v) noexcept;
+std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> hash,
+    std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes,
+    bool parity) noexcept;
 
-std::optional<evmc::address> ecrecover(
-    const ethash::hash256& e, const uint256& r, const uint256& s, bool v) noexcept;
+std::optional<evmc::address> ecrecover(std::span<const uint8_t, 32> hash,
+    std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes,
+    bool parity) noexcept;
 
 }  // namespace evmmax::secp256k1

@@ -317,15 +317,17 @@ TEST(evmmax, ecrecovery)
         const auto input = from_spaced_hex(input_hex).value();
         ASSERT_EQ(input.size(), 128);
 
-        ethash::hash256 hash;
-        std::memcpy(hash.bytes, input.data(), 32);
-        const auto v{be::unsafe::load<uint256>(&input[32])};
+        const std::span<const uint8_t, 128> input_span{input};
+        const auto hash = input_span.subspan<0, 32>();
+        const auto v_bytes = input_span.subspan<32, 32>();
+        const auto r_bytes = input_span.subspan<64, 32>();
+        const auto s_bytes = input_span.subspan<96, 32>();
+
+        const auto v = be::unsafe::load<uint256>(v_bytes.data());
         ASSERT_TRUE(v == 27 || v == 28);
-        const auto r{be::unsafe::load<uint256>(&input[64])};
-        const auto s{be::unsafe::load<uint256>(&input[96])};
         const bool parity = v == 28;
 
-        const auto result = ecrecover(hash, r, s, parity);
+        const auto result = ecrecover(hash, r_bytes, s_bytes, parity);
 
         if (expected_output_hex.empty())
         {
