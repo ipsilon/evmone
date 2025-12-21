@@ -222,6 +222,8 @@ void precompile(benchmark::State& state)
 template <ExecuteFn Fn>
 void modexp(benchmark::State& state)
 {
+    static constexpr auto REV = EVMC_OSAKA;
+
     const auto base_mod_len = static_cast<size_t>(state.range(0));
     const auto exp_bits = static_cast<size_t>(state.range(1));
     const auto exp_len = (exp_bits + 7) / 8;
@@ -242,7 +244,7 @@ void modexp(benchmark::State& state)
 
     const auto output = std::make_unique_for_overwrite<uint8_t[]>(base_mod_len);
 
-    const auto gas_cost = expmod_analyze({input.get(), input_len}, EVMC_PRAGUE).gas_cost;
+    const auto gas_cost = expmod_analyze({input.get(), input_len}, REV).gas_cost;
     int64_t total_gas_used = 0;
     for ([[maybe_unused]] auto _ : state)
     {
@@ -257,22 +259,22 @@ void modexp(benchmark::State& state)
 }
 #define MODEXP_ARGS                     \
     ->ArgNames({"mod_len", "exp_bits"}) \
-        ->Args({1 * 8, 604})            \
-        ->Args({2 * 8, 152})            \
-        ->Args({3 * 8, 68})             \
-        ->Args({4 * 8, 39})             \
-        ->Args({5 * 8, 25})             \
-        ->Args({6 * 8, 18})             \
-        ->Args({7 * 8, 13})             \
-        ->Args({8 * 8, 10})             \
-        ->Args({9 * 8, 8})              \
-        ->Args({10 * 8, 7})             \
-        ->Args({11 * 8, 6})             \
-        ->Args({12 * 8, 5})             \
+        ->Args({1 * 8, 33})             \
+        ->Args({2 * 8, 33})             \
+        ->Args({3 * 8, 33})             \
+        ->Args({4 * 8, 33})             \
+        ->Args({5 * 8, 11})             \
+        ->Args({6 * 8, 8})              \
+        ->Args({7 * 8, 6})              \
+        ->Args({8 * 8, 5})              \
+        ->Args({9 * 8, 4})              \
+        ->Args({10 * 8, 4})             \
+        ->Args({11 * 8, 4})             \
+        ->Args({12 * 8, 4})             \
         ->Args({14 * 8, 4})             \
         ->Args({17 * 8, 3})             \
         ->Args({24 * 8, 2})             \
-        ->Args({25 * 8, 1})             \
+        ->Args({25 * 8, 2})             \
         ->Args({32 * 8, 2})             \
         ->Args({33 * 8, 2})             \
         ->Args({63 * 8, 2})             \
