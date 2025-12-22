@@ -103,6 +103,24 @@ UIntT modinv_pow2(const UIntT& x, unsigned k) noexcept
     return res;
 }
 
+/// Computes modular exponentiation for even modulus: base^exp % (mod_odd * 2^k).
+template <typename UIntT>
+UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigned k) noexcept
+{
+    // Follow "Montgomery reduction with even modulus" by Çetin Kaya Koç.
+    // https://cetinkayakoc.net/docs/j34.pdf
+    assert(k != 0);
+
+    const auto x1 = modexp_odd(base, exp, mod_odd);
+    const auto x2 = modexp_pow2(base, exp, k);
+
+    const auto mod_odd_inv = modinv_pow2(mod_odd, k);
+
+    const auto mod_pow2_mask = (UIntT{1} << k) - 1;
+    const auto y = ((x2 - x1) * mod_odd_inv) & mod_pow2_mask;
+    return x1 + y * mod_odd;
+}
+
 template <typename UIntT>
 UIntT load(std::span<const uint8_t> data) noexcept
 {
@@ -121,25 +139,13 @@ void modexp_impl(std::span<const uint8_t> base_bytes, Exponent exp,
     const auto base = load<UIntT>(base_bytes);
     const auto mod = load<UIntT>(mod_bytes);
 
-    UIntT result;
-    if (const auto mod_tz = ctz(mod); mod_tz == 0)  // is odd
-    {
-        result = modexp_odd(base, exp, mod);
-    }
-    else if (const auto mod_odd = mod >> mod_tz; mod_odd == 1)  // is power of 2
-    {
-        result = modexp_pow2(base, exp, mod_tz);
-    }
-    else  // is even
-    {
-        const auto x1 = modexp_odd(base, exp, mod_odd);
-        const auto x2 = modexp_pow2(base, exp, mod_tz);
-
-        const auto mod_odd_inv = modinv_pow2(mod_odd, mod_tz);
-
-        const auto mod_pow2_mask = (UIntT{1} << mod_tz) - 1;
-        result = x1 + (((x2 - x1) * mod_odd_inv) & mod_pow2_mask) * mod_odd;
-    }
+    UIntT result;                                               // Modulus is:
+    if (const auto mod_tz = ctz(mod); mod_tz == 0)              // - odd
+        result = modexp_odd(base, exp, mod);                    //
+    else if (const auto mod_odd = mod >> mod_tz; mod_odd == 1)  // - power of 2
+        result = modexp_pow2(base, exp, mod_tz);                //
+    else                                                        // - even
+        result = modexp_even(base, exp, mod_odd, mod_tz);
 
     trunc(std::span{output, mod_bytes.size()}, result);
 }
