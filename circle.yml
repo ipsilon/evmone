@@ -65,7 +65,7 @@ executors:
   macos-xcode-min:
     resource_class: macos.m1.medium.gen1
     macos:
-      xcode: 16.2.0
+      xcode: 16.3.0
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 6
 
