@@ -137,6 +137,7 @@ struct TransactionInitcode
 class ExecutionState
 {
 public:
+    int64_t gas_left = 0;
     int64_t gas_refund = 0;
     Memory memory;
     const evmc_message* msg = nullptr;
