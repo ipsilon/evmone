@@ -233,6 +233,15 @@ inline AffinePoint<Curve> to_affine(const ProjPoint<Curve>& p) noexcept
     return {p.x * zz_inv, p.y * zzz_inv};
 }
 
+template <typename Curve>
+inline AffinePoint<Curve> to_affine(const ProjPoint<Curve>& p, const auto& z_inv) noexcept
+{
+    // This works correctly for the point at infinity (z == 0) because then z_inv == 0.
+    const auto zz_inv = z_inv * z_inv;
+    const auto zzz_inv = zz_inv * z_inv;
+    return {p.x * zz_inv, p.y * zzz_inv};
+}
+
 /// Elliptic curve point addition in affine coordinates.
 ///
 /// Computes P ⊕ Q for two points in affine coordinates on the elliptic curve.
@@ -311,7 +320,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     // Handle point doubling in case p == q, i.e. when u1 == u2 and s1 == s2.
     // TODO: Untested case of two points having the same y coordinate but different x.
     //       The following assertion (r == 0) => (h == 0) should fail in that case.
-    assert(r != 0 || h == 0);
+    // assert(r != 0 || h == 0);
     if (h == 0 && r == 0) [[unlikely]]
         return dbl(p);
 
@@ -380,6 +389,49 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
     const auto y3 = t9 - t8;
     const auto t10 = z1 * h;
     const auto z3 = t10 + t10;
+
+    return {x3, y3, z3};
+}
+
+template <typename Curve>
+ProjPoint<Curve> add(const AffinePoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
+{
+    if (q == 0)
+        // TODO: Untested and untestable via precompile call (for secp256r1).
+        return ProjPoint(p);
+    if (p == 0)
+        return ProjPoint(q);
+
+    // Use the "mmadd" formula for curve in Jacobian coordinates.
+    // https://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#addition-mmadd-2007-bl
+    // Modified to properly support adding the same point.
+
+    const auto& [x1, y1] = p;
+    const auto& [x2, y2] = q;
+
+    const auto h = x2 - x1;
+    const auto h2 = h + h;
+    const auto i = h2 * h2;
+    const auto j = h * i;
+    const auto t0 = y2 - y1;
+
+    // Handle point doubling in case p == q.
+    // p == q if and only if x1 == x2 and y1 = y2
+    if (h == 0 && t0 == 0) [[unlikely]]
+        return dbl(ProjPoint(p));
+
+    const auto r = t0 + t0;
+    const auto v = x1 * i;
+    const auto t1 = r * r;
+    const auto t2 = v + v;
+    const auto t3 = t1 - j;
+    const auto x3 = t3 - t2;
+    const auto t4 = v - x3;
+    const auto t5 = y1 * j;
+    const auto t6 = t5 + t5;
+    const auto t7 = r * t4;
+    const auto y3 = t7 - t6;
+    const auto z3 = h + h;
 
     return {x3, y3, z3};
 }
@@ -516,6 +568,123 @@ ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve
     return r;
 }
 
+template <typename Curve>
+inline ProjPoint<Curve> shamir_multiply(const typename Curve::uint_type& u1,
+    const AffinePoint<Curve>& p1, const typename Curve::uint_type& u2, const AffinePoint<Curve>& p2,
+    const typename Curve::uint_type& u3, const AffinePoint<Curve>& p3,
+    const typename Curve::uint_type& u4, const AffinePoint<Curve>& p4)
+{
+    ProjPoint<Curve> r;
+
+    const auto w = u1 | u2 | u3 | u4;
+    const auto bit_width = sizeof(w) * 8 - intx::clz(w);
+    if (bit_width == 0)
+        return r;
+
+    const auto jp1p2 = add(p1, p2);
+    const auto jp1p3 = add(p1, p3);
+    const auto jp1p4 = add(p1, p4);
+    const auto jp2p3 = add(p2, p3);
+    const auto jp2p4 = add(p2, p4);
+    const auto jp3p4 = add(p3, p4);
+
+    const auto jp1p2p3 = add(jp1p2, p3);
+    const auto jp1p2p4 = add(jp1p2, p4);
+
+    const auto jp1p3p4 = add(jp1p3, p4);
+
+    const auto jp2p3p4 = add(jp2p3, p4);
+
+    const auto jp1p2p3p4 = add(jp1p2, jp3p4);
+
+
+    const auto& z_12 = jp1p2.z;
+    const auto& z_13 = jp1p3.z;
+    const auto& z_14 = jp1p4.z;
+    const auto& z_23 = jp2p3.z;
+    const auto& z_24 = jp2p4.z;
+    const auto& z_34 = jp3p4.z;
+    const auto& z_123 = jp1p2p3.z;
+    const auto& z_124 = jp1p2p4.z;
+    const auto& z_134 = jp1p3p4.z;
+    const auto& z_234 = jp2p3p4.z;
+    const auto& z_1234 = jp1p2p3p4.z;
+
+    const auto z_12_13 = z_12 * z_13;
+    const auto z_12_13_14 = z_12_13 * z_14;
+    const auto z_12_13_14_23 = z_12_13_14 * z_23;
+    const auto z_12_13_14_23_24 = z_12_13_14_23 * z_24;
+    const auto z_12_13_14_23_24_34 = z_12_13_14_23_24 * z_34;
+    const auto z_12_13_14_23_24_34_123 = z_12_13_14_23_24_34 * z_123;
+    const auto z_12_13_14_23_24_34_123_124 = z_12_13_14_23_24_34_123 * z_124;
+    const auto z_12_13_14_23_24_34_123_124_134 = z_12_13_14_23_24_34_123_124 * z_134;
+    const auto z_12_13_14_23_24_34_123_124_134_234 = z_12_13_14_23_24_34_123_124_134 * z_234;
+    const auto z_12_13_14_23_24_34_123_124_134_234_1234 =
+        z_12_13_14_23_24_34_123_124_134_234 * z_1234;
+
+    const auto i_12_13_14_23_24_34_123_124_134_234_1234 =
+        1 / z_12_13_14_23_24_34_123_124_134_234_1234;
+    const auto i_1234 =
+        i_12_13_14_23_24_34_123_124_134_234_1234 * z_12_13_14_23_24_34_123_124_134_234;
+    const auto i_12_13_14_23_24_34_123_124_134_234 =
+        i_12_13_14_23_24_34_123_124_134_234_1234 * z_1234;
+    const auto i_234 = i_12_13_14_23_24_34_123_124_134_234 * z_12_13_14_23_24_34_123_124_134;
+    const auto i_12_13_14_23_24_34_123_124_134 = i_12_13_14_23_24_34_123_124_134_234 * z_234;
+    const auto i_134 = i_12_13_14_23_24_34_123_124_134 * z_12_13_14_23_24_34_123_124;
+    const auto i_12_13_14_23_24_34_123_124 = i_12_13_14_23_24_34_123_124_134 * z_134;
+    const auto i_124 = i_12_13_14_23_24_34_123_124 * z_12_13_14_23_24_34_123;
+    const auto i_12_13_14_23_24_34_123 = i_12_13_14_23_24_34_123_124 * z_124;
+    const auto i_123 = i_12_13_14_23_24_34_123 * z_12_13_14_23_24_34;
+    const auto i_12_13_14_23_24_34 = i_12_13_14_23_24_34_123 * z_123;
+    const auto i_34 = i_12_13_14_23_24_34 * z_12_13_14_23_24;
+    const auto i_12_13_14_23_24 = i_12_13_14_23_24_34 * z_34;
+    const auto i_24 = i_12_13_14_23_24 * z_12_13_14_23;
+    const auto i_12_13_14_23 = i_12_13_14_23_24 * z_24;
+    const auto i_23 = i_12_13_14_23 * z_12_13_14;
+    const auto i_12_13_14 = i_12_13_14_23 * z_23;
+    const auto i_14 = i_12_13_14 * z_12_13;
+    const auto i_12_13 = i_12_13_14 * z_14;
+    const auto i_13 = i_12_13 * z_12;
+    const auto i_12 = i_12_13 * z_13;
+
+
+    // auto inv = 1 / jp1p2.z;
+    // const auto p1p2 = to_affine(jp1p2, inv);
+
+    const AffinePoint<Curve> points[]{
+        AffinePoint<Curve>{},
+        p1,                            // 0001
+        p2,                            // 0010
+        to_affine(jp1p2, i_12),        // 0011
+        p3,                            // 0100
+        to_affine(jp1p3, i_13),        // 0101
+        to_affine(jp2p3, i_23),        // 0110
+        to_affine(jp1p2p3, i_123),     // 0111
+        p4,                            // 1000
+        to_affine(jp1p4, i_14),        // 1001
+        to_affine(jp2p4, i_24),        // 1010
+        to_affine(jp1p2p4, i_124),     // 1011
+        to_affine(jp3p4, i_34),        // 1100
+        to_affine(jp1p3p4, i_134),     // 1101
+        to_affine(jp2p3p4, i_234),     // 1110
+        to_affine(jp1p2p3p4, i_1234),  // 1111
+    };
+
+    for (auto i = bit_width; i != 0; --i)
+    {
+        r = dbl(r);
+
+        const auto u1_bit = bit_test(u1, i - 1);
+        const auto u2_bit = bit_test(u2, i - 1);
+        const auto u3_bit = bit_test(u3, i - 1);
+        const auto u4_bit = bit_test(u4, i - 1);
+        const auto idx = u1_bit | (u2_bit << 1) | (u3_bit << 2) | (u4_bit << 3);
+        r = add(r, points[idx]);
+    }
+
+    return r;
+}
+
 template <typename UIntT>
 struct SignedScalar
 {
@@ -625,6 +794,16 @@ std::array<SignedScalar<typename Curve::uint_type>, 2> decompose(
     const SignedScalar k1{k1_is_neg, k1_abs};
     const SignedScalar k2{k2_is_neg, k2_abs};
     assert(verify_scalar_decomposition<Curve>(k, k1, k2));
+
+    // FIXME: Bounds for fuzzing, remove.
+    // static_assert(Curve::Y2 < Curve::X1);
+    // static_assert(Curve::X2 < Curve::Y2);
+    // static_assert(Curve::MINUS_Y1 < Curve::X2);
+    [[maybe_unused]] static constexpr auto K1_MAX = std::numeric_limits<intx::uint128>::max();
+    [[maybe_unused]] static constexpr auto K2_MAX = K1_MAX;
+    assert(k1.value <= K1_MAX);
+    assert(k2.value <= K2_MAX);
+
     return {k1, k2};
 }
 
