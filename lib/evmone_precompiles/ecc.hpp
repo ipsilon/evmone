@@ -26,8 +26,6 @@ template <typename T>
 concept FieldSpec = requires { T::ORDER; };
 
 /// A representation of an element in a prime field.
-///
-/// TODO: Combine with BaseFieldElem.
 template <FieldSpec Spec>
 class FieldElement
 {
@@ -112,6 +110,12 @@ public:
     {
         return wrap(Fp.mul(a.value_, Fp.inv(b.value_)));
     }
+
+    /// Named 1/x inversion method. Needed in the pairing templates.
+    constexpr auto inv() const noexcept { return wrap(Fp.inv(value_)); }
+
+    /// Named one element. Needed in the pairing templates.
+    static constexpr auto one() noexcept { return FieldElement{1}; }
 };
 
 /// The affine (two coordinates) point on an Elliptic Curve over a prime field.

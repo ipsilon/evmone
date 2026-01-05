@@ -10,15 +10,7 @@
 namespace evmmax::bn254
 {
 using namespace intx;
-
-/// Specifies base field value type and modular arithmetic for bn254 curve.
-struct BaseFieldConfig
-{
-    using ValueT = uint256;
-    static constexpr auto MOD_ARITH = ModArith{Curve::FIELD_PRIME};
-    static constexpr auto ONE = MOD_ARITH.to_mont(1);
-};
-using Fq = ecc::BaseFieldElem<BaseFieldConfig>;
+using Fq = Curve::Fp;
 
 // Extension fields implemented based on https://hackmd.io/@jpw/bn254#Field-extension-towers
 
@@ -39,10 +31,10 @@ struct Fq6Config
     using BaseFieldT = Fq;
     using ValueT = Fq2;
     static constexpr uint8_t DEGREE = 3;
-    static constexpr auto ksi = Fq2({Fq::from_int(9_u256), Fq::from_int(1_u256)});
+    static constexpr auto ksi = Fq2({Fq(9_u256), Fq(1_u256)});
     static constexpr auto _3_ksi_inv = Fq2({
-        Fq::from_int(0x2b149d40ceb8aaae81be18991be06ac3b5b4c5e559dbefa33267e6dc24a138e5_u256),
-        Fq::from_int(0x9713b03af0fed4cd2cafadeed8fdf4a74fa084e52d1852e4a2bd0685c315d2_u256),
+        Fq(0x2b149d40ceb8aaae81be18991be06ac3b5b4c5e559dbefa33267e6dc24a138e5_u256),
+        Fq(0x9713b03af0fed4cd2cafadeed8fdf4a74fa084e52d1852e4a2bd0685c315d2_u256),
     });
 };
 using Fq6 = ecc::ExtFieldElem<Fq6Config>;
@@ -108,12 +100,6 @@ constexpr Fq12 multiply(const Fq12& a, const Fq12& b)
     const auto c1 = (a0 + a1) * (b0 + b1) - t0 - t1;
 
     return Fq12({c0, c1});
-}
-
-/// Inverses the base field element
-inline Fq inverse(const Fq& x)
-{
-    return Fq(BaseFieldConfig::MOD_ARITH.inv(x.value()));
 }
 
 /// Inverses the Fq^2 field element

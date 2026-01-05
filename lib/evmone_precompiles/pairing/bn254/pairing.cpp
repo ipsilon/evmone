@@ -145,9 +145,9 @@ std::optional<bool> pairing_check(std::span<const std::pair<Point, ExtPoint>> pa
         }
 
         // Converts points' coefficients in Montgomery form.
-        const auto P_aff = ecc::Point<Fq>{Fq::from_int(p.x), Fq::from_int(p.y)};
-        const auto Q_aff = ecc::Point<Fq2>{Fq2({Fq::from_int(q.x.first), Fq::from_int(q.x.second)}),
-            Fq2({Fq::from_int(q.y.first), Fq::from_int(q.y.second)})};
+        const auto P_aff = ecc::Point<Fq>{Fq(p.x), Fq(p.y)};
+        const auto Q_aff = ecc::Point<Fq2>{
+            Fq2({Fq(q.x.first), Fq(q.x.second)}), Fq2({Fq(q.y.first), Fq(q.y.second)})};
 
         const bool g1_is_inf = is_infinity(P_aff);
         const bool g2_is_inf = g2_is_infinity(Q_aff);

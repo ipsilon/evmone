@@ -9,7 +9,7 @@ namespace evmmax::bn254
 {
 consteval Fq2 make_fq2(const uint256& a, const uint256& b) noexcept
 {
-    return Fq2({Fq::from_int(a), Fq::from_int(b)});
+    return Fq2({Fq(a), Fq(b)});
 }
 
 /// Defines coefficients needed for fast Frobenius endomorphism computation.
@@ -77,7 +77,7 @@ constexpr bool is_field_element(const uint256& v)
 constexpr bool is_on_curve(const ecc::Point<Fq>& p) noexcept
 {
     // TODO(C++23): make static
-    constexpr auto B = Fq::from_int(3);
+    constexpr auto B = Fq(3);
 
     const auto x3 = p.x * p.x * p.x;
     const auto y2 = p.y * p.y;
@@ -96,7 +96,7 @@ constexpr bool is_on_twisted_curve(const evmmax::ecc::Point<Fq2>& p)
 /// Verifies that affine point over the base field is infinity.
 constexpr bool is_infinity(const evmmax::ecc::Point<Fq>& p)
 {
-    return p.x.is_zero() && p.y.is_zero();
+    return p.x == 0 && p.y == 0;
 }
 
 /// Verifies that affine point over the Fq^2 extended field is infinity.
