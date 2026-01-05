@@ -6,7 +6,6 @@
 #include <gtest/gtest.h>
 #include <test/utils/utils.hpp>
 
-using namespace evmmax;
 using namespace evmmax::secp256k1;
 using namespace evmc::literals;
 using namespace evmone::test;
@@ -42,7 +41,7 @@ TEST(secp256k1, field_sqrt)
              Curve::FIELD_PRIME - 1,
          })
     {
-        const auto a = ecc::FieldElement<Curve>{t};
+        const auto a = Curve::Fp{t};
         const auto a2_sqrt = field_sqrt(a * a);
         ASSERT_TRUE(a2_sqrt.has_value()) << to_string(t);
         EXPECT_TRUE(a2_sqrt == a || a2_sqrt == -a) << to_string(t);
@@ -53,13 +52,13 @@ TEST(secp256k1, field_sqrt_invalid)
 {
     for (const auto& t : {3_u256, Curve::FIELD_PRIME - 1})
     {
-        EXPECT_FALSE(field_sqrt(ecc::FieldElement<Curve>{t}).has_value());
+        EXPECT_FALSE(field_sqrt(Curve::Fp{t}).has_value());
     }
 }
 
 TEST(secp256k1, scalar_inv)
 {
-    const ModArith n{Curve::ORDER};
+    const evmmax::ModArith n{Curve::ORDER};
 
     for (const auto& t : {
              1_u256,
@@ -104,7 +103,7 @@ TEST(secp256k1, calculate_y)
 
     for (const auto& t : test_cases)
     {
-        const auto x = ecc::FieldElement<Curve>{t.x};
+        const auto x = Curve::Fp{t.x};
 
         const auto y_even = calculate_y(x, false);
         ASSERT_TRUE(y_even.has_value());
@@ -123,7 +122,7 @@ TEST(secp256k1, calculate_y_invalid)
              Curve::FIELD_PRIME - 1,
          })
     {
-        const auto x = ecc::FieldElement<Curve>{t};
+        const auto x = Curve::Fp{t};
 
         const auto y_even = calculate_y(x, false);
         ASSERT_FALSE(y_even.has_value());

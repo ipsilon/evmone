@@ -14,17 +14,21 @@ struct Curve
 {
     using uint_type = uint256;
 
-    /// The field prime number (P).
-    static constexpr auto FIELD_PRIME =
-        0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff_u256;
-
     /// The secp256r1 curve group order (N).
     static constexpr auto ORDER =
         0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551_u256;
 
-    static constexpr ModArith Fp{FIELD_PRIME};
+    struct FpSpec
+    {
+        /// The field prime number (P).
+        static constexpr auto ORDER =
+            0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff_u256;
+    };
+    using Fp = ecc::FieldElement<FpSpec>;
 
-    static constexpr auto A = FIELD_PRIME - 3;
+    static constexpr auto& FIELD_PRIME = Fp::ORDER;
+
+    static constexpr auto A = Fp::ORDER - 3;
 
     static constexpr auto B =
         0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b_u256;

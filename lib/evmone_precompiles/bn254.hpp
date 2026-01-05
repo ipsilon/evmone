@@ -18,27 +18,29 @@ struct Curve
     /// The field/scalar unsigned int type.
     using uint_type = uint256;
 
-    /// The field prime number (P).
-    static constexpr auto FIELD_PRIME =
-        0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
-
     /// The order of the curve (N).
     static constexpr auto ORDER =
         0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001_u256;
 
-    /// The modular arithmetic for the field.
-    static constexpr ModArith Fp{FIELD_PRIME};
+    struct FpSpec
+    {
+        /// The field prime number (P).
+        static constexpr auto ORDER =
+            0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
+    };
+    using Fp = ecc::FieldElement<FpSpec>;
+
+    static constexpr auto& FIELD_PRIME = Fp::ORDER;
 
     static constexpr auto A = 0;
-    static constexpr auto B = ecc::FieldElement<Curve>(3);
+    static constexpr auto B = Fp{3};
 
     /// Endomorphism parameters. See ecc::decompose().
     /// @{
     /// λ
     static constexpr auto LAMBDA = 0xb3c4d79d41a917585bfc41088d8daaa78b17ea66b99c90dd_u256;
     /// β
-    static constexpr ecc::FieldElement<Curve> BETA{
-        0x59e26bcea0d48bacd4f263f1acdb5c4f5763473177fffffe_u256};
+    static constexpr Fp BETA{0x59e26bcea0d48bacd4f263f1acdb5c4f5763473177fffffe_u256};
     /// x₁
     static constexpr auto X1 = 0x6f4d8248eeb859fd95b806bca6f338ee_u256;
     /// -y₁

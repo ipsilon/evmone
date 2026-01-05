@@ -16,15 +16,24 @@ struct Curve
 {
     using uint_type = uint256;
 
-    /// The field prime number (P).
-    static constexpr auto FIELD_PRIME =
-        0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f_u256;
+    struct FpSpec
+    {
+        /// The field prime number (P).
+        static constexpr auto ORDER =
+            0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f_u256;
+    };
+    using Fp = ecc::FieldElement<FpSpec>;
 
-    /// The secp256k1 curve group order (N).
-    static constexpr auto ORDER =
-        0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141_u256;
+    struct FrSpec
+    {
+        /// The secp256k1 curve group order (N).
+        static constexpr auto ORDER =
+            0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141_u256;
+    };
+    using Fr = ecc::FieldElement<FrSpec>;
 
-    static constexpr ModArith Fp{FIELD_PRIME};
+    static constexpr auto& FIELD_PRIME = Fp::ORDER;
+    static constexpr auto& ORDER = Fr::ORDER;
 
     static constexpr auto A = 0;
 };
@@ -37,11 +46,10 @@ using AffinePoint = ecc::AffinePoint<Curve>;
 /// where P is ::FieldPrime.
 ///
 /// @return Square root of x if it exists, std::nullopt otherwise.
-std::optional<ecc::FieldElement<Curve>> field_sqrt(const ecc::FieldElement<Curve>& x) noexcept;
+std::optional<Curve::Fp> field_sqrt(const Curve::Fp& x) noexcept;
 
 /// Calculate y coordinate of a point having x coordinate and y parity.
-std::optional<ecc::FieldElement<Curve>> calculate_y(
-    const ecc::FieldElement<Curve>& x, bool y_parity) noexcept;
+std::optional<Curve::Fp> calculate_y(const Curve::Fp& x, bool y_parity) noexcept;
 
 /// Convert the secp256k1 point (uncompressed public key) to Ethereum address.
 evmc::address to_address(const AffinePoint& pt) noexcept;
