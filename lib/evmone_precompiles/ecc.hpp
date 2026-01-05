@@ -29,14 +29,24 @@ concept FieldSpec = requires { T::ORDER; };
 ///
 /// TODO: Combine with BaseFieldElem.
 template <FieldSpec Spec>
-struct FieldElement
+class FieldElement
 {
     using uint_type = std::remove_const_t<decltype(Spec::ORDER)>;
-    static constexpr auto& ORDER = Spec::ORDER;
-    static constexpr ModArith<uint_type> Fp{ORDER};
+    static constexpr ModArith<uint_type> Fp{Spec::ORDER};
 
-    // TODO: Make this private.
-    uint_type value_{};
+    uint_type value_;
+
+    /// Wraps a value into the Element type assuming it is already in the internal ModArith form.
+    [[gnu::always_inline]] static constexpr FieldElement wrap(const uint_type& v) noexcept
+    {
+        FieldElement element;
+        element.value_ = v;
+        return element;
+    }
+
+public:
+    /// The alias to the finite field's order.
+    static constexpr auto& ORDER = Spec::ORDER;
 
     FieldElement() = default;
 
@@ -101,15 +111,6 @@ struct FieldElement
     friend constexpr auto operator/(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.mul(a.value_, Fp.inv(b.value_)));
-    }
-
-    /// Wraps a raw value into the Element type assuming it is already in Montgomery form.
-    /// TODO: Make this private.
-    [[gnu::always_inline]] static constexpr FieldElement wrap(const uint_type& v) noexcept
-    {
-        FieldElement element;
-        element.value_ = v;
-        return element;
     }
 };
 
