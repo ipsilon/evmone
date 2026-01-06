@@ -79,7 +79,8 @@ commands:
           name: "Install CMake <<parameters.version>>"
           working_directory: /usr/local
           command: |
-            curl -L https://github.com/Kitware/CMake/releases/download/v<<parameters.version>>/cmake-<<parameters.version>>-linux-x86_64.tar.gz | sudo tar -xz --strip=1
+            curl -L --retry 3 -C - --output-dir /tmp -O https://github.com/Kitware/CMake/releases/download/v<<parameters.version>>/cmake-<<parameters.version>>-linux-x86_64.tar.gz
+            sudo tar -xz --strip=1 -f /tmp/cmake-*.tar.gz
 
   install_riscv_toolchain:
     steps:
@@ -87,10 +88,8 @@ commands:
           name: "Install RISC-V Toolchain"
           working_directory: /usr/local
           command: |
-            curl -L https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.01.20/riscv32-glibc-ubuntu-24.04-llvm-nightly-2025.01.20-nightly.tar.xz > /tmp/riscv.tar.xz 
-            sudo cmake -E tar xJ /tmp/riscv.tar.xz
-            # Fixup misplaced libunwind.
-            (cd riscv/sysroot/lib && sudo ln -s ../../lib/riscv32-unknown-linux-gnu/libunwind.so.1)
+            curl -L --retry 3 -C - --output-dir /tmp -O https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2026.01.01/riscv32-glibc-ubuntu-24.04-llvm.tar.xz
+            sudo cmake -E tar xJ /tmp/riscv*.tar.xz
 
   checkout_submodules:
     steps:
@@ -146,7 +145,8 @@ commands:
           working_directory: ~/spec-tests
           command: |
             find . -delete
-            curl -L https://github.com/<<parameters.repo>>/releases/download/<<parameters.release>>/fixtures_<<parameters.fixtures_suffix>>.tar.gz | tar -xz
+            curl -L --retry 3 -C - --output-dir /tmp -O https://github.com/<<parameters.repo>>/releases/download/<<parameters.release>>/fixtures_<<parameters.fixtures_suffix>>.tar.gz
+            tar -xzf /tmp/fixtures_*.tar.gz
             ls -l
 
   build:
