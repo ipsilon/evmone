@@ -319,9 +319,6 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const ProjPoint<Curve>& q) noexc
     const auto r = s2 - s1;
 
     // Handle point doubling in case p == q, i.e. when u1 == u2 and s1 == s2.
-    // TODO: Untested case of two points having the same y coordinate but different x.
-    //       The following assertion (r == 0) => (h == 0) should fail in that case.
-    assert(r != 0 || h == 0);
     if (h == 0 && r == 0) [[unlikely]]
         return dbl(p);
 
@@ -490,40 +487,126 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
     return r;
 }
 
-/// Computes multi-scalar multiplication of u×P ⊕ v×Q.
+/// Windowed Non-adjacent Form (wNAF).
+template <typename UIntT>
+class NAF
+{
+public:
+    using digit_type = int8_t;
+
+private:
+    /// The storage for the NAF digits, starting from the least significant one.
+    /// For a k-bit scalar, there can be at most k+1 digits.
+    std::array<digit_type, sizeof(UIntT) * 8 + 1> digits_{};
+
+    /// The number of digits used to store the NAF representation.
+    size_t width_ = 0;
+
+public:
+    /// Returns the number of digits in the NAF representation.
+    size_t width() const noexcept { return width_; }
+
+    /// Returns the i-th digit in the NAF representation.
+    ///
+    /// It is allowed to access digits beyond the current width, which will return 0.
+    digit_type operator[](size_t i) const noexcept { return digits_[i]; }
+
+    /// Sets the i-th digit in the NAF representation and updates the width accordingly.
+    void set(size_t i, digit_type d) noexcept
+    {
+        if (d != 0)
+        {
+            digits_[i] = d;
+            width_ = std::max(width_, i + 1);
+        }
+    }
+};
+
+/// Convert an unsigned scalar value to its windowed Non-adjacent Form (wNAF).
 ///
-/// The implementation uses the "Straus-Shamir trick": https://eprint.iacr.org/2003/257.pdf#page=7.
+/// See
+/// https://en.wikipedia.org/wiki/Elliptic_curve_point_multiplication#w-ary_non-adjacent_form_(wNAF)_method.
+template <unsigned W, typename UIntT>
+constexpr NAF<UIntT> to_wnaf(UIntT k) noexcept
+{
+    using digit_type = NAF<UIntT>::digit_type;
+    static_assert(W >= 2);
+    static_assert(W <= sizeof(digit_type) * 8);
+    constexpr unsigned RADIX = 1 << W;
+
+    NAF<UIntT> naf;
+    for (size_t i = 0; k != 0; ++i, k >>= 1)
+    {
+        const auto r = static_cast<unsigned>(k) % RADIX;
+        if (r % 2 != 0)
+        {
+            const auto d_sign = r > RADIX / 2;
+            const auto d_abs = d_sign ? RADIX - r : r;
+            const auto d = d_sign ? -d_abs : d_abs;
+            naf.set(i, static_cast<digit_type>(d));
+            k -= d_sign ? -UIntT{d_abs} : UIntT{d_abs};  // intx lacks sign extending conversion.
+        }
+    }
+    return naf;
+}
+
+template <unsigned W, typename Curve>
+void precompute_wnaf_table(
+    std::span<ProjPoint<Curve>, 1 << (W - 2)> table, const AffinePoint<Curve>& p) noexcept
+{
+    table[0] = ProjPoint{p};           // 1P.
+    const auto two_p = dbl(table[0]);  // 2P.
+
+    for (size_t i = 1; i < table.size(); ++i)
+        table[i] = add(table[i - 1], two_p);  // (2i+3)P = (2i+1)P + 2P.
+}
+
+/// Computes multi-scalar multiplication using the wNAF (sliding window) method.
+template <unsigned W, size_t S, typename Curve>
+ProjPoint<Curve> msm_wnaf(std::span<const AffinePoint<Curve>* const, S> points,
+    std::span<const typename Curve::uint_type* const, S> scalars) noexcept
+{
+    static constexpr size_t TABLE_SIZE = 1 << (W - 2);
+
+    std::array<NAF<typename Curve::uint_type>, S> nafs;
+    std::array<ProjPoint<Curve>, S * TABLE_SIZE> joint_table;
+
+    for (size_t s = 0; s < S; ++s)
+    {
+        nafs[s] = to_wnaf<W>(*scalars[s]);
+        precompute_wnaf_table<W>(
+            std::span<ProjPoint<Curve>, TABLE_SIZE>{&joint_table[s * TABLE_SIZE], TABLE_SIZE},
+            *points[s]);
+    }
+
+    ProjPoint<Curve> r;
+    const auto max_width =
+        std::ranges::max(nafs, {}, &NAF<typename Curve::uint_type>::width).width();
+    for (size_t i = max_width; i != 0; --i)
+    {
+        r = dbl(r);
+
+        for (size_t s = 0; s < S; ++s)
+        {
+            const auto d = nafs[s][i - 1];
+            if (d == 0)  // TODO: likely
+                continue;
+
+            const auto* table = &joint_table[s * TABLE_SIZE];
+            const auto& pt = table[(static_cast<unsigned>(std::abs(d)) - 1) / 2];
+            r = add(r, d >= 0 ? pt : -pt);
+        }
+    }
+
+    return r;
+}
+
+/// Computes multi-scalar multiplication of u×P ⊕ v×Q.
 template <typename Curve>
 ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve>& p,
     const typename Curve::uint_type& v, const AffinePoint<Curve>& q)
 {
-    ProjPoint<Curve> r;
-
-    const auto w = u | v;
-    const auto bit_width = sizeof(w) * 8 - intx::clz(w);
-    if (bit_width == 0)
-        return r;
-
-    // Precompute affine P + Q. Works correctly if P == Q.
-    const auto h = add_affine(p, q);
-
-    // Create lookup table for points. The index 0 is unused.
-    // TODO: Put 0 at index 0 and use it in the loop to avoid the branch.
-    const AffinePoint<Curve>* const points[]{nullptr, &p, &q, &h};
-
-    for (auto i = bit_width; i != 0; --i)
-    {
-        r = dbl(r);
-
-        const auto u_bit = bit_test(u, i - 1);
-        const auto v_bit = bit_test(v, i - 1);
-        const auto idx = 2 * size_t{v_bit} + size_t{u_bit};
-        if (idx == 0)
-            continue;
-        r = add(r, *points[idx]);
-    }
-
-    return r;
+    return msm_wnaf<4, 2, Curve>(std::array{&p, &q}, std::array{&u, &v});
 }
 
 template <typename UIntT>
