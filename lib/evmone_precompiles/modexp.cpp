@@ -88,19 +88,21 @@ UIntT modexp_pow2(const UIntT& base, Exponent exp, unsigned k) noexcept
     return ret;
 }
 
-/// Computes modular inversion for modulus of 2^k.
+/// Computes modular inversion for modulus of 2ᵏ.
+///
+/// TODO: This actually may return more bits than k, the caller is responsible for masking the
+///   result. Better design may be to pass std::span<uint64_t> without specifying k.
 template <typename UIntT>
 UIntT modinv_pow2(const UIntT& x, unsigned k) noexcept
 {
-    UIntT b = 1;
-    UIntT res;
-    for (size_t i = 0; i < k; ++i)
-    {
-        const auto t = b & 1;
-        b = (b - x * t) >> 1;
-        res |= t << i;
-    }
-    return res;
+    assert(bit_test(x, 0));             // x must be odd.
+    UIntT inv = evmmax::inv_mod(x[0]);  // Good start.
+
+    // Each iteration doubles the number of correct bits in the inverse. See inv_mod().
+    for (size_t iterations = 64; iterations < k; iterations *= 2)
+        inv *= 2 - x * inv;
+
+    return inv;
 }
 
 /// Computes modular exponentiation for even modulus: base^exp % (mod_odd * 2^k).
