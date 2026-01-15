@@ -33,6 +33,12 @@ TEST(expmod, test_vectors)
         {"03", "00", "06", "01"},
         {"03", "01", "14", "03"},
         {"03", "02", "14", "09"},
+        // Even modulus: 3^3 mod 12 = 27 mod 12 = 3.
+        {"03", "03", "0c", "03"},
+        // Even modulus: 2^5 mod 20 = 32 mod 20 = 12.
+        {"02", "05", "14", "0c"},
+        // Even modulus: 5^7 mod 24 = 78125 mod 24 = 5.
+        {"05", "07", "18", "05"},
         {"03", "03", "03a0", "001b"},
         {"09", "05", "10", "09"},
         {"09", "05", "11", "08"},
@@ -41,6 +47,8 @@ TEST(expmod, test_vectors)
         {"09", "05", "18", "09"},
         {"03", "80", "ff", "ab"},
         {"03", "1c93", "61", "5f"},
+        // Power-of-two modulus bigger than single word.
+        {"cc", "11", "00000001000000000000000000000000", "00000000fe8477d6c9cef3cc00000000"},
         {
             "03",
             "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2e",
@@ -99,6 +107,36 @@ TEST(expmod, test_vectors)
             "966c23e59e10c2a65950af0c4b047e185de46ee3d11f9b6b202d408bba3fa657dbb2cd49d4a1d329966c23"
             "e59e10c2a65950af0c4b047e185de46ee3d11f9b6b202d408bba3fa657dbb2cd49d4a1d329966c23e59e10"
             "c2a65950af0c4b047e185de46ee3d11f9b6b20",
+        },
+        // Even modulus: (2^320 - 1) * 2^64.
+        {
+            "03",
+            "0300",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            "0000000000000000",
+            "52fb579ce1cc2f9ca0d054fc45bedb199389314a067aaff8f058864885f642c5acbbf6a3673585bb"
+            "442488538f42dc01",
+        },
+        // Even modulus: (2^768 - 1) * 2^320.
+        {
+            "03",
+            "0300",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+            "ffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000"
+            "00000000000000000000000000000000",
+            "4059444789547ff685087bca8a144d32556b2251613171aa4cf05d8a005015d9b8408ba5f7c89595"
+            "e76d925173cf80e552a856b1ce217c1f33940f8241e6adcf76b672c4935a40f4bb36410ee24654c1"
+            "14cd718bea878742c703dc5abddbdbfa17d12328a2a6bb9d6e80dc0bc224eef03128625977a1e2c1"
+            "d189336e303567d7442488538f42dc01",
+        },
+        // Large base (48 bytes) with small even modulus (16 bytes).
+        {
+            "010101010101010101010101010101010101010101010101"
+            "010101010101010101010101010101010101010101010101",
+            "01",
+            "02020202020202020202020202020202",
+            "01010101010101010101010101010101",
         },
     };
 
