@@ -46,19 +46,22 @@ public:
     }
 };
 
-/// Performs a Montgomery modular multiplication.
+/// Performs the Almost Montgomery Multiplication (AMM).
 ///
-/// Inputs must be in Montgomery form: x = aR, y = bR.
-/// This computes Montgomery multiplication xyR⁻¹ % mod what gives aRbRR⁻¹ % mod = abR % mod.
-/// The result (abR) is in Montgomery form.
+/// The AMM is a relaxed version of the Montgomery multiplication producing a result in Montgomery
+/// form which is in range [0, 2⋅mod) in plain form, i.e., it may be larger than the modulus.
+/// This allows to skip the final conditional subtraction in most cases, improving performance.
+///
+/// The inputs are expected to be in Montgomery form.
+/// Additionally, passing y=1 converts x from Montgomery form back to plain form,
+/// because for x = aR: mul_amm(x, 1) = aR⋅1⋅R⁻¹ % mod = a % mod.
+///
+/// See "Efficient Software Implementations of Modular Exponentiation":
+/// https://eprint.iacr.org/2011/239.pdf
 template <typename UintT>
-constexpr UintT mul_mont(
-    const UintT& x, const UintT& y, const UintT& mod, uint64_t mod_inv) noexcept
+constexpr UintT mul_amm(const UintT& x, const UintT& y, const UintT& mod, uint64_t mod_inv) noexcept
 {
-    // Coarsely Integrated Operand Scanning (CIOS) Method
-    // Based on 2.3.2 from
-    // High-Speed Algorithms & Architectures For Number-Theoretic Cryptosystems
-    // https://www.microsoft.com/en-us/research/wp-content/uploads/1998/06/97Acar.pdf
+    // Use Coarsely Integrated Operand Scanning (CIOS) method with the "almost" reduction.
 
     constexpr auto S = UintT::num_words;  // TODO(C++23): Make it static
 
@@ -80,10 +83,12 @@ constexpr UintT mul_mont(
         const auto [sum2, d2] = intx::addc(t[S], c);
         t[S - 1] = sum2;
         t[S] = d1 + d2;
+        assert(t[S] <= 1);  // d1+d2 should never exceed 1 for valid inputs.
     }
 
-    if (t >= mod)
+    if (t[S] != 0)  // Reduce if t >= R.
         t -= mod;
+    assert(t[S] == 0);  // One subtraction should make t < R.
 
     return static_cast<UintT>(t);
 }
@@ -102,13 +107,19 @@ UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
     auto ret_mont = base_mont;
     for (auto i = exp.bit_width() - 1; i != 0; --i)
     {
-        ret_mont = mul_mont(ret_mont, ret_mont, mod, mod_inv);
+        ret_mont = mul_amm(ret_mont, ret_mont, mod, mod_inv);
         if (exp[i - 1])
-            ret_mont = mul_mont(ret_mont, base_mont, mod, mod_inv);
+            ret_mont = mul_amm(ret_mont, base_mont, mod, mod_inv);
     }
 
-    // Convert the result from the Montgomery form (reuse mul_mont with neutral factor 1).
-    const auto ret = mul_mont(ret_mont, UIntT{1}, mod, mod_inv);
+    // Convert the result from Montgomery form by multiplying with the standard integer 1.
+    auto ret = mul_amm(ret_mont, UIntT{1}, mod, mod_inv);
+
+    // Reduce if necessary: AMM can produce mod <= ret < 2*mod.
+    if (ret >= mod)
+        ret -= mod;
+    assert(ret < mod);  // One reduction should be enough.
+
     return ret;
 }
 
