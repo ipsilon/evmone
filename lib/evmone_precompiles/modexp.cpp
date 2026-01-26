@@ -54,23 +54,70 @@ public:
     }
 };
 
+/// Performs a Montgomery modular multiplication.
+///
+/// Inputs must be in Montgomery form: x = aR, y = bR.
+/// This computes Montgomery multiplication xyR⁻¹ % mod what gives aRbRR⁻¹ % mod = abR % mod.
+/// The result (abR) is in Montgomery form.
+template <typename UintT>
+constexpr UintT mul_mont(
+    const UintT& x, const UintT& y, const UintT& mod, uint64_t mod_inv) noexcept
+{
+    // Coarsely Integrated Operand Scanning (CIOS) Method
+    // Based on 2.3.2 from
+    // High-Speed Algorithms & Architectures For Number-Theoretic Cryptosystems
+    // https://www.microsoft.com/en-us/research/wp-content/uploads/1998/06/97Acar.pdf
+
+    constexpr auto S = UintT::num_words;  // TODO(C++23): Make it static
+
+    intx::uint<UintT::num_bits + 64> t;
+    for (size_t i = 0; i != S; ++i)
+    {
+        uint64_t c = 0;
+#pragma GCC unroll 8
+        for (size_t j = 0; j != S; ++j)
+            std::tie(c, t[j]) = evmmax::addmul(t[j], x[j], y[i], c);
+        const auto [sum1, d1] = intx::addc(t[S], c);
+        t[S] = sum1;
+
+        const auto m = t[0] * mod_inv;
+        std::tie(c, std::ignore) = evmmax::addmul(t[0], m, mod[0], 0);
+#pragma GCC unroll 8
+        for (size_t j = 1; j != S; ++j)
+            std::tie(c, t[j - 1]) = evmmax::addmul(t[j], m, mod[j], c);
+        const auto [sum2, d2] = intx::addc(t[S], c);
+        t[S - 1] = sum2;
+        t[S] = d1 + d2;
+    }
+
+    if (t >= mod)
+        t -= mod;
+
+    return static_cast<UintT>(t);
+}
+
 template <typename UIntT>
 UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
 {
     assert(exp.bit_width() != 0);  // Exponent of zero must be handled outside.
 
-    const evmmax::ModArith<UIntT> arith{mod};
-    const auto base_mont = arith.to_mont(base);
+    const auto mod_inv = evmmax::compute_mont_mod_inv(mod);
 
-    auto ret = base_mont;
+    /// Convert the base to Montgomery form: base*R % mod, where R = 2^(num_bits).
+    const auto base_mont =
+        udivrem(intx::uint<UIntT::num_bits * 2>{base} << UIntT::num_bits, mod).rem;
+
+    auto ret_mont = base_mont;
     for (auto i = exp.bit_width() - 1; i != 0; --i)
     {
-        ret = arith.mul(ret, ret);
+        ret_mont = mul_mont(ret_mont, ret_mont, mod, mod_inv);
         if (exp[i - 1])
-            ret = arith.mul(ret, base_mont);
+            ret_mont = mul_mont(ret_mont, base_mont, mod, mod_inv);
     }
 
-    return arith.from_mont(ret);
+    // Convert the result from the Montgomery form (reuse mul_mont with neutral factor 1).
+    const auto ret = mul_mont(ret_mont, UIntT{1}, mod, mod_inv);
+    return ret;
 }
 
 template <typename UIntT>
