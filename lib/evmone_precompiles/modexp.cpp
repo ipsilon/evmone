@@ -57,11 +57,13 @@ public:
 template <typename UIntT>
 UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
 {
+    assert(exp.bit_width() != 0);  // Exponent of zero must be handled outside.
+
     const evmmax::ModArith<UIntT> arith{mod};
     const auto base_mont = arith.to_mont(base);
 
-    auto ret = arith.to_mont(1);
-    for (auto i = exp.bit_width(); i != 0; --i)
+    auto ret = base_mont;
+    for (auto i = exp.bit_width() - 1; i != 0; --i)
     {
         ret = arith.mul(ret, ret);
         if (exp[i - 1])
@@ -140,14 +142,17 @@ void modexp_impl(std::span<const uint8_t> base_bytes, Exponent exp,
     using UIntT = intx::uint<Size * 8>;
     const auto base = load<UIntT>(base_bytes);
     const auto mod = load<UIntT>(mod_bytes);
+    assert(mod != 0);  // Modulus of zero must be handled outside.
 
-    UIntT result;                                               // Modulus is:
-    if (const auto mod_tz = ctz(mod); mod_tz == 0)              // - odd
-        result = modexp_odd(base, exp, mod);                    //
-    else if (const auto mod_odd = mod >> mod_tz; mod_odd == 1)  // - power of 2
-        result = modexp_pow2(base, exp, mod_tz);                //
-    else                                                        // - even
-        result = modexp_even(base, exp, mod_odd, mod_tz);
+    UIntT result;
+    if (exp.bit_width() == 0)                                   // Exponent is 0:
+        result = mod != 1;                                      // - result is 1 except mod 1
+    else if (const auto mod_tz = ctz(mod); mod_tz == 0)         // Modulus is:
+        result = modexp_odd(base, exp, mod);                    // - odd
+    else if (const auto mod_odd = mod >> mod_tz; mod_odd == 1)  //
+        result = modexp_pow2(base, exp, mod_tz);                // - power of 2
+    else                                                        //
+        result = modexp_even(base, exp, mod_odd, mod_tz);       // - even
 
     trunc(std::span{output, mod_bytes.size()}, result);
 }
