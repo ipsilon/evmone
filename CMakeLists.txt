@@ -132,8 +132,13 @@ if(EVMONE_FUZZING)
     endif()
 endif()
 
-hunter_add_package(intx)
-find_package(intx CONFIG REQUIRED)
+set(EVMONE_INTX_DIR "" CACHE PATH "Path to local intx source directory")
+if(EVMONE_INTX_DIR)
+    add_subdirectory(${EVMONE_INTX_DIR} intx)
+else()
+    hunter_add_package(intx)
+    find_package(intx CONFIG REQUIRED)
+endif()
 
 set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
