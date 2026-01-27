@@ -10,6 +10,7 @@ target_sources(
     baseline_analysis_test.cpp
     blockchaintest_loader_test.cpp
     bytecode_test.cpp
+    crypto_wnaf.cpp
     evm_fixture.cpp
     evm_fixture.hpp
     evm_test.cpp
