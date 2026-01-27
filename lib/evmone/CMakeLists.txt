@@ -16,6 +16,8 @@ add_library(evmone
     baseline_execution.cpp
     baseline_instruction_table.cpp
     baseline_instruction_table.hpp
+    caterpillar.cpp
+    caterpillar.hpp
     constants.hpp
     delegation.cpp
     delegation.hpp
