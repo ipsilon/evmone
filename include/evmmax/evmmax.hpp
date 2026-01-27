@@ -30,6 +30,22 @@ constexpr uint64_t inv_mod(uint64_t a) noexcept
     return inv;
 }
 
+/// Compute the modulus inverse for Montgomery multiplication, i.e., N': mod⋅N' = 2⁶⁴-1.
+template <typename UintT>
+constexpr uint64_t compute_mont_mod_inv(const UintT& mod) noexcept
+{
+    // Compute the inversion mod[0]⁻¹ mod 2⁶⁴, then the final result is N' = -mod[0]⁻¹
+    // because this gives mod⋅N' = -1 mod 2⁶⁴ = 2⁶⁴-1.
+    return -inv_mod(mod[0]);
+}
+
+constexpr std::pair<uint64_t, uint64_t> addmul(
+    uint64_t t, uint64_t a, uint64_t b, uint64_t c) noexcept
+{
+    const auto p = intx::umul(a, b) + t + c;
+    return {p[1], p[0]};
+}
+
 /// The modular arithmetic operations for EVMMAX (EVM Modular Arithmetic Extensions).
 template <typename UintT>
 class ModArith
@@ -48,21 +64,6 @@ class ModArith
         // rounded to 2*num_bits+64 for intx requirements.
         constexpr auto RR = intx::uint<UintT::num_bits * 2 + 64>{1} << (UintT::num_bits * 2);
         return intx::udivrem(RR, mod).rem;
-    }
-
-    /// Compute the modulus inverse for Montgomery multiplication, i.e., N': mod⋅N' = 2⁶⁴-1.
-    static constexpr uint64_t compute_mont_mod_inv(const UintT& mod) noexcept
-    {
-        // Compute the inversion mod[0]⁻¹ mod 2⁶⁴, then the final result is N' = -mod[0]⁻¹
-        // because this gives mod⋅N' = -1 mod 2⁶⁴ = 2⁶⁴-1.
-        return -inv_mod(mod[0]);
-    }
-
-    static constexpr std::pair<uint64_t, uint64_t> addmul(
-        uint64_t t, uint64_t a, uint64_t b, uint64_t c) noexcept
-    {
-        const auto p = intx::umul(a, b) + t + c;
-        return {p[1], p[0]};
     }
 
 public:
