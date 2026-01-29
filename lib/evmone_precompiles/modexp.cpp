@@ -65,32 +65,31 @@ constexpr UintT mul_amm(const UintT& x, const UintT& y, const UintT& mod, uint64
 
     constexpr auto S = UintT::num_words;  // TODO(C++23): Make it static
 
-    intx::uint<UintT::num_bits + 64> t;
+    UintT t;
+    bool t_carry = false;
     for (size_t i = 0; i != S; ++i)
     {
         uint64_t c = 0;
 #pragma GCC unroll 8
         for (size_t j = 0; j != S; ++j)
             std::tie(c, t[j]) = evmmax::addmul(t[j], x[j], y[i], c);
-        const auto [sum1, d1] = intx::addc(t[S], c);
-        t[S] = sum1;
+        const auto [sum1, d1] = intx::addc(c, t_carry);
 
         const auto m = t[0] * mod_inv;
         std::tie(c, std::ignore) = evmmax::addmul(t[0], m, mod[0], 0);
 #pragma GCC unroll 8
         for (size_t j = 1; j != S; ++j)
             std::tie(c, t[j - 1]) = evmmax::addmul(t[j], m, mod[j], c);
-        const auto [sum2, d2] = intx::addc(t[S], c);
+        const auto [sum2, d2] = intx::addc(sum1, c);
         t[S - 1] = sum2;
-        t[S] = d1 + d2;
-        assert(t[S] <= 1);  // d1+d2 should never exceed 1 for valid inputs.
+        assert(!(d1 && d2));  // At most one carry should be set.
+        t_carry = d1 || d2;
     }
 
-    if (t[S] != 0)  // Reduce if t >= R.
+    if (t_carry)  // Reduce if t >= R.
         t -= mod;
-    assert(t[S] == 0);  // One subtraction should make t < R.
 
-    return static_cast<UintT>(t);
+    return t;
 }
 
 template <typename UIntT>
