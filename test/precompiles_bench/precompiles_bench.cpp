@@ -24,6 +24,9 @@ namespace
 using namespace evmone::state;
 using namespace evmone::test;
 
+/// The revision used for the precompile benchmarks.
+constexpr auto REV = EVMC_OSAKA;
+
 using ExecuteFn = ExecutionResult(
     const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept;
 
@@ -190,7 +193,7 @@ void precompile(benchmark::State& state)
     size_t max_output_size = 0;
     for (const auto& input : inputs<Id>)
     {
-        const auto r = analyze<Id>(input, EVMC_LATEST_STABLE_REVISION);
+        const auto r = analyze<Id>(input, REV);
         batch_gas_cost += r.gas_cost;
         max_output_size = std::max(max_output_size, r.max_output_size);
     }
@@ -220,14 +223,16 @@ void precompile(benchmark::State& state)
 template <ExecuteFn Fn>
 void modexp(benchmark::State& state)
 {
-    static constexpr auto REV = EVMC_OSAKA;
-
     const auto base_mod_len = static_cast<size_t>(state.range(0));
-    const auto exp_bits = static_cast<size_t>(state.range(1));
+    const auto mod_tz = static_cast<size_t>(state.range(1));
+    const auto exp_bits = static_cast<size_t>(state.range(2));
+
     const auto exp_len = (exp_bits + 7) / 8;
     const auto exp_clz = exp_bits % 8 == 0 ? 0 : 8 - exp_bits % 8;
 
-    const auto payload_len = 2 * base_mod_len + exp_len - 1;
+    const auto mod_trailing_zero_bytes = mod_tz / 8;
+    assert(mod_trailing_zero_bytes <= base_mod_len);
+    const auto payload_len = 2 * base_mod_len + exp_len - mod_trailing_zero_bytes;
     const auto input_len = 3 * 32 + payload_len;
     const auto input = std::make_unique_for_overwrite<uint8_t[]>(input_len);
     intx::be::unsafe::store(&input[0], intx::uint256{base_mod_len});
@@ -237,8 +242,13 @@ void modexp(benchmark::State& state)
     std::fill_n(&payload[0], base_mod_len, 0xff);
     std::fill_n(&payload[base_mod_len + 1], exp_len - 1, 0xff);
     payload[base_mod_len] = 0xff >> exp_clz;
-    // Skip the last byte in the mod to make input incomplete and mod even.
-    std::fill_n(&payload[base_mod_len + exp_len], base_mod_len - 1, 0xff);
+
+    const auto mod_lsb_zero_bits = mod_tz % 8;
+    const auto mod_has_lsb_zero_bits = mod_lsb_zero_bits != 0;
+    const auto last_byte_p = std::fill_n(&payload[base_mod_len + exp_len],
+        base_mod_len - mod_trailing_zero_bytes - size_t{mod_has_lsb_zero_bits}, 0xff);
+    if (mod_has_lsb_zero_bits)
+        *last_byte_p = static_cast<uint8_t>(0xff << mod_lsb_zero_bits);
 
     const auto output = std::make_unique_for_overwrite<uint8_t[]>(base_mod_len);
 
@@ -255,31 +265,47 @@ void modexp(benchmark::State& state)
     state.counters["gas_used"] = Counter(static_cast<double>(gas_cost));
     state.counters["gas_rate"] = Counter(static_cast<double>(total_gas_used), Counter::kIsRate);
 }
-#define MODEXP_ARGS                     \
-    ->ArgNames({"mod_len", "exp_bits"}) \
-        ->Args({1 * 8, 33})             \
-        ->Args({2 * 8, 33})             \
-        ->Args({3 * 8, 33})             \
-        ->Args({4 * 8, 33})             \
-        ->Args({4 * 8, 256})            \
-        ->Args({4 * 8, 8192})           \
-        ->Args({5 * 8, 11})             \
-        ->Args({6 * 8, 8})              \
-        ->Args({6 * 8, 256})            \
-        ->Args({7 * 8, 6})              \
-        ->Args({8 * 8, 5})              \
-        ->Args({9 * 8, 4})              \
-        ->Args({14 * 8, 4})             \
-        ->Args({17 * 8, 3})             \
-        ->Args({24 * 8, 2})             \
-        ->Args({63 * 8, 2})             \
-        ->Args({64 * 8, 2})             \
-        ->Args({64 * 8, 8192})          \
-        ->Args({65 * 8, 2})             \
-        ->Args({127 * 8, 2})            \
-        ->Args({128 * 8, 2})            \
-        ->Args({128 * 8, 256})          \
-        ->Args({128 * 8, 2048})
+#define MODEXP_ARGS                               \
+    ->ArgNames({"mod_len", "mod_tz", "exp_bits"}) \
+        ->Args({1 * 8, 8, 33})                    \
+        ->Args({2 * 8, 8, 33})                    \
+        ->Args({3 * 8, 8, 33})                    \
+        ->Args({4 * 8, 0, 33})                    \
+        ->Args({4 * 8, 1, 33})                    \
+        ->Args({4 * 8, 8, 33})                    \
+        ->Args({4 * 8, 127, 33})                  \
+        ->Args({4 * 8, 254, 33})                  \
+        ->Args({4 * 8, 0, 256})                   \
+        ->Args({4 * 8, 8, 256})                   \
+        ->Args({4 * 8, 127, 256})                 \
+        ->Args({4 * 8, 254, 256})                 \
+        ->Args({4 * 8, 8, 8192})                  \
+        ->Args({5 * 8, 8, 11})                    \
+        ->Args({6 * 8, 8, 8})                     \
+        ->Args({6 * 8, 8, 256})                   \
+        ->Args({7 * 8, 8, 6})                     \
+        ->Args({8 * 8, 8, 5})                     \
+        ->Args({9 * 8, 8, 4})                     \
+        ->Args({14 * 8, 8, 4})                    \
+        ->Args({17 * 8, 8, 3})                    \
+        ->Args({24 * 8, 8, 2})                    \
+        ->Args({63 * 8, 0, 2})                    \
+        ->Args({63 * 8, 8, 2})                    \
+        ->Args({63 * 8, 1000, 2})                 \
+        ->Args({63 * 8, 4000, 2})                 \
+        ->Args({63 * 8, 0, 255})                  \
+        ->Args({63 * 8, 8, 255})                  \
+        ->Args({63 * 8, 1000, 255})               \
+        ->Args({63 * 8, 4000, 255})               \
+        ->Args({64 * 8, 8, 2})                    \
+        ->Args({64 * 8, 8, 8192})                 \
+        ->Args({65 * 8, 8, 2})                    \
+        ->Args({127 * 8, 8, 2})                   \
+        ->Args({128 * 8, 8, 2})                   \
+        ->Args({128 * 8, 8, 256})                 \
+        ->Args({128 * 8, 8, 2048})                \
+        ->Args({128 * 8, 4096, 2048})             \
+        ->Args({128 * 8, 8190, 2048})
 BENCHMARK(modexp<expmod_execute>) MODEXP_ARGS;
 #ifdef EVMONE_PRECOMPILES_GMP
 BENCHMARK(modexp<expmod_execute_gmp>) MODEXP_ARGS;
