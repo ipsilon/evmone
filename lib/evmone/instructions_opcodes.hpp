@@ -160,6 +160,10 @@ enum Opcode : uint8_t  // NOLINT(*-use-enum-class)
     OP_LOG3 = 0xa3,
     OP_LOG4 = 0xa4,
 
+    OP_DUPN = 0xe6,
+    OP_SWAPN = 0xe7,
+    OP_EXCHANGE = 0xe8,
+
     OP_CREATE = 0xf0,
     OP_CALL = 0xf1,
     OP_CALLCODE = 0xf2,

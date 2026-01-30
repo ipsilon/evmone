@@ -22,6 +22,7 @@ target_sources(
     evm_eip4844_blobhash_test.cpp
     evm_eip7516_blobbasefee_test.cpp
     evm_eip7939_clz_test.cpp
+    evm_eip8024_test.cpp
     evm_memory_test.cpp
     evm_state_test.cpp
     evm_storage_test.cpp
