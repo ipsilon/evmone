@@ -4,6 +4,7 @@
 #pragma once
 
 #include <evmc/evmc.hpp>
+#include <evmone/instructions.hpp>
 #include <evmone/instructions_traits.hpp>
 #include <intx/intx.hpp>
 #include <test/utils/utils.hpp>
@@ -479,6 +480,23 @@ inline std::string decode(bytes_view bytecode)
     for (auto it = bytecode.begin(); it != bytecode.end(); ++it)
     {
         const auto opcode = *it;
+        if (opcode == OP_DUPN || opcode == OP_SWAPN || opcode == OP_EXCHANGE)
+        {
+            const auto imm = (it + 1 != bytecode.end()) ? *(it + 1) : uint8_t{0};
+            const auto valid = (opcode == OP_EXCHANGE) ?
+                                   evmone::instr::imm::is_valid_exchange(imm) :
+                                   evmone::instr::imm::is_valid_dupn_swapn(imm);
+            if (!valid)
+            {
+                if (opcode == OP_DUPN)
+                    s += " + OP_INVALID_DUPN";
+                else if (opcode == OP_SWAPN)
+                    s += " + OP_INVALID_SWAPN";
+                else
+                    s += " + OP_INVALID_EXCHANGE";
+                continue;
+            }
+        }
         if (const auto name = evmone::instr::traits[opcode].name; name)
         {
             s += std::string{" + OP_"} + name;
