@@ -10,14 +10,6 @@ using namespace intx;
 
 namespace
 {
-template <unsigned N>
-void trunc(std::span<uint8_t> dst, const intx::uint<N>& x) noexcept
-{
-    assert(dst.size() <= N / 8);  // destination must be smaller than the source value
-    const auto d = to_big_endian(x);
-    std::copy_n(&as_bytes(d)[sizeof(d) - dst.size()], dst.size(), dst.begin());
-}
-
 /// Represents the exponent value of the modular exponentiation operation.
 ///
 /// This is a view type of the big-endian bytes representing the bits of the exponent.
@@ -172,23 +164,13 @@ UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigne
     return x1 + y * mod_odd;
 }
 
-template <typename UIntT>
-UIntT load(std::span<const uint8_t> data) noexcept
-{
-    static constexpr auto UINT_SIZE = sizeof(UIntT);
-    assert(data.size() <= UINT_SIZE);
-    uint8_t tmp[UINT_SIZE]{};
-    std::ranges::copy(data, &tmp[UINT_SIZE - data.size()]);
-    return be::load<UIntT>(tmp);
-}
-
 template <size_t Size>
 void modexp_impl(std::span<const uint8_t> base_bytes, Exponent exp,
     std::span<const uint8_t> mod_bytes, uint8_t* output) noexcept
 {
     using UIntT = intx::uint<Size * 8>;
-    const auto base = load<UIntT>(base_bytes);
-    const auto mod = load<UIntT>(mod_bytes);
+    const auto base = intx::be::load<UIntT>(base_bytes);
+    const auto mod = intx::be::load<UIntT>(mod_bytes);
     assert(mod != 0);  // Modulus of zero must be handled outside.
 
     UIntT result;
@@ -201,7 +183,7 @@ void modexp_impl(std::span<const uint8_t> base_bytes, Exponent exp,
     else                                                        //
         result = modexp_even(base, exp, mod_odd, mod_tz);       // - even
 
-    trunc(std::span{output, mod_bytes.size()}, result);
+    intx::be::trunc(std::span{output, mod_bytes.size()}, result);
 }
 }  // namespace
 

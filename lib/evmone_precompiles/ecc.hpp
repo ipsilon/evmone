@@ -55,8 +55,7 @@ public:
     static constexpr std::optional<FieldElement> from_bytes(
         std::span<const uint8_t, sizeof(uint_type)> b) noexcept
     {
-        // TODO: Add intx::load from std::span.
-        const auto x = intx::be::unsafe::load<uint_type>(b.data());
+        const auto x = intx::be::load<uint_type>(b);
         if (x >= ORDER) [[unlikely]]
             return std::nullopt;
         return FieldElement{x};
@@ -64,8 +63,7 @@ public:
 
     constexpr void to_bytes(std::span<uint8_t, sizeof(uint_type)> b) const noexcept
     {
-        // TODO: Add intx::store to std::span.
-        intx::be::unsafe::store(b.data(), value());
+        intx::be::store(b, value());
     }
 
 
@@ -466,8 +464,6 @@ ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
 template <typename Curve>
 ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) noexcept
 {
-    using IntT = Curve::uint_type;
-
     // Reduce the scalar by the curve group order.
     // This allows using more efficient add algorithm in the loop because doubling cannot happen.
     while (true)
@@ -480,8 +476,7 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
     }
 
     ProjPoint<Curve> r;
-    const auto bit_width = sizeof(IntT) * 8 - intx::clz(c);
-    for (auto i = bit_width; i != 0; --i)
+    for (size_t i = bit_width(c); i != 0; --i)
     {
         r = ecc::dbl(r);
         if (bit_test(c, i - 1))
@@ -499,8 +494,7 @@ ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve
 {
     ProjPoint<Curve> r;
 
-    const auto w = u | v;
-    const auto bit_width = sizeof(w) * 8 - intx::clz(w);
+    const auto bit_width = intx::bit_width(u | v);
     if (bit_width == 0)
         return r;
 
