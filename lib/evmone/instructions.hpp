@@ -267,35 +267,35 @@ inline void signextend(StackTop stack) noexcept
 inline void lt(StackTop stack) noexcept
 {
     const auto& x = stack.pop();
-    stack[0] = x < stack[0];
+    stack[0] = uint64_t{x < stack[0]};
 }
 
 inline void gt(StackTop stack) noexcept
 {
     const auto& x = stack.pop();
-    stack[0] = stack[0] < x;  // Arguments are swapped and < is used.
+    stack[0] = uint64_t{stack[0] < x};  // Arguments are swapped and < is used.
 }
 
 inline void slt(StackTop stack) noexcept
 {
     const auto& x = stack.pop();
-    stack[0] = slt(x, stack[0]);
+    stack[0] = uint64_t{slt(x, stack[0])};
 }
 
 inline void sgt(StackTop stack) noexcept
 {
     const auto& x = stack.pop();
-    stack[0] = slt(stack[0], x);  // Arguments are swapped and SLT is used.
+    stack[0] = uint64_t{slt(stack[0], x)};  // Arguments are swapped and SLT is used.
 }
 
 inline void eq(StackTop stack) noexcept
 {
-    stack[1] = stack[0] == stack[1];
+    stack[1] = uint64_t{stack[0] == stack[1]};
 }
 
 inline void iszero(StackTop stack) noexcept
 {
-    stack.top() = stack.top() == 0;
+    stack.top() = uint64_t{stack.top() == 0};
 }
 
 inline void and_(StackTop stack) noexcept
