@@ -10,21 +10,21 @@ using namespace evmone::test;
 
 TEST_P(evm, dupn_undefined)
 {
-    rev = EVMC_MAX_REVISION;
+    rev = EVMC_OSAKA;
     execute(push(1) + "e6" + "00");
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
 }
 
 TEST_P(evm, swapn_undefined)
 {
-    rev = EVMC_MAX_REVISION;
+    rev = EVMC_OSAKA;
     execute(push(1) + push(2) + "e7" + "00");
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
 }
 
 TEST_P(evm, exchange_undefined)
 {
-    rev = EVMC_MAX_REVISION;
+    rev = EVMC_OSAKA;
     execute(push(1) + push(2) + push(3) + "e8" + "00");
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
 }
