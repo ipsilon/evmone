@@ -333,33 +333,131 @@ void modexp_even(std::span<uint64_t> result, const std::span<const uint64_t> bas
     add(result, x1);
 }
 
-template <size_t Size>
+/// Loads big-endian bytes into little-endian uint64 words.
+[[gnu::noinline]] void load_words(std::span<const uint8_t> data, std::span<uint64_t> out) noexcept
+{
+    // Zero-initialize output
+    std::ranges::fill(out, uint64_t{0});
+
+    // Process input bytes from the end (least significant) to the beginning
+    const size_t n = out.size();
+    size_t byte_pos = data.size();
+    for (size_t w = 0; w < n && byte_pos > 0; ++w)
+    {
+        uint64_t word = 0;
+        for (size_t b = 0; b < 8 && byte_pos > 0; ++b)
+        {
+            --byte_pos;
+            word |= static_cast<uint64_t>(data[byte_pos]) << (b * 8);
+        }
+        out[w] = word;
+    }
+}
+
+/// Stores little-endian uint64 words to big-endian bytes.
+[[gnu::noinline]] void store_words(std::span<const uint64_t> words, std::span<uint8_t> out) noexcept
+{
+    std::ranges::fill(out, uint8_t{0});
+
+    size_t byte_pos = out.size();
+    for (size_t w = 0; w < words.size() && byte_pos > 0; ++w)
+    {
+        for (size_t b = 0; b < 8 && byte_pos > 0; ++b)
+        {
+            --byte_pos;
+            out[byte_pos] = static_cast<uint8_t>(words[w] >> (b * 8));
+        }
+    }
+}
+/// Counts trailing zeros in a little-endian word array. Returns total bits if all zero.
+[[gnu::noinline]] unsigned ctz_words(std::span<const uint64_t> x) noexcept
+{
+    unsigned count = 0;
+    for (const auto i : x)
+    {
+        if (i != 0)
+            return count + static_cast<unsigned>(std::countr_zero(i));
+        count += 64;
+    }
+    return count;
+}
+
+bool is_pow2(std::span<const uint64_t> x) noexcept
+{
+    int popcount = 0;
+    for (const auto w : x)
+        popcount += std::popcount(w);
+    return popcount == 1;
+}
+
+/// Right-shifts a little-endian word array by k bits.
+[[gnu::noinline]] void shr_words(
+    std::span<const uint64_t> x, unsigned k, std::span<uint64_t> out) noexcept
+{
+    assert(out.size() == x.size());
+    const size_t n = x.size();
+    const auto word_shift = k / 64;
+    const auto bit_shift = k % 64;
+
+    if (word_shift >= n)
+    {
+        std::ranges::fill(out, uint64_t{0});
+        return;
+    }
+
+    if (bit_shift == 0)
+    {
+        for (size_t i = 0; i < n - word_shift; ++i)
+            out[i] = x[i + word_shift];
+        for (size_t i = n - word_shift; i < n; ++i)
+            out[i] = 0;
+    }
+    else
+    {
+        for (size_t i = 0; i < n - word_shift - 1; ++i)
+            out[i] = (x[i + word_shift] >> bit_shift) | (x[i + word_shift + 1] << (64 - bit_shift));
+        out[n - word_shift - 1] = x[n - 1] >> bit_shift;
+        for (size_t i = n - word_shift; i < n; ++i)
+            out[i] = 0;
+    }
+}
+
 void modexp_impl(std::span<const uint8_t> base_bytes, Exponent exp,
     std::span<const uint8_t> mod_bytes, uint8_t* output) noexcept
 {
-    using UIntT = intx::uint<Size * 8>;
-    const auto base = intx::be::load<UIntT>(base_bytes);
-    const auto mod = intx::be::load<UIntT>(mod_bytes);
-    assert(mod != 0);  // Modulus of zero must be handled outside.
+    const auto w = (std::max(mod_bytes.size(), base_bytes.size()) + 7) / 8;
+    std::vector<uint64_t> base(w);
+    load_words(base_bytes, base);
+    std::vector<uint64_t> mod(w);
+    load_words(mod_bytes, mod);
+    // FIXME: assert(mod != 0);  // Modulus of zero must be handled outside.
+    std::vector<uint64_t> result(w);
 
-    UIntT result;
-    if (exp.bit_width() == 0)                            // Exponent is 0:
-        result = mod != 1;                               // - result is 1 except mod 1
-    else if (const auto mod_tz = ctz(mod); mod_tz == 0)  // - odd
+    if (exp.bit_width() == 0)  // Exponent is 0:
     {
-        modexp_odd_fakedyn(as_words(result), as_words(base), exp, as_words(mod));
+        if (mod[0] > 1)
+            result[0] = 1;
+        else if (const auto mod_hi = std::span{mod}.subspan(1); std::ranges::any_of(mod_hi, [](auto x) { return x != 0; }))
+            result[0] = 1;
     }
-    else if (const auto mod_odd = mod >> mod_tz; mod_odd == 1)  // - power of 2
+    else if (const auto mod_tz = ctz_words(mod); mod_tz == 0)  // - odd
+    {
+        modexp_odd_fakedyn(result, base, exp, mod);
+    }
+    else if (is_pow2(mod))  // - power of 2
     {
         const auto n = (mod_tz + 63) / 64;
-        modexp_pow2(as_words(base).subspan(0, n), exp, mod_tz, as_words(result).subspan(0, n));
+        modexp_pow2(std::span{base}.subspan(0, n), exp, mod_tz, std::span(result).subspan(0, n));
     }
     else  // - even
     {
-        modexp_even(as_words(result), as_words(base), exp, as_words(mod_odd), mod_tz);
+        // TODO: Trim inputs.
+        std::vector<uint64_t> mod_odd(w);
+        shr_words(mod, mod_tz, mod_odd);
+        modexp_even(result, base, exp, mod_odd, mod_tz);
     }
 
-    intx::be::trunc(std::span{output, mod_bytes.size()}, result);
+    store_words(std::span{result}, std::span{output, mod_bytes.size()});
 }
 }  // namespace
 
@@ -374,17 +472,6 @@ void modexp(std::span<const uint8_t> base, std::span<const uint8_t> exp,
 
     const Exponent exp_obj{exp};
 
-    if (const auto size = std::max(mod.size(), base.size()); size <= 16)
-        modexp_impl<16>(base, exp_obj, mod, output);
-    else if (size <= 32)
-        modexp_impl<32>(base, exp_obj, mod, output);
-    else if (size <= 64)
-        modexp_impl<64>(base, exp_obj, mod, output);
-    else if (size <= 128)
-        modexp_impl<128>(base, exp_obj, mod, output);
-    else if (size <= 256)
-        modexp_impl<256>(base, exp_obj, mod, output);
-    else
-        modexp_impl<MAX_INPUT_SIZE>(base, exp_obj, mod, output);
+    modexp_impl(base, exp_obj, mod, output);
 }
 }  // namespace evmone::crypto
