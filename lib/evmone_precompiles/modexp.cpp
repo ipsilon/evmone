@@ -170,6 +170,20 @@ UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
     return ret;
 }
 
+/// Subtracts y from x: x[] -= y[]. Returns borrow.
+[[gnu::noinline]] uint64_t sub(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
+{
+    assert(x.size() == y.size());
+    uint64_t borrow = 0;
+    for (size_t i = 0; i < x.size(); ++i)
+    {
+        const auto r = subc(x[i], y[i], borrow);
+        x[i] = r.value;
+        borrow = r.carry;
+    }
+    return borrow;
+}
+
 [[gnu::noinline]] inline void mask_pow2(std::span<uint64_t> x, unsigned k) noexcept
 {
     assert(!x.empty());
@@ -253,16 +267,20 @@ UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigne
     const auto x1 = modexp_odd(base, exp, mod_odd);
 
     const auto n = (k + 63) / 64;
-    UIntT x2;
-    modexp_pow2(as_words(base).subspan(0, n), exp, k, as_words(x2).subspan(0, n));
+    std::vector<uint64_t> x2_w(n);
+    std::vector<uint64_t> mod_odd_inv_w(n);
 
-    const auto mod_odd_words = as_words(mod_odd);
-    UIntT mod_odd_inv;
-    const auto num_pow2_words = (k + 63) / 64;
-    modinv_pow2(as_words(mod_odd_inv).subspan(0, num_pow2_words), mod_odd_words);
+    modexp_pow2(as_words(base).subspan(0, n), exp, k, x2_w);
 
-    const auto mod_pow2_mask = (UIntT{1} << k) - 1;
-    const auto y = ((x2 - x1) * mod_odd_inv) & mod_pow2_mask;
+    modinv_pow2(mod_odd_inv_w, as_words(mod_odd));
+
+    sub(x2_w, as_words(x1).subspan(0, n));
+
+    std::vector<uint64_t> ye_w(n);  // We need a temporary for the mul result.
+    mul(ye_w, x2_w, mod_odd_inv_w);
+    mask_pow2(ye_w, k);
+
+    const auto y = UIntT{ye_w};
     return x1 + y * mod_odd;
 }
 
