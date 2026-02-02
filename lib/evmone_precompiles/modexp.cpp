@@ -136,10 +136,13 @@ UIntT modexp_pow2(const UIntT& base, Exponent exp, unsigned k) noexcept
 template <typename UIntT>
 UIntT modinv_pow2(const UIntT& x, unsigned k) noexcept
 {
-    assert(bit_test(x, 0));             // x must be odd.
-    UIntT inv = evmmax::inv_mod(x[0]);  // Good start.
+    assert(bit_test(x, 0));        // x must be odd for the inverse to exist.
+    assert(k <= UIntT::num_bits);  // k must fit into the type.
 
-    // Each iteration doubles the number of correct bits in the inverse. See inv_mod().
+    // Start with inversion mod 2⁶⁴.
+    UIntT inv = evmmax::modinv(x[0]);
+
+    // Each iteration doubles the number of correct bits in the inverse. See modinv(uint32_t).
     for (size_t iterations = 64; iterations < k; iterations *= 2)
         inv *= 2 - x * inv;
 

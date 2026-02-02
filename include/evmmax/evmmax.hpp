@@ -8,25 +8,38 @@
 
 namespace evmmax
 {
-/// Compute the modular inverse of the number modulo 2⁶⁴: inv⋅a = 1 mod 2⁶⁴.
-constexpr uint64_t inv_mod(uint64_t a) noexcept
+/// Compute the modular inverse of the number modulo 2³²: inv⋅a = 1 mod 2³².
+constexpr uint32_t modinv(uint32_t a) noexcept
 {
     assert(a % 2 == 1);  // The argument must be odd, otherwise the inverse does not exist.
 
+    // Start with inversion mod 2⁴, which is a³ mod 2⁴ (for odd a).
+    // All 8 cases can be verified manually, but the formal explanation can be found in:
+    // https://en.wikipedia.org/wiki/Multiplicative_group_of_integers_modulo_n#Powers_of_2.
+    // This is better tradeoff than a mod 2² plus one Newton-Raphson iteration.
+    // We also avoid explicit mod 2⁴ because the top garbage bits are fine.
+    auto inv = a * a * a;
+
     // Use the Newton–Raphson numeric method, see e.g.
     // https://gmplib.org/~tege/divcnst-pldi94.pdf#page=9, formula (9.2)
-    // Each iteration doubles the number of correct bits:
-    // 2, 4, 8, ..., so for 64-bit value we need 6 iterations.
+    // Each iteration doubles the number of correct bits, starting from 4:
+    // 8, 16, 32, ..., so for 32-bit value we need 3 iterations.
     // TODO(C++23): static
-    constexpr auto ITERATIONS = std::countr_zero(sizeof(a) * 8);
-
-    // Start with inversion mod 2.
-    // TODO: This can be further accelerated by:
-    //   - computing the inversion with smaller type (e.g. uint32_t) first,
-    //   - using a better initial approximation (e.g. via lookup table for 4 bits).
-    uint64_t inv = 1;
+    constexpr auto ITERATIONS = std::countr_zero(sizeof(a) * 8 / 4);
     for (auto i = 0; i < ITERATIONS; ++i)
-        inv *= 2 - a * inv;  // Overflows are fine because they wrap around modulo 2⁶⁴.
+        inv *= 2 - a * inv;  // Overflows are fine because they wrap around modulo 2³².
+
+    assert(inv * a == 1);  // Verify the result.
+    return inv;
+}
+
+/// Compute the modular inverse of the number modulo 2⁶⁴: inv⋅a = 1 mod 2⁶⁴.
+constexpr uint64_t modinv(uint64_t a) noexcept
+{
+    assert(a % 2 == 1);  // The argument must be odd, otherwise the inverse does not exist.
+    uint64_t inv = modinv(static_cast<uint32_t>(a));  // Start with inversion mod 2³².
+    inv *= 2 - a * inv;    // One Newton-Raphson iteration: 64 bits correct.
+    assert(inv * a == 1);  // Verify the result.
     return inv;
 }
 
@@ -36,7 +49,7 @@ constexpr uint64_t compute_mont_mod_inv(const UintT& mod) noexcept
 {
     // Compute the inversion mod[0]⁻¹ mod 2⁶⁴, then the final result is N' = -mod[0]⁻¹
     // because this gives mod⋅N' = -1 mod 2⁶⁴ = 2⁶⁴-1.
-    return -inv_mod(mod[0]);
+    return -modinv(mod[0]);
 }
 
 constexpr std::pair<uint64_t, uint64_t> addmul(
