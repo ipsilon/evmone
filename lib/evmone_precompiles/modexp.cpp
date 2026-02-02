@@ -170,6 +170,32 @@ UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
     return ret;
 }
 
+template <size_t N>
+void modexp_odd_fakedyn_impl(std::span<uint64_t> result, const std::span<const uint64_t> base,
+    Exponent exp, const std::span<const uint64_t> mod) noexcept
+{
+    using UintT = intx::uint<N * 64>;
+    const auto r = modexp_odd(UintT{base}, exp, UintT{mod});
+    std::ranges::copy(as_words(r).subspan(0, result.size()), result.begin());
+}
+
+void modexp_odd_fakedyn(std::span<uint64_t> result, const std::span<const uint64_t> base,
+    Exponent exp, const std::span<const uint64_t> mod) noexcept
+{
+    if (const auto n = std::max(mod.size(), base.size()); n <= 2)
+        modexp_odd_fakedyn_impl<2>(result, base, exp, mod);
+    else if (n <= 4)
+        modexp_odd_fakedyn_impl<4>(result, base, exp, mod);
+    else if (n <= 8)
+        modexp_odd_fakedyn_impl<8>(result, base, exp, mod);
+    else if (n <= 16)
+        modexp_odd_fakedyn_impl<16>(result, base, exp, mod);
+    else if (n <= 32)
+        modexp_odd_fakedyn_impl<32>(result, base, exp, mod);
+    else
+        modexp_odd_fakedyn_impl<128>(result, base, exp, mod);
+}
+
 /// Adds y to x: x[] += y[]. Handles different sizes.
 [[gnu::noinline]] void add(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
 {
@@ -284,7 +310,8 @@ UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigne
     // https://cetinkayakoc.net/docs/j34.pdf
     assert(k != 0);
 
-    const auto x1 = modexp_odd(base, exp, mod_odd);
+    UIntT x1;
+    modexp_odd_fakedyn(as_words(x1), as_words(base), exp, as_words(mod_odd));
 
     const auto n = (k + 63) / 64;
     std::vector<uint64_t> x2_w(n);
@@ -318,10 +345,12 @@ void modexp_impl(std::span<const uint8_t> base_bytes, Exponent exp,
     assert(mod != 0);  // Modulus of zero must be handled outside.
 
     UIntT result;
-    if (exp.bit_width() == 0)                                   // Exponent is 0:
-        result = mod != 1;                                      // - result is 1 except mod 1
-    else if (const auto mod_tz = ctz(mod); mod_tz == 0)         // Modulus is:
-        result = modexp_odd(base, exp, mod);                    // - odd
+    if (exp.bit_width() == 0)                            // Exponent is 0:
+        result = mod != 1;                               // - result is 1 except mod 1
+    else if (const auto mod_tz = ctz(mod); mod_tz == 0)  // - odd
+    {
+        modexp_odd_fakedyn(as_words(result), as_words(base), exp, as_words(mod));
+    }
     else if (const auto mod_odd = mod >> mod_tz; mod_odd == 1)  // - power of 2
     {
         const auto n = (mod_tz + 63) / 64;
