@@ -170,21 +170,57 @@ UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
     return ret;
 }
 
-template <typename UIntT>
-UIntT modexp_pow2(const UIntT& base, Exponent exp, unsigned k) noexcept
+/// Trims the multi-word number x[] to k bits.
+/// TODO: Currently this assumes no leading zeros in x. Re-design this after modexp is dynamic.
+void mask_pow2(std::span<uint64_t> x, unsigned k) noexcept
 {
-    assert(k != 0);  // Modulus of 1 should be covered as "odd".
-    UIntT ret = 1;
-    for (auto i = exp.bit_width(); i != 0; --i)
+    assert(k != 0);
+    assert(x.size() >= (k + 63) / 64);
+    assert(!x.empty());
+    if (const auto rem = k % 64; rem != 0)
+        x.back() &= (uint64_t{1} << rem) - 1;
+}
+
+/// Computes r[] = base[]^exp % 2^k.
+/// Only the low-order words matching the k bits of the base are used.
+/// Also, the same amount of the result words are produced. The rest is not modified.
+void modexp_pow2(std::span<uint64_t> r, std::span<const uint64_t> base, Exponent exp, unsigned k)
+{
+    assert(k != 0);                   // Modulus of 1 should be covered as "odd".
+    assert(exp.bit_width() != 0);     // Exponent of zero must be handled outside.
+    assert(r.data() != base.data());  // No in-place operation.
+
+    const auto num_pow2_words = (k + 63) / 64;
+    assert(r.size() >= num_pow2_words);
+    assert(base.size() >= num_pow2_words);
+
+    const auto base_k = base.subspan(0, num_pow2_words);
+    auto r_k = r.subspan(0, num_pow2_words);
+
+    // Allocate temporary storage for iterations.
+    // TODO: Move to stack if the size is small enough or provide from the caller.
+    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(num_pow2_words);
+    auto tmp = std::span{tmp_storage.get(), num_pow2_words};
+
+    std::ranges::copy(base_k, r_k.begin());
+
+    for (auto i = exp.bit_width() - 1; i != 0; --i)
     {
-        ret *= ret;
+        mul(tmp, r_k, r_k);
+        std::swap(r_k, tmp);
+
         if (exp[i - 1])
-            ret *= base;
+        {
+            mul(tmp, r_k, base_k);
+            std::swap(r_k, tmp);
+        }
     }
 
-    const auto mod_pow2_mask = (UIntT{1} << k) - 1;
-    ret &= mod_pow2_mask;
-    return ret;
+    mask_pow2(r_k, k);
+
+    // r_k may point to the tmp_storage. Copy back to the result buffer if needed.
+    if (r_k.data() != r.data())
+        std::ranges::copy(r_k, r.begin());
 }
 
 /// Computes modular inversion of the multi-word number x[] modulo 2^(r.size() * 64).
@@ -229,7 +265,9 @@ UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigne
     assert(k != 0);
 
     const auto x1 = modexp_odd(base, exp, mod_odd);
-    const auto x2 = modexp_pow2(base, exp, k);
+
+    UIntT x2;
+    modexp_pow2(as_words(x2), as_words(base), exp, k);
 
     const auto mod_odd_words = as_words(mod_odd);
     UIntT mod_odd_inv;
@@ -251,14 +289,14 @@ void modexp_impl(std::span<const uint8_t> base_bytes, Exponent exp,
     assert(mod != 0);  // Modulus of zero must be handled outside.
 
     UIntT result;
-    if (exp.bit_width() == 0)                                   // Exponent is 0:
-        result = mod != 1;                                      // - result is 1 except mod 1
-    else if (const auto mod_tz = ctz(mod); mod_tz == 0)         // Modulus is:
-        result = modexp_odd(base, exp, mod);                    // - odd
-    else if (const auto mod_odd = mod >> mod_tz; mod_odd == 1)  //
-        result = modexp_pow2(base, exp, mod_tz);                // - power of 2
-    else                                                        //
-        result = modexp_even(base, exp, mod_odd, mod_tz);       // - even
+    if (exp.bit_width() == 0)                                        // Exponent is 0:
+        result = mod != 1;                                           // - result is 1 except mod 1
+    else if (const auto mod_tz = ctz(mod); mod_tz == 0)              // Modulus is:
+        result = modexp_odd(base, exp, mod);                         // - odd
+    else if (const auto mod_odd = mod >> mod_tz; mod_odd == 1)       //
+        modexp_pow2(as_words(result), as_words(base), exp, mod_tz);  // - power of 2
+    else                                                             //
+        result = modexp_even(base, exp, mod_odd, mod_tz);            // - even
 
     intx::be::trunc(std::span{output, mod_bytes.size()}, result);
 }
