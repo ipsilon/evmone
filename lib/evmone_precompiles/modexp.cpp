@@ -170,6 +170,26 @@ UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
     return ret;
 }
 
+/// Adds y to x: x[] += y[]. Handles different sizes.
+[[gnu::noinline]] void add(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
+{
+    uint64_t carry = 0;
+    const size_t common = std::min(x.size(), y.size());
+    for (size_t i = 0; i < common; ++i)
+    {
+        const auto r = addc(x[i], y[i], carry);
+        x[i] = r.value;
+        carry = r.carry;
+    }
+    // Propagate carry through remaining x words
+    for (size_t i = common; i < x.size() && carry != 0; ++i)
+    {
+        const auto r = addc(x[i], uint64_t{0}, carry);
+        x[i] = r.value;
+        carry = r.carry;
+    }
+}
+
 /// Subtracts y from x: x[] -= y[]. Returns borrow.
 [[gnu::noinline]] uint64_t sub(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
 {
@@ -280,8 +300,12 @@ UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigne
     mul(ye_w, x2_w, mod_odd_inv_w);
     mask_pow2(ye_w, k);
 
-    const auto y = UIntT{ye_w};
-    return x1 + y * mod_odd;
+    std::vector<uint64_t> y_wf = ye_w;
+    y_wf.resize(UIntT::num_words);
+    std::vector<uint64_t> r_wf(UIntT::num_words);
+    mul(r_wf, y_wf, as_words(mod_odd));  // TODO: Add semi-full multiplication.
+    add(r_wf, as_words(x1));
+    return UIntT{r_wf};
 }
 
 template <size_t Size>
