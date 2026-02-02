@@ -6,6 +6,7 @@
 #include <evmmax/evmmax.hpp>
 #include <bit>
 #include <memory>
+#include <vector>
 
 using namespace intx;
 
@@ -169,21 +170,46 @@ UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
     return ret;
 }
 
-template <typename UIntT>
-UIntT modexp_pow2(const UIntT& base, Exponent exp, unsigned k) noexcept
+[[gnu::noinline]] inline void mask_pow2(std::span<uint64_t> x, unsigned k) noexcept
+{
+    assert(!x.empty());
+    const auto rem = k % 64;
+    if (rem != 0)
+        x.back() &= (uint64_t{1} << rem) - 1;
+}
+
+/// Computes base^exp % 2^k.
+/// All values are little-endian 64-bit words. Output size must be ceil(k/64).
+[[gnu::noinline]] void modexp_pow2(
+    std::span<const uint64_t> base, Exponent exp, unsigned k, std::span<uint64_t> out) noexcept
 {
     assert(k != 0);  // Modulus of 1 should be covered as "odd".
-    UIntT ret = 1;
+
+    const size_t n = (k + 63) / 64;
+    assert(out.size() == n);
+
+    std::vector<uint64_t> base_k(n);
+    std::copy_n(base.data(), std::min(base.size(), n), base_k.begin());
+    mask_pow2(base_k, k);
+
+    std::vector<uint64_t> ret(n);
+    ret[0] = 1;
+
+    std::vector<uint64_t> tmp(n);
     for (auto i = exp.bit_width(); i != 0; --i)
     {
-        ret *= ret;
+        mul(tmp, ret, ret);
+        ret.swap(tmp);
+
         if (exp[i - 1])
-            ret *= base;
+        {
+            mul(tmp, ret, base_k);
+            ret.swap(tmp);
+        }
     }
 
-    const auto mod_pow2_mask = (UIntT{1} << k) - 1;
-    ret &= mod_pow2_mask;
-    return ret;
+    mask_pow2(ret, k);
+    std::ranges::copy(ret, out.begin());
 }
 
 /// Computes modular inversion of x[] for modulus of 2ᵏ, where k = r.size() * 64.
@@ -214,6 +240,18 @@ void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
         // TODO: Avoid copy by swapping buffers.
         std::ranges::copy(t2, r.begin());
     }
+}
+
+template <typename UIntT>
+UIntT modexp_pow2(const UIntT& base, Exponent exp, unsigned k) noexcept
+{
+    assert(k != 0);  // Modulus of 1 should be covered as "odd".
+    UIntT r;
+    const auto n = (k + 63) / 64;
+    const auto base_words = as_words(base).subspan(0, n);
+    const auto r_words = as_words(r).subspan(0, n);
+    modexp_pow2(base_words, exp, k, r_words);
+    return r;
 }
 
 /// Computes modular exponentiation for even modulus: base^exp % (mod_odd * 2^k).
