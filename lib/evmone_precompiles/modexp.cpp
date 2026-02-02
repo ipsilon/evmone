@@ -303,36 +303,34 @@ void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
 }
 
 /// Computes modular exponentiation for even modulus: base^exp % (mod_odd * 2^k).
-template <typename UIntT>
-UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigned k) noexcept
+void modexp_even(std::span<uint64_t> result, const std::span<const uint64_t> base, Exponent exp,
+    std::span<const uint64_t> mod_odd, unsigned k) noexcept
 {
     // Follow "Montgomery reduction with even modulus" by Çetin Kaya Koç.
     // https://cetinkayakoc.net/docs/j34.pdf
     assert(k != 0);
 
-    UIntT x1;
-    modexp_odd_fakedyn(as_words(x1), as_words(base), exp, as_words(mod_odd));
+    std::vector<uint64_t> x1(result.size());
+    modexp_odd_fakedyn(x1, base, exp, mod_odd);
 
     const auto n = (k + 63) / 64;
     std::vector<uint64_t> x2_w(n);
     std::vector<uint64_t> mod_odd_inv_w(n);
 
-    modexp_pow2(as_words(base).subspan(0, n), exp, k, x2_w);
+    modexp_pow2(base.subspan(0, n), exp, k, x2_w);
 
-    modinv_pow2(mod_odd_inv_w, as_words(mod_odd));
+    modinv_pow2(mod_odd_inv_w, mod_odd);
 
-    sub(x2_w, as_words(x1).subspan(0, n));
+    sub(x2_w, std::span{x1}.subspan(0, n));
 
     std::vector<uint64_t> ye_w(n);  // We need a temporary for the mul result.
     mul(ye_w, x2_w, mod_odd_inv_w);
     mask_pow2(ye_w, k);
 
     std::vector<uint64_t> y_wf = ye_w;
-    y_wf.resize(UIntT::num_words);
-    std::vector<uint64_t> r_wf(UIntT::num_words);
-    mul(r_wf, y_wf, as_words(mod_odd));  // TODO: Add semi-full multiplication.
-    add(r_wf, as_words(x1));
-    return UIntT{r_wf};
+    y_wf.resize(result.size());
+    mul(result, y_wf, mod_odd);  // TODO: Add semi-full multiplication.
+    add(result, x1);
 }
 
 template <size_t Size>
@@ -356,8 +354,10 @@ void modexp_impl(std::span<const uint8_t> base_bytes, Exponent exp,
         const auto n = (mod_tz + 63) / 64;
         modexp_pow2(as_words(base).subspan(0, n), exp, mod_tz, as_words(result).subspan(0, n));
     }
-    else                                                   //
-        result = modexp_even(base, exp, mod_odd, mod_tz);  // - even
+    else  // - even
+    {
+        modexp_even(as_words(result), as_words(base), exp, as_words(mod_odd), mod_tz);
+    }
 
     intx::be::trunc(std::span{output, mod_bytes.size()}, result);
 }
