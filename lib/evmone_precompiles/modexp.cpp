@@ -10,6 +10,28 @@ using namespace intx;
 
 namespace
 {
+/// Multiplies each word of x by y and adds the matching word of p, propagating a carry to the next
+/// word. Starts with initial carry c. Stores the result in r. Returns the final carry.
+/// r[] = p[] + x[] * y (+ c).
+/// TODO: Consider [[always_inline]].
+/// TODO: Consider template by the span extent.
+/// TODO: Consider using pointers for some spans.
+constexpr uint64_t addmul(std::span<uint64_t> r, std::span<const uint64_t> p,
+    std::span<const uint64_t> x, uint64_t y, uint64_t c = 0) noexcept
+{
+    assert(r.size() == p.size());
+    assert(r.size() == x.size());
+
+#pragma GCC unroll 4
+    for (size_t i = 0; i != x.size(); ++i)
+    {
+        const auto t = umul(x[i], y) + p[i] + c;
+        r[i] = t[0];
+        c = t[1];
+    }
+    return c;
+}
+
 /// Represents the exponent value of the modular exponentiation operation.
 ///
 /// This is a view type of the big-endian bytes representing the bits of the exponent.
@@ -65,31 +87,29 @@ constexpr UintT mul_amm(const UintT& x, const UintT& y, const UintT& mod, uint64
 
     constexpr auto S = UintT::num_words;  // TODO(C++23): Make it static
 
-    UintT t;
+    UintT t_value;
+    const auto t = as_words(t_value);
     bool t_carry = false;
     for (size_t i = 0; i != S; ++i)
     {
-        uint64_t c = 0;
-#pragma GCC unroll 8
-        for (size_t j = 0; j != S; ++j)
-            std::tie(c, t[j]) = evmmax::addmul(t[j], x[j], y[i], c);
-        const auto [sum1, d1] = intx::addc(c, t_carry);
+        const auto c1 = addmul(t, t, as_words(x), y[i]);
+        const auto [sum1, d1] = intx::addc(c1, t_carry);
 
         const auto m = t[0] * mod_inv;
-        std::tie(c, std::ignore) = evmmax::addmul(t[0], m, mod[0], 0);
-#pragma GCC unroll 8
-        for (size_t j = 1; j != S; ++j)
-            std::tie(c, t[j - 1]) = evmmax::addmul(t[j], m, mod[j], c);
-        const auto [sum2, d2] = intx::addc(sum1, c);
+        const auto c2 = (umul(mod[0], m) + t[0])[1];
+
+        const auto c3 = addmul(t.template subspan<0, S - 1>(), t.template subspan<1>(),
+            as_words(mod).template subspan<1>(), m, c2);
+        const auto [sum2, d2] = intx::addc(sum1, c3);
         t[S - 1] = sum2;
         assert(!(d1 && d2));  // At most one carry should be set.
         t_carry = d1 || d2;
     }
 
     if (t_carry)  // Reduce if t >= R.
-        t -= mod;
+        t_value -= mod;
 
-    return t;
+    return t_value;
 }
 
 template <typename UIntT>
