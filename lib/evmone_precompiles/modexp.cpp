@@ -5,6 +5,7 @@
 #include "modexp.hpp"
 #include <evmmax/evmmax.hpp>
 #include <bit>
+#include <memory>
 
 using namespace intx;
 
@@ -31,6 +32,33 @@ constexpr uint64_t addmul(std::span<uint64_t> r, std::span<const uint64_t> p,
     }
     return c;
 }
+
+/// Computes multiplication of x times y and truncates the result to the size of r:
+/// r[] = x[] * y[].
+constexpr void mul(
+    std::span<uint64_t> r, std::span<const uint64_t> x, std::span<const uint64_t> y) noexcept
+{
+    assert(!x.empty());
+    assert(!y.empty());
+    assert(x.size() >= y.size());  // Required for safe subspan arithmetic in the loop.
+    assert(r.size() == std::max(x.size(), y.size()));
+
+    std::ranges::fill(r, 0);
+    for (size_t j = 0; j < y.size(); ++j)
+        addmul(r.subspan(j), r.subspan(j), x.subspan(0, x.size() - j), y[j]);
+}
+
+/// Computes x[] = 2 - x[].
+constexpr void neg_add2(std::span<uint64_t> x) noexcept
+{
+    assert(!x.empty());
+    bool c = false;
+
+    std::tie(x[0], c) = intx::subc(2, x[0]);
+    for (auto it = x.begin() + 1; it != x.end(); ++it)
+        std::tie(*it, c) = intx::subc(0, *it, c);
+}
+
 
 /// Represents the exponent value of the modular exponentiation operation.
 ///
@@ -159,24 +187,37 @@ UIntT modexp_pow2(const UIntT& base, Exponent exp, unsigned k) noexcept
     return ret;
 }
 
-/// Computes modular inversion for modulus of 2ᵏ.
-///
-/// TODO: This actually may return more bits than k, the caller is responsible for masking the
-///   result. Better design may be to pass std::span<uint64_t> without specifying k.
-template <typename UIntT>
-UIntT modinv_pow2(const UIntT& x, unsigned k) noexcept
+/// Computes modular inversion of the multi-word number x[] modulo 2^(r.size() * 64).
+void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
 {
-    assert(bit_test(x, 0));        // x must be odd for the inverse to exist.
-    assert(k <= UIntT::num_bits);  // k must fit into the type.
+    assert(!x.empty() && (x[0] & 1) != 0);  // x must be odd.
+    assert(r.size() <= x.size());           // Truncating version.
+    assert(!r.empty());
 
-    // Start with inversion mod 2⁶⁴.
-    UIntT inv = evmmax::modinv(x[0]);
+    r[0] = evmmax::modinv(x[0]);  // Good start: 64 correct bits.
 
-    // Each iteration doubles the number of correct bits in the inverse. See modinv(uint32_t).
-    for (size_t iterations = 64; iterations < k; iterations *= 2)
-        inv *= 2 - x * inv;
+    // Allocate temporary storage for iterations.
+    // TODO: Move to stack if the size is small enough or provide from the caller.
+    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(2 * r.size());
+    const auto tmp = std::span{tmp_storage.get(), 2 * r.size()};
 
-    return inv;
+    // Each iteration doubles the number of correct bits in the inverse. See evmmax::modinv().
+    for (size_t i = 1; i < r.size(); i *= 2)
+    {
+        // At the start of the iteration we have i-word correct inverse in r[0-i].
+        // The iteration performs the Newton-Raphson step with double the precision (n=2i).
+        const auto n = std::min(i * 2, r.size());
+        const auto t1 = tmp.subspan(0, n);
+        const auto t2 = tmp.subspan(n, n);
+
+        mul(t1, x.subspan(0, n), r.subspan(0, i));  // t1 = x * inv
+        neg_add2(t1);                               // t1 = 2 - x * inv
+        mul(t2, t1, r.subspan(0, i));               // t2 = inv * (2 - x * inv)
+        // TODO: Consider implementing the step as (inv << 1) - (x * inv * inv).
+
+        // TODO: Avoid copy by swapping buffers.
+        std::ranges::copy(t2, r.begin());
+    }
 }
 
 /// Computes modular exponentiation for even modulus: base^exp % (mod_odd * 2^k).
@@ -190,7 +231,10 @@ UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigne
     const auto x1 = modexp_odd(base, exp, mod_odd);
     const auto x2 = modexp_pow2(base, exp, k);
 
-    const auto mod_odd_inv = modinv_pow2(mod_odd, k);
+    const auto mod_odd_words = as_words(mod_odd);
+    UIntT mod_odd_inv;
+    const auto num_pow2_words = (k + 63) / 64;
+    modinv_pow2(as_words(mod_odd_inv).subspan(0, num_pow2_words), mod_odd_words);
 
     const auto mod_pow2_mask = (UIntT{1} << k) - 1;
     const auto y = ((x2 - x1) * mod_odd_inv) & mod_pow2_mask;
