@@ -4,6 +4,7 @@
 #pragma once
 
 #include "instructions_opcodes.hpp"
+#include <evmc/evmc.hpp>
 #include <array>
 #include <optional>
 
