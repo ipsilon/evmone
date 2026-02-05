@@ -92,6 +92,10 @@ void expmod_stub(std::span<const uint8_t> in_base, std::span<const uint8_t> in_e
         return expmod_lookup_result(base, exp, mod);
     }();
 
+#ifndef __clang__
+// The following fill_n() has false-positive (?) warning in GCC 15.
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
     // Set the result in the output buffer.
     const auto output_p = std::fill_n(output, output_size - result.size(), 0);
     std::ranges::copy(result, output_p);
