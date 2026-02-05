@@ -6,30 +6,30 @@ orbs:
 executors:
   lint:
     docker:
-      - image: ethereum/cpp-build-env:24-lint
+      - image: chfast/cpp-build-env:25-lint
     resource_class: small
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-gcc-latest:
     docker:
-      - image: ethereum/cpp-build-env:24-gcc-14
+      - image: chfast/cpp-build-env:25-gcc-15
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
   linux-gcc-multilib:
     docker:
-      - image: ethereum/cpp-build-env:24-gcc-14-multilib
+      - image: chfast/cpp-build-env:25-gcc-15-multilib
     resource_class: small
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-clang-xlarge:
     docker:
-      - image: ethereum/cpp-build-env:24-clang-20
+      - image: chfast/cpp-build-env:25-clang-21
     resource_class: xlarge
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 8
   linux-clang-selfhosted:
     docker:
-      - image: ethereum/cpp-build-env:24-clang-20
+      - image: chfast/cpp-build-env:25-clang-21
     resource_class: ipsilon/ha9x
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 16
@@ -41,7 +41,7 @@ executors:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-clang-latest:
     docker:
-      - image: ethereum/cpp-build-env:24-clang-20
+      - image: chfast/cpp-build-env:25-clang-21
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
   linux-clang-min:
@@ -634,13 +634,16 @@ jobs:
     steps:
       - build
       - run:
+          name: "Check qemu"
+          command: qemu-x86_64 --version
+      - run:
           name: "Check evmone.so"
           working_directory: ~/build
-          command: (! qemu-x86_64-static bin/evmc run --vm ./lib/libevmone.so,trace 6000 2>&1) | grep "CPU does not support"
+          command: (! qemu-x86_64 bin/evmc run --vm ./lib/libevmone.so,trace 6000 2>&1) | grep "CPU does not support"
       - run:
           name: "Check unittests"
           working_directory: ~/build
-          command: (! qemu-x86_64-static bin/evmone-unittests 2>&1) | grep "CPU does not support"
+          command: (! qemu-x86_64 bin/evmone-unittests 2>&1) | grep "CPU does not support"
 
   riscv32:
     executor: linux-gcc-latest
