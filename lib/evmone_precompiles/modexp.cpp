@@ -11,6 +11,28 @@ using namespace intx;
 
 namespace
 {
+/// Adds y to x: x[] += y[]. The result is truncated to the size of x.
+/// The x and y must be of the same size.
+constexpr void add(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
+{
+    assert(x.size() == y.size());
+
+    bool carry = false;
+    for (size_t i = 0; i < x.size(); ++i)
+        std::tie(x[i], carry) = addc(x[i], y[i], carry);
+}
+
+/// Subtracts y from x: x[] -= y[]. The result is truncated to the size of x.
+/// The x and y must be of the same size.
+constexpr void sub(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
+{
+    assert(x.size() == y.size());
+
+    bool borrow = false;
+    for (size_t i = 0; i < x.size(); ++i)
+        std::tie(x[i], borrow) = subc(x[i], y[i], borrow);
+}
+
 /// Multiplies each word of x by y and adds the matching word of p, propagating a carry to the next
 /// word. Starts with initial carry c. Stores the result in r. Returns the final carry.
 /// r[] = p[] + x[] * y (+ c).
@@ -40,8 +62,11 @@ constexpr void mul(
 {
     assert(!x.empty());
     assert(!y.empty());
-    assert(x.size() >= y.size());  // Required for safe subspan arithmetic in the loop.
     assert(r.size() == std::max(x.size(), y.size()));
+
+    // Ensure y is the shorter one to simplify the implementation and to have shorter outer loop.
+    if (x.size() < y.size())
+        std::swap(x, y);
 
     std::ranges::fill(r, 0);
     for (size_t j = 0; j < y.size(); ++j)
@@ -258,25 +283,35 @@ void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
 
 /// Computes modular exponentiation for even modulus: base^exp % (mod_odd * 2^k).
 template <typename UIntT>
-UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigned k) noexcept
+UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigned k)
 {
     // Follow "Montgomery reduction with even modulus" by Çetin Kaya Koç.
     // https://cetinkayakoc.net/docs/j34.pdf
     assert(k != 0);
 
+    UIntT r;
+
     const auto x1 = modexp_odd(base, exp, mod_odd);
 
-    UIntT x2;
-    modexp_pow2(as_words(x2), as_words(base), exp, k);
-
-    const auto mod_odd_words = as_words(mod_odd);
-    UIntT mod_odd_inv;
     const auto num_pow2_words = (k + 63) / 64;
-    modinv_pow2(as_words(mod_odd_inv).subspan(0, num_pow2_words), mod_odd_words);
+    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(num_pow2_words * 2);
+    const auto tmp = std::span{tmp_storage.get(), num_pow2_words * 2};
+    const auto tmp1 = tmp.subspan(0, num_pow2_words);
+    const auto tmp2 = tmp.subspan(num_pow2_words, num_pow2_words);
 
-    const auto mod_pow2_mask = (UIntT{1} << k) - 1;
-    const auto y = ((x2 - x1) * mod_odd_inv) & mod_pow2_mask;
-    return x1 + y * mod_odd;
+    const auto x2 = as_words(r).subspan(0, num_pow2_words);  // Reuse the result storage.
+    modexp_pow2(x2, as_words(base), exp, k);
+
+    const auto mod_odd_inv = tmp1;
+    modinv_pow2(mod_odd_inv, as_words(mod_odd));
+
+    const auto y = tmp2;
+    sub(x2, as_words(x1).subspan(0, num_pow2_words));
+    mul(y, x2, mod_odd_inv);
+    mask_pow2(y, k);
+    mul(as_words(r), y, as_words(mod_odd));
+    add(as_words(r), as_words(x1));
+    return r;
 }
 
 template <size_t Size>
