@@ -166,7 +166,7 @@ constexpr UintT mul_amm(const UintT& x, const UintT& y, const UintT& mod, uint64
 }
 
 template <typename UIntT>
-UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
+UIntT modexp_odd_fixed_size(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
 {
     assert(exp.bit_width() != 0);  // Exponent of zero must be handled outside.
 
@@ -193,6 +193,32 @@ UIntT modexp_odd(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
     assert(ret < mod);  // One reduction should be enough.
 
     return ret;
+}
+
+void modexp_odd(std::span<uint64_t> result, const std::span<const uint64_t> base, Exponent exp,
+    const std::span<const uint64_t> mod) noexcept
+{
+    assert(result.size() == mod.size());
+    assert(base.size() == mod.size());  // True for the current callers. Relax if needed.
+
+    const auto impl = [=]<size_t N>() {
+        using UintT = intx::uint<N * 64>;
+        const auto r = modexp_odd_fixed_size(UintT{base}, exp, UintT{mod});
+        std::ranges::copy(as_words(r).subspan(0, result.size()), result.begin());
+    };
+
+    if (const auto n = mod.size(); n <= 2)
+        impl.operator()<2>();
+    else if (n <= 4)
+        impl.operator()<4>();
+    else if (n <= 8)
+        impl.operator()<8>();
+    else if (n <= 16)
+        impl.operator()<16>();
+    else if (n <= 32)
+        impl.operator()<32>();
+    else
+        impl.operator()<128>();
 }
 
 /// Trims the multi-word number x[] to k bits.
@@ -282,36 +308,37 @@ void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
 }
 
 /// Computes modular exponentiation for even modulus: base^exp % (mod_odd * 2^k).
-template <typename UIntT>
-UIntT modexp_even(const UIntT& base, Exponent exp, const UIntT& mod_odd, unsigned k)
+void modexp_even(std::span<uint64_t> r, const std::span<const uint64_t> base, Exponent exp,
+    std::span<const uint64_t> mod_odd, unsigned k)
 {
     // Follow "Montgomery reduction with even modulus" by Çetin Kaya Koç.
     // https://cetinkayakoc.net/docs/j34.pdf
     assert(k != 0);
-
-    UIntT r;
-
-    const auto x1 = modexp_odd(base, exp, mod_odd);
+    assert(r.size() == mod_odd.size());
 
     const auto num_pow2_words = (k + 63) / 64;
-    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(num_pow2_words * 2);
-    const auto tmp = std::span{tmp_storage.get(), num_pow2_words * 2};
-    const auto tmp1 = tmp.subspan(0, num_pow2_words);
-    const auto tmp2 = tmp.subspan(num_pow2_words, num_pow2_words);
+    const auto tmp_storage =
+        std::make_unique_for_overwrite<uint64_t[]>(mod_odd.size() + num_pow2_words * 2);
+    const auto tmp = std::span{tmp_storage.get(), mod_odd.size() + num_pow2_words * 2};
+    const auto tmp1 = tmp.subspan(0, mod_odd.size());
+    const auto tmp2 = tmp.subspan(mod_odd.size(), num_pow2_words);
+    const auto tmp3 = tmp.subspan(mod_odd.size() + num_pow2_words, num_pow2_words);
 
-    const auto x2 = as_words(r).subspan(0, num_pow2_words);  // Reuse the result storage.
-    modexp_pow2(x2, as_words(base), exp, k);
+    const auto x1 = tmp1;
+    modexp_odd(x1, base, exp, mod_odd);
 
-    const auto mod_odd_inv = tmp1;
-    modinv_pow2(mod_odd_inv, as_words(mod_odd));
+    const auto x2 = r.subspan(0, num_pow2_words);  // Reuse the result storage.
+    modexp_pow2(x2, base, exp, k);
 
-    const auto y = tmp2;
-    sub(x2, as_words(x1).subspan(0, num_pow2_words));
+    const auto mod_odd_inv = tmp2;
+    modinv_pow2(mod_odd_inv, mod_odd);
+
+    const auto y = tmp3;
+    sub(x2, std::span(x1).subspan(0, num_pow2_words));
     mul(y, x2, mod_odd_inv);
     mask_pow2(y, k);
-    mul(as_words(r), y, as_words(mod_odd));
-    add(as_words(r), as_words(x1));
-    return r;
+    mul(r, y, mod_odd);
+    add(r, x1);
 }
 
 template <size_t Size>
@@ -324,14 +351,14 @@ void modexp_impl(std::span<const uint8_t> base_bytes, Exponent exp,
     assert(mod != 0);  // Modulus of zero must be handled outside.
 
     UIntT result;
-    if (exp.bit_width() == 0)                                        // Exponent is 0:
-        result = mod != 1;                                           // - result is 1 except mod 1
-    else if (const auto mod_tz = ctz(mod); mod_tz == 0)              // Modulus is:
-        result = modexp_odd(base, exp, mod);                         // - odd
-    else if (const auto mod_odd = mod >> mod_tz; mod_odd == 1)       //
-        modexp_pow2(as_words(result), as_words(base), exp, mod_tz);  // - power of 2
-    else                                                             //
-        result = modexp_even(base, exp, mod_odd, mod_tz);            // - even
+    if (exp.bit_width() == 0)                            // Exponent is 0:
+        result = mod != 1;                               // - result is 1 except mod 1
+    else if (const auto mod_tz = ctz(mod); mod_tz == 0)  // Modulus is: - odd
+        modexp_odd(as_words(result), as_words(base), exp, as_words(mod));
+    else if (const auto mod_odd = mod >> mod_tz; mod_odd == 1)  // - power of 2
+        modexp_pow2(as_words(result), as_words(base), exp, mod_tz);
+    else  // - even
+        modexp_even(as_words(result), as_words(base), exp, as_words(mod_odd), mod_tz);
 
     intx::be::trunc(std::span{output, mod_bytes.size()}, result);
 }

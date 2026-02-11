@@ -105,6 +105,11 @@ int64_t process_authorization_list(
 
         // 3. Verify if the signer has been successfully recovered from the signature.
         //    authority = ecrecover(...)
+        // y_parity must be 0 or 1 for EIP-7702/2930 signatures.
+        if (auth.v > 1)
+            continue;
+        // TODO: We actually only do "partial" verification by assuming the signature is valid
+        //   when the test has the signer specified.
         if (!auth.signer.has_value())
             continue;
 
@@ -131,7 +136,7 @@ int64_t process_authorization_list(
 
         // 7. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter
         // if authority exists in the trie.
-        // Successful authorisation validation makes an account non-empty.
+        // Successful authorization validation makes an account non-empty.
         // We apply the refund only if the account has existed before.
         // We detect "exists in the trie" by inspecting _empty_ property (EIP-161) because _empty_
         // implies an account doesn't exist in the state (EIP-7523).
