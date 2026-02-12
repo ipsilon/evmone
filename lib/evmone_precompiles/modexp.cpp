@@ -129,6 +129,14 @@ void store(std::span<uint8_t> r, std::span<const uint64_t> words) noexcept
     std::ranges::fill(r.subspan(0, pos), uint8_t{0});
 }
 
+/// Trims a little-endian word array to significant words.
+template <typename T>
+constexpr std::span<T> trim(std::span<T> x) noexcept
+{
+    const auto it = std::ranges::find_if(x.rbegin(), x.rend(), [](auto w) { return w != 0; });
+    return x.first(static_cast<size_t>(std::ranges::distance(it, x.rend())));
+}
+
 /// Counts trailing zeros in a non-zero little-endian word array.
 constexpr unsigned ctz(std::span<const uint64_t> x) noexcept
 {
@@ -168,6 +176,79 @@ void shr(std::span<uint64_t> r, std::span<const uint64_t> x, unsigned k) noexcep
     }
 }
 
+
+/// Computes r[] = u[] % d[] (remainder only).
+/// The d[] must be non-zero. The r[] size must be >= num significant words in d[].
+void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uint64_t> d) noexcept
+{
+    assert(!d.empty());
+    assert(!u.empty());
+    assert(d.back() != 0);
+    assert(u.back() != 0);
+    assert(r.size() >= d.size());
+    assert(u.size() > d.size());  // Because used only for to-Montgomery conversion.
+
+    const auto un_storage = std::make_unique_for_overwrite<uint64_t[]>(u.size() + 1);
+    auto un = std::span{un_storage.get(), u.size() + 1};
+    un.back() = 0;  // Only the extra top word needs zeroing; the rest is set by normalization.
+
+    // Normalize: left-shift both u and d so that the MSB of d's top word is set.
+    const auto shift = static_cast<unsigned>(std::countl_zero(d.back()));
+
+    // Allocate normalized divisor.
+    const auto dn_storage = std::make_unique_for_overwrite<uint64_t[]>(d.size());
+    const auto dn = std::span{dn_storage.get(), d.size()};
+
+    if (shift != 0)
+    {
+        for (size_t i = d.size() - 1; i != 0; --i)
+            dn[i] = (d[i] << shift) | (d[i - 1] >> (64 - shift));
+        dn[0] = d[0] << shift;
+
+        // Normalize numerator into un.
+        un[u.size()] = u.back() >> (64 - shift);
+        for (size_t i = u.size() - 1; i != 0; --i)
+            un[i] = (u[i] << shift) | (u[i - 1] >> (64 - shift));
+        un[0] = u[0] << shift;
+    }
+    else
+    {
+        std::ranges::copy(d, dn.begin());
+        std::ranges::copy(u, un.begin());
+    }
+
+    // Shrink off the extra top word if it is not significant for the normalized numerator.
+    if (un.back() == 0 && un[un.size() - 2] < dn.back())
+        un = un.first(un.size() - 1);
+
+    const auto denormalize = [&r, shift](std::span<const uint64_t> x) noexcept {
+        assert(r.size() >= x.size());
+        shr(r.first(x.size()), x, shift);
+        std::ranges::fill(r.subspan(x.size()), uint64_t{0});
+    };
+
+    assert(un.size() > dn.size());  // Not possible in the current usage.
+
+    if (dn.size() == 1)
+    {
+        const uint64_t rem_words[1]{intx::internal::udivrem_by1(un, dn[0])};
+        denormalize(rem_words);
+    }
+    else if (dn.size() == 2)
+    {
+        const auto rem2 = intx::internal::udivrem_by2(un, uint128{dn[0], dn[1]});
+        denormalize(as_words(rem2));
+    }
+    else
+    {
+        // General case: Knuth's algorithm. The quotient is stored in the temporary q_storage
+        // buffer; we don't use it, but udivrem_knuth requires storage for it.
+        const auto q_len = un.size() - dn.size();
+        const auto q_storage = std::make_unique_for_overwrite<uint64_t[]>(q_len);
+        intx::internal::udivrem_knuth(q_storage.get(), un, dn);
+        denormalize(un.subspan(0, dn.size()));
+    }
+}
 
 /// Represents the exponent value of the modular exponentiation operation.
 ///
@@ -249,6 +330,8 @@ constexpr void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> y,
     std::ranges::copy(t, r.begin());
 }
 
+/// Performs modular exponentiation for an odd modulus using Montgomery multiplication.
+/// The base must already be in Montgomery form: base = (orig_base * R) % mod.
 template <typename UIntT>
 UIntT modexp_odd_fixed_size(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
 {
@@ -257,16 +340,12 @@ UIntT modexp_odd_fixed_size(const UIntT& base, Exponent exp, const UIntT& mod) n
 
     const auto mod_inv = evmmax::compute_mont_mod_inv(mod);
 
-    /// Convert the base to Montgomery form: base*R % mod, where R = 2^(num_bits).
-    const auto base_mont =
-        udivrem(intx::uint<UIntT::num_bits * 2>{base} << UIntT::num_bits, mod).rem;
-
-    auto ret = base_mont;
+    auto ret = base;
     for (auto i = exp.bit_width() - 1; i != 0; --i)
     {
         mul_amm<N>(as_words(ret), as_words(ret), as_words(mod), mod_inv);
         if (exp[i - 1])
-            mul_amm<N>(as_words(ret), as_words(base_mont), as_words(mod), mod_inv);
+            mul_amm<N>(as_words(ret), as_words(base), as_words(mod), mod_inv);
     }
 
     // Convert the result from Montgomery form by multiplying with the standard integer 1.
@@ -281,33 +360,75 @@ UIntT modexp_odd_fixed_size(const UIntT& base, Exponent exp, const UIntT& mod) n
     return ret;
 }
 
-void modexp_odd(std::span<uint64_t> result, const std::span<const uint64_t> base, Exponent exp,
-    const std::span<const uint64_t> mod) noexcept
+void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Exponent exp,
+    std::span<const uint64_t> mod) noexcept
 {
-    static constexpr auto MAX_INPUT_SIZE = 1024 / sizeof(uint64_t);  // 8192 bits, as in EIP-7823.
-    assert(base.size() <= MAX_INPUT_SIZE);
-    assert(base.size() <= MAX_INPUT_SIZE);
-    assert(result.size() == mod.size());
-    assert(base.size() == mod.size());  // True for the current callers. Relax if needed.
+    base = trim(base);
+    mod = trim(mod);
+    assert(!mod.empty());
+    assert(exp.bit_width() != 0);
+
+    if (base.empty()) [[unlikely]]  // base is 0: 0^exp = 0 for exp > 0.
+    {
+        std::ranges::fill(result, uint64_t{0});
+        return;
+    }
+
+    const auto n = mod.size();
+
+    // Select the fixed-size width (in words) for Montgomery multiplication.
+    static constexpr auto MAX_SIZE = 1024 / sizeof(uint64_t);  // 8192 bits, as in EIP-7823.
+    assert(n <= MAX_SIZE);
+    static constexpr size_t SIZES[] = {2, 4, 8, 16, 32, MAX_SIZE};
+    const auto r_size = *std::ranges::lower_bound(SIZES, n);
+
+    // Compute base_mont = (base * R) % mod, where R = 2^(r_size*64).
+    // R must match the width used by Montgomery multiplication (mul_amm).
+    // The numerator is base shifted left by r_size words (r_size + base.size() words).
+    // The result (base * R) % mod can be up to mod-1, always requiring n words.
+    const auto u_len = r_size + base.size();
+    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(u_len + n);
+    const auto tmp = std::span{tmp_storage.get(), u_len + n};
+    const auto u = tmp.first(u_len);
+    const auto base_mont = tmp.subspan(u_len, n);
+    std::ranges::fill(u.first(r_size), uint64_t{0});
+    std::ranges::copy(base, u.subspan(r_size).begin());
+    rem(base_mont, u, mod);
 
     const auto impl = [=]<size_t N>() {
         using UintT = intx::uint<N * 64>;
-        const auto r = modexp_odd_fixed_size(UintT{base}, exp, UintT{mod});
-        std::ranges::copy(as_words(r).subspan(0, result.size()), result.begin());
+
+        // Pass zero-extended fixed-size representation.
+        const auto r = modexp_odd_fixed_size(UintT{base_mont}, exp, UintT{mod});
+
+        // TODO: Because the caller's mod is not trimmed, we must also zero-extend the result.
+        const auto rw = as_words(r);
+        const auto [_, out] =
+            std::ranges::copy(rw.first(std::min(rw.size(), result.size())), result.begin());
+        std::fill(out, result.end(), 0);
     };
 
-    if (const auto n = mod.size(); n <= 2)
+    switch (r_size)
+    {
+    case 2:
         impl.operator()<2>();
-    else if (n <= 4)
+        break;
+    case 4:
         impl.operator()<4>();
-    else if (n <= 8)
+        break;
+    case 8:
         impl.operator()<8>();
-    else if (n <= 16)
+        break;
+    case 16:
         impl.operator()<16>();
-    else if (n <= 32)
+        break;
+    case 32:
         impl.operator()<32>();
-    else
-        impl.operator()<MAX_INPUT_SIZE>();
+        break;
+    default:
+        impl.operator()<MAX_SIZE>();
+        break;
+    }
 }
 
 /// Trims the multi-word number x[] to k bits.
