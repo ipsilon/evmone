@@ -6,7 +6,6 @@
 #include "../utils/stdx/utility.hpp"
 #include "evmone_precompiles/secp256r1.hpp"
 #include "precompiles_internal.hpp"
-#include "precompiles_stubs.hpp"
 #include <evmone_precompiles/blake2b.hpp>
 #include <evmone_precompiles/bls.hpp>
 #include <evmone_precompiles/bn254.hpp>
@@ -403,18 +402,12 @@ ExecutionResult expmod_execute(
     if (mod.empty())
         return {EVMC_SUCCESS, output_size};
 
-    if (std::max(base.size(), mod.size()) <= MODEXP_LEN_LIMIT_EIP7823)
-    {
-        crypto::modexp(base, exp, mod, output);
-        return {EVMC_SUCCESS, output_size};
-    }
-
 #ifdef EVMONE_PRECOMPILES_GMP
     expmod_gmp(base, exp, mod, output);
 #else
-    expmod_stub(base, exp, mod, output);
+    crypto::modexp(base, exp, mod, output);
 #endif
-    return {EVMC_SUCCESS, mod.size()};
+    return {EVMC_SUCCESS, output_size};
 }
 
 #ifdef EVMONE_PRECOMPILES_GMP

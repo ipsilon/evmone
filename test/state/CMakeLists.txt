@@ -24,8 +24,6 @@ target_sources(
     precompiles.hpp
     precompiles.cpp
     precompiles_internal.hpp
-    precompiles_stubs.hpp
-    precompiles_stubs.cpp
     requests.hpp
     requests.cpp
     state.hpp
