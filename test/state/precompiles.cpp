@@ -21,6 +21,10 @@
 #include <limits>
 #include <span>
 
+#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
+#include "precompiles_libsecp256k1.hpp"
+#endif
+
 #ifdef EVMONE_PRECOMPILES_GMP
 #include "precompiles_gmp.hpp"
 #endif
@@ -301,15 +305,22 @@ ExecutionResult ecrecover_execute(const uint8_t* input, size_t input_size, uint8
 
     const auto hash = input_span.subspan<0, 32>();
     const auto v_bytes = input_span.subspan<32, 32>();
-    const auto r_bytes = input_span.subspan<64, 32>();
-    const auto s_bytes = input_span.subspan<96, 32>();
 
     const auto v = intx::be::unsafe::load<intx::uint256>(v_bytes.data());
     if (v != 27 && v != 28)
         return {EVMC_SUCCESS, 0};
     const bool parity = v == 28;
 
+#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
+    std::optional<evmc::address> res;
+    const auto sig_bytes = input_span.subspan<64, 64>();
+    if (uint8_t pubkey[64]; ecrecover_libsecp256k1(pubkey, hash, sig_bytes, parity))
+        res = evmmax::secp256k1::to_address(pubkey);
+#else
+    const auto r_bytes = input_span.subspan<64, 32>();
+    const auto s_bytes = input_span.subspan<96, 32>();
     const auto res = evmmax::secp256k1::ecrecover(hash, r_bytes, s_bytes, parity);
+#endif
     if (res)
     {
         std::memset(output, 0, 12);

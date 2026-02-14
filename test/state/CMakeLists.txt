@@ -2,6 +2,8 @@
 # Copyright 2022 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+include(FetchContent)
+
 add_library(evmone-state STATIC)
 add_library(evmone::state ALIAS evmone-state)
 target_compile_features(evmone-state PUBLIC cxx_std_20)
@@ -35,12 +37,40 @@ target_sources(
     transaction.hpp
 )
 
+option(EVMONE_PRECOMPILES_LIBSECP256K1 "Enable precompiles implementations using libsecp256k1 library" OFF)
+if(EVMONE_PRECOMPILES_LIBSECP256K1)
+    FetchContent_Declare(
+        libsecp256k1
+        URL https://github.com/bitcoin-core/secp256k1/archive/refs/tags/v0.7.1.tar.gz
+        URL_HASH SHA256=958f204dbafc117e73a2604285dc2eb2a5128344d3499c114dcba5de54cb7a9e
+    )
+    block()
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w")  # Disable warnings.
+        set(SECP256K1_ENABLE_MODULE_RECOVERY ON)
+        FetchContent_MakeAvailable(libsecp256k1)
+        add_library(libsecp256k1::secp256k1 ALIAS secp256k1)
+        set_target_properties(
+            secp256k1
+            PROPERTIES
+            COMPILE_OPTIONS -w  # Disable warnings.
+            CXX_CLANG_TIDY ""
+        )
+        #    target_compile_options(secp256k1 PRIVATE -w)  # Disable warnings.
+    endblock()
+    target_link_libraries(evmone-state PRIVATE libsecp256k1::secp256k1)
+    target_compile_definitions(evmone-state PUBLIC EVMONE_PRECOMPILES_LIBSECP256K1=1)
+    target_sources(
+        evmone-state PRIVATE
+        precompiles_libsecp256k1.hpp
+        precompiles_libsecp256k1.cpp
+    )
+endif()
+
 option(EVMONE_PRECOMPILES_SILKPRE "Enable precompiles from silkpre library (for benchmarking only)" OFF)
 if(EVMONE_PRECOMPILES_SILKPRE)
     # Silkpre requires the ethash library, so enable it in Hunter.
     hunter_add_package(ethash)
 
-    include(FetchContent)
     FetchContent_Declare(
         silkpre
         GIT_REPOSITORY https://github.com/erigontech/silkpre
