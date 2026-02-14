@@ -4,7 +4,7 @@
 
 #include "precompiles_libsecp256k1.hpp"
 #include <secp256k1_recovery.h>
-#include <cstring>
+#include <cassert>
 
 namespace evmone::state
 {
@@ -17,16 +17,16 @@ bool ecrecover_libsecp256k1(std::span<uint8_t, 64> pubkey, std::span<const uint8
         return false;
 
     secp256k1_pubkey pk;
-    if (secp256k1_ecdsa_recover(secp256k1_context_static, &pk, &sig,
-            reinterpret_cast<const unsigned char*>(hash.data())) != 1)
+    if (secp256k1_ecdsa_recover(secp256k1_context_static, &pk, &sig, hash.data()) != 1)
         return false;
 
     uint8_t pubkey_prefixed[65];
     auto output_length = sizeof(pubkey_prefixed);
-    secp256k1_ec_pubkey_serialize(
+    [[maybe_unused]] const auto serialized_ok = secp256k1_ec_pubkey_serialize(
         secp256k1_context_static, pubkey_prefixed, &output_length, &pk, SECP256K1_EC_UNCOMPRESSED);
-
-    std::memcpy(pubkey.data(), pubkey_prefixed + 1, pubkey.size());
+    assert(serialized_ok == 1);
+    assert(output_length == sizeof(pubkey_prefixed));
+    std::copy_n(&pubkey_prefixed[1], pubkey.size(), pubkey.data());
     return true;
 }
 }  // namespace evmone::state
