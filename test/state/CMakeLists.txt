@@ -44,34 +44,35 @@ if(EVMONE_PRECOMPILES_LIBSECP256K1)
         URL https://github.com/bitcoin-core/secp256k1/archive/refs/tags/v0.7.1.tar.gz
         URL_HASH SHA256=958f204dbafc117e73a2604285dc2eb2a5128344d3499c114dcba5de54cb7a9e
     )
-    block()
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -w")  # Disable warnings.
-        set(SECP256K1_ENABLE_MODULE_ECDH OFF)
-        set(SECP256K1_ENABLE_MODULE_RECOVERY ON)
-        set(SECP256K1_ENABLE_MODULE_EXTRAKEYS OFF)
-        set(SECP256K1_ENABLE_MODULE_SCHNORRSIG OFF)
-        set(SECP256K1_ENABLE_MODULE_MUSIG OFF)
-        set(SECP256K1_ENABLE_MODULE_ELLSWIFT OFF)
-        #FIXME: benchmark asm
-        set(SECP256K1_ASM OFF)
-        set(SECP256K1_BUILD_BENCHMARK OFF)
-        set(SECP256K1_BUILD_TESTS OFF)
-        set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
-        set(SECP256K1_BUILD_CTIME_TESTS OFF)
-        set(SECP256K1_BUILD_EXAMPLES OFF)
-        # Needed for shared library builds. TODO: investigate how to hide the symbols.
-        set(SECP256K1_ENABLE_API_VISIBILITY_ATTRIBUTES ON)
-        set(SECP256K1_VALGRIND OFF)
-        FetchContent_MakeAvailable(libsecp256k1)
-        add_library(libsecp256k1::secp256k1 ALIAS secp256k1)
+    set(BUILD_SHARED_LIBS_ORIG ${BUILD_SHARED_LIBS})
+    set(BUILD_SHARED_LIBS OFF)
+    set(SECP256K1_ENABLE_MODULE_ECDH OFF)
+    set(SECP256K1_ENABLE_MODULE_RECOVERY ON)
+    set(SECP256K1_ENABLE_MODULE_EXTRAKEYS OFF)
+    set(SECP256K1_ENABLE_MODULE_SCHNORRSIG OFF)
+    set(SECP256K1_ENABLE_MODULE_MUSIG OFF)
+    set(SECP256K1_ENABLE_MODULE_ELLSWIFT OFF)
+    # On x86_64 using asm is ~1% worse. Untested on ARM.
+    set(SECP256K1_ASM OFF)
+    set(SECP256K1_BUILD_BENCHMARK OFF)
+    set(SECP256K1_BUILD_TESTS OFF)
+    set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
+    set(SECP256K1_BUILD_CTIME_TESTS OFF)
+    set(SECP256K1_BUILD_EXAMPLES OFF)
+    # Needed for shared library builds. TODO: investigate how to hide the symbols.
+    set(SECP256K1_ENABLE_API_VISIBILITY_ATTRIBUTES ON)
+    set(SECP256K1_VALGRIND OFF)
+    FetchContent_MakeAvailable(libsecp256k1)
+    foreach(TARGET secp256k1 secp256k1_precomputed)
         set_target_properties(
-            secp256k1
+            ${TARGET}
             PROPERTIES
-            COMPILE_OPTIONS -w  # Disable warnings.
+            COMPILE_OPTIONS $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-w>  # Disable warnings.
             CXX_CLANG_TIDY ""
         )
-        #    target_compile_options(secp256k1 PRIVATE -w)  # Disable warnings.
-    endblock()
+    endforeach()
+    add_library(libsecp256k1::secp256k1 ALIAS secp256k1)
+
     target_link_libraries(evmone-state PRIVATE libsecp256k1::secp256k1)
     target_compile_definitions(evmone-state PUBLIC EVMONE_PRECOMPILES_LIBSECP256K1=1)
     target_sources(
@@ -79,6 +80,7 @@ if(EVMONE_PRECOMPILES_LIBSECP256K1)
         precompiles_libsecp256k1.hpp
         precompiles_libsecp256k1.cpp
     )
+    set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_ORIG})
 endif()
 
 option(EVMONE_PRECOMPILES_SILKPRE "Enable precompiles from silkpre library (for benchmarking only)" OFF)
