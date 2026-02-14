@@ -462,6 +462,25 @@ jobs:
       - upload_coverage:
           flags: eest-legacy
 
+  precompiles-libsecp256k1:
+    executor: linux-clang-latest
+    environment:
+      BUILD_TYPE: Release
+      CMAKE_OPTIONS: -DCOVERAGE=1 -DEVMONE_PRECOMPILES_LIBSECP256K1=1
+    steps:
+      - build
+      - download_execution_spec_tests:
+          release: v5.4.0
+          fixtures_suffix: stable
+      - run:
+          name: "Execution spec tests (state_tests)"
+          working_directory: ~/build
+          command: >
+            bin/evmone-statetest ~/spec-tests/fixtures/state_tests
+      - collect_coverage_clang
+      - upload_coverage:
+          flags: eest-libsecp256k1
+
   precompiles-gmp:
     executor: linux-clang-latest
     environment:
@@ -688,6 +707,7 @@ workflows:
               only: /^v[0-9].*/
       - execution-spec-tests
       - ethereum-tests
+      - precompiles-libsecp256k1
       - precompiles-gmp
       - precompiles-silkpre
       - cmake-min

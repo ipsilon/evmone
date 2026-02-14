@@ -21,6 +21,10 @@
 #include <limits>
 #include <span>
 
+#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
+#include "precompiles_libsecp256k1.hpp"
+#endif
+
 #ifdef EVMONE_PRECOMPILES_GMP
 #include "precompiles_gmp.hpp"
 #endif
@@ -290,34 +294,86 @@ PrecompileAnalysis p256verify_analyze(bytes_view, evmc_revision) noexcept
     return {6900, 32};
 }
 
-ExecutionResult ecrecover_execute(const uint8_t* input, size_t input_size, uint8_t* output,
+namespace
+{
+class EcrecoverInput
+{
+    uint8_t buffer_[128]{};
+
+public:
+    explicit EcrecoverInput(std::span<const uint8_t> input) noexcept
+    {
+        std::copy_n(input.data(), std::min(input.size(), std::size(buffer_)), buffer_);
+    }
+
+    std::optional<std::tuple<std::span<const uint8_t, 32>, std::span<const uint8_t, 64>, bool>>
+    parse() const noexcept
+    {
+        const auto hash = std::span{buffer_}.subspan<0, 32>();
+        const auto v_bytes = std::span{buffer_}.subspan<32, 32>();
+        const auto sig_bytes = std::span{buffer_}.subspan<64, 64>();
+
+        const auto v = intx::be::unsafe::load<intx::uint256>(v_bytes.data());
+        if (v != 27 && v != 28)
+            return std::nullopt;
+        const bool parity = v == 28;
+
+        return std::tuple{hash, sig_bytes, parity};
+    }
+};
+
+}  // namespace
+
+ExecutionResult ecrecover_execute_evmone(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
 {
+    const EcrecoverInput input_buffer{std::span{input, input_size}};
+    const auto o = input_buffer.parse();
+    if (!o)
+        return {EVMC_SUCCESS, 0};
+    const auto& [hash, sig_bytes, parity] = *o;
+
+    const auto res = evmmax::secp256k1::ecrecover(
+        hash, sig_bytes.subspan<0, 32>(), sig_bytes.subspan<32, 32>(), parity);
+    if (!res)
+        return {EVMC_SUCCESS, 0};
+
+    const auto it = std::fill_n(output, 32 - sizeof(*res), 0);
+    std::copy_n(res->bytes, sizeof(*res), it);
+    return {EVMC_SUCCESS, 32};
+}
+
+#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
+ExecutionResult ecrecover_execute_libsecp256k1(const uint8_t* input, size_t input_size,
+    uint8_t* output, [[maybe_unused]] size_t output_size) noexcept
+{
+    const EcrecoverInput input_buffer{std::span{input, input_size}};
+    const auto o = input_buffer.parse();
+    if (!o)
+        return {EVMC_SUCCESS, 0};
+    const auto& [hash, sig_bytes, parity] = *o;
+
+    uint8_t pubkey[64];
+    if (!ecrecover_libsecp256k1(pubkey, hash, sig_bytes, parity))
+        return {EVMC_SUCCESS, 0};
+
+    const auto addr = evmmax::secp256k1::to_address(pubkey);
+    const auto it = std::fill_n(output, 32 - sizeof(addr), 0);
+    std::copy_n(addr.bytes, sizeof(addr), it);
+    return {EVMC_SUCCESS, 32};
+}
+#endif
+
+ExecutionResult ecrecover_execute(
+    const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept
+{
     assert(output_size >= 32);
-
-    uint8_t input_buffer[128]{};
-    const std::span input_span{input_buffer};
-    std::copy_n(input, std::min(input_size, std::size(input_buffer)), input_span.begin());
-
-    const auto hash = input_span.subspan<0, 32>();
-    const auto v_bytes = input_span.subspan<32, 32>();
-    const auto r_bytes = input_span.subspan<64, 32>();
-    const auto s_bytes = input_span.subspan<96, 32>();
-
-    const auto v = intx::be::unsafe::load<intx::uint256>(v_bytes.data());
-    if (v != 27 && v != 28)
-        return {EVMC_SUCCESS, 0};
-    const bool parity = v == 28;
-
-    const auto res = evmmax::secp256k1::ecrecover(hash, r_bytes, s_bytes, parity);
-    if (res)
-    {
-        std::memset(output, 0, 12);
-        std::memcpy(output + 12, res->bytes, 20);
-        return {EVMC_SUCCESS, 32};
-    }
-    else
-        return {EVMC_SUCCESS, 0};
+// Select better implementation.
+#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
+    return ecrecover_execute_libsecp256k1(input, input_size, output, output_size);
+#else
+    return ecrecover_execute_evmone(input, input_size, output, output_size);
+#endif
 }
 
 ExecutionResult sha256_execute(const uint8_t* input, size_t input_size, uint8_t* output,

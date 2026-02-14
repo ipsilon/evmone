@@ -29,17 +29,19 @@ std::optional<Curve::Fp> calculate_y(const Curve::Fp& x, bool y_parity) noexcept
     return (candidate_parity == y_parity) ? y : -y;
 }
 
+evmc::address to_address(std::span<const uint8_t, 64> pubkey) noexcept
+{
+    const auto hashed = ethash::keccak256(pubkey.data(), pubkey.size());
+    evmc::address ret;
+    std::copy_n(&hashed.bytes[12], sizeof(ret), ret.bytes);
+    return ret;
+}
+
 evmc::address to_address(const AffinePoint& pt) noexcept
 {
-    // This performs Ethereum's address hashing on an uncompressed pubkey.
     uint8_t serialized[64];
     pt.to_bytes(serialized);
-
-    const auto hashed = ethash::keccak256(serialized, sizeof(serialized));
-    evmc::address ret{};
-    std::memcpy(ret.bytes, hashed.bytes + 12, 20);
-
-    return ret;
+    return to_address(serialized);
 }
 
 std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> hash,
