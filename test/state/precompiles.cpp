@@ -347,30 +347,20 @@ ExecutionResult ecrecover_execute_evmone(const uint8_t* input, size_t input_size
 ExecutionResult ecrecover_execute_libsecp256k1(const uint8_t* input, size_t input_size,
     uint8_t* output, [[maybe_unused]] size_t output_size) noexcept
 {
-    uint8_t input_buffer[128]{};
-    const std::span input_span{input_buffer};
-    std::copy_n(input, std::min(input_size, std::size(input_buffer)), input_span.begin());
-
-    const auto hash = input_span.subspan<0, 32>();
-    const auto v_bytes = input_span.subspan<32, 32>();
-
-    const auto v = intx::be::unsafe::load<intx::uint256>(v_bytes.data());
-    if (v != 27 && v != 28)
+    const EcrecoverInput input_buffer{std::span{input, input_size}};
+    const auto o = input_buffer.parse();
+    if (!o)
         return {EVMC_SUCCESS, 0};
-    const bool parity = v == 28;
+    const auto& [hash, sig_bytes, parity] = *o;
 
-    std::optional<evmc::address> res;
-    const auto sig_bytes = input_span.subspan<64, 64>();
-    if (uint8_t pubkey[64]; ecrecover_libsecp256k1(pubkey, hash, sig_bytes, parity))
-        res = evmmax::secp256k1::to_address(pubkey);
-    if (res)
-    {
-        std::memset(output, 0, 12);
-        std::memcpy(output + 12, res->bytes, 20);
-        return {EVMC_SUCCESS, 32};
-    }
-    else
+    uint8_t pubkey[64];
+    if (!ecrecover_libsecp256k1(pubkey, hash, sig_bytes, parity))
         return {EVMC_SUCCESS, 0};
+
+    const auto addr = evmmax::secp256k1::to_address(pubkey);
+    const auto it = std::fill_n(output, 32 - sizeof(addr), 0);
+    std::copy_n(addr.bytes, sizeof(addr), it);
+    return {EVMC_SUCCESS, 32};
 }
 #endif
 
