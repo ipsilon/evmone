@@ -294,7 +294,7 @@ PrecompileAnalysis p256verify_analyze(bytes_view, evmc_revision) noexcept
     return {6900, 32};
 }
 
-ExecutionResult ecrecover_execute(const uint8_t* input, size_t input_size, uint8_t* output,
+ExecutionResult ecrecover_execute_evmone(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
 {
     assert(output_size >= 32);
@@ -311,16 +311,9 @@ ExecutionResult ecrecover_execute(const uint8_t* input, size_t input_size, uint8
         return {EVMC_SUCCESS, 0};
     const bool parity = v == 28;
 
-#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
-    std::optional<evmc::address> res;
-    const auto sig_bytes = input_span.subspan<64, 64>();
-    if (uint8_t pubkey[64]; ecrecover_libsecp256k1(pubkey, hash, sig_bytes, parity))
-        res = evmmax::secp256k1::to_address(pubkey);
-#else
     const auto r_bytes = input_span.subspan<64, 32>();
     const auto s_bytes = input_span.subspan<96, 32>();
     const auto res = evmmax::secp256k1::ecrecover(hash, r_bytes, s_bytes, parity);
-#endif
     if (res)
     {
         std::memset(output, 0, 12);
@@ -329,6 +322,50 @@ ExecutionResult ecrecover_execute(const uint8_t* input, size_t input_size, uint8
     }
     else
         return {EVMC_SUCCESS, 0};
+}
+
+#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
+ExecutionResult ecrecover_execute_libsecp256k1(const uint8_t* input, size_t input_size,
+    uint8_t* output, [[maybe_unused]] size_t output_size) noexcept
+{
+    assert(output_size >= 32);
+
+    uint8_t input_buffer[128]{};
+    const std::span input_span{input_buffer};
+    std::copy_n(input, std::min(input_size, std::size(input_buffer)), input_span.begin());
+
+    const auto hash = input_span.subspan<0, 32>();
+    const auto v_bytes = input_span.subspan<32, 32>();
+
+    const auto v = intx::be::unsafe::load<intx::uint256>(v_bytes.data());
+    if (v != 27 && v != 28)
+        return {EVMC_SUCCESS, 0};
+    const bool parity = v == 28;
+
+    std::optional<evmc::address> res;
+    const auto sig_bytes = input_span.subspan<64, 64>();
+    if (uint8_t pubkey[64]; ecrecover_libsecp256k1(pubkey, hash, sig_bytes, parity))
+        res = evmmax::secp256k1::to_address(pubkey);
+    if (res)
+    {
+        std::memset(output, 0, 12);
+        std::memcpy(output + 12, res->bytes, 20);
+        return {EVMC_SUCCESS, 32};
+    }
+    else
+        return {EVMC_SUCCESS, 0};
+}
+#endif
+
+ExecutionResult ecrecover_execute(
+    const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept
+{
+// Select better implementation.
+#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
+    return ecrecover_execute_libsecp256k1(input, input_size, output, output_size);
+#else
+    return ecrecover_execute_evmone(input, input_size, output, output_size);
+#endif
 }
 
 ExecutionResult sha256_execute(const uint8_t* input, size_t input_size, uint8_t* output,

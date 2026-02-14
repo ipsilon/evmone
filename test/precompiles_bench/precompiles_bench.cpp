@@ -11,6 +11,10 @@
 #include <memory>
 #include <span>
 
+#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
+#include <state/precompiles_libsecp256k1.hpp>
+#endif
+
 #ifdef EVMONE_PRECOMPILES_GMP
 #include <state/precompiles_gmp.hpp>
 #endif
@@ -316,11 +320,15 @@ BENCHMARK_TEMPLATE(precompile, PrecompileId::identity, identity_execute);
 
 namespace bench_ecrecovery
 {
-constexpr auto evmmax_cpp = ecrecover_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, evmmax_cpp);
-#ifdef EVMONE_PRECOMPILES_SILKPRE
-constexpr auto libsecp256k1 = silkpre_ecrecover_execute;
+constexpr auto evmone = ecrecover_execute_evmone;
+BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, evmone);
+#ifdef EVMONE_PRECOMPILES_LIBSECP256K1
+constexpr auto libsecp256k1 = ecrecover_execute_libsecp256k1;
 BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, libsecp256k1);
+#endif
+#ifdef EVMONE_PRECOMPILES_SILKPRE
+constexpr auto silkpre_libsecp256k1 = silkpre_ecrecover_execute;
+BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, silkpre_libsecp256k1);
 #endif
 }  // namespace bench_ecrecovery
 

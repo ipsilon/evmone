@@ -40,6 +40,8 @@ PrecompileAnalysis p256verify_analyze(evmc::bytes_view input, evmc_revision rev)
 
 ExecutionResult ecrecover_execute(
     const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept;
+ExecutionResult ecrecover_execute_evmone(
+    const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept;
 ExecutionResult sha256_execute(
     const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept;
 ExecutionResult ripemd160_execute(
