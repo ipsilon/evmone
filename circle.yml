@@ -479,7 +479,7 @@ jobs:
             bin/evmone-statetest ~/spec-tests/fixtures/state_tests
       - collect_coverage_clang
       - upload_coverage:
-          flags: eest-develop-libsecp256k1
+          flags: eest-libsecp256k1
 
   precompiles-gmp:
     executor: linux-clang-latest
