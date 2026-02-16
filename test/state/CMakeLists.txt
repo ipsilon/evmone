@@ -44,6 +44,7 @@ if(EVMONE_PRECOMPILES_LIBSECP256K1)
         URL https://github.com/bitcoin-core/secp256k1/archive/refs/tags/v0.7.1.tar.gz
         URL_HASH SHA256=958f204dbafc117e73a2604285dc2eb2a5128344d3499c114dcba5de54cb7a9e
     )
+    # TODO(cmake-3.25): Use block().
     set(BUILD_SHARED_LIBS_ORIG ${BUILD_SHARED_LIBS})
     set(BUILD_SHARED_LIBS OFF)
     set(SECP256K1_ENABLE_MODULE_ECDH OFF)
@@ -59,8 +60,8 @@ if(EVMONE_PRECOMPILES_LIBSECP256K1)
     set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
     set(SECP256K1_BUILD_CTIME_TESTS OFF)
     set(SECP256K1_BUILD_EXAMPLES OFF)
-    # Needed for shared library builds. TODO: investigate how to hide the symbols.
-    set(SECP256K1_ENABLE_API_VISIBILITY_ATTRIBUTES ON)
+    # Not needed for static library.
+    set(SECP256K1_ENABLE_API_VISIBILITY_ATTRIBUTES OFF)
     set(SECP256K1_VALGRIND OFF)
     FetchContent_MakeAvailable(libsecp256k1)
     foreach(TARGET secp256k1 secp256k1_precomputed)
