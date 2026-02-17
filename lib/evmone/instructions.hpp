@@ -8,6 +8,8 @@
 #include "instructions_traits.hpp"
 #include "instructions_xmacro.hpp"
 #include <evmone_precompiles/keccak.hpp>
+#include <cassert>
+#include <utility>
 
 namespace evmone
 {
@@ -42,6 +44,40 @@ public:
     /// Assigns the value to the stack top and moves the stack top pointer up.
     void push(const uint256& value) noexcept { *m_end++ = value; }
 };
+
+namespace instr::imm
+{
+inline bool is_valid_dupn_swapn(uint8_t x) noexcept
+{
+    return x <= 0x5a || x >= 0x80;
+}
+
+inline bool is_valid_exchange(uint8_t x) noexcept
+{
+    return x <= 0x4f || x >= 0x80;
+}
+
+inline uint16_t decode_dupn_swapn(uint8_t x) noexcept
+{
+    assert(is_valid_dupn_swapn(x));
+    if (x <= 0x5a)
+        return static_cast<uint16_t>(x + 17);
+    else
+        return static_cast<uint16_t>(x - 20);
+}
+
+inline std::pair<uint8_t, uint8_t> decode_exchange(uint8_t x) noexcept
+{
+    assert(is_valid_exchange(x));
+    const auto k = x <= 0x4f ? x : static_cast<uint8_t>(x - 48);
+    const auto q = static_cast<uint8_t>(k / 16);
+    const auto r = static_cast<uint8_t>(k % 16);
+    if (q < r)
+        return {static_cast<uint8_t>(q + 1), static_cast<uint8_t>(r + 1)};
+    else
+        return {static_cast<uint8_t>(r + 1), static_cast<uint8_t>(29 - q)};
+}
+}  // namespace instr::imm
 
 
 /// Instruction execution result.
@@ -883,6 +919,80 @@ inline void swap(StackTop stack) noexcept
     a[1] = t1;
     a[2] = t2;
     a[3] = t3;
+}
+
+inline code_iterator dupn(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
+{
+    const auto imm = pos[1];
+    if (!instr::imm::is_valid_dupn_swapn(imm))
+    {
+        state.status = EVMC_UNDEFINED_INSTRUCTION;
+        return nullptr;
+    }
+
+    const auto n = instr::imm::decode_dupn_swapn(imm);
+    const auto stack_size =
+        static_cast<size_t>(stack.end() - state.stack_space.bottom());
+    if (stack_size >= StackSpace::limit)
+    {
+        state.status = EVMC_STACK_OVERFLOW;
+        return nullptr;
+    }
+    if (n > stack_size)
+    {
+        state.status = EVMC_STACK_UNDERFLOW;
+        return nullptr;
+    }
+
+    stack.push(stack[static_cast<int>(n - 1)]);
+
+    return pos + 2;
+}
+
+inline code_iterator swapn(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
+{
+    const auto imm = pos[1];
+    if (!instr::imm::is_valid_dupn_swapn(imm))
+    {
+        state.status = EVMC_UNDEFINED_INSTRUCTION;
+        return nullptr;
+    }
+
+    const auto n = instr::imm::decode_dupn_swapn(imm);
+    const auto stack_size =
+        static_cast<size_t>(stack.end() - state.stack_space.bottom());
+    if (stack_size <= n)
+    {
+        state.status = EVMC_STACK_UNDERFLOW;
+        return nullptr;
+    }
+
+    std::swap(stack[static_cast<int>(n)], stack.top());
+
+    return pos + 2;
+}
+
+inline code_iterator exchange(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
+{
+    const auto imm = pos[1];
+    if (!instr::imm::is_valid_exchange(imm))
+    {
+        state.status = EVMC_UNDEFINED_INSTRUCTION;
+        return nullptr;
+    }
+
+    const auto [n, m] = instr::imm::decode_exchange(imm);
+    const auto stack_size =
+        static_cast<size_t>(stack.end() - state.stack_space.bottom());
+    if (stack_size <= m)
+    {
+        state.status = EVMC_STACK_UNDERFLOW;
+        return nullptr;
+    }
+
+    std::swap(stack[static_cast<int>(n)], stack[static_cast<int>(m)]);
+
+    return pos + 2;
 }
 
 inline Result mcopy(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
