@@ -19,10 +19,6 @@
 #include <state/precompiles_gmp.hpp>
 #endif
 
-#ifdef EVMONE_PRECOMPILES_SILKPRE
-#include <state/precompiles_silkpre.hpp>
-#endif
-
 namespace
 {
 using namespace evmone::state;
@@ -326,10 +322,6 @@ BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, evmone);
 constexpr auto libsecp256k1 = ecrecover_execute_libsecp256k1;
 BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, libsecp256k1);
 #endif
-#ifdef EVMONE_PRECOMPILES_SILKPRE
-constexpr auto silkpre_libsecp256k1 = silkpre_ecrecover_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, silkpre_libsecp256k1);
-#endif
 }  // namespace bench_ecrecovery
 
 namespace bench_expmod
@@ -340,40 +332,24 @@ BENCHMARK(precompile<PrecompileId::expmod, evmone>);
 constexpr auto gmp = expmod_execute_gmp;
 BENCHMARK(precompile<PrecompileId::expmod, gmp>);
 #endif
-#ifdef EVMONE_PRECOMPILES_SILKPRE
-constexpr auto silkpre = silkpre_expmod_execute;
-BENCHMARK(precompile<PrecompileId::expmod, silkpre>);
-#endif
 }  // namespace bench_expmod
 
 namespace bench_ecadd
 {
 constexpr auto evmmax_cpp = ecadd_execute;
 BENCHMARK_TEMPLATE(precompile, PrecompileId::ecadd, evmmax_cpp);
-#ifdef EVMONE_PRECOMPILES_SILKPRE
-constexpr auto libff = silkpre_ecadd_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::ecadd, libff);
-#endif
 }  // namespace bench_ecadd
 
 namespace bench_ecmul
 {
 constexpr auto evmmax_cpp = ecmul_execute;
 BENCHMARK_TEMPLATE(precompile, PrecompileId::ecmul, evmmax_cpp);
-#ifdef EVMONE_PRECOMPILES_SILKPRE
-constexpr auto libff = silkpre_ecmul_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::ecmul, libff);
-#endif
 }  // namespace bench_ecmul
 
 namespace bench_ecpairing
 {
 constexpr auto evmmax_cpp = ecpairing_execute;
 BENCHMARK_TEMPLATE(precompile, PrecompileId::ecpairing, evmmax_cpp);
-#ifdef EVMONE_PRECOMPILES_SILKPRE
-constexpr auto libff = silkpre_ecpairing_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::ecpairing, libff);
-#endif
 }  // namespace bench_ecpairing
 
 namespace bench_kzg

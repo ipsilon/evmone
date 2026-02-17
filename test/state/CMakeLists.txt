@@ -84,40 +84,6 @@ if(EVMONE_PRECOMPILES_LIBSECP256K1)
     set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_ORIG})
 endif()
 
-option(EVMONE_PRECOMPILES_SILKPRE "Enable precompiles from silkpre library (for benchmarking only)" OFF)
-if(EVMONE_PRECOMPILES_SILKPRE)
-    # Silkpre requires the ethash library, so enable it in Hunter.
-    hunter_add_package(ethash)
-
-    FetchContent_Declare(
-        silkpre
-        GIT_REPOSITORY https://github.com/erigontech/silkpre
-        GIT_TAG f972090a41de75073f55e914bf0107838b4b86a4
-        GIT_SHALLOW TRUE
-    )
-    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-    set(BUILD_SHARED_LIBS_ORIG ${BUILD_SHARED_LIBS})
-    set(BUILD_SHARED_LIBS OFF)
-    FetchContent_MakeAvailable(silkpre)
-    set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_ORIG})
-
-    set_target_properties(
-        silkpre secp256k1 ff
-        PROPERTIES
-        COMPILE_OPTIONS -w  # Disable warnings.
-        CXX_CLANG_TIDY ""
-    )
-
-    target_link_libraries(evmone-state PRIVATE silkpre)
-    target_compile_definitions(evmone-state PUBLIC EVMONE_PRECOMPILES_SILKPRE=1)
-    target_sources(
-        evmone-state PRIVATE
-        precompiles_silkpre.hpp
-        precompiles_silkpre.cpp
-    )
-endif()
-
-# This is done after Silkpre because it also tries to find GMP.
 option(EVMONE_PRECOMPILES_GMP "Enable precompiles implementations via the GMP/MPIR library" OFF)
 if(EVMONE_PRECOMPILES_GMP)
     find_package(GMP REQUIRED)

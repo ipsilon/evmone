@@ -503,28 +503,6 @@ jobs:
       - upload_coverage:
           flags: eest-develop-gmp
 
-  precompiles-silkpre:
-    executor: linux-clang-latest
-    environment:
-      BUILD_TYPE: Release
-      CMAKE_OPTIONS: -DCOVERAGE=1 -DEVMONE_PRECOMPILES_SILKPRE=1
-    steps:
-      - run:
-          name: "Install GMP"
-          command: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
-      - build
-      - download_execution_tests:
-          rev: v17.1
-          legacy: false
-      - run:
-          name: "State tests"
-          working_directory: ~/build
-          command: |
-            bin/evmone-statetest ~/tests/GeneralStateTests
-      - collect_coverage_clang
-      - upload_coverage:
-          flags: eest-legacy-silkpre
-
   gcc-min:
     executor: linux-gcc-min
     steps:
@@ -709,7 +687,6 @@ workflows:
       - ethereum-tests
       - precompiles-libsecp256k1
       - precompiles-gmp
-      - precompiles-silkpre
       - cmake-min
       - gcc-min
       - clang-min
