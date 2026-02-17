@@ -451,18 +451,14 @@ expmod_parse_input(
     return {base, exp, mod};
 }
 
-ExecutionResult expmod_execute(
+ExecutionResult expmod_execute_evmone(
     const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept
 {
     const auto [base, exp, mod] = expmod_parse_input(input, input_size, output, output_size);
     if (mod.empty())
         return {EVMC_SUCCESS, output_size};
 
-#ifdef EVMONE_PRECOMPILES_GMP
-    expmod_gmp(base, exp, mod, output);
-#else
     crypto::modexp(base, exp, mod, output);
-#endif
     return {EVMC_SUCCESS, output_size};
 }
 
@@ -475,9 +471,19 @@ ExecutionResult expmod_execute_gmp(
         return {EVMC_SUCCESS, output_size};
 
     expmod_gmp(base, exp, mod, output);
-    return {EVMC_SUCCESS, mod.size()};
+    return {EVMC_SUCCESS, output_size};
 }
 #endif
+
+ExecutionResult expmod_execute(
+    const uint8_t* input, size_t input_size, uint8_t* output, size_t output_size) noexcept
+{
+#ifdef EVMONE_PRECOMPILES_GMP
+    return expmod_execute_gmp(input, input_size, output, output_size);
+#else
+    return expmod_execute_evmone(input, input_size, output, output_size);
+#endif
+}
 
 ExecutionResult ecadd_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept

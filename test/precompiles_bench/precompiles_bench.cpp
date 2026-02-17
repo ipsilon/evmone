@@ -310,7 +310,7 @@ void modexp(benchmark::State& state)
         ->Args({128 * 8, 8, 2048})                \
         ->Args({128 * 8, 4096, 2048})             \
         ->Args({128 * 8, 8190, 2048})
-BENCHMARK(modexp<expmod_execute>) MODEXP_ARGS;
+BENCHMARK(modexp<expmod_execute_evmone>) MODEXP_ARGS;
 #ifdef EVMONE_PRECOMPILES_GMP
 BENCHMARK(modexp<expmod_execute_gmp>) MODEXP_ARGS;
 #endif
@@ -334,7 +334,7 @@ BENCHMARK_TEMPLATE(precompile, PrecompileId::ecrecover, silkpre_libsecp256k1);
 
 namespace bench_expmod
 {
-constexpr auto evmone = expmod_execute;
+constexpr auto evmone = expmod_execute_evmone;
 BENCHMARK(precompile<PrecompileId::expmod, evmone>);
 #ifdef EVMONE_PRECOMPILES_GMP
 constexpr auto gmp = expmod_execute_gmp;
