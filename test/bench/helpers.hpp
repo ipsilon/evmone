@@ -10,6 +10,7 @@
 #include <evmone/advanced_analysis.hpp>
 #include <evmone/advanced_execution.hpp>
 #include <evmone/baseline.hpp>
+#include <evmone/caterpillar.hpp>
 #include <evmone/vm.hpp>
 
 namespace evmone::test
@@ -65,6 +66,15 @@ inline evmc::Result baseline_execute(evmc::VM& c_vm, [[maybe_unused]] ExecutionS
     auto& vm = *static_cast<evmone::VM*>(c_vm.get_raw_pointer());
     return evmc::Result{
         baseline::execute(vm, host.get_interface(), host.to_context(), rev, msg, analysis)};
+}
+
+inline evmc::Result caterpillar_execute(evmc::VM& c_vm, ExecutionState& exec_state,
+    const baseline::CodeAnalysis& analysis, const evmc_message& msg, evmc_revision rev,
+    evmc::Host& host, bytes_view code)
+{
+    const auto& vm = *static_cast<evmone::VM*>(c_vm.get_raw_pointer());
+    exec_state.reset(msg, rev, host.get_interface(), host.to_context(), code);
+    return evmc::Result{caterpillar::execute(vm, msg.gas, exec_state, analysis)};
 }
 
 inline evmc::Result evmc_execute(evmc::VM& vm, FakeExecutionState& /*exec_state*/,
@@ -150,6 +160,9 @@ constexpr auto bench_advanced_execute = bench_execute<advanced::AdvancedExecutio
 
 constexpr auto bench_baseline_execute =
     bench_execute<ExecutionState, baseline::CodeAnalysis, baseline_execute, baseline_analyse>;
+
+constexpr auto bench_caterpillar_execute =
+    bench_execute<ExecutionState, baseline::CodeAnalysis, caterpillar_execute, baseline_analyse>;
 
 inline void bench_evmc_execute(benchmark::State& state, evmc::VM& vm, bytes_view code,
     bytes_view input = {}, bytes_view expected_output = {})
