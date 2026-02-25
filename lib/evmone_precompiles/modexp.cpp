@@ -217,41 +217,42 @@ public:
 ///
 /// See "Efficient Software Implementations of Modular Exponentiation":
 /// https://eprint.iacr.org/2011/239.pdf
-template <typename UintT>
-constexpr UintT mul_amm(const UintT& x, const UintT& y, const UintT& mod, uint64_t mod_inv) noexcept
+template <size_t N>
+constexpr void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> y,
+    std::span<const uint64_t, N> mod, uint64_t mod_inv) noexcept
 {
+    static_assert(N != std::dynamic_extent);
     // Use Coarsely Integrated Operand Scanning (CIOS) method with the "almost" reduction.
 
-    constexpr auto S = UintT::num_words;  // TODO(C++23): Make it static
-
-    UintT t_value;
-    const auto t = as_words(t_value);
+    std::array<uint64_t, N> t_storage{};
+    const std::span t{t_storage};
     bool t_carry = false;
-    for (size_t i = 0; i != S; ++i)
+    for (size_t i = 0; i != N; ++i)
     {
-        const auto c1 = addmul(t, t, as_words(x), y[i]);
+        const auto c1 = addmul(t, t, r, y[i]);
         const auto [sum1, d1] = intx::addc(c1, t_carry);
 
         const auto m = t[0] * mod_inv;
         const auto c2 = (umul(mod[0], m) + t[0])[1];
 
-        const auto c3 = addmul(t.template subspan<0, S - 1>(), t.template subspan<1>(),
-            as_words(mod).template subspan<1>(), m, c2);
+        const auto c3 = addmul(t.template subspan<0, N - 1>(), t.template subspan<1>(),
+            mod.template subspan<1>(), m, c2);
         const auto [sum2, d2] = intx::addc(sum1, c3);
-        t[S - 1] = sum2;
+        t[N - 1] = sum2;
         assert(!(d1 && d2));  // At most one carry should be set.
         t_carry = d1 || d2;
     }
 
     if (t_carry)  // Reduce if t >= R.
-        t_value -= mod;
+        sub(t, mod);
 
-    return t_value;
+    std::ranges::copy(t, r.begin());
 }
 
 template <typename UIntT>
 UIntT modexp_odd_fixed_size(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
 {
+    static constexpr auto N = UIntT::num_words;
     assert(exp.bit_width() != 0);  // Exponent of zero must be handled outside.
 
     const auto mod_inv = evmmax::compute_mont_mod_inv(mod);
@@ -260,16 +261,17 @@ UIntT modexp_odd_fixed_size(const UIntT& base, Exponent exp, const UIntT& mod) n
     const auto base_mont =
         udivrem(intx::uint<UIntT::num_bits * 2>{base} << UIntT::num_bits, mod).rem;
 
-    auto ret_mont = base_mont;
+    auto ret = base_mont;
     for (auto i = exp.bit_width() - 1; i != 0; --i)
     {
-        ret_mont = mul_amm(ret_mont, ret_mont, mod, mod_inv);
+        mul_amm<N>(as_words(ret), as_words(ret), as_words(mod), mod_inv);
         if (exp[i - 1])
-            ret_mont = mul_amm(ret_mont, base_mont, mod, mod_inv);
+            mul_amm<N>(as_words(ret), as_words(base_mont), as_words(mod), mod_inv);
     }
 
     // Convert the result from Montgomery form by multiplying with the standard integer 1.
-    auto ret = mul_amm(ret_mont, UIntT{1}, mod, mod_inv);
+    static constexpr UIntT ONE = 1;
+    mul_amm<N>(as_words(ret), as_words(ONE), as_words(mod), mod_inv);
 
     // Reduce if necessary: AMM can produce mod <= ret < 2*mod.
     if (ret >= mod)
