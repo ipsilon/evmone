@@ -6,6 +6,7 @@
 #include <evmmax/evmmax.hpp>
 #include <bit>
 #include <memory>
+#include <ranges>
 
 using namespace intx;
 
@@ -135,6 +136,13 @@ constexpr std::span<T> trim(std::span<T> x) noexcept
 {
     const auto it = std::ranges::find_if(x.rbegin(), x.rend(), [](auto w) { return w != 0; });
     return x.first(static_cast<size_t>(std::ranges::distance(it, x.rend())));
+}
+
+/// Compares two same-size little-endian word arrays as unsigned integers: returns true if x < y.
+constexpr bool less(std::span<const uint64_t> x, std::span<const uint64_t> y) noexcept
+{
+    assert(x.size() == y.size());
+    return std::ranges::lexicographical_compare(std::views::reverse(x), std::views::reverse(y));
 }
 
 /// Counts trailing zeros in a non-zero little-endian word array.
@@ -332,32 +340,31 @@ constexpr void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> y,
 
 /// Performs modular exponentiation for an odd modulus using Montgomery multiplication.
 /// The base must already be in Montgomery form: base = (orig_base * R) % mod.
-template <typename UIntT>
-UIntT modexp_odd_fixed_size(const UIntT& base, Exponent exp, const UIntT& mod) noexcept
+template <size_t N>
+void modexp_odd_fixed_size(std::span<uint64_t, N> r, std::span<const uint64_t, N> base,
+    Exponent exp, std::span<const uint64_t, N> mod) noexcept
 {
-    static constexpr auto N = UIntT::num_words;
+    static_assert(N != std::dynamic_extent);
     assert(exp.bit_width() != 0);  // Exponent of zero must be handled outside.
 
-    const auto mod_inv = evmmax::compute_mont_mod_inv(mod);
+    const auto mod_inv = -evmmax::modinv(mod[0]);
 
-    auto ret = base;
+    std::ranges::copy(base, r.begin());
     for (auto i = exp.bit_width() - 1; i != 0; --i)
     {
-        mul_amm<N>(as_words(ret), as_words(ret), as_words(mod), mod_inv);
+        mul_amm<N>(r, r, mod, mod_inv);
         if (exp[i - 1])
-            mul_amm<N>(as_words(ret), as_words(base), as_words(mod), mod_inv);
+            mul_amm<N>(r, base, mod, mod_inv);
     }
 
     // Convert the result from Montgomery form by multiplying with the standard integer 1.
-    static constexpr UIntT ONE = 1;
-    mul_amm<N>(as_words(ret), as_words(ONE), as_words(mod), mod_inv);
+    static constexpr std::array<uint64_t, N> ONE{{1}};
+    mul_amm<N>(r, ONE, mod, mod_inv);
 
-    // Reduce if necessary: AMM can produce mod <= ret < 2*mod.
-    if (ret >= mod)
-        ret -= mod;
-    assert(ret < mod);  // One reduction should be enough.
-
-    return ret;
+    // Reduce if necessary: AMM can produce mod <= r < 2*mod.
+    if (!less(r, mod))
+        sub(r, mod);
+    assert(less(r, mod));
 }
 
 void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Exponent exp,
@@ -396,13 +403,13 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     rem(base_mont, u, mod);
 
     const auto impl = [=]<size_t N>() {
-        using UintT = intx::uint<N * 64>;
-
-        // Pass zero-extended fixed-size representation.
-        const auto r = modexp_odd_fixed_size(UintT{base_mont}, exp, UintT{mod});
-
-        // TODO: Because the caller's mod is not trimmed, we must also zero-extend the result.
-        const auto rw = as_words(r);
+        std::array<uint64_t, N> base_mont_buf{};
+        std::ranges::copy(base_mont, base_mont_buf.begin());
+        std::array<uint64_t, N> mod_buf{};
+        std::ranges::copy(mod, mod_buf.begin());
+        std::array<uint64_t, N> result_buf{};
+        modexp_odd_fixed_size<N>(result_buf, base_mont_buf, exp, mod_buf);
+        const auto rw = std::span<const uint64_t>{result_buf};
         const auto [_, out] =
             std::ranges::copy(rw.first(std::min(rw.size(), result.size())), result.begin());
         std::fill(out, result.end(), 0);
