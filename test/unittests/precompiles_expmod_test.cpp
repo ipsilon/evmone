@@ -67,12 +67,16 @@ TEST(expmod, test_vectors)
         {"0100", "01", "07", "04"},  // large base, small odd mod
         {"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "01", "0006", "0003"},
         {"02", "05", "060000000000000000", "000000000000000020"},
+        // Even modulus with large base: odd part (3) has fewer significant words than the
+        // result buffer. Regression test for zeroing trailing words in modexp_odd().
+        {"00000000000000000000000000000002", "03", "00000000000000000000000000000006",
+            "00000000000000000000000000000002"},
         {"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "02",
             "fffffffffffffffd", "0000000000001900"},
         {"02", "03", "0100000000000000000000000000000001", "0000000000000000000000000000000008"},
         // Power-of-two modulus bigger than single word.
         {"cc", "11", "00000001000000000000000000000000", "00000000fe8477d6c9cef3cc00000000"},
-        // Odd modulus dispatch-width coverage (n != N for n=1,3,5).
+        // Odd modulus of various word sizes (1, 3, 5 words).
         {"0000000000000002", "01", "8000000000000001", "0000000000000002"},
         {"000000000000000000000000000000000000000000000002", "01",
             "800000000000000000000000000000000000000000000001",

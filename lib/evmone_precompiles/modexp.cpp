@@ -306,28 +306,33 @@ public:
 ///
 /// See "Efficient Software Implementations of Modular Exponentiation":
 /// https://eprint.iacr.org/2011/239.pdf
-template <size_t N>
-constexpr void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> y,
-    std::span<const uint64_t, N> mod, uint64_t mod_inv) noexcept
+void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> y, std::span<const uint64_t> mod,
+    uint64_t mod_inv, std::span<uint64_t> t) noexcept
 {
-    static_assert(N != std::dynamic_extent);
     // Use Coarsely Integrated Operand Scanning (CIOS) method with the "almost" reduction.
+    const auto n = r.size();
+    assert(n > 0);
+    assert(y.size() == n);
+    assert(mod.size() == n);
+    assert(t.size() == n);
 
-    std::array<uint64_t, N> t_storage{};
-    const std::span t{t_storage};
+    const auto t_lo = t.subspan(0, n - 1);
+    const auto t_hi = t.subspan(1);
+    const auto mod_hi = mod.subspan(1);
+
+    std::ranges::fill(t, uint64_t{0});
     bool t_carry = false;
-    for (size_t i = 0; i != N; ++i)
+    for (size_t i = 0; i != n; ++i)
     {
         const auto c1 = addmul(t, t, r, y[i]);
-        const auto [sum1, d1] = intx::addc(c1, t_carry);
+        const auto [sum1, d1] = intx::addc(c1, uint64_t{t_carry});
 
         const auto m = t[0] * mod_inv;
         const auto c2 = (umul(mod[0], m) + t[0])[1];
 
-        const auto c3 = addmul(t.template subspan<0, N - 1>(), t.template subspan<1>(),
-            mod.template subspan<1>(), m, c2);
+        const auto c3 = addmul(t_lo, t_hi, mod_hi, m, c2);
         const auto [sum2, d2] = intx::addc(sum1, c3);
-        t[N - 1] = sum2;
+        t[n - 1] = sum2;
         assert(!(d1 && d2));  // At most one carry should be set.
         t_carry = d1 || d2;
     }
@@ -336,35 +341,6 @@ constexpr void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> y,
         sub(t, mod);
 
     std::ranges::copy(t, r.begin());
-}
-
-/// Performs modular exponentiation for an odd modulus using Montgomery multiplication.
-/// The base must already be in Montgomery form: base = (orig_base * R) % mod.
-template <size_t N>
-void modexp_odd_fixed_size(std::span<uint64_t, N> r, std::span<const uint64_t, N> base,
-    Exponent exp, std::span<const uint64_t, N> mod) noexcept
-{
-    static_assert(N != std::dynamic_extent);
-    assert(exp.bit_width() != 0);  // Exponent of zero must be handled outside.
-
-    const auto mod_inv = -evmmax::modinv(mod[0]);
-
-    std::ranges::copy(base, r.begin());
-    for (auto i = exp.bit_width() - 1; i != 0; --i)
-    {
-        mul_amm<N>(r, r, mod, mod_inv);
-        if (exp[i - 1])
-            mul_amm<N>(r, base, mod, mod_inv);
-    }
-
-    // Convert the result from Montgomery form by multiplying with the standard integer 1.
-    static constexpr std::array<uint64_t, N> ONE{{1}};
-    mul_amm<N>(r, ONE, mod, mod_inv);
-
-    // Reduce if necessary: AMM can produce mod <= r < 2*mod.
-    if (!less(r, mod))
-        sub(r, mod);
-    assert(less(r, mod));
 }
 
 void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Exponent exp,
@@ -382,60 +358,43 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     }
 
     const auto n = mod.size();
+    const auto mod_inv = -evmmax::modinv(mod[0]);
 
-    // Select the fixed-size width (in words) for Montgomery multiplication.
-    static constexpr auto MAX_SIZE = 1024 / sizeof(uint64_t);  // 8192 bits, as in EIP-7823.
-    assert(n <= MAX_SIZE);
-    static constexpr size_t SIZES[] = {2, 4, 8, 16, 32, MAX_SIZE};
-    const auto r_size = *std::ranges::lower_bound(SIZES, n);
+    // Compute base_mont = (base * R) % mod, where R = 2^(n*64).
+    // The numerator u = base << (n*64): base in the upper words, lower n words are zero.
+    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(n + base.size() + n + n);
+    const auto u = std::span{tmp_storage.get(), n + base.size()};
+    const auto base_mont = std::span{tmp_storage.get() + n + base.size(), n};
+    const auto t = std::span{tmp_storage.get() + n + base.size() + n, n};
 
-    // Compute base_mont = (base * R) % mod, where R = 2^(r_size*64).
-    // R must match the width used by Montgomery multiplication (mul_amm).
-    // The numerator is base shifted left by r_size words (r_size + base.size() words).
-    // The result (base * R) % mod can be up to mod-1, always requiring n words.
-    const auto u_len = r_size + base.size();
-    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(u_len + n);
-    const auto tmp = std::span{tmp_storage.get(), u_len + n};
-    const auto u = tmp.first(u_len);
-    const auto base_mont = tmp.subspan(u_len, n);
-    std::ranges::fill(u.first(r_size), uint64_t{0});
-    std::ranges::copy(base, u.subspan(r_size).begin());
+    std::ranges::fill(u.first(n), uint64_t{0});  // Lower n words of u must be zero.
+    std::ranges::copy(base, u.subspan(n).begin());
     rem(base_mont, u, mod);
 
-    const auto impl = [=]<size_t N>() {
-        std::array<uint64_t, N> base_mont_buf{};
-        std::ranges::copy(base_mont, base_mont_buf.begin());
-        std::array<uint64_t, N> mod_buf{};
-        std::ranges::copy(mod, mod_buf.begin());
-        std::array<uint64_t, N> result_buf{};
-        modexp_odd_fixed_size<N>(result_buf, base_mont_buf, exp, mod_buf);
-        const auto rw = std::span<const uint64_t>{result_buf};
-        const auto [_, out] =
-            std::ranges::copy(rw.first(std::min(rw.size(), result.size())), result.begin());
-        std::fill(out, result.end(), 0);
-    };
+    // Reuse the lower n words of u as the result buffer r.
+    const auto r = u.subspan(0, n);
 
-    switch (r_size)
+    std::ranges::copy(base_mont, r.begin());
+    for (auto i = exp.bit_width() - 1; i != 0; --i)
     {
-    case 2:
-        impl.operator()<2>();
-        break;
-    case 4:
-        impl.operator()<4>();
-        break;
-    case 8:
-        impl.operator()<8>();
-        break;
-    case 16:
-        impl.operator()<16>();
-        break;
-    case 32:
-        impl.operator()<32>();
-        break;
-    default:
-        impl.operator()<MAX_SIZE>();
-        break;
+        mul_amm(r, r, mod, mod_inv, t);
+        if (exp[i - 1])
+            mul_amm(r, base_mont, mod, mod_inv, t);
     }
+
+    // Convert the result from Montgomery form by multiplying with 1.
+    // Reuse base_mont as ONE (it is no longer needed after the loop).
+    std::ranges::fill(base_mont, uint64_t{0});
+    base_mont[0] = 1;
+    mul_amm(r, base_mont, mod, mod_inv, t);
+
+    // Reduce if necessary: AMM can produce mod <= r < 2*mod.
+    if (!less(r, mod))
+        sub(r, mod);
+    assert(less(r, mod));
+
+    const auto [_, out] = std::ranges::copy(r, result.begin());
+    std::fill(out, result.end(), uint64_t{0});
 }
 
 /// Trims the multi-word number x[] to k bits.
@@ -571,6 +530,8 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     const auto base = std::span{storage.get(), w};
     load(base, base_bytes);
     const auto mod = std::span{storage.get() + w, w};
+
+    // TODO: While loading modulus, we can check if it is zero and split the even part.
     load(mod, mod_bytes);
     assert(std::ranges::any_of(mod, [](auto x) { return x != 0; }));  // Modulus of zero must be
                                                                       // handled outside.
