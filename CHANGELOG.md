@@ -5,6 +5,80 @@ Documentation of all notable changes to the **evmone** project.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.19.0] — unreleased
+
+### Added
+
+- Option to use [libsecp256k1] for `ecrecover` precompile.
+  [#1454](https://github.com/ipsilon/evmone/pull/1454)
+
+### Changed
+
+- **Modular exponentiation (`modexp`) rewrite**: the precompile implementation has been substantially
+  reworked to use variadic-length number representation and optimized algorithms.
+  [#1292](https://github.com/ipsilon/evmone/pull/1292)
+  [#1413](https://github.com/ipsilon/evmone/pull/1413)
+  [#1420](https://github.com/ipsilon/evmone/pull/1420)
+  [#1424](https://github.com/ipsilon/evmone/pull/1424)
+  [#1434](https://github.com/ipsilon/evmone/pull/1434)
+  [#1442](https://github.com/ipsilon/evmone/pull/1442)
+  [#1443](https://github.com/ipsilon/evmone/pull/1443)
+  [#1446](https://github.com/ipsilon/evmone/pull/1446)
+  [#1452](https://github.com/ipsilon/evmone/pull/1452)
+  [#1457](https://github.com/ipsilon/evmone/pull/1457)
+  [#1460](https://github.com/ipsilon/evmone/pull/1460)
+  [#1461](https://github.com/ipsilon/evmone/pull/1461)
+  [#1462](https://github.com/ipsilon/evmone/pull/1462)
+  - Almost Montgomery Multiplication (AMM) is now used instead of standard Montgomery multiplication.
+    [#1427](https://github.com/ipsilon/evmone/pull/1427)
+    [#1425](https://github.com/ipsilon/evmone/pull/1425)
+    [#1426](https://github.com/ipsilon/evmone/pull/1426)
+    [#1435](https://github.com/ipsilon/evmone/pull/1435)
+    [#1436](https://github.com/ipsilon/evmone/pull/1436)
+  - Newton–Raphson method is used for modular inversion.
+    [#1359](https://github.com/ipsilon/evmone/pull/1359)
+    [#1420](https://github.com/ipsilon/evmone/pull/1420)
+    [#1432](https://github.com/ipsilon/evmone/pull/1432)
+- **ECC optimizations**:
+  - BN254 `ecmul` optimized with the field endomorphism.
+    [#1389](https://github.com/ipsilon/evmone/pull/1389)
+  - `ecrecover` and `p256verify` optimized with Shamir trick multi-scalar multiplication.
+    [#1390](https://github.com/ipsilon/evmone/pull/1390)
+  - Field multiplications by constants optimized in ECC.
+    [#1393](https://github.com/ipsilon/evmone/pull/1393)
+  - secp256k1 refactored to use `FieldElement` instead of `ModArith`.
+    [#1402](https://github.com/ipsilon/evmone/pull/1402)
+    [#1415](https://github.com/ipsilon/evmone/pull/1415)
+    [#1416](https://github.com/ipsilon/evmone/pull/1416)
+    [#1417](https://github.com/ipsilon/evmone/pull/1417)
+- Modexp precompile implementations ("evmone" and "gmp") are now split into separate source files.
+  [#1455](https://github.com/ipsilon/evmone/pull/1455)
+- Upgraded [intx] to 0.15.0.
+  [#1371](https://github.com/ipsilon/evmone/pull/1371)
+  [#1430](https://github.com/ipsilon/evmone/pull/1430)
+- Test utilities reorganized into a single `evmone.testutils` library.
+  [#1380](https://github.com/ipsilon/evmone/pull/1380)
+  [#1381](https://github.com/ipsilon/evmone/pull/1381)
+  [#1384](https://github.com/ipsilon/evmone/pull/1384)
+  [#1385](https://github.com/ipsilon/evmone/pull/1385)
+  [#1386](https://github.com/ipsilon/evmone/pull/1386)
+
+### Removed
+
+- The optional "silkpre" precompile backend has been removed.
+  [#1456](https://github.com/ipsilon/evmone/pull/1456)
+- Modexp stubs removed — the local implementation is now used for all inputs.
+  [#1453](https://github.com/ipsilon/evmone/pull/1453)
+
+### Fixed
+
+- Missing [EIP-7702] `y_parity` validation.
+  [#1450](https://github.com/ipsilon/evmone/pull/1450)
+- BN254 input point validation.
+  [#1399](https://github.com/ipsilon/evmone/pull/1399)
+- Missing `Transaction::gas_limit` initialization.
+  [#1382](https://github.com/ipsilon/evmone/pull/1382)
+
 ## [0.18.0] — 2025-10-31
 
 Bye-bye, EOF.
@@ -1119,6 +1193,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 - Exposes [EVMC] 6 ABI.
 - The [intx 0.2.0](https://github.com/chfast/intx/releases/tag/v0.2.0) library is used for 256-bit precision arithmetic. 
 
+[0.19.0]: https://github.com/ethereum/evmone/compare/v0.18.0...master
 [0.18.0]: https://github.com/ethereum/evmone/releases/tag/v0.18.0
 [0.17.0]: https://github.com/ethereum/evmone/releases/tag/v0.17.0
 [0.16.0]: https://github.com/ethereum/evmone/releases/tag/v0.16.0
@@ -1250,6 +1325,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 [Silkworm]: https://github.com/torquem-ch/silkworm
 [t8n]: https://ethereum-tests.readthedocs.io/en/develop/t8ntool-ref.html
 [blst]: https://github.com/supranational/blst
+[libsecp256k1]: https://github.com/bitcoin-core/secp256k1
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.1.0/
 [Semantic Versioning]: https://semver.org/spec/v2.0.0.html
