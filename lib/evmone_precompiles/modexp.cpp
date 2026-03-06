@@ -69,17 +69,14 @@ constexpr void mul(
     if (x.size() < y.size())
         std::swap(x, y);
 
+    // Iterations where we store high product words (above x/y size).
+    const auto extra = std::min(y.size(), r.size() - x.size());
+
     std::ranges::fill(r, 0);
-    for (size_t j = 0; j < y.size(); ++j)
-    {
-        const auto len = std::min(x.size(), r.size() - j);
-        const auto c = addmul(r.subspan(j, len), r.subspan(j, len), x.subspan(0, len), y[j]);
-        if (const auto pos = j + len; pos < r.size())
-        {
-            assert(r[pos] == 0);  // No previous carry here — just store.
-            r[pos] = c;
-        }
-    }
+    for (size_t j = 0; j < extra; ++j)
+        r[j + x.size()] = addmul(r.subspan(j, x.size()), r.subspan(j, x.size()), x, y[j]);
+    for (size_t j = extra; j < y.size(); ++j)
+        addmul(r.subspan(j), r.subspan(j), x.first(r.size() - j), y[j]);
 }
 
 /// Computes x[] = 2 - x[].
