@@ -547,9 +547,8 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     const auto base_size = (base_bytes.size() + 7) / 8;
     const auto mod_size = (mod_bytes.size() + 7) / 8;
     const auto storage = std::make_unique_for_overwrite<uint64_t[]>(base_size + mod_size * 2);
-    const auto base = load(std::span{storage.get(), base_size}, base_bytes);
-    const auto [mod_odd, mod_tz] =
-        load_mod(std::span{storage.get() + base_size, mod_size}, mod_bytes);
+    const auto base = load({storage.get(), base_size}, base_bytes);
+    const auto [mod_odd, mod_tz] = load_mod({storage.get() + base_size, mod_size}, mod_bytes);
     assert(!mod_odd.empty());  // Modulus of zero must be handled outside.
     const auto result = std::span{storage.get() + base_size + mod_size, mod_size};
     std::ranges::fill(result, uint64_t{0});
@@ -570,7 +569,7 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     else if (mod_odd.size() == 1 && mod_odd[0] == 1)  // - power of 2
     {
         const auto n = (mod_tz + 63) / 64;
-        modexp_pow2(std::span(result).subspan(0, n), base, exp, mod_tz);
+        modexp_pow2(result.subspan(0, n), base, exp, mod_tz);
     }
     else  // - even
     {
