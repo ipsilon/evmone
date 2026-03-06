@@ -164,9 +164,10 @@ std::span<const uint64_t> shr(
     const auto word_shift = k / 64;
     const auto bit_shift = k % 64;
 
-    // Shift words. r and x may alias (load_mod shifts in-place) but std::copy is well-defined
-    // because d_first (r.begin()) is before the source range (x + word_shift).
-    std::ranges::copy(x.subspan(word_shift), r.begin());
+    // Shift words. std::copy requires d_first ∉ [first, last).
+    // When word_shift == 0 and r aliases x, it would be a self-copy — skip it.
+    if (word_shift != 0 || r.data() != x.data())
+        std::ranges::copy(x.subspan(word_shift), r.begin());
     std::ranges::fill(r.subspan(n - word_shift), uint64_t{0});
 
     // Shift remaining bits in place.
