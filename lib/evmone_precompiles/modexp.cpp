@@ -164,7 +164,8 @@ std::span<const uint64_t> shr(
     const auto word_shift = k / 64;
     const auto bit_shift = k % 64;
 
-    // Shift words.
+    // Shift words. r and x may alias (load_mod shifts in-place) but std::copy is well-defined
+    // because d_first (r.begin()) is before the source range (x + word_shift).
     std::ranges::copy(x.subspan(word_shift), r.begin());
     std::ranges::fill(r.subspan(n - word_shift), uint64_t{0});
 
@@ -340,6 +341,7 @@ void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> y, std::span<const
     assert(y.size() == n);
     assert(mod.size() == n);
     assert(t.size() == n);
+    assert(mod.back() != 0);
 
     const auto t_lo = t.subspan(0, n - 1);
     const auto t_hi = t.subspan(1);
@@ -373,6 +375,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
 {
     assert(!mod.empty() && mod.back() != 0);    // mod must be trimmed.
     assert(!base.empty() && base.back() != 0);  // base must be trimmed.
+    assert(!result.empty());
     assert(exp.bit_width() != 0);
 
     const auto n = mod.size();
