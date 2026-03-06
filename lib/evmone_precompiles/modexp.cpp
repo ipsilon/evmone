@@ -254,6 +254,7 @@ void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uin
         un = un.first(un.size() - 1);
 
     const auto denormalize = [&r, shift](std::span<const uint64_t> x) noexcept {
+        assert(shift < 64);  // Normalization shift is sub-word.
         assert(r.size() >= x.size());
         shr(r.first(x.size()), x, shift);
         std::ranges::fill(r.subspan(x.size()), uint64_t{0});
@@ -411,7 +412,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     assert(less(r, mod));
 
     const auto [_, out] = std::ranges::copy(r, result.begin());
-    std::fill(out, result.end(), uint64_t{0});
+    std::ranges::fill(std::span{out, result.end()}, uint64_t{0});
 }
 
 /// Trims the multi-word number x[] to k bits.
