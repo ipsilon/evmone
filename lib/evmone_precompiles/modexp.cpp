@@ -73,12 +73,11 @@ constexpr void mul(
     for (size_t j = 0; j < y.size(); ++j)
     {
         const auto len = std::min(x.size(), r.size() - j);
-        auto c = addmul(r.subspan(j, len), r.subspan(j, len), x.subspan(0, len), y[j]);
-        for (auto pos = j + len; pos < r.size() && c != 0; ++pos)
+        const auto c = addmul(r.subspan(j, len), r.subspan(j, len), x.subspan(0, len), y[j]);
+        if (const auto pos = j + len; pos < r.size())
         {
-            bool carry;
-            std::tie(r[pos], carry) = addc(r[pos], c);
-            c = carry ? 1 : 0;
+            assert(r[pos] == 0);  // No previous carry here — just store.
+            r[pos] = c;
         }
     }
 }
@@ -532,7 +531,7 @@ void modexp_even(std::span<uint64_t> r, const std::span<const uint64_t> base, Ex
     const auto x2 = r.subspan(0, num_pow2_words);  // Reuse the result storage.
     modexp_pow2(x2, base, exp, k);
 
-    sub(x2, std::span<const uint64_t>(x1).subspan(0, num_pow2_words));
+    sub(x2, x1.subspan(0, num_pow2_words));
     mul(y, x2, mod_odd_inv);
     mask_pow2(y, k);
     mul(r, mod_odd, y);
