@@ -385,6 +385,18 @@ TEST(expmod, test_vectors)
             "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
             "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
             "0000000000000000000000000000000000000000000000000000000000000000000001"},
+        // Small base with multi-word power-of-two modulus (pow2 path: base shorter than mod).
+        {"03", "07", "00000000000000000100000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000088b"},
+        // Small base with multi-word even modulus (even path: trimmed mod shorter than w).
+        // 3^3 mod 12, where 12 is encoded as 16 bytes.
+        {"03", "03", "0000000000000000000000000000000c",
+            "00000000000000000000000000000003"},
+        // Small base with even modulus having large pow2 factor
+        // (even/pow2 path: base shorter than num_pow2_words).
+        // 3^5 mod (5 * 2^128) = 243.
+        {"03", "05", "000000000000000500000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000f3"},
     };
 
     for (const auto& [base_hex, exp_hex, mod_hex, expected_result_hex] : test_cases)
