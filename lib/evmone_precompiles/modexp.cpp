@@ -63,7 +63,7 @@ constexpr void mul(
 {
     assert(!x.empty());
     assert(!y.empty());
-    assert(r.size() == std::max(x.size(), y.size()));
+    assert(r.size() >= std::max(x.size(), y.size()));
 
     // Ensure y is the shorter one to simplify the implementation and to have shorter outer loop.
     if (x.size() < y.size())
@@ -71,7 +71,16 @@ constexpr void mul(
 
     std::ranges::fill(r, 0);
     for (size_t j = 0; j < y.size(); ++j)
-        addmul(r.subspan(j), r.subspan(j), x.subspan(0, x.size() - j), y[j]);
+    {
+        const auto len = std::min(x.size(), r.size() - j);
+        auto c = addmul(r.subspan(j, len), r.subspan(j, len), x.subspan(0, len), y[j]);
+        for (auto pos = j + len; pos < r.size() && c != 0; ++pos)
+        {
+            bool carry;
+            std::tie(r[pos], carry) = addc(r[pos], c);
+            c = carry ? 1 : 0;
+        }
+    }
 }
 
 /// Computes x[] = 2 - x[].
@@ -469,7 +478,6 @@ void modexp_pow2(std::span<uint64_t> r, std::span<const uint64_t> base, Exponent
 void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
 {
     assert(!x.empty() && (x[0] & 1) != 0);  // x must be odd.
-    assert(r.size() <= x.size());           // Truncating version.
     assert(!r.empty());
 
     r[0] = evmmax::modinv(x[0]);  // Good start: 64 correct bits.
@@ -488,7 +496,8 @@ void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
         const auto t1 = tmp.subspan(0, n);
         const auto t2 = tmp.subspan(n, n);
 
-        mul(t1, x.subspan(0, n), r.subspan(0, i));  // t1 = x * inv
+        // Clamp x to available words: high words beyond x.size() are implicitly zero.
+        mul(t1, x.subspan(0, std::min(n, x.size())), r.subspan(0, i));  // t1 = x * inv
         neg_add2(t1);                               // t1 = 2 - x * inv
         mul(t2, t1, r.subspan(0, i));               // t2 = inv * (2 - x * inv)
         // TODO: Consider implementing the step as (inv << 1) - (x * inv * inv).
@@ -509,30 +518,24 @@ void modexp_even(std::span<uint64_t> r, const std::span<const uint64_t> base, Ex
     assert(!mod_odd.empty() && mod_odd.back() != 0);  // mod_odd must be trimmed.
 
     const size_t num_pow2_words = (k + 63) / 64;
-    const auto n = std::max(mod_odd.size(), num_pow2_words);
-    assert(r.size() >= n);
-    r = r.subspan(0, n);
+    assert(r.size() >= std::max(mod_odd.size(), num_pow2_words));
 
-    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(n + num_pow2_words * 2);
-    const auto tmp = std::span{tmp_storage.get(), n + num_pow2_words * 2};
-    const auto tmp1 = tmp.subspan(0, n);
-    const auto tmp2 = tmp.subspan(n, num_pow2_words);
-    const auto tmp3 = tmp.subspan(n + num_pow2_words, num_pow2_words);
+    const auto tmp_storage =
+        std::make_unique_for_overwrite<uint64_t[]>(r.size() + num_pow2_words * 2);
+    const auto x1 = std::span{tmp_storage.get(), r.size()};
+    const auto mod_odd_inv = std::span{tmp_storage.get() + r.size(), num_pow2_words};
+    const auto y = std::span{tmp_storage.get() + r.size() + num_pow2_words, num_pow2_words};
 
-    const auto x1 = tmp1;
+    modinv_pow2(mod_odd_inv, mod_odd);
     modexp_odd(x1, base, exp, mod_odd);
 
     const auto x2 = r.subspan(0, num_pow2_words);  // Reuse the result storage.
     modexp_pow2(x2, base, exp, k);
 
-    const auto mod_odd_inv = tmp2;
-    modinv_pow2(mod_odd_inv, mod_odd);
-
-    const auto y = tmp3;
-    sub(x2, std::span(x1).subspan(0, num_pow2_words));
+    sub(x2, std::span<const uint64_t>(x1).subspan(0, num_pow2_words));
     mul(y, x2, mod_odd_inv);
     mask_pow2(y, k);
-    mul(r, y, mod_odd);
+    mul(r, mod_odd, y);
     add(r, x1);
 }
 }  // namespace
