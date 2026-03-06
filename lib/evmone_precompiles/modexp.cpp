@@ -158,7 +158,7 @@ constexpr bool less(std::span<const uint64_t> x, std::span<const uint64_t> y) no
 std::span<const uint64_t> shr(
     std::span<uint64_t> r, std::span<const uint64_t> x, unsigned k) noexcept
 {
-    const size_t n = x.size();
+    const auto n = x.size();
     assert(r.size() >= n);
     assert(k < n * 64);
     const auto word_shift = k / 64;
@@ -176,7 +176,7 @@ std::span<const uint64_t> shr(
         r[n - word_shift - 1] >>= bit_shift;
     }
 
-    return trim(std::span<const uint64_t>(r).first(n));
+    return trim(r.first(n));
 }
 
 /// Result of loading the modulus: the odd part and trailing zero count.
@@ -494,8 +494,8 @@ void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
 
         // Clamp x to available words: high words beyond x.size() are implicitly zero.
         mul(t1, x.subspan(0, std::min(n, x.size())), r.subspan(0, i));  // t1 = x * inv
-        neg_add2(t1);                               // t1 = 2 - x * inv
-        mul(t2, t1, r.subspan(0, i));               // t2 = inv * (2 - x * inv)
+        neg_add2(t1);                                                   // t1 = 2 - x * inv
+        mul(t2, t1, r.subspan(0, i));                                   // t2 = inv * (2 - x * inv)
         // TODO: Consider implementing the step as (inv << 1) - (x * inv * inv).
 
         // TODO: Avoid copy by swapping buffers.
@@ -522,12 +522,12 @@ void modexp_even(std::span<uint64_t> r, const std::span<const uint64_t> base, Ex
     const auto mod_odd_inv = std::span{tmp_storage.get() + r.size(), num_pow2_words};
     const auto y = std::span{tmp_storage.get() + r.size() + num_pow2_words, num_pow2_words};
 
-    modinv_pow2(mod_odd_inv, mod_odd);
     modexp_odd(x1, base, exp, mod_odd);
 
     const auto x2 = r.subspan(0, num_pow2_words);  // Reuse the result storage.
     modexp_pow2(x2, base, exp, k);
 
+    modinv_pow2(mod_odd_inv, mod_odd);
     sub(x2, x1.subspan(0, num_pow2_words));
     mul(y, x2, mod_odd_inv);
     mask_pow2(y, k);
