@@ -148,43 +148,6 @@ constexpr bool less(std::span<const uint64_t> x, std::span<const uint64_t> y) no
     return std::ranges::lexicographical_compare(std::views::reverse(x), std::views::reverse(y));
 }
 
-/// Result of loading the modulus: the odd part and trailing zero count.
-struct ModLoad
-{
-    std::span<uint64_t> mod_odd;  ///< Trimmed odd part (shifted in-place).
-    unsigned mod_tz;              ///< Total trailing zero bits (0 = odd modulus).
-};
-
-/// Loads modulus from big-endian bytes and extracts the odd part.
-/// The odd part is shifted in-place within the storage buffer.
-ModLoad load_mod(std::span<uint64_t> storage, std::span<const uint8_t> data) noexcept
-{
-    const auto top = load(storage, data);
-    if (top.empty())
-        return {{}, 0};  // mod is zero
-
-    // Find first non-zero word from bottom.
-    const auto it = std::ranges::find_if(top, [](auto w) { return w != 0; });
-    // Always found: top is trimmed so top.back() != 0.
-
-    const auto tz_words = static_cast<size_t>(it - top.begin());
-    const auto bit_shift = static_cast<unsigned>(std::countr_zero(*it));
-    const auto mod_tz = static_cast<unsigned>(tz_words * 64 + bit_shift);
-
-    auto mod_core = top.subspan(tz_words);
-
-    // Sub-word right-shift in-place (0-63 bits).
-    if (bit_shift != 0)
-    {
-        for (size_t i = 0; i < mod_core.size() - 1; ++i)
-            mod_core[i] = (mod_core[i] >> bit_shift) | (mod_core[i + 1] << (64 - bit_shift));
-        mod_core.back() >>= bit_shift;
-        mod_core = trim(mod_core);  // top word may become zero after shift
-    }
-
-    return {mod_core, mod_tz};
-}
-
 /// Right-shifts a little-endian word array by k bits.
 /// Returns a subspan trimmed to significant (non-zero) words.
 std::span<const uint64_t> shr(
@@ -209,6 +172,35 @@ std::span<const uint64_t> shr(
     }
 
     return trim(std::span<const uint64_t>(r).first(n));
+}
+
+/// Result of loading the modulus: the odd part and trailing zero count.
+struct ModLoad
+{
+    std::span<const uint64_t> mod_odd;  ///< Trimmed odd part (shifted in-place).
+    unsigned mod_tz;                    ///< Total trailing zero bits (0 = odd modulus).
+};
+
+/// Loads modulus from big-endian bytes and extracts the odd part.
+/// The odd part is shifted in-place within the storage buffer.
+ModLoad load_mod(std::span<uint64_t> storage, std::span<const uint8_t> data) noexcept
+{
+    const auto top = load(storage, data);
+    assert(!top.empty());  // Modulus of zero must be handled outside.
+
+    // Find first non-zero word from bottom.
+    const auto it = std::ranges::find_if(top, [](auto w) { return w != 0; });
+    // Always found: top is trimmed so top.back() != 0.
+
+    const auto tz_words = static_cast<size_t>(it - top.begin());
+    const auto bit_shift = static_cast<unsigned>(std::countr_zero(*it));
+    const auto mod_tz = static_cast<unsigned>(tz_words * 64 + bit_shift);
+
+    if (mod_tz == 0)
+        return {top, 0};
+
+    // Right-shift in-place to extract the odd part.
+    return {shr(storage, top, mod_tz), mod_tz};
 }
 
 
@@ -552,12 +544,14 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
 {
     const Exponent exp{exp_bytes};
 
-    const auto w = (std::max(mod_bytes.size(), base_bytes.size()) + 7) / 8;
-    const auto storage = std::make_unique_for_overwrite<uint64_t[]>(w * 3);
-    const auto base = load(std::span{storage.get(), w}, base_bytes);
-    const auto [mod_odd, mod_tz] = load_mod(std::span{storage.get() + w, w}, mod_bytes);
+    const auto base_size = (base_bytes.size() + 7) / 8;
+    const auto mod_size = (mod_bytes.size() + 7) / 8;
+    const auto storage = std::make_unique_for_overwrite<uint64_t[]>(base_size + mod_size * 2);
+    const auto base = load(std::span{storage.get(), base_size}, base_bytes);
+    const auto [mod_odd, mod_tz] =
+        load_mod(std::span{storage.get() + base_size, mod_size}, mod_bytes);
     assert(!mod_odd.empty());  // Modulus of zero must be handled outside.
-    const auto result = std::span{storage.get() + w * 2, w};
+    const auto result = std::span{storage.get() + base_size + mod_size, mod_size};
     std::ranges::fill(result, uint64_t{0});
 
     if (exp.bit_width() == 0)  // Exponent is 0:
