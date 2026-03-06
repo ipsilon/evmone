@@ -152,7 +152,7 @@ constexpr bool less(std::span<const uint64_t> x, std::span<const uint64_t> y) no
 struct ModLoad
 {
     std::span<uint64_t> mod_odd;  ///< Trimmed odd part (shifted in-place).
-    unsigned mod_tz;               ///< Total trailing zero bits (0 = odd modulus).
+    unsigned mod_tz;              ///< Total trailing zero bits (0 = odd modulus).
 };
 
 /// Loads modulus from big-endian bytes and extracts the odd part.
@@ -374,7 +374,7 @@ void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> y, std::span<const
 void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Exponent exp,
     std::span<const uint64_t> mod) noexcept
 {
-    assert(!mod.empty() && mod.back() != 0);   // mod must be trimmed.
+    assert(!mod.empty() && mod.back() != 0);    // mod must be trimmed.
     assert(!base.empty() && base.back() != 0);  // base must be trimmed.
     assert(exp.bit_width() != 0);
 
@@ -434,10 +434,10 @@ void mask_pow2(std::span<uint64_t> x, unsigned k) noexcept
 /// Also, the same amount of the result words are produced. The rest is not modified.
 void modexp_pow2(std::span<uint64_t> r, std::span<const uint64_t> base, Exponent exp, unsigned k)
 {
-    assert(k != 0);                              // Modulus of 1 should be covered as "odd".
-    assert(exp.bit_width() != 0);                // Exponent of zero must be handled outside.
-    assert(!base.empty() && base.back() != 0);   // base must be trimmed.
-    assert(r.data() != base.data());             // No in-place operation.
+    assert(k != 0);                             // Modulus of 1 should be covered as "odd".
+    assert(exp.bit_width() != 0);               // Exponent of zero must be handled outside.
+    assert(!base.empty() && base.back() != 0);  // base must be trimmed.
+    assert(r.data() != base.data());            // No in-place operation.
 
     const size_t num_pow2_words = (k + 63) / 64;
     assert(r.size() >= num_pow2_words);
@@ -513,7 +513,7 @@ void modexp_even(std::span<uint64_t> r, const std::span<const uint64_t> base, Ex
     // Follow "Montgomery reduction with even modulus" by Çetin Kaya Koç.
     // https://cetinkayakoc.net/docs/j34.pdf
     assert(k != 0);
-    assert(!base.empty() && base.back() != 0);       // base must be trimmed.
+    assert(!base.empty() && base.back() != 0);        // base must be trimmed.
     assert(!mod_odd.empty() && mod_odd.back() != 0);  // mod_odd must be trimmed.
 
     const size_t num_pow2_words = (k + 63) / 64;
@@ -521,8 +521,7 @@ void modexp_even(std::span<uint64_t> r, const std::span<const uint64_t> base, Ex
     assert(r.size() >= n);
     r = r.subspan(0, n);
 
-    const auto tmp_storage =
-        std::make_unique_for_overwrite<uint64_t[]>(n + num_pow2_words * 2);
+    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(n + num_pow2_words * 2);
     const auto tmp = std::span{tmp_storage.get(), n + num_pow2_words * 2};
     const auto tmp1 = tmp.subspan(0, n);
     const auto tmp2 = tmp.subspan(n, num_pow2_words);
