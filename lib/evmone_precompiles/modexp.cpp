@@ -148,21 +148,41 @@ constexpr bool less(std::span<const uint64_t> x, std::span<const uint64_t> y) no
     return std::ranges::lexicographical_compare(std::views::reverse(x), std::views::reverse(y));
 }
 
-/// Counts trailing zeros in a non-zero little-endian word array.
-constexpr unsigned ctz(std::span<const uint64_t> x) noexcept
+/// Result of loading the modulus: the odd part and trailing zero count.
+struct ModLoad
 {
-    assert(std::ranges::any_of(x, [](auto w) { return w != 0; }));
-    const auto it = std::ranges::find_if(x, [](auto w) { return w != 0; });
-    return static_cast<unsigned>((it - x.begin()) * 64 + std::countr_zero(*it));
-}
+    std::span<uint64_t> mod_odd;  ///< Trimmed odd part (shifted in-place).
+    unsigned mod_tz;               ///< Total trailing zero bits (0 = odd modulus).
+};
 
-/// Checks if a non-zero multi-word number is a power of two.
-constexpr bool is_pow2(std::span<const uint64_t> x) noexcept
+/// Loads modulus from big-endian bytes and extracts the odd part.
+/// The odd part is shifted in-place within the storage buffer.
+ModLoad load_mod(std::span<uint64_t> storage, std::span<const uint8_t> data) noexcept
 {
-    assert(std::ranges::any_of(x, [](auto w) { return w != 0; }));
-    const auto it = std::ranges::find_if(x, [](auto w) { return w != 0; });
-    return std::has_single_bit(*it) &&
-           std::ranges::none_of(it + 1, x.end(), [](auto w) { return w != 0; });
+    const auto top = load(storage, data);
+    if (top.empty())
+        return {{}, 0};  // mod is zero
+
+    // Find first non-zero word from bottom.
+    const auto it = std::ranges::find_if(top, [](auto w) { return w != 0; });
+    // Always found: top is trimmed so top.back() != 0.
+
+    const auto tz_words = static_cast<size_t>(it - top.begin());
+    const auto bit_shift = static_cast<unsigned>(std::countr_zero(*it));
+    const auto mod_tz = static_cast<unsigned>(tz_words * 64 + bit_shift);
+
+    auto mod_core = top.subspan(tz_words);
+
+    // Sub-word right-shift in-place (0-63 bits).
+    if (bit_shift != 0)
+    {
+        for (size_t i = 0; i < mod_core.size() - 1; ++i)
+            mod_core[i] = (mod_core[i] >> bit_shift) | (mod_core[i + 1] << (64 - bit_shift));
+        mod_core.back() >>= bit_shift;
+        mod_core = trim(mod_core);  // top word may become zero after shift
+    }
+
+    return {mod_core, mod_tz};
 }
 
 /// Right-shifts a little-endian word array by k bits.
@@ -534,35 +554,33 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     const Exponent exp{exp_bytes};
 
     const auto w = (std::max(mod_bytes.size(), base_bytes.size()) + 7) / 8;
-    const auto storage = std::make_unique_for_overwrite<uint64_t[]>(w * 4);
+    const auto storage = std::make_unique_for_overwrite<uint64_t[]>(w * 3);
     const auto base = load(std::span{storage.get(), w}, base_bytes);
-    // TODO: While loading modulus, we can check if it is zero and split the even part.
-    const auto mod = load(std::span{storage.get() + w, w}, mod_bytes);
-    assert(!mod.empty());  // Modulus of zero must be handled outside.
+    const auto [mod_odd, mod_tz] = load_mod(std::span{storage.get() + w, w}, mod_bytes);
+    assert(!mod_odd.empty());  // Modulus of zero must be handled outside.
     const auto result = std::span{storage.get() + w * 2, w};
     std::ranges::fill(result, uint64_t{0});
 
     if (exp.bit_width() == 0)  // Exponent is 0:
     {
         // Result is 1 except when mod is 1.
-        if (mod.size() != 1 || mod[0] != 1)
+        if (mod_tz != 0 || mod_odd.size() != 1 || mod_odd[0] != 1)  // mod != 1
             result[0] = 1;
     }
     else if (base.empty())  // base is 0: 0^exp = 0 for exp > 0.
     {
     }
-    else if (const auto mod_tz = ctz(mod); mod_tz == 0)  // - odd
+    else if (mod_tz == 0)  // - odd
     {
-        modexp_odd(result, base, exp, mod);
+        modexp_odd(result, base, exp, mod_odd);
     }
-    else if (is_pow2(mod))  // - power of 2
+    else if (mod_odd.size() == 1 && mod_odd[0] == 1)  // - power of 2
     {
         const auto n = (mod_tz + 63) / 64;
         modexp_pow2(std::span(result).subspan(0, n), base, exp, mod_tz);
     }
     else  // - even
     {
-        const auto mod_odd = shr(std::span{storage.get() + w * 3, w}, mod, mod_tz);
         modexp_even(result, base, exp, mod_odd, mod_tz);
     }
 
