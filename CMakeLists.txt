@@ -65,11 +65,64 @@ if(CABLE_COMPILER_GNULIKE)
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wduplicate-enum>
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wnewline-eof>
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wunreachable-code-aggressive>
-    )
+
+        $<$<CXX_COMPILER_ID:GNU>:-Warray-bounds=2>
+        $<$<CXX_COMPILER_ID:GNU>:-Warith-conversion>
+        -Wmismatched-tags
+        -Wenum-conversion
+
+#        -Wcast-qual FIXME
+        -Wmissing-declarations
+        -Wsign-conversion
+        -Wundef
+        -Wunreachable-code
+        -Wcovered-switch-default
+        -Wextra-semi-stmt
+        $<$<COMPILE_LANGUAGE:C>:-Wmissing-prototypes>
+        $<$<CXX_COMPILER_ID:Clang>:-Wduplicate-enum>
+        $<$<CXX_COMPILER_ID:Clang>:-Wnewline-eof>
+        $<$<CXX_COMPILER_ID:Clang>:-Wunreachable-code-aggressive>
+        $<$<CXX_COMPILER_ID:Clang>:-Wcovered-switch-default>
+        $<$<CXX_COMPILER_ID:Clang>:-Wextra-semi-stmt>
+
+        $<$<CXX_COMPILER_ID:GNU>:-Wduplicated-cond>
+
+        $<$<CXX_COMPILER_ID:Clang>:-Wfinal-dtor-non-final-class>
+        $<$<CXX_COMPILER_ID:GNU>:-Wlogical-op>
+        $<$<CXX_COMPILER_ID:Clang>:-Wnewline-eof>
+        $<$<CXX_COMPILER_ID:Clang>:-Wsuggest-destructor-override>
+        $<$<CXX_COMPILER_ID:Clang>:-Wunreachable-code-break>
+        )
 elseif(MSVC)
     add_compile_options(/wd4324)  # Disabled warning about alignment caused by alignas.
     add_compile_options(/wd5030)  # Allow using unknown attributes.
 endif()
+
+    if(CABLE_COMPILER_CLANG)
+        add_compile_options(
+            -Weverything
+            -Wno-unknown-warning-option  # FIXME
+            -Wno-c++98-compat
+            -Wno-padded
+            -Wno-old-style-cast
+            -Wno-cast-qual
+            -Wno-cast-align
+            -Wno-c++98-compat-pedantic
+            -Wno-documentation-unknown-command
+            -Wno-array-bounds-pointer-arithmetic
+            -Wno-weak-vtables
+            -Wno-undefined-func-template
+            -Wno-global-constructors
+            -Wno-exit-time-destructors
+            -Wno-missing-variable-declarations
+            -Wno-unsafe-buffer-usage
+            -Wno-deprecated-copy-with-dtor
+            -Wno-switch-enum
+            -Wno-used-but-marked-unused
+            -Wno-switch-default
+            -Wno-ctad-maybe-unsupported
+        )
+    endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
     message(FATAL_ERROR "Use -DCOVERAGE=1")
