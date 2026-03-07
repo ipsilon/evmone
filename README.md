@@ -34,7 +34,7 @@ The codebase of _evmone_ is optimized to provide fast and efficient execution of
 
 1. The _indirect call threading_ is the dispatch method used -
    a loaded EVM program is a table with pointers to functions implementing virtual instructions.
-2. The gas cost and stack requirements of block of instructions is precomputed 
+2. The gas cost and stack requirements of a block of instructions is precomputed 
    and applied once per block during execution.
 3. Performs extensive and expensive bytecode analysis before execution.
 
@@ -114,7 +114,7 @@ Docker images with evmone are available on Docker Hub:
 https://hub.docker.com/r/ethereum/evmone.
 
 Having the evmone shared library inside a docker is not very useful on its own,
-but the image can be used as the base of another one or you can run benchmarks 
+but the image can be used as the base of another one, or you can run benchmarks 
 with it.
 
 ```bash
