@@ -509,37 +509,6 @@ void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
     }
 }
 
-/// Computes modular exponentiation for even modulus: base^exp % (mod_odd * 2^k).
-void modexp_even(std::span<uint64_t> r, const std::span<const uint64_t> base, Exponent exp,
-    std::span<const uint64_t> mod_odd, unsigned k)
-{
-    // Follow "Montgomery reduction with even modulus" by Çetin Kaya Koç.
-    // https://cetinkayakoc.net/docs/j34.pdf
-    assert(k != 0);
-    assert(!base.empty() && base.back() != 0);        // base must be trimmed.
-    assert(!mod_odd.empty() && mod_odd.back() != 0);  // mod_odd must be trimmed.
-
-    const auto odd_size = mod_odd.size();
-    const size_t pow2_size = (k + 63) / 64;
-    assert(r.size() >= std::max(odd_size, pow2_size));
-
-    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(odd_size + pow2_size * 2);
-    const auto x1 = std::span{tmp_storage.get(), odd_size};
-    const auto mod_odd_inv = std::span{tmp_storage.get() + odd_size, pow2_size};
-    const auto y = std::span{tmp_storage.get() + odd_size + pow2_size, pow2_size};
-
-    modexp_odd(x1, base, exp, mod_odd);
-
-    const auto x2 = r.first(pow2_size);  // Reuse the result storage.
-    modexp_pow2(x2, base, exp, k);
-
-    modinv_pow2(mod_odd_inv, mod_odd);
-    sub(x2, x1.first(std::min(odd_size, pow2_size)));
-    mul(y, x2, mod_odd_inv);
-    mask_pow2(y, k);
-    mul(r, mod_odd, y);
-    add(r, x1);
-}
 }  // namespace
 
 namespace evmone::crypto
@@ -553,8 +522,11 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     const auto mod_size = (mod_bytes.size() + 7) / 8;
     const auto storage = std::make_unique_for_overwrite<uint64_t[]>(base_size + mod_size * 2);
     const auto base = load({storage.get(), base_size}, base_bytes);
+
+    // Load and decompose the modulus: mod = mod_odd * 2^mod_tz.
     const auto [mod_odd, mod_tz] = load_mod({storage.get() + base_size, mod_size}, mod_bytes);
     assert(!mod_odd.empty());  // Modulus of zero must be handled outside.
+
     const auto result = std::span{storage.get() + base_size + mod_size, mod_size};
     std::ranges::fill(result, uint64_t{0});
 
@@ -567,18 +539,52 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     else if (base.empty())  // base is 0: 0^exp = 0 for exp > 0.
     {
     }
-    else if (mod_tz == 0)  // - odd
+    else
     {
-        modexp_odd(result, base, exp, mod_odd);
-    }
-    else if (mod_odd.size() == 1 && mod_odd[0] == 1)  // - power of 2
-    {
-        const auto n = (mod_tz + 63) / 64;
-        modexp_pow2(result.subspan(0, n), base, exp, mod_tz);
-    }
-    else  // - even
-    {
-        modexp_even(result, base, exp, mod_odd, mod_tz);
+        // The main part is approached by following the procedure for the most general case of an
+        // even modulus, conditionally skipping trivial sub-parts.
+        // See "Montgomery reduction with even modulus" by Çetin Kaya Koç.
+        // https://cetinkayakoc.net/docs/j34.pdf
+
+        // The "odd" part is trivial if the modulus is a pure power of two.
+        const auto odd_is_trivial = mod_odd.size() == 1 && mod_odd[0] == 1;
+
+        // The "power-of-two" part is trivial if the modulus is odd.
+        const auto pow2_is_trivial = mod_tz == 0;
+
+        const auto odd_size = mod_odd.size();
+        const size_t pow2_size = (mod_tz + 63) / 64;
+
+        // Combining results via CRT is needed when both parts are non-trivial.
+        const auto need_crt = !pow2_is_trivial && !odd_is_trivial;
+
+        const auto tmp_storage_size = need_crt ? odd_size + pow2_size * 2 : 0;
+        const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(tmp_storage_size);
+        const auto tmp = std::span{tmp_storage.get(), tmp_storage_size};
+
+        // Place the odd result directly in the result buffer if the CRT is not needed.
+        const auto result_odd = need_crt ? tmp.subspan(0, odd_size) : result;
+        // Always place the power-of-two result in the result buffer.
+        const auto result_pow2 = result.first(pow2_size);
+
+        if (!odd_is_trivial) [[likely]]
+            modexp_odd(result_odd, base, exp, mod_odd);  // x1 = base^exp mod mod_odd
+
+        if (!pow2_is_trivial)
+            modexp_pow2(result_pow2, base, exp, mod_tz);  // x2 = base^exp mod 2^mod_tz
+
+        if (need_crt)
+        {
+            const auto mod_odd_inv = tmp.subspan(odd_size, pow2_size);
+            const auto y = tmp.subspan(odd_size + pow2_size, pow2_size);
+
+            modinv_pow2(mod_odd_inv, mod_odd);
+            sub(result_pow2, result_odd.first(std::min(odd_size, pow2_size)));
+            mul(y, result_pow2, mod_odd_inv);
+            mask_pow2(y, mod_tz);
+            mul(result, mod_odd, y);
+            add(result, result_odd);
+        }
     }
 
     store(std::span{output, mod_bytes.size()}, result);
