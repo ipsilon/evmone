@@ -408,6 +408,14 @@ TEST(expmod, test_vectors)
         // 3^5 mod (5 * 2^128) = 243.
         {"03", "05", "000000000000000500000000000000000000000000000000",
             "0000000000000000000000000000000000000000000000f3"},
+        // Even modulus with 1-word odd part and multi-word pow2 factor.
+        // Exercises carry/borrow propagation in add/sub with shorter operand.
+        // 2^64 mod (3 * 2^128).
+        {"02", "40", "0300000000000000000000000000000000", "0000000000000000010000000000000000"},
+        // 2^128 mod (3 * 2^128): carry propagates through all high words in add.
+        {"02", "80", "0300000000000000000000000000000000", "0100000000000000000000000000000000"},
+        // 2^129 mod (7 * 2^128): carry propagates and is absorbed at nonzero word.
+        {"02", "0081", "0700000000000000000000000000000000", "0200000000000000000000000000000000"},
     };
 
     for (const auto& [base_hex, exp_hex, mod_hex, expected_result_hex] : test_cases)

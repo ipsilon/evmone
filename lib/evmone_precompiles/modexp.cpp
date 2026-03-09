@@ -13,25 +13,27 @@ using namespace intx;
 namespace
 {
 /// Adds y to x: x[] += y[]. The result is truncated to the size of x.
-/// The x and y must be of the same size.
 constexpr void add(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
 {
-    assert(x.size() == y.size());
+    assert(x.size() >= y.size());
 
     bool carry = false;
-    for (size_t i = 0; i < x.size(); ++i)
+    for (size_t i = 0; i < y.size(); ++i)
         std::tie(x[i], carry) = addc(x[i], y[i], carry);
+    for (size_t i = y.size(); carry && i < x.size(); ++i)
+        std::tie(x[i], carry) = addc(x[i], uint64_t{0}, carry);
 }
 
 /// Subtracts y from x: x[] -= y[]. The result is truncated to the size of x.
-/// The x and y must be of the same size.
 constexpr void sub(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
 {
-    assert(x.size() == y.size());
+    assert(x.size() >= y.size());
 
     bool borrow = false;
-    for (size_t i = 0; i < x.size(); ++i)
+    for (size_t i = 0; i < y.size(); ++i)
         std::tie(x[i], borrow) = subc(x[i], y[i], borrow);
+    for (size_t i = y.size(); borrow && i < x.size(); ++i)
+        std::tie(x[i], borrow) = subc(x[i], uint64_t{0}, borrow);
 }
 
 /// Multiplies each word of x by y and adds the matching word of p, propagating a carry to the next
@@ -517,22 +519,22 @@ void modexp_even(std::span<uint64_t> r, const std::span<const uint64_t> base, Ex
     assert(!base.empty() && base.back() != 0);        // base must be trimmed.
     assert(!mod_odd.empty() && mod_odd.back() != 0);  // mod_odd must be trimmed.
 
-    const size_t num_pow2_words = (k + 63) / 64;
-    assert(r.size() >= std::max(mod_odd.size(), num_pow2_words));
+    const auto odd_size = mod_odd.size();
+    const size_t pow2_size = (k + 63) / 64;
+    assert(r.size() >= std::max(odd_size, pow2_size));
 
-    const auto tmp_storage =
-        std::make_unique_for_overwrite<uint64_t[]>(r.size() + num_pow2_words * 2);
-    const auto x1 = std::span{tmp_storage.get(), r.size()};
-    const auto mod_odd_inv = std::span{tmp_storage.get() + r.size(), num_pow2_words};
-    const auto y = std::span{tmp_storage.get() + r.size() + num_pow2_words, num_pow2_words};
+    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(odd_size + pow2_size * 2);
+    const auto x1 = std::span{tmp_storage.get(), odd_size};
+    const auto mod_odd_inv = std::span{tmp_storage.get() + odd_size, pow2_size};
+    const auto y = std::span{tmp_storage.get() + odd_size + pow2_size, pow2_size};
 
     modexp_odd(x1, base, exp, mod_odd);
 
-    const auto x2 = r.subspan(0, num_pow2_words);  // Reuse the result storage.
+    const auto x2 = r.first(pow2_size);  // Reuse the result storage.
     modexp_pow2(x2, base, exp, k);
 
     modinv_pow2(mod_odd_inv, mod_odd);
-    sub(x2, x1.subspan(0, num_pow2_words));
+    sub(x2, x1.first(std::min(odd_size, pow2_size)));
     mul(y, x2, mod_odd_inv);
     mask_pow2(y, k);
     mul(r, mod_odd, y);
