@@ -54,22 +54,19 @@ inline bool is_valid_dupn_swapn(uint8_t x) noexcept
 
 inline bool is_valid_exchange(uint8_t x) noexcept
 {
-    return x <= 0x4f || x >= 0x80;
+    return x <= 0x51 || x >= 0x80;
 }
 
 inline uint16_t decode_dupn_swapn(uint8_t x) noexcept
 {
     assert(is_valid_dupn_swapn(x));
-    if (x <= 0x5a)
-        return static_cast<uint16_t>(x + 17);
-    else
-        return static_cast<uint16_t>(x - 20);
+    return static_cast<uint8_t>(x + 145);
 }
 
 inline std::pair<uint8_t, uint8_t> decode_exchange(uint8_t x) noexcept
 {
     assert(is_valid_exchange(x));
-    const auto k = x <= 0x4f ? x : static_cast<uint8_t>(x - 48);
+    const auto k = static_cast<uint8_t>(x ^ 0x8f);
     const auto q = static_cast<uint8_t>(k / 16);
     const auto r = static_cast<uint8_t>(k % 16);
     if (q < r)
