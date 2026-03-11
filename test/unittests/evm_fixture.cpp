@@ -9,7 +9,7 @@ namespace evmone::test
 {
 namespace
 {
-evmc::VM advanced_vm{evmc_create_evmone(), {{"advanced", ""}}};
+evmc::VM advanced_vm{evmc_create_evmone(), {{"caterpillar", ""}}};
 evmc::VM baseline_vm{evmc_create_evmone()};
 evmc::VM bnocgoto_vm{evmc_create_evmone(), {{"cgoto", "no"}}};
 
