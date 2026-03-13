@@ -4,9 +4,10 @@
 
 #pragma once
 
-#include <evmc/bytes.hpp>
+#include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 #include <cassert>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -114,4 +115,115 @@ inline bytes internal::encode_container(InputIterator begin, InputIterator end)
         content += encode(*it);
     return wrap_list(content);
 }
+
+// --- RLP Decoding ---
+
+template <class T>
+concept UnsignedIntegral =
+    std::unsigned_integral<T> || std::same_as<T, intx::uint128> || std::same_as<T, intx::uint256> ||
+    std::same_as<T, intx::uint512> || std::same_as<T, intx::uint<2048>>;
+
+/// Load unsigned integral from big-endian bytes. Destination size must not be smaller than input.
+template <UnsignedIntegral T>
+[[nodiscard]] inline T load(bytes_view input)
+{
+    if (input.size() > sizeof(T))
+        throw std::runtime_error("load: input too big");
+
+    T x{};
+    std::memcpy(&intx::as_bytes(x)[sizeof(T) - input.size()], input.data(), input.size());
+    x = intx::to_big_endian(x);
+    return x;
+}
+
+struct Header
+{
+    uint64_t payload_length = 0;
+    bool is_list = false;
+};
+
+[[nodiscard]] Header decode_header(bytes_view& input);
+
+/// Generic decode dispatching to ADL rlp_decode.
+template <typename T>
+inline void decode(bytes_view& input, T& to)
+{
+    rlp_decode(input, to);
+}
+
+template <UnsignedIntegral T>
+void decode(bytes_view& from, T& to)
+{
+    const auto h = decode_header(from);
+
+    if (h.is_list)
+        throw std::runtime_error("rlp decoding error: unexpected list type");
+
+    if (sizeof(T) < h.payload_length)
+        throw std::runtime_error("rlp decoding error: unexpected type");
+
+    to = load<T>(from.substr(0, static_cast<size_t>(h.payload_length)));
+    from.remove_prefix(static_cast<size_t>(h.payload_length));
+}
+
+void decode(bytes_view& from, bytes& to);
+void decode(bytes_view& from, evmc::bytes32& to);
+void decode(bytes_view& from, evmc::address& to);
+
+template <size_t N>
+void decode(bytes_view& from, std::span<uint8_t, N> to)
+{
+    const auto h = decode_header(from);
+
+    if (h.is_list)
+        throw std::runtime_error("rlp decoding error: unexpected list type");
+
+    if (to.size() < h.payload_length)
+        throw std::runtime_error("rlp decoding error: payload too big");
+
+    auto d = to.size() - h.payload_length;
+    std::memcpy(to.data() + d, from.data(), static_cast<size_t>(h.payload_length));
+    from.remove_prefix(static_cast<size_t>(h.payload_length));
+}
+
+template <size_t N>
+void decode(bytes_view& from, uint8_t (&to)[N])
+{
+    decode(from, std::span<uint8_t, N>(to));
+}
+
+template <typename T1, typename T2>
+void decode(bytes_view& from, std::pair<T1, T2>& p);
+
+template <typename T>
+void decode(bytes_view& from, std::vector<T>& to)
+{
+    const auto h = decode_header(from);
+
+    if (!h.is_list)
+        throw std::runtime_error("rlp decoding error: unexpected type. list expected");
+
+    auto payload_view = from.substr(0, static_cast<size_t>(h.payload_length));
+
+    while (!payload_view.empty())
+    {
+        to.emplace_back();
+        decode(payload_view, to.back());
+    }
+
+    from.remove_prefix(static_cast<size_t>(h.payload_length));
+}
+
+template <typename T1, typename T2>
+void decode(bytes_view& from, std::pair<T1, T2>& p)
+{
+    const auto h = decode_header(from);
+
+    if (!h.is_list)
+        throw std::runtime_error("rlp decoding error: unexpected type. list expected");
+
+    decode(from, p.first);
+    decode(from, p.second);
+}
+
 }  // namespace evmone::rlp
