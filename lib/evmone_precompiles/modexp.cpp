@@ -5,7 +5,7 @@
 #include "modexp.hpp"
 #include <evmmax/evmmax.hpp>
 #include <bit>
-#include <memory>
+#include <memory_resource>
 #include <ranges>
 
 using namespace intx;
@@ -215,7 +215,9 @@ ModLoad load_mod(std::span<uint64_t> storage, std::span<const uint8_t> data) noe
 
 /// Computes r[] = u[] % d[] (remainder only).
 /// The d[] must be non-zero. The r[] size must be >= num significant words in d[].
-void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uint64_t> d) noexcept
+/// Scratch space required: 2 * u.size() + 2 words.
+void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uint64_t> d,
+    std::span<uint64_t> scratch) noexcept
 {
     assert(!d.empty());
     assert(!u.empty());
@@ -223,17 +225,17 @@ void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uin
     assert(u.back() != 0);
     assert(r.size() >= d.size());
     assert(u.size() > d.size());  // Because used only for to-Montgomery conversion.
+    assert(scratch.size() >= 2 * u.size() + 2);
 
-    const auto un_storage = std::make_unique_for_overwrite<uint64_t[]>(u.size() + 1);
-    auto un = std::span{un_storage.get(), u.size() + 1};
+    // Layout: un[u.size()+1] | dn[d.size()] | q[u.size()+1-d.size()]
+    auto un = scratch.subspan(0, u.size() + 1);
+    const auto dn = scratch.subspan(u.size() + 1, d.size());
+    const auto q_buf = scratch.subspan(u.size() + 1 + d.size(), u.size() + 1 - d.size());
+
     un.back() = 0;  // Only the extra top word needs zeroing; the rest is set by normalization.
 
     // Normalize: left-shift both u and d so that the MSB of d's top word is set.
     const auto shift = static_cast<unsigned>(std::countl_zero(d.back()));
-
-    // Allocate normalized divisor.
-    const auto dn_storage = std::make_unique_for_overwrite<uint64_t[]>(d.size());
-    const auto dn = std::span{dn_storage.get(), d.size()};
 
     if (shift != 0)
     {
@@ -278,11 +280,9 @@ void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uin
     }
     else
     {
-        // General case: Knuth's algorithm. The quotient is stored in the temporary q_storage
-        // buffer; we don't use it, but udivrem_knuth requires storage for it.
-        const auto q_len = un.size() - dn.size();
-        const auto q_storage = std::make_unique_for_overwrite<uint64_t[]>(q_len);
-        intx::internal::udivrem_knuth(q_storage.get(), un, dn);
+        // General case: Knuth's algorithm. The quotient is stored in q_buf;
+        // we don't use it, but udivrem_knuth requires storage for it.
+        intx::internal::udivrem_knuth(q_buf.data(), un, dn);
         denormalize(un.subspan(0, dn.size()));
     }
 }
@@ -373,8 +373,10 @@ void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> y, std::span<const
     std::ranges::copy(t, r.begin());
 }
 
+/// Computes result[] = base[]^exp % mod[] for odd mod[] (mod[0] % 2 != 0).
+/// Scratch space required: 5n + 3*base.size() + 2 words, where n = mod.size().
 void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Exponent exp,
-    std::span<const uint64_t> mod) noexcept
+    std::span<const uint64_t> mod, std::span<uint64_t> scratch) noexcept
 {
     assert(!mod.empty() && mod.back() != 0);    // mod must be trimmed.
     assert(!base.empty() && base.back() != 0);  // base must be trimmed.
@@ -384,16 +386,21 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     const auto n = mod.size();
     const auto mod_inv = -evmmax::modinv(mod[0]);
 
+    // Layout: u[n+base.size()] | base_mont[n] | t[n] | rem_scratch[2*(n+base.size())+2]
+    // After rem() returns, the rem_scratch is dead.
+    assert(scratch.size() >= 5 * n + 3 * base.size() + 2);
+
     // Compute base_mont = (base * R) % mod, where R = 2^(n*64).
     // The numerator u = base << (n*64): base in the upper words, lower n words are zero.
-    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(n + base.size() + n + n);
-    const auto u = std::span{tmp_storage.get(), n + base.size()};
-    const auto base_mont = std::span{tmp_storage.get() + n + base.size(), n};
-    const auto t = std::span{tmp_storage.get() + n + base.size() + n, n};
+    const auto u = scratch.subspan(0, n + base.size());
+    const auto base_mont = scratch.subspan(n + base.size(), n);
+    // TODO: t and rem_scratch have exclusive lifetimes.
+    const auto t = scratch.subspan(n + base.size() + n, n);
+    const auto rem_scratch = scratch.subspan(3 * n + base.size());
 
     std::ranges::fill(u.first(n), uint64_t{0});  // Lower n words of u must be zero.
     std::ranges::copy(base, u.subspan(n).begin());
-    rem(base_mont, u, mod);
+    rem(base_mont, u, mod, rem_scratch);
 
     // Reuse the lower n words of u as the result buffer r.
     const auto r = u.subspan(0, n);
@@ -435,7 +442,9 @@ void mask_pow2(std::span<uint64_t> x, unsigned k) noexcept
 /// Computes r[] = base[]^exp % 2^k.
 /// Only the low-order words matching the k bits of the base are used.
 /// Also, the same amount of the result words are produced. The rest is not modified.
-void modexp_pow2(std::span<uint64_t> r, std::span<const uint64_t> base, Exponent exp, unsigned k)
+/// Scratch space required: (k + 63) / 64 words.
+void modexp_pow2(std::span<uint64_t> r, std::span<const uint64_t> base, Exponent exp, unsigned k,
+    std::span<uint64_t> scratch) noexcept
 {
     assert(k != 0);                             // Modulus of 1 should be covered as "odd".
     assert(exp.bit_width() != 0);               // Exponent of zero must be handled outside.
@@ -444,15 +453,12 @@ void modexp_pow2(std::span<uint64_t> r, std::span<const uint64_t> base, Exponent
 
     const size_t num_pow2_words = (k + 63) / 64;
     assert(r.size() >= num_pow2_words);
+    assert(scratch.size() >= num_pow2_words);
 
     auto r_k = r.subspan(0, num_pow2_words);
+    auto tmp = scratch.subspan(0, num_pow2_words);
 
     const auto base_k = base.subspan(0, std::min(base.size(), num_pow2_words));
-
-    // Allocate temporary storage for iterations.
-    // TODO: Move to stack if the size is small enough or provide from the caller.
-    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(num_pow2_words);
-    auto tmp = std::span{tmp_storage.get(), num_pow2_words};
 
     const auto [_, pad] = std::ranges::copy(base_k, r_k.begin());
     std::ranges::fill(std::span{pad, r_k.end()}, uint64_t{0});
@@ -471,23 +477,21 @@ void modexp_pow2(std::span<uint64_t> r, std::span<const uint64_t> base, Exponent
 
     mask_pow2(r_k, k);
 
-    // r_k may point to the tmp_storage. Copy back to the result buffer if needed.
+    // r_k may point to scratch. Copy back to the result buffer if needed.
     if (r_k.data() != r.data())
         std::ranges::copy(r_k, r.begin());
 }
 
 /// Computes modular inversion of the multi-word number x[] modulo 2^(r.size() * 64).
-void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
+/// Scratch space required: 2 * r.size() words.
+void modinv_pow2(
+    std::span<uint64_t> r, std::span<const uint64_t> x, std::span<uint64_t> scratch) noexcept
 {
     assert(!x.empty() && (x[0] & 1) != 0);  // x must be odd.
     assert(!r.empty());
+    assert(scratch.size() >= 2 * r.size());
 
     r[0] = evmmax::modinv(x[0]);  // Good start: 64 correct bits.
-
-    // Allocate temporary storage for iterations.
-    // TODO: Move to stack if the size is small enough or provide from the caller.
-    const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(2 * r.size());
-    const auto tmp = std::span{tmp_storage.get(), 2 * r.size()};
 
     // Each iteration doubles the number of correct bits in the inverse. See evmmax::modinv().
     for (size_t i = 1; i < r.size(); i *= 2)
@@ -495,8 +499,8 @@ void modinv_pow2(std::span<uint64_t> r, std::span<const uint64_t> x) noexcept
         // At the start of the iteration we have i-word correct inverse in r[0-i].
         // The iteration performs the Newton-Raphson step with double the precision (n=2i).
         const auto n = std::min(i * 2, r.size());
-        const auto t1 = tmp.subspan(0, n);
-        const auto t2 = tmp.subspan(n, n);
+        const auto t1 = scratch.subspan(0, n);
+        const auto t2 = scratch.subspan(n, n);
 
         // Clamp x to available words: high words beyond x.size() are implicitly zero.
         mul(t1, x.subspan(0, std::min(n, x.size())), r.subspan(0, i));  // t1 = x * inv
@@ -520,14 +524,22 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
 
     const auto base_size = (base_bytes.size() + 7) / 8;
     const auto mod_size = (mod_bytes.size() + 7) / 8;
-    const auto storage = std::make_unique_for_overwrite<uint64_t[]>(base_size + mod_size * 2);
-    const auto base = load({storage.get(), base_size}, base_bytes);
 
-    // Load and decompose the modulus: mod = mod_odd * 2^mod_tz.
-    const auto [mod_odd, mod_tz] = load_mod({storage.get() + base_size, mod_size}, mod_bytes);
+    // Bump allocator for all working memory (values + scratch).
+    // Stack buffer covers inputs up to the EIP-7823 limit (1024 bytes).
+    // Capacity: values[b+2m] + op scratch[5m+3b+2] + CRT[m+2] = 4b+8m+4 words.
+    // The worst case is an even modulus with 1 trailing zero bit (odd_size=m, pow2_size=1).
+    static constexpr size_t MAX_SIZE = 1024 / sizeof(uint64_t);  // EIP-7823
+    static constexpr size_t STACK_CAPACITY = 4 * MAX_SIZE + 8 * MAX_SIZE + 4;
+    alignas(uint64_t) std::byte stack_buf[STACK_CAPACITY * sizeof(uint64_t)];
+    std::pmr::monotonic_buffer_resource pool{stack_buf, sizeof(stack_buf)};
+    std::pmr::polymorphic_allocator<uint64_t> alloc{&pool};
+
+    // Allocate and load values.
+    const auto base = load({alloc.allocate(base_size), base_size}, base_bytes);
+    const auto [mod_odd, mod_tz] = load_mod({alloc.allocate(mod_size), mod_size}, mod_bytes);
     assert(!mod_odd.empty());  // Modulus of zero must be handled outside.
-
-    const auto result = std::span{storage.get() + base_size + mod_size, mod_size};
+    const auto result = std::span{alloc.allocate(mod_size), mod_size};
     std::ranges::fill(result, uint64_t{0});
 
     if (exp.bit_width() == 0)  // Exponent is 0:
@@ -558,27 +570,30 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
         // Combining results via CRT is needed when both parts are non-trivial.
         const auto need_crt = !pow2_is_trivial && !odd_is_trivial;
 
-        const auto tmp_storage_size = need_crt ? odd_size + pow2_size * 2 : 0;
-        const auto tmp_storage = std::make_unique_for_overwrite<uint64_t[]>(tmp_storage_size);
-        const auto tmp = std::span{tmp_storage.get(), tmp_storage_size};
+        // Allocate operation scratch (dead after each call, reused sequentially).
+        const size_t odd_scratch = !odd_is_trivial ? 5 * odd_size + 3 * base.size() + 2 : 0;
+        const size_t pow2_scratch = !pow2_is_trivial ? pow2_size : 0;
+        const size_t inv_scratch = need_crt ? 2 * pow2_size : 0;
+        const size_t op_scratch_size = std::max({odd_scratch, pow2_scratch, inv_scratch});
+        const auto op_scratch = std::span{alloc.allocate(op_scratch_size), op_scratch_size};
 
         // Place the odd result directly in the result buffer if the CRT is not needed.
-        const auto result_odd = need_crt ? tmp.subspan(0, odd_size) : result;
+        const auto result_odd = need_crt ? std::span{alloc.allocate(odd_size), odd_size} : result;
         // Always place the power-of-two result in the result buffer.
         const auto result_pow2 = result.first(pow2_size);
 
         if (!odd_is_trivial) [[likely]]
-            modexp_odd(result_odd, base, exp, mod_odd);  // x1 = base^exp mod mod_odd
+            modexp_odd(result_odd, base, exp, mod_odd, op_scratch);
 
         if (!pow2_is_trivial)
-            modexp_pow2(result_pow2, base, exp, mod_tz);  // x2 = base^exp mod 2^mod_tz
+            modexp_pow2(result_pow2, base, exp, mod_tz, op_scratch);
 
         if (need_crt)
         {
-            const auto mod_odd_inv = tmp.subspan(odd_size, pow2_size);
-            const auto y = tmp.subspan(odd_size + pow2_size, pow2_size);
+            const auto mod_odd_inv = std::span{alloc.allocate(pow2_size), pow2_size};
+            const auto y = std::span{alloc.allocate(pow2_size), pow2_size};
 
-            modinv_pow2(mod_odd_inv, mod_odd);
+            modinv_pow2(mod_odd_inv, mod_odd, op_scratch);
             sub(result_pow2, result_odd.first(std::min(odd_size, pow2_size)));
             mul(y, result_pow2, mod_odd_inv);
             mask_pow2(y, mod_tz);
