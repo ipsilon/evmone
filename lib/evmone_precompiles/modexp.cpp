@@ -12,8 +12,8 @@ using namespace intx;
 
 namespace
 {
-/// Adds y to x: x[] += y[]. The result is truncated to the size of x.
-constexpr void add(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
+/// Adds y to x: x[] += y[]. The result is truncated to the size of x. Returns the carry bit.
+constexpr bool add(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
 {
     assert(x.size() >= y.size());
 
@@ -22,6 +22,7 @@ constexpr void add(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
         std::tie(x[i], carry) = addc(x[i], y[i], carry);
     for (size_t i = y.size(); carry && i < x.size(); ++i)
         std::tie(x[i], carry) = addc(x[i], uint64_t{0}, carry);
+    return carry;
 }
 
 /// Subtracts y from x: x[] -= y[]. The result is truncated to the size of x.
@@ -79,17 +80,6 @@ constexpr void mul(
         r[j + x.size()] = addmul(r.subspan(j, x.size()), r.subspan(j, x.size()), x, y[j]);
     for (size_t j = extra; j < y.size(); ++j)
         addmul(r.subspan(j), r.subspan(j), x.first(r.size() - j), y[j]);
-}
-
-/// Computes x[] = 2 - x[].
-constexpr void neg_add2(std::span<uint64_t> x) noexcept
-{
-    assert(!x.empty());
-    bool c = false;
-
-    std::tie(x[0], c) = intx::subc(2, x[0]);
-    for (auto it = x.begin() + 1; it != x.end(); ++it)
-        std::tie(*it, c) = intx::subc(0, *it, c);
 }
 
 /// Trims a little-endian word array to significant words.
@@ -489,25 +479,26 @@ void modinv_pow2(
     assert(!r.empty());
     assert(scratch.size() >= 2 * r.size());
 
-    r[0] = evmmax::modinv(x[0]);  // Good start: 64 correct bits.
+    r[0] = evmmax::modinv(x[0]);                   // Good start: 64 correct bits.
+    std::ranges::fill(r.subspan(1), uint64_t{0});  // Zero the rest for correct final subtraction.
 
-    // Each iteration doubles the number of correct bits in the inverse. See evmmax::modinv().
+    // Newton-Raphson iteration for modular inverse: inv' = inv * (2 - x * inv).
+    // Rearranged as: inv' = 2 * inv - x * inv^2, which avoids the (2 - x) negation helper
+    // and computes the result directly into r (no copy needed).
+    // Each iteration doubles the number of correct bits. See evmmax::modinv().
     for (size_t i = 1; i < r.size(); i *= 2)
     {
-        // At the start of the iteration we have i-word correct inverse in r[0-i].
-        // The iteration performs the Newton-Raphson step with double the precision (n=2i).
+        // We have i-word correct inverse in r[0..i). Double the precision to n = min(2i, r.size()).
         const auto n = std::min(i * 2, r.size());
+        assert(n > i);
         const auto t1 = scratch.subspan(0, n);
         const auto t2 = scratch.subspan(n, n);
 
-        // Clamp x to available words: high words beyond x.size() are implicitly zero.
-        mul(t1, x.subspan(0, std::min(n, x.size())), r.subspan(0, i));  // t1 = x * inv
-        neg_add2(t1);                                                   // t1 = 2 - x * inv
-        mul(t2, t1, r.subspan(0, i));                                   // t2 = inv * (2 - x * inv)
-        // TODO: Consider implementing the step as (inv << 1) - (x * inv * inv).
-
-        // TODO: Avoid copy by swapping buffers.
-        std::ranges::copy(t2, r.begin());
+        const auto inv = r.first(i);
+        mul(t1, inv, inv);                            // t1 = inv^2
+        mul(t2, t1, x.first(std::min(n, x.size())));  // t2 = inv^2 * x, x clamped to n words.
+        r[i] = uint64_t{add(inv, inv)};               // r[0..i+1) = 2 * inv, carry into r[i]
+        sub(r.first(n), t2);                          // r[0..n) = 2 * inv - x * inv^2
     }
 }
 
