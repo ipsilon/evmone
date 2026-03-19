@@ -315,6 +315,11 @@ TEST_P(expmod, large_inputs)
     EXPECT_EQ(run(make_val(1025, 0x40, 0x03), {0x01}, make_val(1025, 0x80, 2)),
         make_val(1025, 0x40, 0x03));
 
+    // Even modulus with tiny odd part and large pow2 factor.
+    // mod = 3 * 256^1023 (1024 bytes). inv_scratch dominates op_scratch.
+    // 2^1 mod M = 2.
+    expect_last_byte(run({0x02}, {0x01}, make_val(1024, 0x03)), 2);
+
     // Dense values: (2^N - 2)^2 mod (2^N - 1) = 1. Tests AMM reduction at various sizes.
     for (const auto n : {size_t{64}, size_t{128}, size_t{256}, size_t{512}, size_t{1024}})
         expect_last_byte(

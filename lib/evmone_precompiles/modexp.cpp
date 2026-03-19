@@ -374,7 +374,7 @@ void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> y, std::span<const
 }
 
 /// Computes result[] = base[]^exp % mod[] for odd mod[] (mod[0] % 2 != 0).
-/// Scratch space required: 5n + 3*base.size() + 2 words, where n = mod.size().
+/// Scratch space required: 4n + 3*base.size() + 2 words, where n = mod.size().
 void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Exponent exp,
     std::span<const uint64_t> mod, std::span<uint64_t> scratch) noexcept
 {
@@ -386,17 +386,16 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     const auto n = mod.size();
     const auto mod_inv = -evmmax::modinv(mod[0]);
 
-    // Layout: u[n+base.size()] | base_mont[n] | t[n] | rem_scratch[2*(n+base.size())+2]
-    // After rem() returns, the rem_scratch is dead.
-    assert(scratch.size() >= 5 * n + 3 * base.size() + 2);
+    // Layout: u[n+base.size()] | base_mont[n] | t/rem_scratch[max(n, 2*(n+base.size())+2)]
+    // t and rem_scratch share the same region (exclusive lifetimes).
+    assert(scratch.size() >= 4 * n + 3 * base.size() + 2);
 
     // Compute base_mont = (base * R) % mod, where R = 2^(n*64).
     // The numerator u = base << (n*64): base in the upper words, lower n words are zero.
     const auto u = scratch.subspan(0, n + base.size());
     const auto base_mont = scratch.subspan(n + base.size(), n);
-    // TODO: t and rem_scratch have exclusive lifetimes.
-    const auto t = scratch.subspan(n + base.size() + n, n);
-    const auto rem_scratch = scratch.subspan(3 * n + base.size());
+    const auto t = scratch.subspan(2 * n + base.size(), n);
+    const auto rem_scratch = scratch.subspan(2 * n + base.size(), 2 * n + 2 * base.size() + 2);
 
     std::ranges::fill(u.first(n), uint64_t{0});  // Lower n words of u must be zero.
     std::ranges::copy(base, u.subspan(n).begin());
@@ -429,14 +428,13 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
 }
 
 /// Trims the multi-word number x[] to k bits.
-/// TODO: Currently this assumes no leading zeros in x. Re-design this after modexp is dynamic.
 void mask_pow2(std::span<uint64_t> x, unsigned k) noexcept
 {
     assert(k != 0);
-    assert(x.size() >= (k + 63) / 64);
-    assert(!x.empty());
-    if (const auto rem = k % 64; rem != 0)
-        x.back() &= (uint64_t{1} << rem) - 1;
+    assert(x.size() == (k + 63) / 64);
+    // This implementation assumes the x.size() matches the k so we always mask the top word.
+    // For k % 64 == 0, we don't mask anything.
+    x.back() &= ~uint64_t{0} >> (-k % 64);
 }
 
 /// Computes r[] = base[]^exp % 2^k.
@@ -527,10 +525,10 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
 
     // Bump allocator for all working memory (values + scratch).
     // Stack buffer covers inputs up to the EIP-7823 limit (1024 bytes).
-    // Capacity: values[b+2m] + op scratch[5m+3b+2] + CRT[m+2] = 4b+8m+4 words.
+    // Capacity: values[b+2m] + op scratch[4m+3b+2] + CRT[m+2] = 4b+7m+4 words.
     // The worst case is an even modulus with 1 trailing zero bit (odd_size=m, pow2_size=1).
     static constexpr size_t MAX_SIZE = 1024 / sizeof(uint64_t);  // EIP-7823
-    static constexpr size_t STACK_CAPACITY = 4 * MAX_SIZE + 8 * MAX_SIZE + 4;
+    static constexpr size_t STACK_CAPACITY = 4 * MAX_SIZE + 7 * MAX_SIZE + 4;
     alignas(uint64_t) std::byte stack_buf[STACK_CAPACITY * sizeof(uint64_t)];
     std::pmr::monotonic_buffer_resource pool{stack_buf, sizeof(stack_buf)};
     std::pmr::polymorphic_allocator<uint64_t> alloc{&pool};
@@ -571,7 +569,7 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
         const auto need_crt = !pow2_is_trivial && !odd_is_trivial;
 
         // Allocate operation scratch (dead after each call, reused sequentially).
-        const size_t odd_scratch = !odd_is_trivial ? 5 * odd_size + 3 * base.size() + 2 : 0;
+        const size_t odd_scratch = !odd_is_trivial ? 4 * odd_size + 3 * base.size() + 2 : 0;
         const size_t pow2_scratch = !pow2_is_trivial ? pow2_size : 0;
         const size_t inv_scratch = need_crt ? 2 * pow2_size : 0;
         const size_t op_scratch_size = std::max({odd_scratch, pow2_scratch, inv_scratch});
