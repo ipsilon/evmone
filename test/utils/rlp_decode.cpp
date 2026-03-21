@@ -71,6 +71,8 @@ void rlp_decode(bytes_view& from, Transaction& to)
     {
         decode(from, to.access_list);
         decode(from, to.v);
+        if (to.v > 1)
+            throw std::runtime_error("rlp decoding error: invalid y_parity value");
     }
 
     decode(from, to.r);
