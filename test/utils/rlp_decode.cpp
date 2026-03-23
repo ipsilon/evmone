@@ -31,8 +31,14 @@ void rlp_decode(bytes_view& from, Transaction& to)
             throw std::runtime_error("rlp decoding error: unexpected transaction type.");
 
         // Decode list after type identifier.
-        if (!decode_header(from).is_list)
+        const auto list_header = decode_header(from);
+        if (!list_header.is_list)
             throw std::runtime_error("rlp decoding error: unexpected type. list expected");
+
+        // Create a sub-view limited to the list payload.
+        // This ensures decoding doesn't read past the list boundary
+        // and that all bytes in the list are consumed.
+        from = from.substr(0, static_cast<size_t>(list_header.payload_length));
 
         decode(from, to.chain_id);
     }
@@ -77,6 +83,9 @@ void rlp_decode(bytes_view& from, Transaction& to)
 
     decode(from, to.r);
     decode(from, to.s);
+
+    if (!from.empty())
+        throw std::runtime_error("rlp decoding error: trailing data in transaction");
 }
 
 }  // namespace evmone::state
