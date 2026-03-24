@@ -35,9 +35,9 @@ void rlp_decode(bytes_view& from, Transaction& to)
         if (!list_header.is_list)
             throw std::runtime_error("rlp decoding error: unexpected type. list expected");
 
-        // Create a sub-view limited to the list payload.
-        // This ensures decoding doesn't read past the list boundary
-        // and that all bytes in the list are consumed.
+        // Verify the list payload fits in the remaining data, then limit the view.
+        if (list_header.payload_length > from.size())
+            throw std::runtime_error("rlp decoding error: list payload exceeds available data");
         from = from.substr(0, static_cast<size_t>(list_header.payload_length));
 
         decode(from, to.chain_id);
