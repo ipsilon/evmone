@@ -203,6 +203,9 @@ void decode(bytes_view& from, std::vector<T>& to)
     if (!h.is_list)
         throw std::runtime_error("rlp decoding error: unexpected type. list expected");
 
+    if (h.payload_length > from.size())
+        throw std::runtime_error("rlp decoding error: list payload exceeds available data");
+
     auto payload_view = from.substr(0, static_cast<size_t>(h.payload_length));
 
     while (!payload_view.empty())
@@ -222,8 +225,15 @@ void decode(bytes_view& from, std::pair<T1, T2>& p)
     if (!h.is_list)
         throw std::runtime_error("rlp decoding error: unexpected type. list expected");
 
-    decode(from, p.first);
-    decode(from, p.second);
+    if (h.payload_length > from.size())
+        throw std::runtime_error("rlp decoding error: pair payload exceeds available data");
+
+    auto payload_view = from.substr(0, static_cast<size_t>(h.payload_length));
+    decode(payload_view, p.first);
+    decode(payload_view, p.second);
+    if (!payload_view.empty())
+        throw std::runtime_error("rlp decoding error: trailing data in pair");
+    from.remove_prefix(static_cast<size_t>(h.payload_length));
 }
 
 }  // namespace evmone::rlp
