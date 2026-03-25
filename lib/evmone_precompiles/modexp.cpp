@@ -325,42 +325,44 @@ public:
 ///
 /// See "Efficient Software Implementations of Modular Exponentiation":
 /// https://eprint.iacr.org/2011/239.pdf
-void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> y, std::span<const uint64_t> mod,
-    uint64_t mod_inv, std::span<uint64_t> t) noexcept
+///
+/// Computes r = x * y * R^-1 mod m (Almost Montgomery Multiplication).
+/// r must not alias x or y.
+void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> x, std::span<const uint64_t> y,
+    std::span<const uint64_t> mod, uint64_t mod_inv) noexcept
 {
     // Use Coarsely Integrated Operand Scanning (CIOS) method with the "almost" reduction.
     const auto n = r.size();
     assert(n > 0);
+    assert(x.size() == n);
     assert(y.size() == n);
     assert(mod.size() == n);
-    assert(t.size() == n);
     assert(mod.back() != 0);
+    assert(r.data() != x.data() && r.data() != y.data());  // r must not alias inputs.
 
-    const auto t_lo = t.subspan(0, n - 1);
-    const auto t_hi = t.subspan(1);
+    const auto r_lo = r.subspan(0, n - 1);
+    const auto r_hi = r.subspan(1);
     const auto mod_hi = mod.subspan(1);
 
-    std::ranges::fill(t, uint64_t{0});
-    bool t_carry = false;
+    std::ranges::fill(r, uint64_t{0});
+    bool r_carry = false;
     for (size_t i = 0; i != n; ++i)
     {
-        const auto c1 = addmul(t, t, r, y[i]);
-        const auto [sum1, d1] = intx::addc(c1, uint64_t{t_carry});
+        const auto c1 = addmul(r, r, x, y[i]);
+        const auto [sum1, d1] = intx::addc(c1, uint64_t{r_carry});
 
-        const auto m = t[0] * mod_inv;
-        const auto c2 = (umul(mod[0], m) + t[0])[1];
+        const auto m = r[0] * mod_inv;
+        const auto c2 = (umul(mod[0], m) + r[0])[1];
 
-        const auto c3 = addmul(t_lo, t_hi, mod_hi, m, c2);
+        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, c2);
         const auto [sum2, d2] = intx::addc(sum1, c3);
-        t[n - 1] = sum2;
-        assert(!(d1 && d2));  // At most one carry should be set.
-        t_carry = d1 || d2;
+        r[n - 1] = sum2;
+        assert(!(d1 && d2));
+        r_carry = d1 || d2;
     }
 
-    if (t_carry)  // Reduce if t >= R.
-        sub(t, mod);
-
-    std::ranges::copy(t, r.begin());
+    if (r_carry)
+        sub(r, mod);
 }
 
 /// Computes result[] = base[]^exp % mod[] for odd mod[] (mod[0] % 2 != 0).
@@ -370,7 +372,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
 {
     assert(!mod.empty() && mod.back() != 0);    // mod must be trimmed.
     assert(!base.empty() && base.back() != 0);  // base must be trimmed.
-    assert(!result.empty());
+    assert(result.size() == mod.size());
     assert(exp.bit_width() != 0);
 
     const auto n = mod.size();
@@ -384,37 +386,40 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     // The numerator u = base << (n*64): base in the upper words, lower n words are zero.
     const auto u = scratch.subspan(0, n + base.size());
     const auto base_mont = scratch.subspan(n + base.size(), n);
-    const auto t = scratch.subspan(2 * n + base.size(), n);
     const auto rem_scratch = scratch.subspan(2 * n + base.size(), 2 * n + 2 * base.size() + 2);
 
     std::ranges::fill(u.first(n), uint64_t{0});  // Lower n words of u must be zero.
     std::ranges::copy(base, u.subspan(n).begin());
     rem(base_mont, u, mod, rem_scratch);
 
-    // Reuse the lower n words of u as the result buffer r.
-    const auto r = u.subspan(0, n);
+    // Double-buffer: r1 always holds the current value, r2 is scratch for mul_amm output.
+    auto r_cur = result;
+    auto r_tmp = u.first(n);  // Reuse u scratch space.
+    std::ranges::copy(base_mont, r_cur.begin());
 
-    std::ranges::copy(base_mont, r.begin());
     for (auto i = exp.bit_width() - 1; i != 0; --i)
     {
-        mul_amm(r, r, mod, mod_inv, t);
+        mul_amm(r_tmp, r_cur, r_cur, mod, mod_inv);  // Square: r2 = r1 * r1.
         if (exp[i - 1])
-            mul_amm(r, base_mont, mod, mod_inv, t);
+            mul_amm(r_cur, r_tmp, base_mont, mod, mod_inv);  // Multiply: r1 = r2 * base_mont.
+        else
+            std::swap(r_cur, r_tmp);  // No multiply: adopt r2 as r1.
     }
 
-    // Convert the result from Montgomery form by multiplying with 1.
-    // Reuse base_mont as ONE (it is no longer needed after the loop).
+    // Convert from Montgomery form: multiply by 1.
     std::ranges::fill(base_mont, uint64_t{0});
     base_mont[0] = 1;
-    mul_amm(r, base_mont, mod, mod_inv, t);
+    mul_amm(r_tmp, r_cur, base_mont, mod, mod_inv);
+    std::swap(r_cur, r_tmp);
 
     // Reduce if necessary: AMM can produce mod <= r < 2*mod.
-    if (!less(r, mod))
-        sub(r, mod);
-    assert(less(r, mod));
+    if (!less(r_cur, mod))
+        sub(r_cur, mod);
+    assert(less(r_cur, mod));
 
-    const auto [_, out] = std::ranges::copy(r, result.begin());
-    std::ranges::fill(std::span{out, result.end()}, uint64_t{0});
+    // If the result ended up in the scratch buffer, copy to result.
+    if (r_cur.data() != result.data())
+        std::ranges::copy(r_cur, result.begin());
 }
 
 /// Trims the multi-word number x[] to k bits.
@@ -567,7 +572,8 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
         const auto op_scratch = std::span{alloc.allocate(op_scratch_size), op_scratch_size};
 
         // Place the odd result directly in the result buffer if the CRT is not needed.
-        const auto result_odd = need_crt ? std::span{alloc.allocate(odd_size), odd_size} : result;
+        const auto result_odd =
+            need_crt ? std::span{alloc.allocate(odd_size), odd_size} : result.first(odd_size);
         // Always place the power-of-two result in the result buffer.
         const auto result_pow2 = result.first(pow2_size);
 
