@@ -10,6 +10,8 @@
 
 using namespace intx;
 
+namespace evmone::crypto
+{
 namespace
 {
 /// Adds y to x: x[] += y[]. The result is truncated to the size of x. Returns the carry bit.
@@ -37,12 +39,25 @@ constexpr void sub(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
         std::tie(x[i], borrow) = subc(x[i], uint64_t{0}, borrow);
 }
 
+/// Multiplies multi-word x by single word y: r[] = x[] * y. Returns the carry word.
+constexpr uint64_t mul(std::span<uint64_t> r, std::span<const uint64_t> x, uint64_t y) noexcept
+{
+    assert(r.size() == x.size());
+
+    uint64_t c = 0;
+#pragma GCC unroll 4
+    for (size_t i = 0; i != x.size(); ++i)
+    {
+        const auto p = umul(x[i], y) + c;
+        r[i] = p[0];
+        c = p[1];
+    }
+    return c;
+}
+
 /// Multiplies each word of x by y and adds the matching word of p, propagating a carry to the next
 /// word. Starts with initial carry c. Stores the result in r. Returns the final carry.
 /// r[] = p[] + x[] * y (+ c).
-/// TODO: Consider [[always_inline]].
-/// TODO: Consider template by the span extent.
-/// TODO: Consider using pointers for some spans.
 constexpr uint64_t addmul(std::span<uint64_t> r, std::span<const uint64_t> p,
     std::span<const uint64_t> x, uint64_t y, uint64_t c = 0) noexcept
 {
@@ -67,18 +82,24 @@ constexpr void mul(
     assert(!x.empty());
     assert(!y.empty());
     assert(r.size() >= std::max(x.size(), y.size()));
+    assert(r.size() <= x.size() + y.size());  // No support for zeroing r tail.
 
     // Ensure y is the shorter one to simplify the implementation and to have shorter outer loop.
     if (x.size() < y.size())
         std::swap(x, y);
 
-    // Iterations where we store high product words (above x/y size).
-    const auto extra = std::min(y.size(), r.size() - x.size());
+    // First iteration: use mul (not addmul) since r is uninitialized.
+    const auto hi0 = mul(r.first(x.size()), x, y[0]);
+    if (r.size() > x.size())
+        r[x.size()] = hi0;
 
-    std::ranges::fill(r, 0);
-    for (size_t j = 0; j < extra; ++j)
+    // Growing phase: each iteration produces a new high word at r[j + x.size()].
+    const auto hi_iters = std::min(y.size(), r.size() - x.size());
+    for (size_t j = 1; j < hi_iters; ++j)
         r[j + x.size()] = addmul(r.subspan(j, x.size()), r.subspan(j, x.size()), x, y[j]);
-    for (size_t j = extra; j < y.size(); ++j)
+
+    // Truncating phase: product is wider than r, discard high words.
+    for (size_t j = std::max(hi_iters, size_t{1}); j < y.size(); ++j)
         addmul(r.subspan(j), r.subspan(j), x.first(r.size() - j), y[j]);
 }
 
@@ -344,9 +365,20 @@ void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> x, std::span<const
     const auto r_hi = r.subspan(1);
     const auto mod_hi = mod.subspan(1);
 
-    std::ranges::fill(r, uint64_t{0});
+    // First iteration: r is uninitialized, so use mul instead of addmul.
     bool r_carry = false;
-    for (size_t i = 0; i != n; ++i)
+    {
+        const auto c1 = mul(r, x, y[0]);
+
+        const auto m = r[0] * mod_inv;
+        const auto c2 = (umul(mod[0], m) + r[0])[1];
+
+        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, c2);
+        std::tie(r[n - 1], r_carry) = intx::addc(c1, c3);
+    }
+
+    // Remaining iterations.
+    for (size_t i = 1; i != n; ++i)
     {
         const auto c1 = addmul(r, r, x, y[i]);
         const auto [sum1, d1] = intx::addc(c1, uint64_t{r_carry});
@@ -509,8 +541,6 @@ void modinv_pow2(
 
 }  // namespace
 
-namespace evmone::crypto
-{
 void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_bytes,
     std::span<const uint8_t> mod_bytes, uint8_t* output) noexcept
 {
