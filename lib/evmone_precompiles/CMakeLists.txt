@@ -27,6 +27,8 @@ target_sources(
     pairing/field_template.hpp
     modexp.hpp
     modexp.cpp
+    mulmod.hpp
+    mulmod.cpp
     ripemd160.hpp
     ripemd160.cpp
     secp256k1.hpp

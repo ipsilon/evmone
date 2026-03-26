@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "modexp.hpp"
+#include "mulmod.hpp"
 #include <evmmax/evmmax.hpp>
 #include <bit>
 #include <memory_resource>
@@ -27,53 +28,6 @@ constexpr bool add(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
     return carry;
 }
 
-/// Subtracts y from x: x[] -= y[]. The result is truncated to the size of x.
-constexpr void sub(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
-{
-    assert(x.size() >= y.size());
-
-    bool borrow = false;
-    for (size_t i = 0; i < y.size(); ++i)
-        std::tie(x[i], borrow) = subc(x[i], y[i], borrow);
-    for (size_t i = y.size(); borrow && i < x.size(); ++i)
-        std::tie(x[i], borrow) = subc(x[i], uint64_t{0}, borrow);
-}
-
-/// Multiplies multi-word x by single word y: r[] = x[] * y. Returns the carry word.
-constexpr uint64_t mul(std::span<uint64_t> r, std::span<const uint64_t> x, uint64_t y) noexcept
-{
-    assert(r.size() == x.size());
-
-    uint64_t c = 0;
-#pragma GCC unroll 4
-    for (size_t i = 0; i != x.size(); ++i)
-    {
-        const auto p = umul(x[i], y) + c;
-        r[i] = p[0];
-        c = p[1];
-    }
-    return c;
-}
-
-/// Multiplies each word of x by y and adds the matching word of p, propagating a carry to the next
-/// word. Starts with initial carry c. Stores the result in r. Returns the final carry.
-/// r[] = p[] + x[] * y (+ c).
-constexpr uint64_t addmul(std::span<uint64_t> r, std::span<const uint64_t> p,
-    std::span<const uint64_t> x, uint64_t y, uint64_t c = 0) noexcept
-{
-    assert(r.size() == p.size());
-    assert(r.size() == x.size());
-
-#pragma GCC unroll 4
-    for (size_t i = 0; i != x.size(); ++i)
-    {
-        const auto t = umul(x[i], y) + p[i] + c;
-        r[i] = t[0];
-        c = t[1];
-    }
-    return c;
-}
-
 /// Computes multiplication of x times y and truncates the result to the size of r:
 /// r[] = x[] * y[].
 constexpr void mul(
@@ -89,7 +43,7 @@ constexpr void mul(
         std::swap(x, y);
 
     // First iteration: use mul (not addmul) since r is uninitialized.
-    const auto hi0 = mul(r.first(x.size()), x, y[0]);
+    const auto hi0 = crypto::mul(r.first(x.size()), x, y[0]);
     if (r.size() > x.size())
         r[x.size()] = hi0;
 
@@ -349,8 +303,9 @@ public:
 ///
 /// Computes r = x * y * R^-1 mod m (Almost Montgomery Multiplication).
 /// r must not alias x or y.
-void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> x, std::span<const uint64_t> y,
-    std::span<const uint64_t> mod, uint64_t mod_inv) noexcept
+template <size_t N = std::dynamic_extent>
+void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
+    std::span<const uint64_t, N> y, std::span<const uint64_t, N> mod, uint64_t mod_inv) noexcept
 {
     // Use Coarsely Integrated Operand Scanning (CIOS) method with the "almost" reduction.
     const auto n = r.size();
@@ -368,7 +323,7 @@ void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> x, std::span<const
     // First iteration: r is uninitialized, so use mul instead of addmul.
     bool r_carry = false;
     {
-        const auto c1 = mul(r, x, y[0]);
+        const auto c1 = crypto::mul(r, x, y[0]);
 
         const auto m = r[0] * mod_inv;
         const auto c2 = (umul(mod[0], m) + r[0])[1];
@@ -395,6 +350,15 @@ void mul_amm(std::span<uint64_t> r, std::span<const uint64_t> x, std::span<const
 
     if (r_carry)
         sub(r, mod);
+}
+
+/// Almost Montgomery Multiplication specialized for 4-word (256-bit) operands.
+/// Delegates to mul_amm_256 in mulmod.cpp.
+template <>
+[[gnu::always_inline]] void mul_amm<4>(std::span<uint64_t, 4> r, std::span<const uint64_t, 4> x,
+    std::span<const uint64_t, 4> y, std::span<const uint64_t, 4> mod, uint64_t mod_inv) noexcept
+{
+    mul_amm_256(r, x, y, mod, mod_inv);
 }
 
 /// Computes result[] = base[]^exp % mod[] for odd mod[] (mod[0] % 2 != 0).
@@ -424,34 +388,43 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     std::ranges::copy(base, u.subspan(n).begin());
     rem(base_mont, u, mod, rem_scratch);
 
-    // Double-buffer: r1 always holds the current value, r2 is scratch for mul_amm output.
-    auto r_cur = result;
-    auto r_tmp = u.first(n);  // Reuse u scratch space.
-    std::ranges::copy(base_mont, r_cur.begin());
+    // Double-buffer exponentiation loop, parameterized by mul_amm size.
+    const auto exp_loop = [&]<size_t N>() {
+        auto r_cur = std::span<uint64_t, N>{result};
+        auto r_tmp = std::span<uint64_t, N>{u.first(n)};
+        const auto bm = std::span<const uint64_t, N>{base_mont};
+        const auto m = std::span<const uint64_t, N>{mod};
 
-    for (auto i = exp.bit_width() - 1; i != 0; --i)
-    {
-        mul_amm(r_tmp, r_cur, r_cur, mod, mod_inv);  // Square: r2 = r1 * r1.
-        if (exp[i - 1])
-            mul_amm(r_cur, r_tmp, base_mont, mod, mod_inv);  // Multiply: r1 = r2 * base_mont.
-        else
-            std::swap(r_cur, r_tmp);  // No multiply: adopt r2 as r1.
-    }
+        std::ranges::copy(bm, r_cur.begin());
+        for (auto i = exp.bit_width() - 1; i != 0; --i)
+        {
+            mul_amm<N>(r_tmp, r_cur, r_cur, m, mod_inv);  // Square.
+            if (exp[i - 1])
+                mul_amm<N>(r_cur, r_tmp, bm, m, mod_inv);  // Multiply.
+            else
+                std::swap(r_cur, r_tmp);
+        }
 
-    // Convert from Montgomery form: multiply by 1.
-    std::ranges::fill(base_mont, uint64_t{0});
-    base_mont[0] = 1;
-    mul_amm(r_tmp, r_cur, base_mont, mod, mod_inv);
-    std::swap(r_cur, r_tmp);
+        // Convert from Montgomery form: multiply by 1.
+        std::ranges::fill(base_mont, uint64_t{0});
+        base_mont[0] = 1;
+        mul_amm<N>(r_tmp, r_cur, std::span<const uint64_t, N>{base_mont}, m, mod_inv);
+        std::swap(r_cur, r_tmp);
+
+        // If the result ended up in scratch, copy to result.
+        if (r_cur.data() != result.data())
+            std::ranges::copy(r_cur, result.begin());
+    };
+
+    if (n == 4)
+        exp_loop.operator()<4>();
+    else
+        exp_loop.operator()<std::dynamic_extent>();
 
     // Reduce if necessary: AMM can produce mod <= r < 2*mod.
-    if (!less(r_cur, mod))
-        sub(r_cur, mod);
-    assert(less(r_cur, mod));
-
-    // If the result ended up in the scratch buffer, copy to result.
-    if (r_cur.data() != result.data())
-        std::ranges::copy(r_cur, result.begin());
+    if (!less(result, mod))
+        sub(result, mod);
+    assert(less(result, mod));
 }
 
 /// Trims the multi-word number x[] to k bits.
