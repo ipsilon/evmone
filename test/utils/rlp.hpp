@@ -162,6 +162,10 @@ void decode(bytes_view& from, T& to)
     if (sizeof(T) < h.payload_length)
         throw std::runtime_error("rlp decoding error: unexpected type");
 
+    // Reject non-canonical integer encoding: no leading zeros allowed.
+    if (h.payload_length > 0 && from[0] == 0)
+        throw std::runtime_error("rlp decoding error: integer has leading zero");
+
     to = load<T>(from.substr(0, static_cast<size_t>(h.payload_length)));
     from.remove_prefix(static_cast<size_t>(h.payload_length));
 }
