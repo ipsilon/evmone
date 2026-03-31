@@ -36,7 +36,7 @@ constexpr void mul(
     assert(!x.empty());
     assert(!y.empty());
     assert(r.size() >= std::max(x.size(), y.size()));
-    assert(r.size() <= x.size() + y.size());  // No support for zeroing r tail.
+    assert(r.size() <= x.size() + y.size());  // No tail zeroing: r may truncate but not exceed.
 
     // Ensure y is the shorter one to simplify the implementation and to have shorter outer loop.
     if (x.size() < y.size())
@@ -148,11 +148,12 @@ std::span<const uint64_t> shr(
     return trim(r.first(n));
 }
 
-/// Result of loading the modulus: the odd part and trailing zero count.
+/// Result of loading the modulus: the odd part, trailing zero count, and total word size.
 struct ModLoad
 {
     std::span<const uint64_t> mod_odd;  ///< Trimmed odd part (shifted in-place).
     unsigned mod_tz;                    ///< Total trailing zero bits (0 = odd modulus).
+    size_t mod_size;                    ///< Total significant word count of the modulus.
 };
 
 /// Loads modulus from big-endian bytes and extracts the odd part.
@@ -171,10 +172,10 @@ ModLoad load_mod(std::span<uint64_t> storage, std::span<const uint8_t> data) noe
     const auto mod_tz = static_cast<unsigned>(tz_words * 64 + bit_shift);
 
     if (mod_tz == 0)
-        return {top, 0};
+        return {top, 0, top.size()};
 
     // Right-shift in-place to extract the odd part.
-    return {shr(storage, top, mod_tz), mod_tz};
+    return {shr(storage, top, mod_tz), mod_tz, top.size()};
 }
 
 
@@ -519,8 +520,8 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
 {
     const Exponent exp{exp_bytes};
 
-    const auto base_size = (base_bytes.size() + 7) / 8;
-    const auto mod_size = (mod_bytes.size() + 7) / 8;
+    const auto declared_base_size = (base_bytes.size() + 7) / 8;
+    const auto declared_mod_size = (mod_bytes.size() + 7) / 8;
 
     // Bump allocator for all working memory (values + scratch).
     // Stack buffer covers inputs up to the EIP-7823 limit (1024 bytes).
@@ -532,10 +533,13 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     std::pmr::monotonic_buffer_resource pool{stack_buf, sizeof(stack_buf)};
     std::pmr::polymorphic_allocator<uint64_t> alloc{&pool};
 
-    // Allocate and load values.
-    const auto base = load({alloc.allocate(base_size), base_size}, base_bytes);
-    const auto [mod_odd, mod_tz] = load_mod({alloc.allocate(mod_size), mod_size}, mod_bytes);
+    // Allocate and load values. The actual mod_size may be smaller than declared
+    // if the modulus has leading zero bytes.
+    const auto base = load({alloc.allocate(declared_base_size), declared_base_size}, base_bytes);
+    const auto [mod_odd, mod_tz, mod_size] =
+        load_mod({alloc.allocate(declared_mod_size), declared_mod_size}, mod_bytes);
     assert(!mod_odd.empty());  // Modulus of zero must be handled outside.
+    // Result sized to actual mod value, not declared byte length. store() zero-fills leading bytes.
     const auto result = std::span{alloc.allocate(mod_size), mod_size};
     std::ranges::fill(result, uint64_t{0});
 
