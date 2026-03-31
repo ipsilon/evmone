@@ -10,6 +10,7 @@ endif()
 
 option(BUILD_SHARED_LIBS "Build evmone as a shared library" ON)
 option(COVERAGE "Build with coverage instrumentation" OFF)
+option(ASSERTIONS "Force enable the assertions in the code ignoring the CMAKE_BUILD_TYPE default" OFF)
 option(EVMONE_TESTING "Build tests and test tools" OFF)
 option(EVMONE_FUZZING "Instrument libraries and build fuzzing tools" OFF)
 
@@ -89,6 +90,18 @@ if(COVERAGE)
         $<$<CXX_COMPILER_ID:GNU>:--coverage>
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-fprofile-instr-generate>
     )
+endif()
+
+if(ASSERTIONS)
+    if(CMAKE_CONFIGURATION_TYPES)
+        message(FATAL_ERROR "ASSERTIONS option is not supported with multi-configuration generators")
+    endif()
+    # Remove -DNDEBUG from default build type flags.
+    string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_UPPER)
+    get_property(ENABLED_LANGUAGES GLOBAL PROPERTY ENABLED_LANGUAGES)
+    foreach(LANG IN LISTS ENABLED_LANGUAGES)
+        string(REGEX REPLACE " *-DNDEBUG" "" CMAKE_${LANG}_FLAGS_${BUILD_TYPE_UPPER} "${CMAKE_${LANG}_FLAGS_${BUILD_TYPE_UPPER}}")
+    endforeach()
 endif()
 
 set(CMAKE_C_VISIBILITY_PRESET hidden)

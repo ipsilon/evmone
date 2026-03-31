@@ -148,6 +148,26 @@ commands:
             curl -L --retry 3 -C - --output-dir /tmp -O https://github.com/<<parameters.repo>>/releases/download/<<parameters.release>>/fixtures_<<parameters.fixtures_suffix>>.tar.gz
             tar -xzf /tmp/fixtures_*.tar.gz
             ls -l
+  run_execution_spec_tests:
+    steps:
+      - download_execution_spec_tests:
+          release: v5.4.0
+          # develop includes stable
+          fixtures_suffix: develop
+      - run:
+          name: "Execution spec tests (develop, state_tests)"
+          # Tests for in-development EVM revision currently passing.
+          working_directory: ~/build
+          command: >
+            LLVM_PROFILE_FILE=state_tests.profraw
+            bin/evmone-statetest ~/spec-tests/fixtures/state_tests
+      - run:
+          name: "Execution spec tests (develop, blockchain_tests)"
+          # Tests for in-development EVM revision currently passing.
+          working_directory: ~/build
+          command: >
+            LLVM_PROFILE_FILE=blockchain_tests.profraw
+            bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests
 
   build:
     description: "Build"
@@ -392,24 +412,7 @@ jobs:
       CMAKE_OPTIONS: -DCOVERAGE=1
     steps:
       - build
-      - download_execution_spec_tests:
-          release: v5.4.0
-          # develop includes stable
-          fixtures_suffix: develop
-      - run:
-          name: "Execution spec tests (develop, state_tests)"
-          # Tests for in-development EVM revision currently passing.
-          working_directory: ~/build
-          command: >
-            LLVM_PROFILE_FILE=state_tests.profraw
-            bin/evmone-statetest ~/spec-tests/fixtures/state_tests
-      - run:
-          name: "Execution spec tests (develop, blockchain_tests)"
-          # Tests for in-development EVM revision currently passing.
-          working_directory: ~/build
-          command: >
-            LLVM_PROFILE_FILE=blockchain_tests.profraw
-            bin/evmone-blockchaintest ~/spec-tests/fixtures/blockchain_tests
+      - run_execution_spec_tests
       - collect_coverage_clang:
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|t8n|unittests|utils)
           binaries: evmone-statetest evmone-blockchaintest
@@ -534,6 +537,7 @@ jobs:
     executor: linux-gcc-multilib
     environment:
       TOOLCHAIN: cxx17-32bit
+      CMAKE_OPTIONS: -DASSERTIONS=ON
     steps:
       - build
       - test
@@ -542,11 +546,12 @@ jobs:
     executor: linux-clang-selfhosted
     environment:
       TOOLCHAIN: clang-libcxx-debug
-      CMAKE_OPTIONS: -DBUILD_SHARED_LIBS=NO -DSANITIZE=address,undefined,shift-exponent,implicit-conversion,nullability
+      CMAKE_OPTIONS: -DBUILD_SHARED_LIBS=NO -DASSERTIONS=ON -DSANITIZE=address,undefined,shift-exponent,implicit-conversion,nullability
       UBSAN_OPTIONS: halt_on_error=1
     steps:
       - build
       - test
+      - run_execution_spec_tests
 
   clang-tidy:
     executor: linux-clang-selfhosted
@@ -576,7 +581,7 @@ jobs:
     executor: linux-clang-selfhosted
     environment:
       CMAKE_GENERATOR: Ninja
-      CMAKE_OPTIONS: -DEVMONE_FUZZING=ON
+      CMAKE_OPTIONS: -DASSERTIONS=ON -DEVMONE_FUZZING=ON
     steps:
       - build
       - restore_cache:
@@ -597,7 +602,7 @@ jobs:
     executor: macos
     environment:
       BUILD_TYPE: RelWithDebInfo
-      CMAKE_OPTIONS: -DSANITIZE=address,undefined
+      CMAKE_OPTIONS: -DASSERTIONS=ON -DSANITIZE=address,undefined
       TESTS_FILTER: unittests
     steps:
       - run:
