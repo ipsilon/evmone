@@ -1,0 +1,112 @@
+// evmone: Fast Ethereum Virtual Machine implementation
+// Copyright 2026 The evmone Authors.
+// SPDX-License-Identifier: Apache-2.0
+
+/// This file contains EVM unit tests for EIP-8024
+/// https://eips.ethereum.org/EIPS/eip-8024
+
+#include "evm_fixture.hpp"
+
+using namespace evmone::test;
+
+TEST(bytecode, eip8024_decode)
+{
+    EXPECT_EQ(decode(bytecode{"e680"}), "bytecode{} + OP_DUPN + \"80\"");
+    EXPECT_EQ(decode(bytecode{"e7db"}), "bytecode{} + OP_SWAPN + \"db\"");
+    EXPECT_EQ(decode(bytecode{"e6805b"}), "bytecode{} + OP_DUPN + \"80\" + OP_JUMPDEST");
+    EXPECT_EQ(decode(bytecode{"e75b"}), "bytecode{} + OP_INVALID_SWAPN + OP_JUMPDEST");
+    EXPECT_EQ(decode(bytecode{"e6605b"}), "bytecode{} + OP_INVALID_DUPN + OP_PUSH1 + \"5b\"");
+    EXPECT_EQ(decode(bytecode{"e7610000"}),
+        "bytecode{} + OP_INVALID_SWAPN + OP_PUSH2 + \"0000\"");
+    EXPECT_EQ(decode(bytecode{"e65f"}), "bytecode{} + OP_INVALID_DUPN + OP_PUSH0");
+    EXPECT_EQ(decode(bytecode{"e89d"}), "bytecode{} + OP_EXCHANGE + \"9d\"");
+    EXPECT_EQ(decode(bytecode{"e82f"}), "bytecode{} + OP_EXCHANGE + \"2f\"");
+    EXPECT_EQ(decode(bytecode{"e850"}), "bytecode{} + OP_EXCHANGE + \"50\"");
+    EXPECT_EQ(decode(bytecode{"e851"}), "bytecode{} + OP_EXCHANGE + \"51\"");
+    EXPECT_EQ(decode(bytecode{"e852"}), "bytecode{} + OP_INVALID_EXCHANGE + OP_MSTORE");
+}
+
+TEST_P(evm, dupn_basic)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_EXPERIMENTAL;
+    const auto code = push(1) + 16 * OP_PUSH0 + bytecode{"e680"} + ret_top();
+    execute(code);
+    EXPECT_STATUS(EVMC_SUCCESS);
+    EXPECT_OUTPUT_INT(1);
+}
+
+TEST_P(evm, dupn_implicit_immediate)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_EXPERIMENTAL;
+    // Missing immediate at end of code defaults to 0.
+    const auto code = push(1) + 144 * OP_PUSH0 + bytecode{"e6"} + ret_top();
+    execute(code);
+    EXPECT_STATUS(EVMC_SUCCESS);
+    EXPECT_OUTPUT_INT(1);
+}
+
+TEST_P(evm, swapn_basic)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_EXPERIMENTAL;
+    const auto code = push(2) + 16 * OP_PUSH0 + push(1) + bytecode{"e780"} + ret_top();
+    execute(code);
+    EXPECT_STATUS(EVMC_SUCCESS);
+    EXPECT_OUTPUT_INT(2);
+}
+
+TEST_P(evm, exchange_basic)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_EXPERIMENTAL;
+    const auto code = push(0) + push(1) + push(2) + bytecode{"e88e"} + OP_SWAP1 + ret_top();
+    execute(code);
+    EXPECT_STATUS(EVMC_SUCCESS);
+    EXPECT_OUTPUT_INT(0);
+}
+
+TEST_P(evm, dupn_invalid_immediate)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_EXPERIMENTAL;
+    const auto code = 17 * OP_PUSH0 + bytecode{"e65b"};
+    execute(code);
+    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
+}
+
+TEST_P(evm, swapn_invalid_immediate)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_EXPERIMENTAL;
+    const auto code = 18 * OP_PUSH0 + bytecode{"e75b"};
+    execute(code);
+    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
+}
+
+TEST_P(evm, exchange_invalid_immediate)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_EXPERIMENTAL;
+    const auto code = 3 * OP_PUSH0 + bytecode{"e852"};
+    execute(code);
+    EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
+}
+
+TEST_P(evm, dupn_stack_underflow)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_EXPERIMENTAL;
+    const auto code = 16 * OP_PUSH0 + bytecode{"e680"};
+    execute(code);
+    EXPECT_STATUS(EVMC_STACK_UNDERFLOW);
+}
