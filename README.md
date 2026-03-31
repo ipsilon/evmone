@@ -6,6 +6,7 @@
 [![circleci badge]][circleci]
 [![appveyor badge]][appveyor]
 [![license badge]][Apache License, Version 2.0]
+[![gitpoap badge](https://public-api.gitpoap.io/v1/repo/ethereum/evmone/badge)](https://www.gitpoap.io/gh/ethereum/evmone)
 
 > Fast Ethereum Virtual Machine implementation
 
