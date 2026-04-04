@@ -461,6 +461,9 @@ ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
     }
 }
 
+/// WARNING: This function is NOT constant-time. The execution time depends on the scalar value.
+/// This is acceptable for EVM precompiles where all inputs (hash, signature, public key) are
+/// public calldata. Do not use for operations involving secret keys (e.g. signing).
 template <typename Curve>
 ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) noexcept
 {
@@ -487,6 +490,7 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
 
 /// Computes multi-scalar multiplication of u×P ⊕ v×Q.
 ///
+/// WARNING: This function is NOT constant-time. See mul() for details.
 /// The implementation uses the "Straus-Shamir trick": https://eprint.iacr.org/2003/257.pdf#page=7.
 template <typename Curve>
 ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve>& p,
