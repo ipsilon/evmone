@@ -106,10 +106,18 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
     blst_p1 out;
     blst_p1_add_or_double_affine(&out, &p0, &*p1_affine);
 
-    blst_p1_affine result;
-    blst_p1_to_affine(&result, &out);
-    store(_rx, result.x);
-    store(_ry, result.y);
+    if (blst_p1_is_inf(&out))
+    {
+        std::memset(_rx, 0, 64);
+        std::memset(_ry, 0, 64);
+    }
+    else
+    {
+        blst_p1_affine result;
+        blst_p1_to_affine(&result, &out);
+        store(_rx, result.x);
+        store(_ry, result.y);
+    }
 
     return true;
 }
@@ -133,10 +141,18 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
     blst_p1 out;
     blst_p1_mult(&out, &p, scalar.b, 256);
 
-    blst_p1_affine result;
-    blst_p1_to_affine(&result, &out);
-    store(_rx, result.x);
-    store(_ry, result.y);
+    if (blst_p1_is_inf(&out))
+    {
+        std::memset(_rx, 0, 64);
+        std::memset(_ry, 0, 64);
+    }
+    else
+    {
+        blst_p1_affine result;
+        blst_p1_to_affine(&result, &out);
+        store(_rx, result.x);
+        store(_ry, result.y);
+    }
 
     return true;
 }
@@ -156,10 +172,18 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
     blst_p2 out;
     blst_p2_add_or_double_affine(&out, &p0, &*p1_affine);
 
-    blst_p2_affine result;
-    blst_p2_to_affine(&result, &out);
-    store(_rx, result.x);
-    store(_ry, result.y);
+    if (blst_p2_is_inf(&out))
+    {
+        std::memset(_rx, 0, 128);
+        std::memset(_ry, 0, 128);
+    }
+    else
+    {
+        blst_p2_affine result;
+        blst_p2_to_affine(&result, &out);
+        store(_rx, result.x);
+        store(_ry, result.y);
+    }
 
     return true;
 }
@@ -183,10 +207,18 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
     blst_p2 out;
     blst_p2_mult(&out, &p, scalar.b, 256);
 
-    blst_p2_affine result;
-    blst_p2_to_affine(&result, &out);
-    store(_rx, result.x);
-    store(_ry, result.y);
+    if (blst_p2_is_inf(&out))
+    {
+        std::memset(_rx, 0, 128);
+        std::memset(_ry, 0, 128);
+    }
+    else
+    {
+        blst_p2_affine result;
+        blst_p2_to_affine(&result, &out);
+        store(_rx, result.x);
+        store(_ry, result.y);
+    }
 
     return true;
 }
