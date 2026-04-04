@@ -274,6 +274,8 @@ AffinePoint<Curve> add_affine(const AffinePoint<Curve>& p, const AffinePoint<Cur
         if constexpr (Curve::A != 0)
             dy += typename Curve::Fp{Curve::A};
         dx = y1 + y1;
+        if (dx == 0)           // 2-torsion point (y == 0): tangent is vertical.
+            return {};         // Return the point at infinity.
     }
     const auto slope = dy / dx;
 
