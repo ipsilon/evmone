@@ -538,6 +538,7 @@ ExecutionResult ecmul_execute(const uint8_t* input, size_t input_size, uint8_t* 
 
 ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
+try
 {
     static constexpr auto OUTPUT_SIZE = 32;
     static constexpr size_t PAIR_SIZE = 192;
@@ -570,6 +571,10 @@ ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8
     std::fill_n(output, OUTPUT_SIZE, 0);
     output[OUTPUT_SIZE - 1] = *res ? 1 : 0;
     return {EVMC_SUCCESS, OUTPUT_SIZE};
+}
+catch (...)
+{
+    return {EVMC_PRECOMPILE_FAILURE, 0};
 }
 
 ExecutionResult identity_execute(const uint8_t* input, size_t input_size, uint8_t* output,
@@ -651,6 +656,7 @@ ExecutionResult bls12_g1add_execute(const uint8_t* input, size_t input_size, uin
 
 ExecutionResult bls12_g1msm_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
+try
 {
     // Checked in `_analyze` function which must be called before.
     assert(input_size % BLS12_G1_MUL_INPUT_SIZE == 0);
@@ -670,6 +676,10 @@ ExecutionResult bls12_g1msm_execute(const uint8_t* input, size_t input_size, uin
 
     return {EVMC_SUCCESS, BLS12_G1_POINT_SIZE};
 }
+catch (...)
+{
+    return {EVMC_PRECOMPILE_FAILURE, 0};
+}
 
 ExecutionResult bls12_g2add_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
@@ -687,6 +697,7 @@ ExecutionResult bls12_g2add_execute(const uint8_t* input, size_t input_size, uin
 
 ExecutionResult bls12_g2msm_execute(const uint8_t* input, size_t input_size, uint8_t* output,
     [[maybe_unused]] size_t output_size) noexcept
+try
 {
     // Checked in `_analyze` function which must be called before.
     assert(input_size % BLS12_G2_MUL_INPUT_SIZE == 0);
@@ -705,6 +716,10 @@ ExecutionResult bls12_g2msm_execute(const uint8_t* input, size_t input_size, uin
     }
 
     return {EVMC_SUCCESS, BLS12_G2_POINT_SIZE};
+}
+catch (...)
+{
+    return {EVMC_PRECOMPILE_FAILURE, 0};
 }
 
 ExecutionResult bls12_pairing_check_execute(const uint8_t* input, size_t input_size,

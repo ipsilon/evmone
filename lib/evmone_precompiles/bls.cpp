@@ -192,7 +192,7 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
 }
 
 [[nodiscard]] bool g1_msm(
-    uint8_t _rx[64], uint8_t _ry[64], const uint8_t* _xycs, size_t size) noexcept
+    uint8_t _rx[64], uint8_t _ry[64], const uint8_t* _xycs, size_t size)
 {
     constexpr auto SINGLE_ENTRY_SIZE = (64 * 2 + 32);
     assert(size % SINGLE_ENTRY_SIZE == 0);
@@ -254,7 +254,7 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
 }
 
 [[nodiscard]] bool g2_msm(
-    uint8_t _rx[128], uint8_t _ry[128], const uint8_t* _xycs, size_t size) noexcept
+    uint8_t _rx[128], uint8_t _ry[128], const uint8_t* _xycs, size_t size)
 {
     constexpr auto SINGLE_ENTRY_SIZE = (128 * 2 + 32);
     assert(size % SINGLE_ENTRY_SIZE == 0);
