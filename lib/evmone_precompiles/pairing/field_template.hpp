@@ -27,11 +27,9 @@ struct ExtFieldElem
     explicit constexpr ExtFieldElem(const CoeffArrT& cs) noexcept : coeffs{cs} {}
 
     constexpr ExtFieldElem conjugate() const noexcept
+        requires(DEGREE == 2)
     {
-        auto res = this->coeffs;
-        for (size_t i = 1; i < DEGREE; i += 2)
-            res[i] = -res[i];
-        return ExtFieldElem(res);
+        return ExtFieldElem(CoeffArrT{coeffs[0], -coeffs[1]});
     }
 
     static constexpr ExtFieldElem one() noexcept
