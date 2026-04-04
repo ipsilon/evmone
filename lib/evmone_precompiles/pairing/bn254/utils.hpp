@@ -207,6 +207,11 @@ constexpr Fq12 endomorphism(const Fq12& f) noexcept
 
 
 /// Computes `P0 + P1` in Jacobian coordinates.
+///
+/// PRECONDITION: Neither P0 nor P1 may be the point at infinity (Z=0),
+/// and P0 must not equal P1 or -P1. These cases are not handled and will
+/// produce incorrect results. This is safe for current callers (mul_by_X,
+/// g2_subgroup_check) because all intermediate points have large prime order.
 constexpr ecc::JacPoint<Fq2> add(
     const ecc::JacPoint<Fq2>& P0, const ecc::JacPoint<Fq2>& P1) noexcept
 {
