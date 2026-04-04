@@ -89,6 +89,8 @@ std::span<uint64_t> load(std::span<uint64_t> storage, std::span<const uint8_t> d
 /// Stores little-endian uint64 words to big-endian bytes.
 void store(std::span<uint8_t> r, std::span<const uint64_t> words) noexcept
 {
+    static_assert(
+        std::endian::native == std::endian::little, "modexp store() requires little-endian host");
     // Write full byteswapped words from the end (the least significant word first).
     size_t w = 0;
     auto pos = r.size();
