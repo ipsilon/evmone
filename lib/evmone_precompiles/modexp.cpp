@@ -169,7 +169,7 @@ ModLoad load_mod(std::span<uint64_t> storage, std::span<const uint8_t> data) noe
 
     const auto tz_words = static_cast<size_t>(it - top.begin());
     const auto bit_shift = static_cast<unsigned>(std::countr_zero(*it));
-    const auto mod_tz = static_cast<unsigned>(tz_words * 64 + bit_shift);
+    const auto mod_tz = static_cast<size_t>(tz_words * 64 + bit_shift);
 
     if (mod_tz == 0)
         return {top, 0, top.size()};
