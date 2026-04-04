@@ -99,17 +99,20 @@ public:
         return wrap(Fp.sub(0, a.value_));
     }
 
+    /// Division returns 0 when the divisor is 0. See ModArith::inv().
     friend constexpr auto operator/(one_t, const FieldElement& a) noexcept
     {
         return wrap(Fp.inv(a.value_));
     }
 
+    /// Division returns 0 when the divisor is 0. See ModArith::inv().
     friend constexpr auto operator/(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.mul(a.value_, Fp.inv(b.value_)));
     }
 
     /// Named 1/x inversion method. Needed in the pairing templates.
+    /// Returns 0 when this element is 0. See ModArith::inv().
     constexpr auto inv() const noexcept { return wrap(Fp.inv(value_)); }
 
     /// Named one element. Needed in the pairing templates.

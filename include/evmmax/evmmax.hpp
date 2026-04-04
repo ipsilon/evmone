@@ -159,7 +159,8 @@ public:
     }
 
     /// Compute the modular inversion of the x in Montgomery form. The result is in Montgomery form.
-    /// If x is not invertible, the result is 0.
+    /// If x is not invertible (including x == 0), the result is 0 — not an error.
+    /// Callers that use this for division must guard against zero divisors externally.
     constexpr UintT inv(const UintT& x) const noexcept
     {
         assert((mod_ & 1) == 1);
