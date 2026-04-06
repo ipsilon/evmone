@@ -26,12 +26,11 @@ struct ExtFieldElem
     /// TODO: This constructor may be optimized to avoid copying the array.
     explicit constexpr ExtFieldElem(const CoeffArrT& cs) noexcept : coeffs{cs} {}
 
+    /// Returns the conjugate of a degree-2 extension field element: (a, b) → (a, -b).
     constexpr ExtFieldElem conjugate() const noexcept
+        requires(DEGREE == 2)
     {
-        auto res = this->coeffs;
-        for (size_t i = 1; i < DEGREE; i += 2)
-            res[i] = -res[i];
-        return ExtFieldElem(res);
+        return ExtFieldElem({coeffs[0], -coeffs[1]});
     }
 
     static constexpr ExtFieldElem one() noexcept
