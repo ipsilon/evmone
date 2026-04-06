@@ -47,7 +47,7 @@ inline constexpr int LOG_ATE_LOOP_COUNT = 63;
 /// Miller loop according to https://eprint.iacr.org/2010/354.pdf Algorithm 1.
 Fq12 miller_loop(const ecc::Point<Fq2>& Q, const ecc::Point<Fq>& P) noexcept
 {
-    auto T = ecc::JacPoint<Fq2>::from(Q);
+    auto T = ecc::ProjPoint<TwistCurve>::from(Q);
     auto nQ = -Q;
     auto f = Fq12::one();
     std::array<Fq2, 3> t;

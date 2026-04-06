@@ -172,18 +172,25 @@ struct AffinePoint
 
 /// Elliptic curve point in Jacobian coordinates (X, Y, Z)
 /// representing the affine point (X/Z², Y/Z³).
-/// TODO: Merge with JacPoint.
 template <typename Curve>
 struct ProjPoint
 {
     using FE = Curve::Fp;
     FE x;
-    FE y{1};  // TODO: Make sure this is compile-time constant.
+    FE y = FE::one();
     FE z;
 
     ProjPoint() = default;
     constexpr ProjPoint(const FE& x_, const FE& y_, const FE& z_) noexcept : x{x_}, y{y_}, z{z_} {}
-    constexpr explicit ProjPoint(const AffinePoint<Curve>& p) noexcept : x{p.x}, y{p.y}, z{FE{1}} {}
+    constexpr explicit ProjPoint(const AffinePoint<Curve>& p) noexcept
+      : x{p.x}, y{p.y}, z{FE::one()}
+    {}
+
+    /// Creates a ProjPoint from an untyped Point.
+    static constexpr ProjPoint from(const Point<FE>& p) noexcept
+    {
+        return {p.x, p.y, FE::one()};
+    }
 
     friend constexpr bool operator==(const ProjPoint& p, zero_t) noexcept { return p.z == 0; }
 
@@ -199,35 +206,6 @@ struct ProjPoint
     }
 
     friend constexpr ProjPoint operator-(const ProjPoint& p) noexcept { return {p.x, -p.y, p.z}; }
-};
-
-// Jacobian (three) coordinates point implementation.
-template <typename ValueT>
-struct JacPoint
-{
-    ValueT x = 1;
-    ValueT y = 1;
-    ValueT z = 0;
-
-    // Compares two Jacobian coordinates points
-    friend constexpr bool operator==(const JacPoint& a, const JacPoint& b) noexcept
-    {
-        const auto bz2 = b.z * b.z;
-        const auto az2 = a.z * a.z;
-
-        const auto bz3 = bz2 * b.z;
-        const auto az3 = az2 * a.z;
-
-        return a.x * bz2 == b.x * az2 && a.y * bz3 == b.y * az3;
-    }
-
-    friend constexpr JacPoint operator-(const JacPoint& p) noexcept { return {p.x, -p.y, p.z}; }
-
-    // Creates Jacobian coordinates point from affine point
-    static constexpr JacPoint from(const ecc::Point<ValueT>& ap) noexcept
-    {
-        return {ap.x, ap.y, ValueT::one()};
-    }
 };
 
 template <typename IntT>

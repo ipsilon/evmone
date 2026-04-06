@@ -51,6 +51,13 @@ struct Fq12Config
 };
 using Fq12 = ecc::ExtFieldElem<Fq12Config>;
 
+/// The BN254 twist curve parameters (G2 curve over Fq2).
+struct TwistCurve
+{
+    using Fp = Fq2;
+    static constexpr auto A = 0;
+};
+
 /// Multiplies two Fq^2 field elements
 constexpr Fq2 multiply(const Fq2& a, const Fq2& b)
 {
