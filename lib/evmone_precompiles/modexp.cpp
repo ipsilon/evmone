@@ -89,6 +89,8 @@ std::span<uint64_t> load(std::span<uint64_t> storage, std::span<const uint8_t> d
 /// Stores little-endian uint64 words to big-endian bytes.
 void store(std::span<uint8_t> r, std::span<const uint64_t> words) noexcept
 {
+    static_assert(
+        std::endian::native == std::endian::little, "modexp store() requires little-endian host");
     // Write full byteswapped words from the end (the least significant word first).
     size_t w = 0;
     auto pos = r.size();
@@ -169,7 +171,10 @@ ModLoad load_mod(std::span<uint64_t> storage, std::span<const uint8_t> data) noe
 
     const auto tz_words = static_cast<size_t>(it - top.begin());
     const auto bit_shift = static_cast<unsigned>(std::countr_zero(*it));
+    // tz_words * 64 fits in unsigned: overflow requires >512MB trailing zeros which
+    // costs ~50Mx the block gas limit (pre-Osaka) or is impossible (post-Osaka, 1KB).
     const auto mod_tz = static_cast<unsigned>(tz_words * 64 + bit_shift);
+    assert(mod_tz == tz_words * 64 + bit_shift);  // No overflow.
 
     if (mod_tz == 0)
         return {top, 0, top.size()};

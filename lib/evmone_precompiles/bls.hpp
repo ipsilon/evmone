@@ -44,16 +44,16 @@ inline constexpr auto BLS_FIELD_MODULUS =
 /// Computes ∑ⁿₖ₌₁cₖPₖ for points in affine coordinate on the BLS12-381 curve, performs
 /// subgroup check according to spec
 /// https://eips.ethereum.org/EIPS/eip-2537#abi-for-g1-msm
-[[nodiscard]] bool g1_msm(
-    uint8_t _rx[64], uint8_t _ry[64], const uint8_t* _xycs, size_t size) noexcept;
+/// @throws std::bad_alloc
+[[nodiscard]] bool g1_msm(uint8_t _rx[64], uint8_t _ry[64], const uint8_t* _xycs, size_t size);
 
 /// Multi scalar multiplication in BLS12-381 curve G2 subgroup.
 ///
 /// Computes ∑ⁿₖ₌₁cₖPₖ for points in affine coordinate on the BLS12-381 curve  over G2 extension
 /// field, performs subgroup check according to spec
 /// https://eips.ethereum.org/EIPS/eip-2537#abi-for-g2-msm
-[[nodiscard]] bool g2_msm(
-    uint8_t _rx[128], uint8_t _ry[128], const uint8_t* _xycs, size_t size) noexcept;
+/// @throws std::bad_alloc
+[[nodiscard]] bool g2_msm(uint8_t _rx[128], uint8_t _ry[128], const uint8_t* _xycs, size_t size);
 
 /// Maps field element of Fp to curve point on BLS12-381 curve G1 subgroup.
 ///

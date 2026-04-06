@@ -277,6 +277,7 @@ AffinePoint<Curve> add_affine(const AffinePoint<Curve>& p, const AffinePoint<Cur
         if constexpr (Curve::A != 0)
             dy += typename Curve::Fp{Curve::A};
         dx = y1 + y1;
+        assert(dx != 0);  // 2-torsion (y=0): unreachable for prime-order curves.
     }
     const auto slope = dy / dx;
 
