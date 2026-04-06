@@ -26,7 +26,7 @@ inline constexpr auto BLS_FIELD_MODULUS =
 /// Addition in BLS12-381 curve group over G2 extension field.
 ///
 /// Computes P ⊕ Q for two points in affine coordinates on the BLS12-381 curve over G2 extension
-/// field, performs subgroup checks for both points according to spec
+/// field. Checks that point coordinates are from the field and that points are on curve.
 /// https://eips.ethereum.org/EIPS/eip-2537#abi-for-g2-addition
 [[nodiscard]] bool g2_add(uint8_t _rx[128], uint8_t _ry[128], const uint8_t _x0[128],
     const uint8_t _y0[128], const uint8_t _x1[128], const uint8_t _y1[128]) noexcept;

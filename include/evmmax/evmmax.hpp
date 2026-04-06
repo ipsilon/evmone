@@ -158,8 +158,8 @@ public:
         return (d.carry) ? s : d.value;
     }
 
-    /// Compute the modular inversion of the x in Montgomery form. The result is in Montgomery form.
-    /// If x is not invertible, the result is 0.
+    /// Computes modular inverse of x in Montgomery form. Result is in Montgomery form.
+    /// Returns 0 for non-invertible x (including x == 0).
     constexpr UintT inv(const UintT& x) const noexcept
     {
         assert((mod_ & 1) == 1);

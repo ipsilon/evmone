@@ -99,17 +99,20 @@ public:
         return wrap(Fp.sub(0, a.value_));
     }
 
+    /// Division returns 0 when the divisor is 0. See ModArith::inv().
     friend constexpr auto operator/(one_t, const FieldElement& a) noexcept
     {
         return wrap(Fp.inv(a.value_));
     }
 
+    /// Division returns 0 when the divisor is 0. See ModArith::inv().
     friend constexpr auto operator/(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.mul(a.value_, Fp.inv(b.value_)));
     }
 
     /// Named 1/x inversion method. Needed in the pairing templates.
+    /// Returns 0 when this element is 0. See ModArith::inv().
     constexpr auto inv() const noexcept { return wrap(Fp.inv(value_)); }
 
     /// Named one element. Needed in the pairing templates.
@@ -461,6 +464,9 @@ ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
     }
 }
 
+/// Computes scalar multiplication [c]P.
+/// Not constant-time: execution time depends on the scalar value.
+/// Safe for EVM precompiles (public calldata), not for secret key operations.
 template <typename Curve>
 ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) noexcept
 {
@@ -487,6 +493,7 @@ ProjPoint<Curve> mul(const AffinePoint<Curve>& p, typename Curve::uint_type c) n
 
 /// Computes multi-scalar multiplication of u×P ⊕ v×Q.
 ///
+/// Not constant-time. See mul() for details.
 /// The implementation uses the "Straus-Shamir trick": https://eprint.iacr.org/2003/257.pdf#page=7.
 template <typename Curve>
 ProjPoint<Curve> msm(const typename Curve::uint_type& u, const AffinePoint<Curve>& p,
