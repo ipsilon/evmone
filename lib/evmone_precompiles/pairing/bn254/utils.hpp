@@ -115,7 +115,7 @@ constexpr bool g2_is_infinity(const evmmax::ecc::Point<Fq2>& p)
 /// This specialisation computes Frobenius and Frobenius^3
 /// TODO: add reference that it's exactly the same as untwist->frobenius->twist
 template <int P>
-constexpr ecc::JacPoint<Fq2> endomorphism(const ecc::JacPoint<Fq2>& p) noexcept
+constexpr ecc::ProjPoint<E2> endomorphism(const ecc::ProjPoint<E2>& p) noexcept
     requires(P == 1 || P == 3)
 {
     return {
@@ -129,7 +129,7 @@ constexpr ecc::JacPoint<Fq2> endomorphism(const ecc::JacPoint<Fq2>& p) noexcept
 /// over Fq^2 extended field.
 /// This specialisation computes Frobenius^2
 template <int P>
-constexpr ecc::JacPoint<Fq2> endomorphism(const ecc::JacPoint<Fq2>& p) noexcept
+constexpr ecc::ProjPoint<E2> endomorphism(const ecc::ProjPoint<E2>& p) noexcept
     requires(P == 2)
 {
     return {
@@ -208,8 +208,8 @@ constexpr Fq12 endomorphism(const Fq12& f) noexcept
 
 /// Computes `P0 + P1` in Jacobian coordinates.
 /// P0 and P1 must not be the point at infinity, and must not be equal or negations of each other.
-constexpr ecc::JacPoint<Fq2> add(
-    const ecc::JacPoint<Fq2>& P0, const ecc::JacPoint<Fq2>& P1) noexcept
+constexpr ecc::ProjPoint<E2> add(
+    const ecc::ProjPoint<E2>& P0, const ecc::ProjPoint<E2>& P1) noexcept
 {
     const auto& x0 = P0.x;
     const auto& y0 = P0.y;
@@ -246,7 +246,7 @@ constexpr ecc::JacPoint<Fq2> add(
 }
 
 /// Computes `Q + Q` in Jacobian coordinates.
-constexpr ecc::JacPoint<Fq2> dbl(const ecc::JacPoint<Fq2>& Q) noexcept
+constexpr ecc::ProjPoint<E2> dbl(const ecc::ProjPoint<E2>& Q) noexcept
 {
     const auto& x = Q.x;
     const auto& y = Q.y;
@@ -274,7 +274,7 @@ constexpr ecc::JacPoint<Fq2> dbl(const ecc::JacPoint<Fq2>& Q) noexcept
 
 /// Computes `N` doubles of the point `a` in Jacobian coordinates.
 template <int N>
-constexpr ecc::JacPoint<Fq2> n_dbl(const ecc::JacPoint<Fq2>& a) noexcept
+constexpr ecc::ProjPoint<E2> n_dbl(const ecc::ProjPoint<E2>& a) noexcept
 {
     auto r = dbl(a);
     for (int i = 0; i < N - 1; ++i)
@@ -285,7 +285,7 @@ constexpr ecc::JacPoint<Fq2> n_dbl(const ecc::JacPoint<Fq2>& a) noexcept
 
 /// Addchain generated algorithm which multiplies point `a` in Jacobian coordinated
 /// by X (curve seed).
-constexpr ecc::JacPoint<Fq2> mul_by_X(const ecc::JacPoint<Fq2>& a) noexcept
+constexpr ecc::ProjPoint<E2> mul_by_X(const ecc::ProjPoint<E2>& a) noexcept
 {
     auto t0 = dbl(a);
     auto t2 = dbl(t0);
@@ -325,7 +325,7 @@ constexpr ecc::JacPoint<Fq2> mul_by_X(const ecc::JacPoint<Fq2>& a) noexcept
 /// For more details see https://eprint.iacr.org/2022/348.pdf Example 1 from 3.1.2 Examples
 constexpr bool g2_subgroup_check(const ecc::Point<Fq2>& p_aff)
 {
-    const auto p = ecc::JacPoint<Fq2>::from(p_aff);
+    const auto p = ecc::ProjPoint<E2>::from(p_aff);
 
     const auto px = mul_by_X(p);
     const auto px1 = add(px, p);
@@ -344,8 +344,8 @@ constexpr bool g2_subgroup_check(const ecc::Point<Fq2>& p_aff)
 /// the curve (not twisted curve) evaluated at point P
 /// Returns live evaluation coefficients (-t, tw, tvw)
 /// For more details see https://notes.ethereum.org/@ipsilon/Hkn2a2qk0
-constexpr ecc::JacPoint<Fq2> lin_func_and_dbl(
-    const ecc::JacPoint<Fq2>& Q, std::array<Fq2, 3>& t) noexcept
+constexpr ecc::ProjPoint<E2> lin_func_and_dbl(
+    const ecc::ProjPoint<E2>& Q, std::array<Fq2, 3>& t) noexcept
 {
     const auto& x = Q.x;
     const auto& y = Q.y;
@@ -372,14 +372,14 @@ constexpr ecc::JacPoint<Fq2> lin_func_and_dbl(
     t[1] = M * z_squared;
     t[2] = R - M * x;
 
-    return ecc::JacPoint<Fq2>{Xp, Yp, Zp};
+    return ecc::ProjPoint<E2>{Xp, Yp, Zp};
 }
 
 /// Computes points P0 and P1 addition for twisted curve + line defined by untwisted P1 and P2
 /// points on the curve (not twisted curve) evaluated at point P. Formula is simplified for P1.z
 /// == 1. For more details see https://notes.ethereum.org/@ipsilon/Hkn2a2qk0
-[[nodiscard]] constexpr ecc::JacPoint<Fq2> lin_func_and_add(
-    const ecc::JacPoint<Fq2>& P0, const ecc::Point<Fq2>& P1, std::array<Fq2, 3>& t) noexcept
+[[nodiscard]] constexpr ecc::ProjPoint<E2> lin_func_and_add(
+    const ecc::ProjPoint<E2>& P0, const ecc::Point<Fq2>& P1, std::array<Fq2, 3>& t) noexcept
 {
     const auto& x0 = P0.x;
     const auto& y0 = P0.y;
@@ -410,14 +410,14 @@ constexpr ecc::JacPoint<Fq2> lin_func_and_dbl(
     t[1] = R * z0_squared;  // = S2·z0² − y0·z0²
     t[2] = y0 * U2 - x0 * S2;
 
-    return ecc::JacPoint<Fq2>{X3, Y3, Z3};
+    return ecc::ProjPoint<E2>{X3, Y3, Z3};
 }
 
 /// Computes points P0 and P1 addition for twisted curve + line defined by untwisted P1 and P2
 /// points on the curve (not twisted curve) evaluated at point P. Formula is simplified for P1.z
 /// == 1. For more details see https://notes.ethereum.org/@ipsilon/Hkn2a2qk0
 constexpr void lin_func(
-    const ecc::JacPoint<Fq2>& P0, const ecc::Point<Fq2>& P1, std::array<Fq2, 3>& t) noexcept
+    const ecc::ProjPoint<E2>& P0, const ecc::Point<Fq2>& P1, std::array<Fq2, 3>& t) noexcept
 {
     const auto& x0 = P0.x;
     const auto& y0 = P0.y;
