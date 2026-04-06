@@ -15,7 +15,7 @@ consteval Fq2 make_fq2(const uint256& a, const uint256& b) noexcept
 /// Defines coefficients needed for fast Frobenius endomorphism computation.
 /// For more ref see https://eprint.iacr.org/2010/354.pdf 3.2 Frobenius Operator.
 /// TODO: Make it constexpr.
-static inline std::array<std::array<Fq2, 5>, 3> FROBENIUS_COEFFS = {
+static inline const std::array<std::array<Fq2, 5>, 3> FROBENIUS_COEFFS = {
     {
         {
             make_fq2(
@@ -105,7 +105,7 @@ constexpr bool g2_is_infinity(const evmmax::ecc::Point<Fq2>& p)
     return p.x == Fq2::zero() && p.y == Fq2::zero();
 }
 
-// Forbenius endomorphism related functions are implemented based on
+// Frobenius endomorphism related functions are implemented based on
 // https://hackmd.io/@jpw/bn254#mathbb-G_2-membership-check-using-efficient-endomorphism
 // and
 // https://eprint.iacr.org/2010/354.pdf 3.2 Frobenius Operator
