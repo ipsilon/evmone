@@ -2,9 +2,6 @@
 # Copyright 2019-2020 The EVMC Authors.
 # Licensed under the Apache License, Version 2.0.
 
-hunter_add_package(CLI11)
-find_package(CLI11 REQUIRED)
-
 add_executable(evmc-tool main.cpp)
 add_executable(evmc::tool ALIAS evmc-tool)
 set_target_properties(evmc-tool PROPERTIES OUTPUT_NAME evmc)

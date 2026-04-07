@@ -14,7 +14,3 @@ set_target_properties(loader PROPERTIES
     POSITION_INDEPENDENT_CODE TRUE
 )
 target_link_libraries(loader INTERFACE ${CMAKE_DL_LIBS} PUBLIC evmc::evmc)
-
-if(EVMC_INSTALL)
-    install(TARGETS loader EXPORT evmcTargets DESTINATION ${CMAKE_INSTALL_LIBDIR})
-endif()

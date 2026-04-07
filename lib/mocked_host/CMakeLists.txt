@@ -7,7 +7,3 @@ target_sources(mocked_host INTERFACE $<BUILD_INTERFACE:${EVMC_INCLUDE_DIR}/evmc/
 
 add_library(evmc::mocked_host ALIAS mocked_host)
 target_link_libraries(mocked_host INTERFACE evmc::evmc_cpp)
-
-if(EVMC_INSTALL)
-    install(TARGETS mocked_host EXPORT evmcTargets)
-endif()

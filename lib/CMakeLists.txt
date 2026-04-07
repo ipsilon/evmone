@@ -13,11 +13,6 @@ target_compile_features(evmc_cpp INTERFACE cxx_std_17)
 target_include_directories(evmc_cpp INTERFACE $<BUILD_INTERFACE:${EVMC_INCLUDE_DIR}>$<INSTALL_INTERFACE:include>)
 target_link_libraries(evmc_cpp INTERFACE evmc::evmc)
 
-add_subdirectory(instructions)
 add_subdirectory(loader)
 add_subdirectory(mocked_host)
 add_subdirectory(tooling)
-
-if(EVMC_INSTALL)
-    install(TARGETS evmc evmc_cpp EXPORT evmcTargets)
-endif()

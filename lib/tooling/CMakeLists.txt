@@ -12,7 +12,3 @@ target_sources(
     ${EVMC_INCLUDE_DIR}/evmc/tooling.hpp
     run.cpp
 )
-
-if(EVMC_INSTALL)
-    install(TARGETS tooling EXPORT evmcTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-endif()
