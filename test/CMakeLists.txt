@@ -48,8 +48,4 @@ set_target_properties(
 get_target_property(type evmone TYPE)
 if(type STREQUAL SHARED_LIBRARY)
     evmc_add_vm_test(NAME ${PROJECT_NAME}/evmc-vmtester TARGET evmone)
-
-    if(TARGET evm-test)
-        add_test(NAME ${PROJECT_NAME}/evm-test COMMAND evm-test $<TARGET_FILE:evmone>)
-    endif()
 endif()
