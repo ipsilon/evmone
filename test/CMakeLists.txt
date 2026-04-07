@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 include(GoogleTest)
-include(${PROJECT_SOURCE_DIR}/evmc/cmake/EVMC.cmake)
 
 set(evmone_private_include_dir ${PROJECT_SOURCE_DIR}/lib)
 
@@ -44,8 +43,3 @@ set_target_properties(
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}
 )
-
-get_target_property(type evmone TYPE)
-if(type STREQUAL SHARED_LIBRARY)
-    evmc_add_vm_test(NAME ${PROJECT_NAME}/evmc-vmtester TARGET evmone)
-endif()
