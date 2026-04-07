@@ -41,6 +41,9 @@ endif()
 option(EVMC_TOOLS "Build EVMC test tools" ${EVMONE_TESTING})
 option(EVMC_INSTALL "Install EVMC" OFF)
 
+hunter_add_package(CLI11)
+find_package(CLI11 CONFIG REQUIRED)
+
 if(COMMAND block) # TODO(cmake-3.25)
     block()
         set(CMAKE_C_CLANG_TIDY "")

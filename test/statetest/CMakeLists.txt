@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 add_executable(evmone-statetest)
-target_link_libraries(evmone-statetest PRIVATE evmone::testutils evmone evmone-buildinfo GTest::gtest)
+target_link_libraries(evmone-statetest PRIVATE evmone::testutils evmone evmone-buildinfo GTest::gtest CLI11::CLI11)
 target_sources(
     evmone-statetest PRIVATE
     statetest.cpp
