@@ -4,10 +4,6 @@
 
 cmake_minimum_required(VERSION 3.19...4.2)
 
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/evmc/.git)
-    message(FATAL_ERROR "Git submodules not initialized, execute:\n  git submodule update --init")
-endif()
-
 option(BUILD_SHARED_LIBS "Build evmone as a shared library" ON)
 option(COVERAGE "Build with coverage instrumentation" OFF)
 option(ASSERTIONS "Force enable the assertions in the code ignoring the CMAKE_BUILD_TYPE default" OFF)
@@ -37,9 +33,6 @@ set(PROJECT_SOVERSION ${PROJECT_VERSION_MAJOR})
 if(PROJECT_VERSION_MAJOR EQUAL 0)
     set(PROJECT_SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
 endif()
-
-option(EVMC_TOOLS "Build EVMC test tools" ${EVMONE_TESTING})
-option(EVMC_INSTALL "Install EVMC" OFF)
 
 hunter_add_package(CLI11)
 find_package(CLI11 CONFIG REQUIRED)

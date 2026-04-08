@@ -1,6 +1,3 @@
-[submodule "evmc"]
-	path = evmc
-	url = https://github.com/ethereum/evmc
 [submodule "evm-benchmarks"]
 	path = test/evm-benchmarks
 	url = https://github.com/ipsilon/evm-benchmarks
