@@ -59,11 +59,6 @@ macro(cable_configure_compiler)
         message(FATAL_ERROR "cable_configure_compiler() must be used after project()")
     endif()
 
-    if(NOT DEFINED PROJECT_IS_TOP_LEVEL)
-        # Define PROJECT_IS_TOP_LEVEL (since CMake 3.21) if not available.
-        string(COMPARE EQUAL ${CMAKE_SOURCE_DIR} ${PROJECT_SOURCE_DIR} PROJECT_IS_TOP_LEVEL)
-    endif()
-
     if(PROJECT_IS_TOP_LEVEL)
         # Do this configuration only in the top level project.
 

@@ -2,8 +2,6 @@
 # Copyright 2016 The EVMC Authors.
 # Licensed under the Apache License, Version 2.0.
 
-cmake_minimum_required(VERSION 3.16...3.27)
-
 if(TARGET evmc)
     # The evmc library has been already created (probably by other submodule).
     return()

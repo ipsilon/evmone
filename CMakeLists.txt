@@ -2,7 +2,7 @@
 # Copyright 2019 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-cmake_minimum_required(VERSION 3.19...4.2)
+cmake_minimum_required(VERSION 3.22...4.2)
 
 option(BUILD_SHARED_LIBS "Build evmone as a shared library" ON)
 option(COVERAGE "Build with coverage instrumentation" OFF)
