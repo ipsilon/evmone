@@ -7,7 +7,6 @@
 #include "synthetic_benchmarks.hpp"
 #include <benchmark/benchmark.h>
 #include <evmc/evmc.hpp>
-#include <evmc/loader.h>
 #include <evmone/evmone.h>
 #include <filesystem>
 #include <fstream>
@@ -172,7 +171,6 @@ void register_benchmarks(std::span<const BenchmarkCase> benchmark_cases)
 
 
 /// The error code for CLI arguments parsing error in evmone-bench.
-/// The number tries to be different from EVMC loading error codes.
 constexpr auto cli_parsing_error = -3;
 
 /// Parses evmone-bench CLI arguments and registers benchmark cases.
@@ -183,8 +181,6 @@ constexpr auto cli_parsing_error = -3;
 ///    Uses evmone VMs, only synthetic benchmarks are available.
 /// 2: evmone-bench benchmarks_dir
 ///    Uses evmone VMs, loads all benchmarks from benchmarks_dir.
-/// 3: evmone-bench evmc_config benchmarks_dir
-///    The same as (2) but loads additional custom EVMC VM.
 /// 4: evmone-bench code_hex_file input_hex expected_output_hex.
 ///    Uses evmone VMs, registers custom benchmark with the code from the given file,
 ///    and the given input. The benchmark will compare the output with the provided
@@ -192,7 +188,6 @@ constexpr auto cli_parsing_error = -3;
 std::tuple<int, std::vector<BenchmarkCase>> parseargs(int argc, char** argv)
 {
     // Arguments' placeholders:
-    std::string evmc_config;
     std::string benchmarks_dir;
     std::string code_hex_file;
     std::string input_hex;
@@ -206,10 +201,6 @@ std::tuple<int, std::vector<BenchmarkCase>> parseargs(int argc, char** argv)
     case 2:
         benchmarks_dir = argv[1];
         break;
-    case 3:
-        evmc_config = argv[1];
-        benchmarks_dir = argv[2];
-        break;
     case 4:
         code_hex_file = argv[1];
         input_hex = argv[2];
@@ -218,23 +209,6 @@ std::tuple<int, std::vector<BenchmarkCase>> parseargs(int argc, char** argv)
     default:
         std::cerr << "Too many arguments\n";
         return {cli_parsing_error, {}};
-    }
-
-    if (!evmc_config.empty())
-    {
-        auto ec = evmc_loader_error_code{};
-        registered_vms["external"] = evmc::VM{evmc_load_and_configure(evmc_config.c_str(), &ec)};
-
-        if (ec != EVMC_LOADER_SUCCESS)
-        {
-            if (const auto error = evmc_last_error_msg())
-                std::cerr << "EVMC loading error: " << error << "\n";
-            else
-                std::cerr << "EVMC loading error " << ec << "\n";
-            return {static_cast<int>(ec), {}};
-        }
-
-        std::cout << "External VM: " << evmc_config << "\n";
     }
 
     if (!benchmarks_dir.empty())
