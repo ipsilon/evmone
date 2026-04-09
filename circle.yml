@@ -249,7 +249,7 @@ commands:
         default: ""
       binaries:
         type: string
-        default: evmone-unittests evmone-statetest evmone-blockchaintest evmone-t8n
+        default: evmone evmone-unittests evmone-statetest evmone-blockchaintest evmone-t8n
     steps:
       - run:
           name: "Collect coverage data (clang)"
@@ -321,7 +321,7 @@ jobs:
           name: "Check code format"
           command: |
             clang-format --version
-            find include lib test -name '*.hpp' -o -name '*.cpp' -o -name '*.h' -o -name '*.c' | xargs clang-format -i
+            find include lib test tools -name '*.hpp' -o -name '*.cpp' -o -name '*.h' -o -name '*.c' | xargs clang-format -i
             git diff --color --exit-code
       - run:
           name: "Check spelling"
@@ -509,7 +509,7 @@ jobs:
   gcc-min:
     executor: linux-gcc-min
     environment:
-      CMAKE_OPTIONS: -DEVMC_TOOLS=OFF
+      CMAKE_OPTIONS: -DEVMONE_TOOLS=OFF
     steps:
       - build
       - test
@@ -641,9 +641,9 @@ jobs:
           name: "Check qemu"
           command: qemu-x86_64 --version
       - run:
-          name: "Check evmone.so"
+          name: "Check evmone-cli"
           working_directory: ~/build
-          command: (! qemu-x86_64 bin/evmc run --vm ./lib/libevmone.so,trace 6000 2>&1) | grep "CPU does not support"
+          command: (! qemu-x86_64 bin/evmone --trace run 6000 2>&1) | grep "CPU does not support"
       - run:
           name: "Check unittests"
           working_directory: ~/build

@@ -6,6 +6,9 @@ include(GoogleTest)
 
 set(evmone_private_include_dir ${PROJECT_SOURCE_DIR}/lib)
 
+hunter_add_package(CLI11)
+find_package(CLI11 CONFIG REQUIRED)
+
 hunter_add_package(GTest)
 find_package(GTest CONFIG REQUIRED)
 

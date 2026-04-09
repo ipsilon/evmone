@@ -52,7 +52,3 @@ endif()
 set(EVMC_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/include)
 
 add_subdirectory(lib)
-
-if(EVMC_TOOLS)
-    add_subdirectory(tools/evmc)
-endif()

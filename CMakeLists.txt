@@ -25,6 +25,8 @@ include(Hunter/init)
 project(evmone LANGUAGES CXX C)
 set(PROJECT_VERSION 0.20.0)
 
+option(EVMONE_TOOLS "Build evmone tools" ${PROJECT_IS_TOP_LEVEL})
+
 string(REGEX MATCH "([0-9]+)\\.([0-9]+)" _ ${PROJECT_VERSION})
 set(PROJECT_VERSION_MAJOR ${CMAKE_MATCH_1})
 set(PROJECT_VERSION_MINOR ${CMAKE_MATCH_2})
@@ -33,11 +35,6 @@ set(PROJECT_SOVERSION ${PROJECT_VERSION_MAJOR})
 if(PROJECT_VERSION_MAJOR EQUAL 0)
     set(PROJECT_SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
 endif()
-
-option(EVMC_TOOLS "Build EVMC test tools" ${EVMONE_TESTING})
-
-hunter_add_package(CLI11)
-find_package(CLI11 CONFIG REQUIRED)
 
 if(COMMAND block) # TODO(cmake-3.25)
     block()
@@ -155,6 +152,10 @@ set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_subdirectory(lib)
 
+if(EVMONE_TOOLS)
+    add_subdirectory(tools)
+endif()
+
 if(EVMONE_TESTING)
     enable_testing()
     add_subdirectory(test)
@@ -166,6 +167,9 @@ endif()
 set(install_targets evmone)
 if(TARGET evmone-standalone)
     list(APPEND install_targets evmone-standalone)
+endif()
+if(TARGET evmone-cli)
+    list(APPEND install_targets evmone-cli)
 endif()
 if(TARGET evmone-bench)
     list(APPEND install_targets evmone-bench)
