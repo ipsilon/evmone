@@ -42,6 +42,7 @@ struct BlockHeader
     std::optional<uint64_t> blob_gas_used;
     std::optional<uint64_t> excess_blob_gas;
     hash256 requests_hash;
+    int64_t slot_number = 0;
 };
 
 struct TestBlock

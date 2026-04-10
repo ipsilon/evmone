@@ -234,6 +234,7 @@ struct evmc_tx_context
     size_t blob_hashes_count;          /**< The number of blob hashes (EIP-4844). */
     const evmc_tx_initcode* initcodes; /**< The array of transaction initcodes (TXCREATE). */
     size_t initcodes_count;            /**< The number of transaction initcodes (TXCREATE). */
+    int64_t block_slot_number;         /**< The beacon chain slot number (EIP-7843). */
 };
 
 /**

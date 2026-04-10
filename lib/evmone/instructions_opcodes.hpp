@@ -73,6 +73,7 @@ enum Opcode : uint8_t  // NOLINT(*-use-enum-class)
     OP_BASEFEE = 0x48,
     OP_BLOBHASH = 0x49,
     OP_BLOBBASEFEE = 0x4a,
+    OP_SLOTNUM = 0x4b,
 
     OP_POP = 0x50,
     OP_MLOAD = 0x51,

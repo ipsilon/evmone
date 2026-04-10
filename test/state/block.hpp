@@ -61,6 +61,9 @@ struct BlockInfo
     /// Blob gas price from EIP-4844, computed from excess_blob_gas.
     std::optional<intx::uint256> blob_base_fee;
 
+    /// The beacon chain slot number (EIP-7843).
+    int64_t slot_number = 0;
+
     std::vector<Ommer> ommers;
     std::vector<Withdrawal> withdrawals;
 };
