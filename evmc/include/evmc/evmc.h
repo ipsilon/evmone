@@ -200,6 +200,13 @@ struct evmc_message
      * The length of the code to be executed.
      */
     size_t code_size;
+
+    /**
+     * The amount of state gas available (EIP-8037).
+     *
+     * It draws from a reservoir allocated at transaction level.
+     */
+    int64_t state_gas;
 };
 
 /** The hashed initcode used for TXCREATE instruction. */
@@ -498,6 +505,21 @@ struct evmc_result
      * Also extends the size of the evmc_result to 64 bytes (full cache line).
      */
     uint8_t padding[4];
+
+    /**
+     * The amount of state gas left after execution (EIP-8037).
+     *
+     * Returned to the caller so it can restore its own state_gas tracking.
+     */
+    int64_t state_gas_left;
+
+    /**
+     * The total state gas consumed during execution (EIP-8037).
+     *
+     * Accumulated across all frames (EVM charge_state_gas + Host-level charges).
+     * Used for block gas accounting: block_gas = max(regular, state).
+     */
+    int64_t state_gas_used;
 };
 
 

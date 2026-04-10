@@ -118,6 +118,12 @@ struct TransactionReceipt
 
     /// Amount of gas used by this and previous transactions in the block.
     int64_t cumulative_gas_used = 0;
+
+    /// EIP-8037/7778: Block-level gas accounting.
+    int64_t block_gas_used = 0;       ///< Per-tx block gas contribution.
+    int64_t regular_block_gas = 0;    ///< Regular gas component.
+    int64_t state_block_gas = 0;      ///< State gas component.
+
     std::vector<Log> logs;
     BloomFilter logs_bloom_filter;
     StateDiff state_diff;

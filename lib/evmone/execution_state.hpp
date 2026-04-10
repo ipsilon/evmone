@@ -138,6 +138,8 @@ class ExecutionState
 {
 public:
     int64_t gas_refund = 0;
+    int64_t state_gas_left = 0;   ///< EIP-8037: remaining state gas reservoir.
+    int64_t state_gas_used = 0;   ///< EIP-8037: total state gas consumed.
     Memory memory;
     const evmc_message* msg = nullptr;
     evmc::HostContext host;
@@ -182,6 +184,8 @@ public:
         bytes_view _code) noexcept
     {
         gas_refund = 0;
+        state_gas_left = 0;
+        state_gas_used = 0;
         memory.clear();
         msg = &message;
         host = {host_interface, host_ctx};

@@ -42,6 +42,7 @@ constexpr auto storage_cost_spec = []() noexcept {
     tbl[EVMC_PRAGUE] = tbl[EVMC_LONDON];
     tbl[EVMC_OSAKA] = tbl[EVMC_LONDON];
     tbl[EVMC_AMSTERDAM] = tbl[EVMC_LONDON];
+    tbl[EVMC_AMSTERDAM].set = 2900;  // EIP-8037: regular component only (was 20000).
     tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_LONDON];
     return tbl;
 }();
@@ -136,8 +137,33 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 
     const auto [gas_cost_warm, gas_refund] = sstore_costs[state.rev][status];
     const auto gas_cost = gas_cost_warm + gas_cost_cold;
+
+    // EIP-8037: charge state gas for state-creating storage operations.
+    int64_t state_gas_charged = 0;
+    const auto pre_state_gas_left = state.state_gas_left;  // Save for potential rollback.
+    if (state.rev >= EVMC_AMSTERDAM)
+    {
+        if (status == EVMC_STORAGE_ADDED)
+        {
+            state_gas_charged = 32 * CPSB;
+            if (!charge_state_gas(gas_left, state, state_gas_charged))
+                return {EVMC_OUT_OF_GAS, gas_left};
+        }
+        else if (status == EVMC_STORAGE_ADDED_DELETED)
+        {
+            // Refund state gas for set-then-clear (0 -> Y -> 0).
+            state.gas_refund += 32 * CPSB;
+        }
+    }
+
     if ((gas_left -= gas_cost) < 0)
+    {
+        // Regular gas OOG after state gas was charged. Roll back state_gas_used
+        // and restore reservoir since the SSTORE didn't complete (state won't grow).
+        state.state_gas_used -= state_gas_charged;
+        state.state_gas_left = pre_state_gas_left;
         return {EVMC_OUT_OF_GAS, gas_left};
+    }
     state.gas_refund += gas_refund;
     return {EVMC_SUCCESS, gas_left};
 }

@@ -272,6 +272,9 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
     auto& state = vm.get_execution_state(static_cast<size_t>(msg.depth));
     state.reset(msg, rev, host, ctx, analysis.raw_code());
 
+    // EIP-8037: initialize state gas from message.
+    state.state_gas_left = msg.state_gas;
+
     state.analysis.baseline = &analysis;  // Assign code analysis for instruction implementations.
 
     const auto& cost_table = get_baseline_cost_table(state.rev);
@@ -296,8 +299,12 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
     const auto gas_refund = (state.status == EVMC_SUCCESS) ? state.gas_refund : 0;
 
     assert(state.output_size != 0 || state.output_offset == 0);
-    const auto result = evmc::make_result(state.status, gas_left, gas_refund,
+    auto result = evmc::make_result(state.status, gas_left, gas_refund,
         state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size);
+
+    // EIP-8037: always return remaining reservoir (even on OOG).
+    result.state_gas_left = std::max(int64_t{0}, state.state_gas_left);
+    result.state_gas_used = state.state_gas_used;
 
     if (INTX_UNLIKELY(tracer != nullptr))
         tracer->notify_execution_end(result);

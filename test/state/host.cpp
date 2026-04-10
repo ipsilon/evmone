@@ -306,11 +306,33 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     auto create_msg = msg;
     create_msg.input_data = nullptr;
     create_msg.input_size = 0;
+
+    // EIP-8037: Charge CREATE state gas (112 * CPSB) for transaction-level CREATE only.
+    // Opcode-level CREATE already charged in instructions_calls.cpp.
+    int64_t host_state_gas_used = 0;
+    if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
+    {
+        constexpr int64_t create_state_gas = 112 * 1174;
+        if (create_msg.state_gas >= create_state_gas)
+        {
+            create_msg.state_gas -= create_state_gas;
+        }
+        else
+        {
+            const auto remainder = create_state_gas - create_msg.state_gas;
+            create_msg.state_gas = 0;
+            create_msg.gas -= remainder;
+        }
+        host_state_gas_used += create_state_gas;
+    }
+
     const bytes_view initcode{msg.input_data, msg.input_size};
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
     {
         result.create_address = msg.recipient;
+        // EIP-8037: propagate state gas from child and account for host charges.
+        result.state_gas_used += host_state_gas_used;
         return result;
     }
 
@@ -319,31 +341,49 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     const bytes_view code{result.output_data, result.output_size};
 
-    if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > MAX_CODE_SIZE)
-        return evmc::Result{EVMC_FAILURE};
+    // EIP-7954: Amsterdam increases max code size.
+    const auto max_code_size = m_rev >= EVMC_AMSTERDAM ? MAX_CODE_SIZE_AMSTERDAM : MAX_CODE_SIZE;
+    if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > static_cast<size_t>(max_code_size))
+    {
+        auto r = evmc::Result{EVMC_FAILURE};
+        r.raw().state_gas_left = result.state_gas_left;
+        r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
+        return r;
+    }
 
     // Code deployment cost.
     const auto cost = std::ssize(code) * 200;
     gas_left -= cost;
     if (gas_left < 0)
     {
-        return (m_rev == EVMC_FRONTIER) ?
-                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient} :
-                   evmc::Result{EVMC_FAILURE};
+        if (m_rev == EVMC_FRONTIER)
+            return evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient};
+        auto r = evmc::Result{EVMC_FAILURE};
+        r.raw().state_gas_left = result.state_gas_left;
+        r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
+        return r;
     }
 
     if (!code.empty())
     {
         // EIP-3541: Reject new contract code starting with the 0xEF byte.
         if (m_rev >= EVMC_LONDON && code[0] == 0xEF)
-            return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+        {
+            auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+            r.raw().state_gas_left = result.state_gas_left;
+            r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
+            return r;
+        }
 
         new_acc->code_hash = keccak256(code);
         new_acc->code = code;
         new_acc->code_changed = true;
     }
 
-    return evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
+    auto r = evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
+    r.raw().state_gas_left = result.state_gas_left;
+    r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
+    return r;
 }
 
 evmc::Result Host::execute_message(const evmc_message& msg) noexcept
@@ -388,12 +428,21 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
 
     // Calls to precompile address via EIP-7702 delegation execute empty code instead of precompile.
     if ((msg.flags & EVMC_DELEGATED) == 0 && is_precompile(m_rev, msg.code_address))
-        return call_precompile(m_rev, msg);
+    {
+        auto r = call_precompile(m_rev, msg);
+        // EIP-8037: precompiles don't consume state gas, pass through.
+        r.raw().state_gas_left = msg.state_gas;
+        return r;
+    }
 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
     const auto code = m_state.get_code(msg.code_address);
     if (code.empty())
-        return evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
+    {
+        auto r = evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
+        r.raw().state_gas_left = msg.state_gas;
+        return r;
+    }
 
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
@@ -402,7 +451,11 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
 {
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
-        return evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+    {
+        auto r = evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+        r.raw().state_gas_left = orig_msg.state_gas;
+        return r;
+    }
 
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();

@@ -114,6 +114,32 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     return num_words(size_in_bytes) * WordCopyCost;
 }
 
+/// EIP-8037: Cost per state byte for devnet-3.
+inline constexpr int64_t CPSB = 1174;
+
+/// Charge state gas (EIP-8037). Draws from state_gas_left first, spills into gas_left.
+/// Only increments state_gas_used on success (prevents inflation on OOG).
+inline bool charge_state_gas(int64_t& gas_left, ExecutionState& state, int64_t cost) noexcept
+{
+    if (cost <= 0)
+        return true;
+    if (state.state_gas_left >= cost)
+    {
+        state.state_gas_left -= cost;
+        state.state_gas_used += cost;
+        return true;
+    }
+    const auto remainder = cost - state.state_gas_left;
+    if (gas_left >= remainder)
+    {
+        state.state_gas_used += cost;
+        state.state_gas_left = 0;
+        gas_left -= remainder;
+        return true;
+    }
+    return false;
+}
+
 /// Grows EVM memory and checks its cost.
 ///
 /// This function should not be inlined because this may affect other inlining decisions:
@@ -1076,8 +1102,17 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
             // sending value to a non-existing account.
             if (!state.host.account_exists(beneficiary))
             {
-                if ((gas_left -= 25000) < 0)
-                    return {EVMC_OUT_OF_GAS, gas_left};
+                if (state.rev >= EVMC_AMSTERDAM)
+                {
+                    // EIP-8037: charge state gas instead of regular gas.
+                    if (!charge_state_gas(gas_left, state, 112 * CPSB))
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
+                else
+                {
+                    if ((gas_left -= 25000) < 0)
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
             }
         }
     }

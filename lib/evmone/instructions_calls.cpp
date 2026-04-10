@@ -2,6 +2,7 @@
 // Copyright 2019 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "constants.hpp"
 #include "delegation.hpp"
 #include "instructions.hpp"
 #include <variant>
@@ -127,6 +128,8 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     if constexpr (HAS_VALUE_ARG)
     {
         auto cost = has_value ? CALL_VALUE_COST : 0;
+        int64_t call_state_gas_charged = 0;
+        const auto pre_state_gas_left = state.state_gas_left;  // Save for potential rollback.
 
         if constexpr (Op == OP_CALL)
         {
@@ -134,11 +137,28 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
                 return {EVMC_STATIC_MODE_VIOLATION, gas_left};
 
             if ((has_value || state.rev < EVMC_SPURIOUS_DRAGON) && !state.host.account_exists(dst))
-                cost += ACCOUNT_CREATION_COST;
+            {
+                if (state.rev >= EVMC_AMSTERDAM)
+                {
+                    // EIP-8037: charge state gas instead of regular ACCOUNT_CREATION_COST.
+                    call_state_gas_charged = 112 * CPSB;
+                    if (!charge_state_gas(gas_left, state, call_state_gas_charged))
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
+                else
+                {
+                    cost += ACCOUNT_CREATION_COST;
+                }
+            }
         }
 
         if ((gas_left -= cost) < 0)
+        {
+            // Roll back state gas and restore reservoir if regular gas OOGs.
+            state.state_gas_used -= call_state_gas_charged;
+            state.state_gas_left = pre_state_gas_left;
             return {EVMC_OUT_OF_GAS, gas_left};
+        }
     }
 
     msg.gas = std::numeric_limits<int64_t>::max();
@@ -171,6 +191,9 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     if (state.msg->depth >= 1024)
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
 
+    // EIP-8037: pass state gas to child execution.
+    msg.state_gas = state.state_gas_left;
+
     const auto result = state.host.call(msg);
     state.return_data.assign(result.output_data, result.output_size);
     stack.top() = result.status_code == EVMC_SUCCESS;
@@ -181,6 +204,17 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     const auto gas_used = msg.gas - result.gas_left;
     gas_left -= gas_used;
     state.gas_refund += result.gas_refund;
+    // EIP-8037: restore reservoir from child, accumulate state_gas_used.
+    state.state_gas_left = result.state_gas_left;
+    if (result.status_code == EVMC_SUCCESS)
+    {
+        state.state_gas_used += result.state_gas_used;
+    }
+    else if (state.rev >= EVMC_AMSTERDAM)
+    {
+        // REVERT/OOG/HALT: child's state didn't grow. Return state gas to gas_left.
+        gas_left += result.state_gas_used;
+    }
     return {EVMC_SUCCESS, gas_left};
 }
 
@@ -201,6 +235,13 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     if (state.in_static_mode())
         return {EVMC_STATIC_MODE_VIOLATION, gas_left};
 
+    // EIP-8037: charge state gas for account creation.
+    if (state.rev >= EVMC_AMSTERDAM)
+    {
+        if (!charge_state_gas(gas_left, state, 112 * CPSB))
+            return {EVMC_OUT_OF_GAS, gas_left};
+    }
+
     const auto endowment = stack.pop();
     const auto init_code_offset_u256 = stack.pop();
     const auto init_code_size_u256 = stack.pop();
@@ -215,7 +256,10 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     const auto init_code_offset = static_cast<size_t>(init_code_offset_u256);
     const auto init_code_size = static_cast<size_t>(init_code_size_u256);
 
-    if (state.rev >= EVMC_SHANGHAI && init_code_size > 0xC000)
+    // EIP-7954: Amsterdam increases initcode size limit.
+    if (state.rev >= EVMC_AMSTERDAM && init_code_size > MAX_INITCODE_SIZE_AMSTERDAM)
+        return {EVMC_OUT_OF_GAS, gas_left};
+    else if (state.rev >= EVMC_SHANGHAI && state.rev < EVMC_AMSTERDAM && init_code_size > 0xC000)
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);
@@ -246,9 +290,23 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     msg.create2_salt = intx::be::store<evmc::bytes32>(salt);
     msg.value = intx::be::store<evmc::uint256be>(endowment);
 
+    // EIP-8037: pass state gas to child execution.
+    msg.state_gas = state.state_gas_left;
+
     const auto result = state.host.call(msg);
     gas_left -= msg.gas - result.gas_left;
     state.gas_refund += result.gas_refund;
+    // EIP-8037: restore reservoir from child, accumulate state_gas_used.
+    state.state_gas_left = result.state_gas_left;
+    if (result.status_code == EVMC_SUCCESS)
+    {
+        state.state_gas_used += result.state_gas_used;
+    }
+    else if (state.rev >= EVMC_AMSTERDAM)
+    {
+        // REVERT/OOG/HALT: child's state didn't grow. Return state gas to gas_left.
+        gas_left += result.state_gas_used;
+    }
 
     state.return_data.assign(result.output_data, result.output_size);
     if (result.status_code == EVMC_SUCCESS)
