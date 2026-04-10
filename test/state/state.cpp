@@ -490,7 +490,9 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     if (rev >= EVMC_OSAKA && rev < EVMC_AMSTERDAM && tx.gas_limit > MAX_TX_GAS_LIMIT)
         return make_error_code(MAX_GAS_LIMIT_EXCEEDED);
 
-    if (tx.gas_limit > block_gas_left)
+    // EIP-8037: For Amsterdam, per-tx gas_limit check against block_gas_left is removed.
+    // Block-level validation uses max(sum_regular, sum_state) <= gas_limit instead.
+    if (rev < EVMC_AMSTERDAM && tx.gas_limit > block_gas_left)
         return make_error_code(GAS_LIMIT_REACHED);
 
     if (tx.max_gas_price < block.base_fee)
