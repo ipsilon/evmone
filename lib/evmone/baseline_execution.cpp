@@ -65,10 +65,10 @@ inline evmc_status_code check_requirements(const CostTable& cost_table, int64_t&
 
     // Check stack requirements first. This order is not required,
     // but it is nicer because a complete gas check may need to inspect operands.
-	//
-    // Instructions with immediates may need to validate the immediate before stack checks,
-    // so they handle stack requirements internally.
-    if constexpr (instr::traits[Op].immediate_size == 0)
+    //
+    // DUPN/SWAPN/EXCHANGE handle stack requirements internally because
+    // the required depth depends on the immediate value.
+    if constexpr (Op != OP_DUPN && Op != OP_SWAPN && Op != OP_EXCHANGE)
     {
         if constexpr (instr::traits[Op].stack_height_change > 0)
         {

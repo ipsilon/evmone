@@ -37,16 +37,16 @@ TEST_P(evm, dupn_basic)
     EXPECT_OUTPUT_INT(1);
 }
 
-TEST_P(evm, dupn_implicit_immediate)
+TEST_P(evm, dupn_end_of_code)
 {
     if (is_advanced())
         GTEST_SKIP();
     rev = EVMC_AMSTERDAM;
-    // Missing immediate at end of code defaults to 0.
-    const auto code = push(1) + 144 * OP_PUSH0 + bytecode{"e6"} + ret_top();
+    // DUPN at end of code: implicit immediate is 0x00 (valid, decodes to n=145).
+    // With 145 items on the stack, DUP145 succeeds.
+    const auto code = push(1) + 144 * OP_PUSH0 + bytecode{"e6"};
     execute(code);
     EXPECT_STATUS(EVMC_SUCCESS);
-    EXPECT_OUTPUT_INT(1);
 }
 
 TEST_P(evm, swapn_basic)
