@@ -235,13 +235,6 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     if (state.in_static_mode())
         return {EVMC_STATIC_MODE_VIOLATION, gas_left};
 
-    // EIP-8037: charge state gas for account creation.
-    if (state.rev >= EVMC_AMSTERDAM)
-    {
-        if (!charge_state_gas(gas_left, state, 112 * CPSB))
-            return {EVMC_OUT_OF_GAS, gas_left};
-    }
-
     const auto endowment = stack.pop();
     const auto init_code_offset_u256 = stack.pop();
     const auto init_code_size_u256 = stack.pop();
@@ -261,6 +254,15 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
         return {EVMC_OUT_OF_GAS, gas_left};
     else if (state.rev >= EVMC_SHANGHAI && state.rev < EVMC_AMSTERDAM && init_code_size > 0xC000)
         return {EVMC_OUT_OF_GAS, gas_left};
+
+    // EIP-8037: charge state gas for account creation.
+    // Must be after initcode size check to avoid persisting state_gas_used
+    // for an account that was never created (oversized initcode).
+    if (state.rev >= EVMC_AMSTERDAM)
+    {
+        if (!charge_state_gas(gas_left, state, 112 * CPSB))
+            return {EVMC_OUT_OF_GAS, gas_left};
+    }
 
     const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);
     const auto init_code_cost = num_words(init_code_size) * init_code_word_cost;
