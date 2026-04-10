@@ -6,6 +6,7 @@
 #include "../utils/stdx/utility.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
+#include "system_contracts.hpp"
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
@@ -655,6 +656,9 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     // Cumulative gas used is unknown in this scope.
     TransactionReceipt receipt{
         tx.type, result.status_code, gas_used, {}, host.take_logs(), {}, state.build_diff(rev)};
+
+    // EIP-7708 nerf: no burn logs. Destructed accounts with residual balance are preserved
+    // as balance-only accounts in build_diff() rather than being removed, so no ETH is destroyed.
 
     // Cannot put it into constructor call because logs are std::moved from host instance.
     receipt.logs_bloom_filter = compute_bloom_filter(receipt.logs);
