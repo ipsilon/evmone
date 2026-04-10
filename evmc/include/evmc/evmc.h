@@ -1048,10 +1048,17 @@ enum evmc_revision
     EVMC_OSAKA = 14,
 
     /**
+     * The Amsterdam / Glamsterdam revision.
+     *
+     * https://eips.ethereum.org/EIPS/eip-7773
+     */
+    EVMC_AMSTERDAM = 15,
+
+    /**
      * The unspecified EVM revision used for EVM implementations to expose
      * experimental features.
      */
-    EVMC_EXPERIMENTAL = 15,
+    EVMC_EXPERIMENTAL = 16,
 
     /** The maximum EVM revision supported. */
     EVMC_MAX_REVISION = EVMC_EXPERIMENTAL,
@@ -1061,7 +1068,7 @@ enum evmc_revision
      *
      * This is handy for EVM tools to always use the latest revision available.
      */
-    EVMC_LATEST_STABLE_REVISION = EVMC_CANCUN
+    EVMC_LATEST_STABLE_REVISION = EVMC_OSAKA
 };
 
 

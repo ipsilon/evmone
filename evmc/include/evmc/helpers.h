@@ -303,6 +303,8 @@ static inline const char* evmc_revision_to_string(enum evmc_revision rev)
         return "Prague";
     case EVMC_OSAKA:
         return "Osaka";
+    case EVMC_AMSTERDAM:
+        return "Amsterdam";
     case EVMC_EXPERIMENTAL:
         return "Experimental";
     }
