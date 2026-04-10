@@ -693,7 +693,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto refund_limit = total_consumed / 5;
         const auto refund = std::min(result.gas_refund, refund_limit);
 
-        // EIP-7623: block gas_used must be at least min_gas_cost.
+        // EIP-7623: per-tx block gas = max(max(regular, state), min_gas_cost).
+        // Used for block_gas_left. Block header uses max(sum_regular, sum_state) in runner.
         gas_used = std::max(block_gas, tx_props.min_gas_cost);
 
         // Sender pays: max of (actual consumed, min_cost) minus refunds.

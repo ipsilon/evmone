@@ -56,7 +56,9 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
     std::vector<state::TransactionReceipt> receipts;
 
     int64_t cumulative_gas_used = 0;
-    int64_t cumulative_block_gas_used = 0;  // EIP-8037/7778: for block header.
+    // EIP-8037/7778: track regular and state gas separately for block-level 2D formula.
+    int64_t sum_regular_gas = 0;
+    int64_t sum_state_gas = 0;
 
     for (size_t i = 0; i < txs.size(); ++i)
     {
@@ -80,14 +82,13 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
             txs_logs.insert(txs_logs.end(), tx_logs.begin(), tx_logs.end());
             cumulative_gas_used += receipt.gas_used;
             receipt.cumulative_gas_used = cumulative_gas_used;
-            // EIP-8037/7778: track block-level gas separately.
-            const auto tx_block_gas = (receipt.block_gas_used != 0) ?
-                receipt.block_gas_used : receipt.gas_used;
-            cumulative_block_gas_used += tx_block_gas;
+            // EIP-8037/7778: accumulate components for block-level 2D formula.
+            sum_regular_gas += receipt.regular_block_gas;
+            sum_state_gas += receipt.state_block_gas;
             if (rev < EVMC_BYZANTIUM)
                 receipt.post_state = state::mpt_hash(block_state);
 
-            block_gas_left -= tx_block_gas;
+            block_gas_left -= receipt.block_gas_used;
             blob_gas_left -= static_cast<int64_t>(tx.blob_gas_used());
             receipts.emplace_back(std::move(receipt));
         }
@@ -116,9 +117,9 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
 
     const auto bloom = compute_bloom_filter(receipts);
 
-    // EIP-8037/7778: use block-level gas for header comparison.
-    const auto header_gas_used =
-        (cumulative_block_gas_used != 0) ? cumulative_block_gas_used : cumulative_gas_used;
+    // EIP-8037/7778: block-level 2D gas formula: max(sum_regular, sum_state).
+    const auto header_gas_used = (sum_regular_gas != 0 || sum_state_gas != 0) ?
+        std::max(sum_regular_gas, sum_state_gas) : cumulative_gas_used;
     return {std::move(receipts), std::move(rejected_txs), std::move(requests), header_gas_used,
         bloom, blob_gas_left, std::move(block_state)};
 }

@@ -279,7 +279,12 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (!new_acc_exists)
         new_acc = &m_state.insert(msg.recipient);
     else if (is_create_collision(*new_acc))
-        return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
+    {
+        // Preserve reservoir — no state was created.
+        auto r = evmc::Result{EVMC_FAILURE};
+        r.raw().state_gas_left = msg.state_gas;
+        return r;
+    }
     m_state.journal_create(msg.recipient, new_acc_exists);
 
     assert(new_acc != nullptr);
