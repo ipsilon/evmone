@@ -352,16 +352,57 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     }
 
     // Code deployment cost.
-    const auto cost = std::ssize(code) * 200;
-    gas_left -= cost;
-    if (gas_left < 0)
+    auto state_gas_left = result.state_gas_left;
+    auto total_state_gas_used = result.state_gas_used + host_state_gas_used;
+    if (m_rev >= EVMC_AMSTERDAM)
     {
-        if (m_rev == EVMC_FRONTIER)
-            return evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient};
-        auto r = evmc::Result{EVMC_FAILURE};
-        r.raw().state_gas_left = result.state_gas_left;
-        r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
-        return r;
+        // EIP-8037: split code deposit into regular and state components.
+        const auto regular_cost = 6 * ((std::ssize(code) + 31) / 32);
+        const auto state_cost = std::ssize(code) * int64_t{1174};
+        gas_left -= regular_cost;
+        if (gas_left < 0)
+        {
+            auto r = evmc::Result{EVMC_FAILURE};
+            r.raw().state_gas_left = state_gas_left;
+            r.raw().state_gas_used = total_state_gas_used;
+            return r;
+        }
+        // Draw state cost from reservoir, spill to gas_left.
+        const auto saved_state_gas = state_gas_left;
+        if (state_gas_left >= state_cost)
+        {
+            state_gas_left -= state_cost;
+        }
+        else
+        {
+            const auto remainder = state_cost - state_gas_left;
+            state_gas_left = 0;
+            if ((gas_left -= remainder) < 0)
+            {
+                // Code deposit failed — restore reservoir.
+                state_gas_left = saved_state_gas;
+                auto r = evmc::Result{EVMC_FAILURE};
+                r.raw().state_gas_left = state_gas_left;
+                r.raw().state_gas_used = total_state_gas_used;
+                return r;
+            }
+        }
+        total_state_gas_used += state_cost;
+    }
+    else
+    {
+        const auto cost = std::ssize(code) * 200;
+        gas_left -= cost;
+        if (gas_left < 0)
+        {
+            if (m_rev == EVMC_FRONTIER)
+                return evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund,
+                    msg.recipient};
+            auto r = evmc::Result{EVMC_FAILURE};
+            r.raw().state_gas_left = state_gas_left;
+            r.raw().state_gas_used = total_state_gas_used;
+            return r;
+        }
     }
 
     if (!code.empty())
@@ -370,8 +411,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         if (m_rev >= EVMC_LONDON && code[0] == 0xEF)
         {
             auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
-            r.raw().state_gas_left = result.state_gas_left;
-            r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
+            r.raw().state_gas_left = state_gas_left;
+            r.raw().state_gas_used = total_state_gas_used;
             return r;
         }
 
@@ -381,8 +422,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     }
 
     auto r = evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
-    r.raw().state_gas_left = result.state_gas_left;
-    r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
+    r.raw().state_gas_left = state_gas_left;
+    r.raw().state_gas_used = total_state_gas_used;
     return r;
 }
 
