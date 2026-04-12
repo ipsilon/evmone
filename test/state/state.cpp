@@ -686,12 +686,12 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto net_intrinsic_state =
             std::max(int64_t{0}, intrinsic_state - delegation_refund);
         const auto state_gas_used = exec_state_gas + net_intrinsic_state;
-        // Regular gas = total consumed minus intrinsic state (gross) minus exec state.
-        // The gross intrinsic state is subtracted because it was consumed from gas_limit
-        // but is not "regular" gas. The delegation refund reduces the state dimension
-        // but doesn't increase the regular dimension.
-        const auto regular_gas =
-            std::max(int64_t{0}, total_consumed - intrinsic_state - exec_state_gas);
+        // Regular gas = total consumed + delegation_refund - gross intrinsic state - exec state.
+        // The delegation_refund reduced total_consumed (via reservoir return), so add it
+        // back before subtracting intrinsic state to isolate the regular dimension.
+        // This matches geth: txRegular = gas.RegularGas + execGasUsed.RegularGas.
+        const auto regular_gas = std::max(int64_t{0},
+            total_consumed + delegation_refund - intrinsic_state - exec_state_gas);
         const auto block_gas = std::max(regular_gas, state_gas_used);
 
         // Store components for block-level aggregation.
