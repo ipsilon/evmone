@@ -646,31 +646,29 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         }
     }
 
-    // EIP-8037: Auth state gas + reservoir split.
-    int64_t auth_state_gas = 0;
+    // EIP-8037: Always split execution gas into regular + state reservoir.
+    // regular = min(MAX_TX_GAS_LIMIT - intrinsic_regular, execution_gas)
+    // reservoir = execution_gas - regular + intrinsic_state (deducted from reservoir)
     if (rev >= EVMC_AMSTERDAM)
     {
-        if (!tx.authorization_list.empty())
+        const auto exec_gas = tx_props.execution_gas_limit;
+        const auto regular_cap =
+            std::max(int64_t{0}, static_cast<int64_t>(MAX_TX_GAS_LIMIT) -
+                                     tx_props.intrinsic_regular_gas);
+        const auto regular_exec = std::min(exec_gas, regular_cap);
+        message.gas = regular_exec;
+        message.state_gas = exec_gas - regular_exec;
+        // Deduct intrinsic state gas from reservoir (spills to regular if needed).
+        const auto intrinsic_state = tx_props.intrinsic_state_gas;
+        if (message.state_gas >= intrinsic_state)
         {
-            auth_state_gas =
-                static_cast<int64_t>(tx.authorization_list.size()) * (112 + 23) * 1174;
-            message.gas -= auth_state_gas;
+            message.state_gas -= intrinsic_state;
         }
-
-        // EIP-8037: Split gas when gas_limit > MAX_TX_GAS_LIMIT.
-        // Cap regular execution gas, move excess into state gas reservoir.
-        if (tx.gas_limit > MAX_TX_GAS_LIMIT)
+        else
         {
-            const auto intrinsic =
-                static_cast<int64_t>(tx.gas_limit) - tx_props.execution_gas_limit;
-            const auto regular_budget =
-                std::max(int64_t{0}, static_cast<int64_t>(MAX_TX_GAS_LIMIT) - intrinsic);
-            const auto regular_after_auth = regular_budget - auth_state_gas;
-            if (message.gas > regular_after_auth && regular_after_auth >= 0)
-            {
-                message.state_gas = message.gas - regular_after_auth;
-                message.gas = regular_after_auth;
-            }
+            const auto spill = intrinsic_state - message.state_gas;
+            message.state_gas = 0;
+            message.gas -= spill;
         }
     }
 
@@ -688,12 +686,14 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto total_consumed = gas_used;
 
         // EIP-7778: block gas_used = max(sum_regular, sum_state) at block level.
-        const auto exec_state_gas = std::min(result.state_gas_used, total_consumed);
-        const auto net_auth_state_gas = auth_state_gas - delegation_refund;
-        const auto state_gas_used =
-            std::min(exec_state_gas + net_auth_state_gas, total_consumed);
+        // Auth state gas is now in intrinsic, tracked via state_gas_used.
+        const auto exec_state_gas = result.state_gas_used;
+        const auto auth_intrinsic_state = tx_props.intrinsic_state_gas;
+        const auto net_auth_state_gas =
+            std::max(int64_t{0}, auth_intrinsic_state - delegation_refund);
+        const auto state_gas_used = exec_state_gas + net_auth_state_gas;
         const auto regular_only =
-            std::max(int64_t{0}, total_consumed - auth_state_gas - exec_state_gas);
+            std::max(int64_t{0}, total_consumed - exec_state_gas);
         const auto block_gas = std::max(regular_only, state_gas_used);
 
         // Store components for block-level aggregation.
