@@ -52,7 +52,8 @@ int64_t compute_access_list_cost(const AccessList& access_list) noexcept
 
 struct TransactionCost
 {
-    int64_t intrinsic = 0;
+    int64_t intrinsic = 0;        ///< Regular intrinsic gas.
+    int64_t intrinsic_state = 0;  ///< EIP-8037: State gas component of intrinsic.
     int64_t min = 0;
 };
 
@@ -67,21 +68,24 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
 
     const auto is_create = !tx.to.has_value();
 
-    // EIP-8037: CREATE regular cost is 9000 for Amsterdam (state component charged separately).
-    const auto tx_create_cost = (rev >= EVMC_AMSTERDAM) ? int64_t{9000} : TX_CREATE_COST;
-    const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? tx_create_cost : 0;
+    // EIP-8037: Amsterdam splits CREATE cost: regular 9000, state 112*CPSB.
+    const auto tx_create_regular = (rev >= EVMC_AMSTERDAM) ? int64_t{9000} : TX_CREATE_COST;
+    const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? tx_create_regular : 0;
+    const auto create_state_cost =
+        (rev >= EVMC_AMSTERDAM && is_create) ? int64_t{112 * 1174} : 0;
 
     const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(rev, tx.data));
     const auto data_cost = num_tokens * DATA_TOKEN_COST;
 
     const auto access_list_cost = compute_access_list_cost(tx.access_list);
 
-    // EIP-8037: For Amsterdam, auth regular intrinsic is 7500 per auth.
-    // State component (135*1174) charged in transition() via execution gas.
-    const auto per_auth_cost = (rev >= EVMC_AMSTERDAM) ?
+    // EIP-8037: Amsterdam splits auth cost: regular 7500, state (112+23)*CPSB per tuple.
+    const auto per_auth_regular = (rev >= EVMC_AMSTERDAM) ?
         int64_t{7500} : AUTHORIZATION_EMPTY_ACCOUNT_COST;
     const auto auth_list_cost =
-        static_cast<int64_t>(tx.authorization_list.size()) * per_auth_cost;
+        static_cast<int64_t>(tx.authorization_list.size()) * per_auth_regular;
+    const auto auth_state_cost = (rev >= EVMC_AMSTERDAM) ?
+        static_cast<int64_t>(tx.authorization_list.size()) * (112 + 23) * 1174 : int64_t{0};
 
     const auto initcode_cost =
         (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(tx.data.size()) : 0;
@@ -93,7 +97,9 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto min_cost =
         rev >= EVMC_PRAGUE ? TX_BASE_COST + num_tokens * TOTAL_COST_FLOOR_PER_TOKEN : 0;
 
-    return {intrinsic_cost, min_cost};
+    const auto intrinsic_state_cost = create_state_cost + auth_state_cost;
+
+    return {intrinsic_cost, intrinsic_state_cost, min_cost};
 }
 
 int64_t process_authorization_list(
@@ -538,12 +544,15 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     if (sender_acc.balance < max_total_fee)
         return make_error_code(INSUFFICIENT_FUNDS);
 
-    const auto [intrinsic_cost, min_cost] = compute_tx_intrinsic_cost(rev, tx);
-    if (tx.gas_limit < std::max(intrinsic_cost, min_cost))
+    const auto [intrinsic_cost, intrinsic_state, min_cost] =
+        compute_tx_intrinsic_cost(rev, tx);
+    // EIP-8037: total intrinsic includes both regular and state components.
+    const auto total_intrinsic = intrinsic_cost + intrinsic_state;
+    if (tx.gas_limit < std::max(total_intrinsic, min_cost))
         return make_error_code(INTRINSIC_GAS_TOO_LOW);
 
-    const auto execution_gas_limit = tx.gas_limit - intrinsic_cost;
-    return TransactionProperties{execution_gas_limit, min_cost};
+    const auto execution_gas_limit = tx.gas_limit - total_intrinsic;
+    return TransactionProperties{execution_gas_limit, intrinsic_state, intrinsic_cost, min_cost};
 }
 
 StateDiff finalize(const StateView& state_view, evmc_revision rev, const address& coinbase,
