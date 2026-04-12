@@ -204,16 +204,22 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     const auto gas_used = msg.gas - result.gas_left;
     gas_left -= gas_used;
     state.gas_refund += result.gas_refund;
-    // EIP-8037: restore reservoir from child, accumulate state_gas_used.
-    state.state_gas_left = result.state_gas_left;
+    // EIP-8037: handle child state gas.
     if (result.status_code == EVMC_SUCCESS)
     {
+        // Success: accumulate child's state_gas_used, take leftover reservoir.
+        state.state_gas_left = result.state_gas_left;
         state.state_gas_used += result.state_gas_used;
     }
     else if (state.rev >= EVMC_AMSTERDAM)
     {
-        // REVERT/OOG/HALT: child's state didn't grow. Return state gas to gas_left.
-        gas_left += result.state_gas_used;
+        // Failure: child's state was reverted. Return ALL child state gas
+        // (leftover + used) to parent's reservoir. Don't accumulate used.
+        state.state_gas_left = result.state_gas_left + result.state_gas_used;
+    }
+    else
+    {
+        state.state_gas_left = result.state_gas_left;
     }
     return {EVMC_SUCCESS, gas_left};
 }
@@ -298,16 +304,22 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     const auto result = state.host.call(msg);
     gas_left -= msg.gas - result.gas_left;
     state.gas_refund += result.gas_refund;
-    // EIP-8037: restore reservoir from child, accumulate state_gas_used.
-    state.state_gas_left = result.state_gas_left;
+    // EIP-8037: handle child state gas.
     if (result.status_code == EVMC_SUCCESS)
     {
+        // Success: accumulate child's state_gas_used, take leftover reservoir.
+        state.state_gas_left = result.state_gas_left;
         state.state_gas_used += result.state_gas_used;
     }
     else if (state.rev >= EVMC_AMSTERDAM)
     {
-        // REVERT/OOG/HALT: child's state didn't grow. Return state gas to gas_left.
-        gas_left += result.state_gas_used;
+        // Failure: child's state was reverted. Return ALL child state gas
+        // (leftover + used) to parent's reservoir. Don't accumulate used.
+        state.state_gas_left = result.state_gas_left + result.state_gas_used;
+    }
+    else
+    {
+        state.state_gas_left = result.state_gas_left;
     }
 
     state.return_data.assign(result.output_data, result.output_size);
