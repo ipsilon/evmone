@@ -328,7 +328,18 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     const bytes_view code{result.output_data, result.output_size};
 
+    // EIP-3541: Reject new contract code starting with the 0xEF byte.
+    // Must be checked before code deposit gas to avoid charging for rejected code.
+    if (!code.empty() && m_rev >= EVMC_LONDON && code[0] == 0xEF)
+    {
+        auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+        r.raw().state_gas_left = result.state_gas_left;
+        r.raw().state_gas_used = result.state_gas_used;
+        return r;
+    }
+
     // EIP-7954: Amsterdam increases max code size.
+    // Checked before code deposit gas (per geth) to avoid inflating state gas.
     const auto max_code_size = m_rev >= EVMC_AMSTERDAM ? MAX_CODE_SIZE_AMSTERDAM : MAX_CODE_SIZE;
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > static_cast<size_t>(max_code_size))
     {
@@ -394,15 +405,6 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     if (!code.empty())
     {
-        // EIP-3541: Reject new contract code starting with the 0xEF byte.
-        if (m_rev >= EVMC_LONDON && code[0] == 0xEF)
-        {
-            auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
-            r.raw().state_gas_left = state_gas_left;
-            r.raw().state_gas_used = total_state_gas_used;
-            return r;
-        }
-
         new_acc->code_hash = keccak256(code);
         new_acc->code = code;
         new_acc->code_changed = true;
