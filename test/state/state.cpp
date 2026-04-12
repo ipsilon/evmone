@@ -647,8 +647,10 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     }
 
     // EIP-8037: Always split execution gas into regular + state reservoir.
-    // regular = min(MAX_TX_GAS_LIMIT - intrinsic_regular, execution_gas)
-    // reservoir = execution_gas - regular + intrinsic_state (deducted from reservoir)
+    // execution_gas already excludes both regular AND state intrinsic costs.
+    //   regular = min(MAX_TX_GAS_LIMIT - intrinsic_regular, exec_gas)
+    //   reservoir = exec_gas - regular
+    // No further deduction — intrinsic state gas is already consumed from gas_limit.
     if (rev >= EVMC_AMSTERDAM)
     {
         const auto exec_gas = tx_props.execution_gas_limit;
@@ -658,18 +660,6 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto regular_exec = std::min(exec_gas, regular_cap);
         message.gas = regular_exec;
         message.state_gas = exec_gas - regular_exec;
-        // Deduct intrinsic state gas from reservoir (spills to regular if needed).
-        const auto intrinsic_state = tx_props.intrinsic_state_gas;
-        if (message.state_gas >= intrinsic_state)
-        {
-            message.state_gas -= intrinsic_state;
-        }
-        else
-        {
-            const auto spill = intrinsic_state - message.state_gas;
-            message.state_gas = 0;
-            message.gas -= spill;
-        }
     }
 
     const auto result = host.call(message);
@@ -686,13 +676,12 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto total_consumed = gas_used;
 
         // EIP-7778: block gas_used = max(sum_regular, sum_state) at block level.
-        // State gas = EVM-tracked state gas + net auth intrinsic state gas.
+        // State gas = EVM-tracked + intrinsic state gas (CREATE + auth, minus refund).
         // Regular gas = total consumed - state gas.
         const auto exec_state_gas = result.state_gas_used;
-        const auto auth_intrinsic_state = tx_props.intrinsic_state_gas;
-        const auto net_auth_state_gas =
-            std::max(int64_t{0}, auth_intrinsic_state - delegation_refund);
-        const auto state_gas_used = exec_state_gas + net_auth_state_gas;
+        const auto intrinsic_state = tx_props.intrinsic_state_gas;
+        const auto state_gas_used =
+            exec_state_gas + std::max(int64_t{0}, intrinsic_state - delegation_refund);
         const auto regular_gas =
             std::max(int64_t{0}, total_consumed - state_gas_used);
         const auto block_gas = std::max(regular_gas, state_gas_used);
