@@ -660,6 +660,9 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto regular_exec = std::min(exec_gas, regular_cap);
         message.gas = regular_exec;
         message.state_gas = exec_gas - regular_exec;
+        // EIP-8037: Add delegation refund to reservoir (geth: st.gasRemaining.StateGas += refund).
+        // This returns the auth account-creation state gas for existing authorities.
+        message.state_gas += delegation_refund;
     }
 
     const auto result = host.call(message);
@@ -703,10 +706,11 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         // Used for block_gas_left. Block header uses max(sum_regular, sum_state) in runner.
         gas_used = std::max(block_gas, tx_props.min_gas_cost);
 
-        // Sender pays: max of (actual consumed, min_cost) minus refunds.
+        // Sender pays: total consumed minus gas refund.
+        // Delegation refund is already in the reservoir (returned as state_gas_left),
+        // reducing total_consumed. No separate subtraction needed.
         const auto sender_total = std::max(total_consumed, tx_props.min_gas_cost);
-        const auto sender_gas_cost =
-            std::max(sender_total - delegation_refund - refund, tx_props.min_gas_cost);
+        const auto sender_gas_cost = std::max(sender_total - refund, tx_props.min_gas_cost);
         sender_acc.balance += tx_max_cost - sender_gas_cost * effective_gas_price;
         state.touch(block.coinbase).balance += sender_gas_cost * priority_gas_price;
     }
@@ -736,8 +740,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto regular_refund_limit = tc / 5;
         const auto regular_refund = std::min(result.gas_refund, regular_refund_limit);
         const auto sender_total = std::max(tc, tx_props.min_gas_cost);
-        receipt.gas_used =
-            std::max(sender_total - delegation_refund - regular_refund, tx_props.min_gas_cost);
+        receipt.gas_used = std::max(sender_total - regular_refund, tx_props.min_gas_cost);
     }
     else
     {
