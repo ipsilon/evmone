@@ -312,32 +312,14 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     create_msg.input_data = nullptr;
     create_msg.input_size = 0;
 
-    // EIP-8037: Charge CREATE state gas (112 * CPSB) for transaction-level CREATE only.
-    // Opcode-level CREATE already charged in instructions_calls.cpp.
-    int64_t host_state_gas_used = 0;
-    if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
-    {
-        constexpr int64_t create_state_gas = 112 * 1174;
-        if (create_msg.state_gas >= create_state_gas)
-        {
-            create_msg.state_gas -= create_state_gas;
-        }
-        else
-        {
-            const auto remainder = create_state_gas - create_msg.state_gas;
-            create_msg.state_gas = 0;
-            create_msg.gas -= remainder;
-        }
-        host_state_gas_used += create_state_gas;
-    }
+    // EIP-8037: Depth-0 CREATE state gas (112*CPSB) is now in the intrinsic cost.
+    // Opcode-level CREATE (depth > 0) is charged in create_impl.
 
     const bytes_view initcode{msg.input_data, msg.input_size};
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
     {
         result.create_address = msg.recipient;
-        // EIP-8037: propagate state gas from child and account for host charges.
-        result.state_gas_used += host_state_gas_used;
         return result;
     }
 
@@ -352,13 +334,13 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     {
         auto r = evmc::Result{EVMC_FAILURE};
         r.raw().state_gas_left = result.state_gas_left;
-        r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
+        r.raw().state_gas_used = result.state_gas_used;
         return r;
     }
 
     // Code deployment cost.
     auto state_gas_left = result.state_gas_left;
-    auto total_state_gas_used = result.state_gas_used + host_state_gas_used;
+    auto total_state_gas_used = result.state_gas_used;
     if (m_rev >= EVMC_AMSTERDAM)
     {
         // EIP-8037: split code deposit into regular and state components.
