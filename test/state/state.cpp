@@ -686,18 +686,19 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto total_consumed = gas_used;
 
         // EIP-7778: block gas_used = max(sum_regular, sum_state) at block level.
-        // Auth state gas is now in intrinsic, tracked via state_gas_used.
+        // State gas = EVM-tracked state gas + net auth intrinsic state gas.
+        // Regular gas = total consumed - state gas.
         const auto exec_state_gas = result.state_gas_used;
         const auto auth_intrinsic_state = tx_props.intrinsic_state_gas;
         const auto net_auth_state_gas =
             std::max(int64_t{0}, auth_intrinsic_state - delegation_refund);
         const auto state_gas_used = exec_state_gas + net_auth_state_gas;
-        const auto regular_only =
-            std::max(int64_t{0}, total_consumed - exec_state_gas);
-        const auto block_gas = std::max(regular_only, state_gas_used);
+        const auto regular_gas =
+            std::max(int64_t{0}, total_consumed - state_gas_used);
+        const auto block_gas = std::max(regular_gas, state_gas_used);
 
         // Store components for block-level aggregation.
-        amsterdam_regular_gas = std::max(regular_only, tx_props.min_gas_cost);
+        amsterdam_regular_gas = std::max(regular_gas, tx_props.min_gas_cost);
         amsterdam_state_gas = state_gas_used;
 
         // Refund: based on total consumed (auth gas is included in refund base).
