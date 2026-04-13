@@ -45,33 +45,6 @@ public:
     void push(const uint256& value) noexcept { *m_end++ = value; }
 };
 
-namespace instr::imm
-{
-/// Decode DUPN/SWAPN immediate. Returns the stack depth n (17..235),
-/// or std::nullopt if the immediate is in the forbidden range (0x5b..0x7f).
-inline std::optional<int> decode_dupn_swapn_imm(uint8_t x) noexcept
-{
-    if (static_cast<uint8_t>(x - 0x5b) <= 0x24)  // Invalid range: 0x5b..0x7f
-        return std::nullopt;
-    return static_cast<uint8_t>(x + 145);
-}
-
-/// Decode EXCHANGE immediate. Returns the pair (n, m) with 1 <= n < m and n + m <= 30,
-/// or std::nullopt if the immediate is in the forbidden range (0x52..0x7f).
-inline std::optional<std::pair<int, int>> decode_exchange_imm(uint8_t x) noexcept
-{
-    if (static_cast<uint8_t>(x - 0x52) <= 0x2d)  // Invalid range: 0x52..0x7f
-        return std::nullopt;
-    const auto k = x ^ 0x8f;
-    const auto q = k / 16;
-    const auto r = k % 16;
-    if (q < r)
-        return std::pair{q + 1, r + 1};
-    else
-        return std::pair{r + 1, 29 - q};
-}
-}  // namespace instr::imm
-
 
 /// Instruction execution result.
 struct Result
@@ -101,6 +74,27 @@ constexpr void fast_swap(uint256& x, uint256& y) noexcept
     y[1] = t1;
     y[2] = t2;
     y[3] = t3;
+}
+
+/// Decode DUPN/SWAPN immediate. Returns the stack depth n (17..235),
+/// or std::nullopt if the immediate is in the forbidden range (0x5b..0x7f).
+constexpr std::optional<int> decode_dupn_swapn_imm(uint8_t imm) noexcept
+{
+    if (imm >= 0x5b && imm <= 0x7f)
+        return std::nullopt;
+    return imm + 145;
+}
+
+/// Decode EXCHANGE immediate. Returns the pair (n, m) with 1 <= n < m and n + m <= 30,
+/// or std::nullopt if the immediate is in the forbidden range (0x52..0x7f).
+constexpr std::optional<std::pair<int, int>> decode_exchange_imm(uint8_t imm) noexcept
+{
+    if (imm >= 0x52 && imm <= 0x7f)
+        return std::nullopt;
+    const auto k = imm ^ 0x8f;
+    const auto q = k / 16;
+    const auto r = k % 16;
+    return (q < r) ? std::pair{q + 1, r + 1} : std::pair{r + 1, 29 - q};
 }
 
 constexpr auto max_buffer_size = std::numeric_limits<uint32_t>::max();
@@ -920,41 +914,39 @@ inline void swap(StackTop stack) noexcept
 
 inline code_iterator dupn(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
-    const auto n = instr::imm::decode_dupn_swapn_imm(pos[1]);
+    const auto n = decode_dupn_swapn_imm(pos[1]);
     if (!n)
     {
         state.status = EVMC_UNDEFINED_INSTRUCTION;
         return nullptr;
     }
 
-    const auto stack_size = static_cast<size_t>(stack.end() - state.stack_space.bottom());
-    if (stack_size >= StackSpace::limit)
+    const auto stack_size = stack.end() - state.stack_space.bottom();
+    if (stack_size == StackSpace::limit)
     {
         state.status = EVMC_STACK_OVERFLOW;
         return nullptr;
     }
-    if (*n > static_cast<int>(stack_size))
+    if (*n > stack_size)
     {
         state.status = EVMC_STACK_UNDERFLOW;
         return nullptr;
     }
 
     stack.push(stack[*n - 1]);
-
     return pos + 2;
 }
 
 inline code_iterator swapn(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
-    const auto n = instr::imm::decode_dupn_swapn_imm(pos[1]);
+    const auto n = decode_dupn_swapn_imm(pos[1]);
     if (!n)
     {
         state.status = EVMC_UNDEFINED_INSTRUCTION;
         return nullptr;
     }
 
-    const auto stack_size = static_cast<int>(stack.end() - state.stack_space.bottom());
-    if (stack_size <= *n)
+    if (const auto stack_size = stack.end() - state.stack_space.bottom(); *n >= stack_size)
     {
         state.status = EVMC_STACK_UNDERFLOW;
         return nullptr;
@@ -966,7 +958,7 @@ inline code_iterator swapn(StackTop stack, ExecutionState& state, code_iterator 
 
 inline code_iterator exchange(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
-    const auto decoded = instr::imm::decode_exchange_imm(pos[1]);
+    const auto decoded = decode_exchange_imm(pos[1]);
     if (!decoded)
     {
         state.status = EVMC_UNDEFINED_INSTRUCTION;
@@ -974,14 +966,13 @@ inline code_iterator exchange(StackTop stack, ExecutionState& state, code_iterat
     }
 
     const auto [n, m] = *decoded;
-    const auto stack_size = static_cast<int>(stack.end() - state.stack_space.bottom());
-    if (stack_size <= m)
+    if (const auto stack_size = stack.end() - state.stack_space.bottom(); m >= stack_size)
     {
         state.status = EVMC_STACK_UNDERFLOW;
         return nullptr;
     }
 
-    fast_swap(stack[static_cast<int>(n)], stack[static_cast<int>(m)]);
+    fast_swap(stack[n], stack[m]);
     return pos + 2;
 }
 
