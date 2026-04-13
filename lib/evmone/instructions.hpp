@@ -937,8 +937,7 @@ inline code_iterator dupn(StackTop stack, ExecutionState& state, code_iterator p
     }
 
     const auto n = instr::imm::decode_dupn_swapn(imm);
-    const auto stack_size =
-        static_cast<size_t>(stack.end() - state.stack_space.bottom());
+    const auto stack_size = static_cast<size_t>(stack.end() - state.stack_space.bottom());
     if (stack_size >= StackSpace::limit)
     {
         state.status = EVMC_STACK_OVERFLOW;
@@ -965,8 +964,7 @@ inline code_iterator swapn(StackTop stack, ExecutionState& state, code_iterator 
     }
 
     const auto n = instr::imm::decode_dupn_swapn(imm);
-    const auto stack_size =
-        static_cast<size_t>(stack.end() - state.stack_space.bottom());
+    const auto stack_size = static_cast<size_t>(stack.end() - state.stack_space.bottom());
     if (stack_size <= n)
     {
         state.status = EVMC_STACK_UNDERFLOW;
@@ -979,7 +977,10 @@ inline code_iterator swapn(StackTop stack, ExecutionState& state, code_iterator 
     auto& t = stack.top();
     const auto t0 = t[0], t1 = t[1], t2 = t[2], t3 = t[3];
     t = a;
-    a[0] = t0; a[1] = t1; a[2] = t2; a[3] = t3;
+    a[0] = t0;
+    a[1] = t1;
+    a[2] = t2;
+    a[3] = t3;
 
     return pos + 2;
 }
@@ -994,8 +995,7 @@ inline code_iterator exchange(StackTop stack, ExecutionState& state, code_iterat
     }
 
     const auto [n, m] = instr::imm::decode_exchange(imm);
-    const auto stack_size =
-        static_cast<size_t>(stack.end() - state.stack_space.bottom());
+    const auto stack_size = static_cast<size_t>(stack.end() - state.stack_space.bottom());
     if (stack_size <= m)
     {
         state.status = EVMC_STACK_UNDERFLOW;
@@ -1007,7 +1007,10 @@ inline code_iterator exchange(StackTop stack, ExecutionState& state, code_iterat
     auto& b = stack[static_cast<int>(m)];
     const auto t0 = a[0], t1 = a[1], t2 = a[2], t3 = a[3];
     a = b;
-    b[0] = t0; b[1] = t1; b[2] = t2; b[3] = t3;
+    b[0] = t0;
+    b[1] = t1;
+    b[2] = t2;
+    b[3] = t3;
 
     return pos + 2;
 }
