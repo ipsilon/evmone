@@ -63,16 +63,16 @@ inline uint8_t decode_dupn_swapn(uint8_t x) noexcept
     return static_cast<uint8_t>(x + 145);
 }
 
-inline std::pair<uint8_t, uint8_t> decode_exchange(uint8_t x) noexcept
+inline std::pair<int, int> decode_exchange(uint8_t x) noexcept
 {
     assert(is_valid_exchange(x));
-    const auto k = static_cast<uint8_t>(x ^ 0x8f);
-    const auto q = static_cast<uint8_t>(k / 16);
-    const auto r = static_cast<uint8_t>(k % 16);
+    const auto k = (x ^ 0x8f);
+    const auto q = (k / 16);
+    const auto r = (k % 16);
     if (q < r)
-        return {static_cast<uint8_t>(q + 1), static_cast<uint8_t>(r + 1)};
+        return {(q + 1), (r + 1)};
     else
-        return {static_cast<uint8_t>(r + 1), static_cast<uint8_t>(29 - q)};
+        return {(r + 1), (29 - q)};
 }
 }  // namespace instr::imm
 
@@ -980,7 +980,7 @@ inline code_iterator exchange(StackTop stack, ExecutionState& state, code_iterat
     }
 
     const auto [n, m] = instr::imm::decode_exchange(imm);
-    const auto stack_size = static_cast<size_t>(stack.end() - state.stack_space.bottom());
+    const auto stack_size = static_cast<int>(stack.end() - state.stack_space.bottom());
     if (stack_size <= m)
     {
         state.status = EVMC_STACK_UNDERFLOW;
