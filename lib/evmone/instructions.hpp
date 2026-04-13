@@ -973,7 +973,7 @@ inline code_iterator swapn(StackTop stack, ExecutionState& state, code_iterator 
 inline code_iterator exchange(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
     const auto imm = pos[1];
-    if (!instr::imm::is_valid_exchange(imm))
+    if (imm > 0x51 && imm < 0x80)
     {
         state.status = EVMC_UNDEFINED_INSTRUCTION;
         return nullptr;
