@@ -117,6 +117,37 @@ TEST_P(evm, exchange_max_m)
     EXPECT_OUTPUT_INT(99);
 }
 
+TEST_P(evm, swapn_invalid_immediate_boundaries)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_AMSTERDAM;
+    // The invalid range for DUPN/SWAPN is 0x5b..0x7f (91..127).
+    // Verify boundary values of the invalid range.
+    for (const auto* hex : {"e75b", "e75c", "e75f", "e760", "e77e", "e77f"})
+    {
+        execute(18 * OP_PUSH0 + bytecode{hex});
+        EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
+    }
+    // Verify adjacent valid values don't trigger UNDEFINED_INSTRUCTION.
+    // imm=0x5a decodes to n=235, imm=0x80 decodes to n=17.
+    execute(236 * OP_PUSH0 + bytecode{"e75a"});
+    EXPECT_STATUS(EVMC_SUCCESS);
+    execute(18 * OP_PUSH0 + bytecode{"e780"});
+    EXPECT_STATUS(EVMC_SUCCESS);
+}
+
+TEST_P(evm, dupn_stack_overflow)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_AMSTERDAM;
+    // Fill stack to 1024, then DUPN (which pushes) should overflow.
+    const auto code = 1024 * OP_PUSH0 + bytecode{"e680"};
+    execute(code);
+    EXPECT_STATUS(EVMC_STACK_OVERFLOW);
+}
+
 TEST_P(evm, dupn_stack_underflow)
 {
     if (is_advanced())
