@@ -67,17 +67,12 @@ inline std::pair<uint8_t, uint8_t> decode_exchange(uint8_t x) noexcept
 {
     assert(is_valid_exchange(x));
     const auto k = static_cast<uint8_t>(x ^ 0x8f);
-    const auto q = k >> 4;
-    const auto r = k & 0x0f;
-    // Branchless select between two triangle halves of the (n,m) pair space.
-    // mask is 0xff if q < r (upper triangle), 0x00 otherwise (lower triangle).
-    const auto mask = static_cast<uint8_t>(static_cast<int8_t>(q - r) >> 7);
-    // Upper triangle: n=q+1, m=r+1. Lower triangle: n=r+1, m=29-q.
-    const auto n = static_cast<uint8_t>(((q & mask) | (r & ~mask)) + 1);
-    const auto m_upper = static_cast<uint8_t>(r + 1);
-    const auto m_lower = static_cast<uint8_t>(29 - q);
-    const auto m = static_cast<uint8_t>((m_upper & mask) | (m_lower & ~mask));
-    return {n, m};
+    const auto q = static_cast<uint8_t>(k / 16);
+    const auto r = static_cast<uint8_t>(k % 16);
+    if (q < r)
+        return {static_cast<uint8_t>(q + 1), static_cast<uint8_t>(r + 1)};
+    else
+        return {static_cast<uint8_t>(r + 1), static_cast<uint8_t>(29 - q)};
 }
 }  // namespace instr::imm
 
