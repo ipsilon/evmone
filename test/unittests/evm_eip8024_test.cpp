@@ -30,7 +30,7 @@ TEST_P(evm, dupn_basic)
 {
     if (is_advanced())
         GTEST_SKIP();
-    rev = EVMC_EXPERIMENTAL;
+    rev = EVMC_AMSTERDAM;
     const auto code = push(1) + 16 * OP_PUSH0 + bytecode{"e680"} + ret_top();
     execute(code);
     EXPECT_STATUS(EVMC_SUCCESS);
@@ -41,7 +41,7 @@ TEST_P(evm, dupn_implicit_immediate)
 {
     if (is_advanced())
         GTEST_SKIP();
-    rev = EVMC_EXPERIMENTAL;
+    rev = EVMC_AMSTERDAM;
     // Missing immediate at end of code defaults to 0.
     const auto code = push(1) + 144 * OP_PUSH0 + bytecode{"e6"} + ret_top();
     execute(code);
@@ -53,7 +53,7 @@ TEST_P(evm, swapn_basic)
 {
     if (is_advanced())
         GTEST_SKIP();
-    rev = EVMC_EXPERIMENTAL;
+    rev = EVMC_AMSTERDAM;
     const auto code = push(2) + 16 * OP_PUSH0 + push(1) + bytecode{"e780"} + ret_top();
     execute(code);
     EXPECT_STATUS(EVMC_SUCCESS);
@@ -64,7 +64,7 @@ TEST_P(evm, exchange_basic)
 {
     if (is_advanced())
         GTEST_SKIP();
-    rev = EVMC_EXPERIMENTAL;
+    rev = EVMC_AMSTERDAM;
     const auto code = push(0) + push(1) + push(2) + bytecode{"e88e"} + OP_SWAP1 + ret_top();
     execute(code);
     EXPECT_STATUS(EVMC_SUCCESS);
@@ -75,7 +75,7 @@ TEST_P(evm, dupn_invalid_immediate)
 {
     if (is_advanced())
         GTEST_SKIP();
-    rev = EVMC_EXPERIMENTAL;
+    rev = EVMC_AMSTERDAM;
     const auto code = 17 * OP_PUSH0 + bytecode{"e65b"};
     execute(code);
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
@@ -85,7 +85,7 @@ TEST_P(evm, swapn_invalid_immediate)
 {
     if (is_advanced())
         GTEST_SKIP();
-    rev = EVMC_EXPERIMENTAL;
+    rev = EVMC_AMSTERDAM;
     const auto code = 18 * OP_PUSH0 + bytecode{"e75b"};
     execute(code);
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
@@ -95,7 +95,7 @@ TEST_P(evm, exchange_invalid_immediate)
 {
     if (is_advanced())
         GTEST_SKIP();
-    rev = EVMC_EXPERIMENTAL;
+    rev = EVMC_AMSTERDAM;
     const auto code = 3 * OP_PUSH0 + bytecode{"e852"};
     execute(code);
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
@@ -105,7 +105,7 @@ TEST_P(evm, dupn_stack_underflow)
 {
     if (is_advanced())
         GTEST_SKIP();
-    rev = EVMC_EXPERIMENTAL;
+    rev = EVMC_AMSTERDAM;
     const auto code = 16 * OP_PUSH0 + bytecode{"e680"};
     execute(code);
     EXPECT_STATUS(EVMC_STACK_UNDERFLOW);

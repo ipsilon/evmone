@@ -177,11 +177,11 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_OSAKA][OP_CLZ] = 5;
 
     table[EVMC_AMSTERDAM] = table[EVMC_OSAKA];
+    table[EVMC_AMSTERDAM][OP_DUPN] = 3;
+    table[EVMC_AMSTERDAM][OP_SWAPN] = 3;
+    table[EVMC_AMSTERDAM][OP_EXCHANGE] = 3;
 
     table[EVMC_EXPERIMENTAL] = table[EVMC_AMSTERDAM];
-    table[EVMC_EXPERIMENTAL][OP_DUPN] = 3;
-    table[EVMC_EXPERIMENTAL][OP_SWAPN] = 3;
-    table[EVMC_EXPERIMENTAL][OP_EXCHANGE] = 3;
 
     return table;
 }();
@@ -379,9 +379,9 @@ constexpr inline std::array<Traits, 256> traits = []() noexcept {
 
     // Stack height_required is 0 because it depends on the immediate.
     // The opcode handler is assumed to check stack height.
-    table[OP_DUPN] = {"DUPN", 1, false, 0, 1, EVMC_EXPERIMENTAL};
-    table[OP_SWAPN] = {"SWAPN", 1, false, 0, 0, EVMC_EXPERIMENTAL};
-    table[OP_EXCHANGE] = {"EXCHANGE", 1, false, 0, 0, EVMC_EXPERIMENTAL};
+    table[OP_DUPN] = {"DUPN", 1, false, 0, 1, EVMC_AMSTERDAM};
+    table[OP_SWAPN] = {"SWAPN", 1, false, 0, 0, EVMC_AMSTERDAM};
+    table[OP_EXCHANGE] = {"EXCHANGE", 1, false, 0, 0, EVMC_AMSTERDAM};
 
     table[OP_LOG0] = {"LOG0", 0, false, 2, -2, EVMC_FRONTIER};
     table[OP_LOG1] = {"LOG1", 0, false, 3, -3, EVMC_FRONTIER};
