@@ -55,6 +55,25 @@ struct Result
 struct TermResult : Result
 {};
 
+
+/// Swap two values.
+constexpr void fast_swap(uint256& x, uint256& y) noexcept
+{
+    // The simple std::swap(stack.top(), stack[N]) is not used to work around
+    // clang missed optimization: https://github.com/llvm/llvm-project/issues/59116
+    // TODO(clang): Check if #59116 bug fix has been released.
+
+    auto t0 = x[0];
+    auto t1 = x[1];
+    auto t2 = x[2];
+    auto t3 = x[3];
+    x = y;
+    y[0] = t0;
+    y[1] = t1;
+    y[2] = t2;
+    y[3] = t3;
+}
+
 constexpr auto max_buffer_size = std::numeric_limits<uint32_t>::max();
 
 /// The size of the EVM 256-bit word.
@@ -85,7 +104,7 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     int64_t gas_left, Memory& memory, uint64_t new_size) noexcept
 {
     // This implementation recomputes memory.size(). This value is already known to the caller
-    // and can be passed as a parameter, but this make no difference to the performance.
+    // and can be passed as a parameter, but this makes no difference to the performance.
 
     const auto new_words = num_words(new_size);
     const auto current_words = static_cast<int64_t>(memory.size() / word_size);
@@ -867,22 +886,7 @@ template <int N>
 inline void swap(StackTop stack) noexcept
 {
     static_assert(N >= 1 && N <= 16);
-
-    // The simple std::swap(stack.top(), stack[N]) is not used to workaround
-    // clang missed optimization: https://github.com/llvm/llvm-project/issues/59116
-    // TODO(clang): Check if #59116 bug fix has been released.
-
-    auto& a = stack[N];
-    auto& t = stack.top();
-    auto t0 = t[0];
-    auto t1 = t[1];
-    auto t2 = t[2];
-    auto t3 = t[3];
-    t = a;
-    a[0] = t0;
-    a[1] = t1;
-    a[2] = t2;
-    a[3] = t3;
+    fast_swap(stack.top(), stack[N]);
 }
 
 inline Result mcopy(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
