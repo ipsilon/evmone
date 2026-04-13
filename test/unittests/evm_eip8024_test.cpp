@@ -101,6 +101,22 @@ TEST_P(evm, exchange_invalid_immediate)
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
 }
 
+TEST_P(evm, exchange_max_m)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_AMSTERDAM;
+    // Immediate 0x8f decodes to (n=1, m=29) — the maximum m value.
+    // A branchless decode_pair off-by-one would produce (1, 30), causing
+    // a spurious stack underflow (regression from Nethermind devnet bug).
+    // EXCHANGE swaps stack[1] and stack[29]. After swap, stack[1] has 99.
+    // Use SWAP1 to bring it to top for ret_top().
+    const auto code = push(99) + 29 * OP_PUSH0 + bytecode{"e88f"} + OP_SWAP1 + ret_top();
+    execute(code);
+    EXPECT_STATUS(EVMC_SUCCESS);
+    EXPECT_OUTPUT_INT(99);
+}
+
 TEST_P(evm, dupn_stack_underflow)
 {
     if (is_advanced())
