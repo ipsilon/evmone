@@ -681,17 +681,26 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         // EIP-7778: block gas_used = max(sum_regular, sum_state) at block level.
         // State gas = EVM-tracked + intrinsic state gas (CREATE + auth, minus refund).
         // Regular gas = total consumed - state gas.
-        const auto exec_state_gas = result.state_gas_used;
+        const auto exec_state_gas = std::max(int64_t{0}, result.state_gas_used);
         const auto intrinsic_state = tx_props.intrinsic_state_gas;
         const auto net_intrinsic_state =
             std::max(int64_t{0}, intrinsic_state - delegation_refund);
         const auto state_gas_used = exec_state_gas + net_intrinsic_state;
         // Regular gas = total consumed + delegation_refund - gross intrinsic state - exec state.
-        // The delegation_refund reduced total_consumed (via reservoir return), so add it
-        // back before subtracting intrinsic state to isolate the regular dimension.
-        // This matches geth: txRegular = gas.RegularGas + execGasUsed.RegularGas.
-        const auto regular_gas = std::max(int64_t{0},
-            total_consumed + delegation_refund - intrinsic_state - exec_state_gas);
+        // Matches geth: txRegular = gas.RegularGas + execGasUsed.RegularGas.
+        //
+        // Special case: on collision/early-failure (gas_left=0, state_gas_used=0,
+        // state_gas_left preserved), no EVM execution happened. The burned gas is
+        // not categorized as regular or state. Regular = just intrinsic.
+        // Detect collision/early-failure: EVMC_FAILURE with no state gas used and
+        // gas burned. On collision, Host::create returns EVMC_FAILURE (not OOG/REVERT)
+        // with gas_left=0, state_gas_used=0, reservoir preserved.
+        // Detect depth-0 collision: marked by Host with state_gas_used = -1.
+        const auto is_collision = (result.state_gas_used == -1);
+        const auto regular_gas = is_collision ?
+            tx_props.intrinsic_regular_gas :
+            std::max(int64_t{0},
+                total_consumed + delegation_refund - intrinsic_state - exec_state_gas);
         const auto block_gas = std::max(regular_gas, state_gas_used);
 
         // Store components for block-level aggregation.

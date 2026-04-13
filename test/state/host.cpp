@@ -280,9 +280,17 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         new_acc = &m_state.insert(msg.recipient);
     else if (is_create_collision(*new_acc))
     {
-        // Preserve reservoir — no state was created.
         auto r = evmc::Result{EVMC_FAILURE};
-        r.raw().state_gas_left = msg.state_gas;
+        if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
+        {
+            // Mark depth-0 collision with sentinel for block formula.
+            r.raw().state_gas_used = -1;
+        }
+        else
+        {
+            // Preserve reservoir for opcode-level collision.
+            r.raw().state_gas_left = msg.state_gas;
+        }
         return r;
     }
     m_state.journal_create(msg.recipient, new_acc_exists);
