@@ -484,8 +484,8 @@ inline std::string decode(bytes_view bytecode)
         {
             const auto imm = (it + 1 != bytecode.end()) ? *(it + 1) : uint8_t{0};
             const auto valid = (opcode == OP_EXCHANGE) ?
-                                   evmone::instr::imm::is_valid_exchange(imm) :
-                                   evmone::instr::imm::is_valid_dupn_swapn(imm);
+                                   evmone::instr::imm::decode_exchange_imm(imm).has_value() :
+                                   evmone::instr::imm::decode_dupn_swapn_imm(imm).has_value();
             if (!valid)
             {
                 if (opcode == OP_DUPN)

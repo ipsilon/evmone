@@ -8,7 +8,7 @@
 #include "instructions_traits.hpp"
 #include "instructions_xmacro.hpp"
 #include <evmone_precompiles/keccak.hpp>
-#include <cassert>
+#include <optional>
 #include <utility>
 
 namespace evmone
@@ -47,32 +47,28 @@ public:
 
 namespace instr::imm
 {
-inline bool is_valid_dupn_swapn(uint8_t x) noexcept
+/// Decode DUPN/SWAPN immediate. Returns the stack depth n (17..235),
+/// or std::nullopt if the immediate is in the forbidden range (0x5b..0x7f).
+inline std::optional<int> decode_dupn_swapn_imm(uint8_t x) noexcept
 {
-    return static_cast<uint8_t>(x - 0x5b) > 0x24;  // Invalid range: 0x5b..0x7f
-}
-
-inline bool is_valid_exchange(uint8_t x) noexcept
-{
-    return static_cast<uint8_t>(x - 0x52) > 0x2d;  // Invalid range: 0x52..0x7f
-}
-
-inline uint8_t decode_dupn_swapn(uint8_t x) noexcept
-{
-    assert(is_valid_dupn_swapn(x));
+    if (static_cast<uint8_t>(x - 0x5b) <= 0x24)  // Invalid range: 0x5b..0x7f
+        return std::nullopt;
     return static_cast<uint8_t>(x + 145);
 }
 
-inline std::pair<int, int> decode_exchange(uint8_t x) noexcept
+/// Decode EXCHANGE immediate. Returns the pair (n, m) with 1 <= n < m and n + m <= 30,
+/// or std::nullopt if the immediate is in the forbidden range (0x52..0x7f).
+inline std::optional<std::pair<int, int>> decode_exchange_imm(uint8_t x) noexcept
 {
-    assert(is_valid_exchange(x));
-    const auto k = (x ^ 0x8f);
-    const auto q = (k / 16);
-    const auto r = (k % 16);
+    if (static_cast<uint8_t>(x - 0x52) <= 0x2d)  // Invalid range: 0x52..0x7f
+        return std::nullopt;
+    const auto k = x ^ 0x8f;
+    const auto q = k / 16;
+    const auto r = k % 16;
     if (q < r)
-        return {(q + 1), (r + 1)};
+        return std::pair{q + 1, r + 1};
     else
-        return {(r + 1), (29 - q)};
+        return std::pair{r + 1, 29 - q};
 }
 }  // namespace instr::imm
 
@@ -924,62 +920,60 @@ inline void swap(StackTop stack) noexcept
 
 inline code_iterator dupn(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
-    const auto imm = pos[1];
-    if (!instr::imm::is_valid_dupn_swapn(imm))
+    const auto n = instr::imm::decode_dupn_swapn_imm(pos[1]);
+    if (!n)
     {
         state.status = EVMC_UNDEFINED_INSTRUCTION;
         return nullptr;
     }
 
-    const auto n = instr::imm::decode_dupn_swapn(imm);
     const auto stack_size = static_cast<size_t>(stack.end() - state.stack_space.bottom());
     if (stack_size >= StackSpace::limit)
     {
         state.status = EVMC_STACK_OVERFLOW;
         return nullptr;
     }
-    if (n > stack_size)
+    if (*n > static_cast<int>(stack_size))
     {
         state.status = EVMC_STACK_UNDERFLOW;
         return nullptr;
     }
 
-    stack.push(stack[static_cast<int>(n - 1)]);
+    stack.push(stack[*n - 1]);
 
     return pos + 2;
 }
 
 inline code_iterator swapn(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
-    const auto imm = pos[1];
-    if (!instr::imm::is_valid_dupn_swapn(imm))
+    const auto n = instr::imm::decode_dupn_swapn_imm(pos[1]);
+    if (!n)
     {
         state.status = EVMC_UNDEFINED_INSTRUCTION;
         return nullptr;
     }
 
-    const auto n = instr::imm::decode_dupn_swapn(imm);
-    const auto stack_size = static_cast<size_t>(stack.end() - state.stack_space.bottom());
-    if (stack_size <= n)
+    const auto stack_size = static_cast<int>(stack.end() - state.stack_space.bottom());
+    if (stack_size <= *n)
     {
         state.status = EVMC_STACK_UNDERFLOW;
         return nullptr;
     }
 
-    fast_swap(stack.top(), stack[static_cast<int>(n)]);
+    fast_swap(stack.top(), stack[*n]);
     return pos + 2;
 }
 
 inline code_iterator exchange(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
-    const auto imm = pos[1];
-    if (imm > 0x51 && imm < 0x80)
+    const auto decoded = instr::imm::decode_exchange_imm(pos[1]);
+    if (!decoded)
     {
         state.status = EVMC_UNDEFINED_INSTRUCTION;
         return nullptr;
     }
 
-    const auto [n, m] = instr::imm::decode_exchange(imm);
+    const auto [n, m] = *decoded;
     const auto stack_size = static_cast<int>(stack.end() - state.stack_space.bottom());
     if (stack_size <= m)
     {
