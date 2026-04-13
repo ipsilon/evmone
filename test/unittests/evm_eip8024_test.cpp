@@ -16,8 +16,7 @@ TEST(bytecode, eip8024_decode)
     EXPECT_EQ(decode(bytecode{"e6805b"}), "bytecode{} + OP_DUPN + \"80\" + OP_JUMPDEST");
     EXPECT_EQ(decode(bytecode{"e75b"}), "bytecode{} + OP_INVALID_SWAPN + OP_JUMPDEST");
     EXPECT_EQ(decode(bytecode{"e6605b"}), "bytecode{} + OP_INVALID_DUPN + OP_PUSH1 + \"5b\"");
-    EXPECT_EQ(decode(bytecode{"e7610000"}),
-        "bytecode{} + OP_INVALID_SWAPN + OP_PUSH2 + \"0000\"");
+    EXPECT_EQ(decode(bytecode{"e7610000"}), "bytecode{} + OP_INVALID_SWAPN + OP_PUSH2 + \"0000\"");
     EXPECT_EQ(decode(bytecode{"e65f"}), "bytecode{} + OP_INVALID_DUPN + OP_PUSH0");
     EXPECT_EQ(decode(bytecode{"e89d"}), "bytecode{} + OP_EXCHANGE + \"9d\"");
     EXPECT_EQ(decode(bytecode{"e82f"}), "bytecode{} + OP_EXCHANGE + \"2f\"");
