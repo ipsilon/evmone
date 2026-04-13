@@ -153,7 +153,30 @@ TEST_P(evm, dupn_stack_underflow)
     if (is_advanced())
         GTEST_SKIP();
     rev = EVMC_AMSTERDAM;
+    // imm=0x80 decodes to n=17, but only 16 items on stack.
     const auto code = 16 * OP_PUSH0 + bytecode{"e680"};
+    execute(code);
+    EXPECT_STATUS(EVMC_STACK_UNDERFLOW);
+}
+
+TEST_P(evm, swapn_stack_underflow)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_AMSTERDAM;
+    // imm=0x80 decodes to n=17, SWAPN needs n+1=18 items but only 17.
+    const auto code = 17 * OP_PUSH0 + bytecode{"e780"};
+    execute(code);
+    EXPECT_STATUS(EVMC_STACK_UNDERFLOW);
+}
+
+TEST_P(evm, exchange_stack_underflow)
+{
+    if (is_advanced())
+        GTEST_SKIP();
+    rev = EVMC_AMSTERDAM;
+    // imm=0x8e decodes to (n=1, m=2), needs m+1=3 items but only 2.
+    const auto code = 2 * OP_PUSH0 + bytecode{"e88e"};
     execute(code);
     EXPECT_STATUS(EVMC_STACK_UNDERFLOW);
 }
