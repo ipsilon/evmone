@@ -964,7 +964,13 @@ inline code_iterator swapn(StackTop stack, ExecutionState& state, code_iterator 
         return nullptr;
     }
 
-    std::swap(stack[static_cast<int>(n)], stack.top());
+    // Manual swap to match swap<N> workaround for clang missed optimization.
+    // TODO(clang): Check if llvm/llvm-project#59116 bug fix has been released.
+    auto& a = stack[static_cast<int>(n)];
+    auto& t = stack.top();
+    const auto t0 = t[0], t1 = t[1], t2 = t[2], t3 = t[3];
+    t = a;
+    a[0] = t0; a[1] = t1; a[2] = t2; a[3] = t3;
 
     return pos + 2;
 }
@@ -987,7 +993,12 @@ inline code_iterator exchange(StackTop stack, ExecutionState& state, code_iterat
         return nullptr;
     }
 
-    std::swap(stack[static_cast<int>(n)], stack[static_cast<int>(m)]);
+    // Manual swap to match swap<N> workaround for clang missed optimization.
+    auto& a = stack[static_cast<int>(n)];
+    auto& b = stack[static_cast<int>(m)];
+    const auto t0 = a[0], t1 = a[1], t2 = a[2], t3 = a[3];
+    a = b;
+    b[0] = t0; b[1] = t1; b[2] = t2; b[3] = t3;
 
     return pos + 2;
 }
