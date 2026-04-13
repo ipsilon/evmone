@@ -57,7 +57,7 @@ inline bool is_valid_exchange(uint8_t x) noexcept
     return x <= 0x51 || x >= 0x80;
 }
 
-inline uint16_t decode_dupn_swapn(uint8_t x) noexcept
+inline uint8_t decode_dupn_swapn(uint8_t x) noexcept
 {
     assert(is_valid_dupn_swapn(x));
     return static_cast<uint8_t>(x + 145);
