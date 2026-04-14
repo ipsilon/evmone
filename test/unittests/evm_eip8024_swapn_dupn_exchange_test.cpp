@@ -135,7 +135,8 @@ TEST_P(evm, dupn_stack_overflow)
         return;
 
     rev = EVMC_AMSTERDAM;
-    // Fill stack to 1024, then DUPN (which pushes) should overflow.
+    // Regression: DUPN overflow with stack at limit (1024) must not cause UB
+    // in the stack pointer adjustment (stack_end + stack_height_change).
     const auto code = 1024 * OP_PUSH0 + bytecode{"e680"};
     execute(code);
     EXPECT_STATUS(EVMC_STACK_OVERFLOW);
@@ -175,4 +176,49 @@ TEST_P(evm, exchange_stack_underflow)
     const auto code = 2 * OP_PUSH0 + bytecode{"e88e"};
     execute(code);
     EXPECT_STATUS(EVMC_STACK_UNDERFLOW);
+}
+
+TEST_P(evm, dupn_out_of_gas)
+{
+    if (is_advanced())
+        return;
+
+    rev = EVMC_AMSTERDAM;
+    // DUPN costs 3 gas. With exactly 2 gas, it should fail with OOG.
+    // 17 PUSH0 (2 gas each = 34) + DUPN (3 gas) = 37 total.
+    const auto code = 17 * OP_PUSH0 + bytecode{"e680"};
+    execute(36, code);  // 1 gas short.
+    EXPECT_STATUS(EVMC_OUT_OF_GAS);
+
+    execute(37, code);  // Exact gas.
+    EXPECT_STATUS(EVMC_SUCCESS);
+}
+
+TEST_P(evm, swapn_out_of_gas)
+{
+    if (is_advanced())
+        return;
+
+    rev = EVMC_AMSTERDAM;
+    const auto code = 18 * OP_PUSH0 + bytecode{"e780"};
+    execute(38, code);  // 18*2=36 for PUSH0 + 3 for SWAPN = 39. Give 38.
+    EXPECT_STATUS(EVMC_OUT_OF_GAS);
+
+    execute(39, code);
+    EXPECT_STATUS(EVMC_SUCCESS);
+}
+
+TEST_P(evm, exchange_out_of_gas)
+{
+    if (is_advanced())
+        return;
+
+    rev = EVMC_AMSTERDAM;
+    // imm=0x8e decodes to (n=1, m=2), needs 3 items.
+    const auto code = 3 * OP_PUSH0 + bytecode{"e88e"};
+    execute(8, code);  // 3*2=6 for PUSH0 + 3 for EXCHANGE = 9. Give 8.
+    EXPECT_STATUS(EVMC_OUT_OF_GAS);
+
+    execute(9, code);
+    EXPECT_STATUS(EVMC_SUCCESS);
 }
