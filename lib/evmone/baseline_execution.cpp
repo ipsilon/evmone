@@ -65,25 +65,19 @@ inline evmc_status_code check_requirements(const CostTable& cost_table, int64_t&
 
     // Check stack requirements first. This order is not required,
     // but it is nicer because a complete gas check may need to inspect operands.
-    //
-    // DUPN/SWAPN/EXCHANGE handle stack requirements internally because
-    // the required depth depends on the immediate value.
-    if constexpr (Op != OP_DUPN && Op != OP_SWAPN && Op != OP_EXCHANGE)
+    if constexpr (instr::traits[Op].stack_height_change > 0)
     {
-        if constexpr (instr::traits[Op].stack_height_change > 0)
-        {
-            static_assert(instr::traits[Op].stack_height_change == 1,
-                "unexpected instruction with multiple results");
-            if (INTX_UNLIKELY(stack_top == stack_bottom + StackSpace::limit))
-                return EVMC_STACK_OVERFLOW;
-        }
-        if constexpr (instr::traits[Op].stack_height_required > 0)
-        {
-            // Check stack underflow using pointer comparison <= (better optimization).
-            static constexpr auto min_offset = instr::traits[Op].stack_height_required - 1;
-            if (INTX_UNLIKELY(stack_top <= stack_bottom + min_offset))
-                return EVMC_STACK_UNDERFLOW;
-        }
+        static_assert(instr::traits[Op].stack_height_change == 1,
+            "unexpected instruction with multiple results");
+        if (INTX_UNLIKELY(stack_top == stack_bottom + StackSpace::limit))
+            return EVMC_STACK_OVERFLOW;
+    }
+    if constexpr (instr::traits[Op].stack_height_required > 0)
+    {
+        // Check stack underflow using pointer comparison <= (better optimization).
+        static constexpr auto min_offset = instr::traits[Op].stack_height_required - 1;
+        if (INTX_UNLIKELY(stack_top <= stack_bottom + min_offset))
+            return EVMC_STACK_UNDERFLOW;
     }
 
     if constexpr (!instr::has_const_gas_cost(Op) || instr::gas_costs[EVMC_FRONTIER][Op] > 0)

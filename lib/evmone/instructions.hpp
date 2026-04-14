@@ -919,12 +919,8 @@ inline code_iterator dupn(StackTop stack, ExecutionState& state, code_iterator p
         return nullptr;
     }
 
+    // Stack overflow is checked by check_requirements() (stack_height_change=+1).
     const auto stack_size = stack.end() - state.stack_space.bottom();
-    if (stack_size == StackSpace::limit)
-    {
-        state.status = EVMC_STACK_OVERFLOW;
-        return nullptr;
-    }
     if (*n > stack_size)
     {
         state.status = EVMC_STACK_UNDERFLOW;
