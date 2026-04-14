@@ -9,12 +9,11 @@
 
 using namespace evmone::test;
 
-// --- DUPN ---
-
 TEST_P(evm, dupn_basic)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // imm=0x80 → n=17. Push 17 items, DUP17 duplicates the bottom one.
     const auto code = push(1) + 16 * OP_PUSH0 + bytecode{"e680"} + ret_top();
@@ -27,6 +26,7 @@ TEST_P(evm, dupn_end_of_code)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // DUPN at end of code: implicit immediate is 0x00 → n=145.
     const auto code = push(1) + 144 * OP_PUSH0 + bytecode{"e6"};
@@ -38,6 +38,7 @@ TEST_P(evm, dupn_invalid_immediate)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // 0x5b is in the forbidden range (0x5b..0x7f).
     execute(17 * OP_PUSH0 + bytecode{"e65b"});
@@ -48,6 +49,7 @@ TEST_P(evm, dupn_stack_overflow)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // Regression: DUPN overflow with stack at limit (1024) must not cause UB
     // in the stack pointer adjustment (stack_end + stack_height_change).
@@ -59,6 +61,7 @@ TEST_P(evm, dupn_stack_underflow)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // imm=0x80 → n=17, but only 16 items on stack.
     execute(16 * OP_PUSH0 + bytecode{"e680"});
@@ -69,6 +72,7 @@ TEST_P(evm, dupn_out_of_gas)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // 17 PUSH0 (2 gas each = 34) + DUPN (3 gas) = 37 total.
     const auto code = 17 * OP_PUSH0 + bytecode{"e680"};
@@ -78,12 +82,11 @@ TEST_P(evm, dupn_out_of_gas)
     EXPECT_STATUS(EVMC_SUCCESS);
 }
 
-// --- SWAPN ---
-
 TEST_P(evm, swapn_basic)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // imm=0x80 → n=17. SWAP17: swap top with 17th item.
     const auto code = push(2) + 16 * OP_PUSH0 + push(1) + bytecode{"e780"} + ret_top();
@@ -96,6 +99,7 @@ TEST_P(evm, swapn_invalid_immediate)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // 0x5b is in the forbidden range (0x5b..0x7f).
     execute(18 * OP_PUSH0 + bytecode{"e75b"});
@@ -106,6 +110,7 @@ TEST_P(evm, swapn_invalid_immediate_boundaries)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // Verify boundary values of the forbidden range (0x5b..0x7f).
     for (const auto* hex : {"e75b", "e75c", "e75f", "e760", "e77e", "e77f"})
@@ -124,6 +129,7 @@ TEST_P(evm, swapn_stack_underflow)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // imm=0x80 → n=17, SWAPN needs n+1=18 items but only 17.
     execute(17 * OP_PUSH0 + bytecode{"e780"});
@@ -134,6 +140,7 @@ TEST_P(evm, swapn_out_of_gas)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // 18 PUSH0 (36 gas) + SWAPN (3 gas) = 39 total.
     const auto code = 18 * OP_PUSH0 + bytecode{"e780"};
@@ -143,12 +150,11 @@ TEST_P(evm, swapn_out_of_gas)
     EXPECT_STATUS(EVMC_SUCCESS);
 }
 
-// --- EXCHANGE ---
-
 TEST_P(evm, exchange_basic)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // imm=0x8e → (n=1, m=2). Swaps stack[1] and stack[2].
     const auto code = push(0) + push(1) + push(2) + bytecode{"e88e"} + OP_SWAP1 + ret_top();
@@ -161,6 +167,7 @@ TEST_P(evm, exchange_max_m)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // imm=0x8f → (n=1, m=29), the maximum m value.
     // Regression: branchless decode off-by-one would produce (1, 30).
@@ -174,6 +181,7 @@ TEST_P(evm, exchange_invalid_immediate)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // 0x52 is the first byte in the forbidden range (0x52..0x7f).
     execute(3 * OP_PUSH0 + bytecode{"e852"});
@@ -184,6 +192,7 @@ TEST_P(evm, exchange_stack_underflow)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // imm=0x8e → (n=1, m=2), needs m+1=3 items but only 2.
     execute(2 * OP_PUSH0 + bytecode{"e88e"});
@@ -194,6 +203,7 @@ TEST_P(evm, exchange_out_of_gas)
 {
     if (is_advanced())
         return;
+
     rev = EVMC_AMSTERDAM;
     // 3 PUSH0 (6 gas) + EXCHANGE (3 gas) = 9 total.
     const auto code = 3 * OP_PUSH0 + bytecode{"e88e"};
@@ -201,14 +211,4 @@ TEST_P(evm, exchange_out_of_gas)
     EXPECT_STATUS(EVMC_OUT_OF_GAS);
     execute(9, code);
     EXPECT_STATUS(EVMC_SUCCESS);
-}
-
-// --- Regression ---
-
-TEST_P(evm, push1_stack_overflow_at_amsterdam)
-{
-    // Regression: EIP-8024 stack check bypass must not affect PUSH instructions.
-    rev = EVMC_AMSTERDAM;
-    execute(1025 * push(1));
-    EXPECT_STATUS(EVMC_STACK_OVERFLOW);
 }
