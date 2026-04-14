@@ -80,7 +80,7 @@ constexpr std::optional<int> decode_dupn_swapn_imm(uint8_t imm) noexcept
 {
     if (imm >= 0x5b && imm <= 0x7f)
         return std::nullopt;
-    return static_cast<uint8_t>(imm + 145);
+    return static_cast<uint8_t>(imm + 0x91);
 }
 
 /// Decode EXCHANGE immediate. Returns the pair (n, m) with 1 <= n < m and n + m <= 30,
