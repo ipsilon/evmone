@@ -91,6 +91,20 @@ TEST_P(evm, dup_stack_overflow)
     EXPECT_STATUS(EVMC_STACK_OVERFLOW);
 }
 
+TEST_P(evm, push1_stack_overflow)
+{
+    for (const auto r :
+        {EVMC_FRONTIER, EVMC_BYZANTIUM, EVMC_OSAKA, EVMC_AMSTERDAM, EVMC_MAX_REVISION})
+    {
+        rev = r;
+        // PUSH1 has an immediate byte, so it must not bypass the stack overflow check.
+        execute(1024 * push(1));
+        EXPECT_STATUS(EVMC_SUCCESS);
+        execute(1025 * push(1));
+        EXPECT_STATUS(EVMC_STACK_OVERFLOW);
+    }
+}
+
 TEST_P(evm, dup_stack_underflow)
 {
     for (int i = 0; i < 16; ++i)

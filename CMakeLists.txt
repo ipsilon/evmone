@@ -2,11 +2,7 @@
 # Copyright 2019 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-cmake_minimum_required(VERSION 3.19...4.2)
-
-if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/evmc/.git)
-    message(FATAL_ERROR "Git submodules not initialized, execute:\n  git submodule update --init")
-endif()
+cmake_minimum_required(VERSION 3.22...4.2)
 
 option(BUILD_SHARED_LIBS "Build evmone as a shared library" ON)
 option(COVERAGE "Build with coverage instrumentation" OFF)
@@ -27,7 +23,9 @@ cable_set_build_type(DEFAULT Release CONFIGURATION_TYPES Release Debug)
 include(Hunter/init)
 
 project(evmone LANGUAGES CXX C)
-set(PROJECT_VERSION 0.19.0)
+set(PROJECT_VERSION 0.21.0)
+
+option(EVMONE_TOOLS "Build evmone tools" ${PROJECT_IS_TOP_LEVEL})
 
 string(REGEX MATCH "([0-9]+)\\.([0-9]+)" _ ${PROJECT_VERSION})
 set(PROJECT_VERSION_MAJOR ${CMAKE_MATCH_1})
@@ -37,9 +35,6 @@ set(PROJECT_SOVERSION ${PROJECT_VERSION_MAJOR})
 if(PROJECT_VERSION_MAJOR EQUAL 0)
     set(PROJECT_SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
 endif()
-
-option(EVMC_TOOLS "Build EVMC test tools" ${EVMONE_TESTING})
-option(EVMC_INSTALL "Install EVMC" OFF)
 
 if(COMMAND block) # TODO(cmake-3.25)
     block()
@@ -157,6 +152,10 @@ set(include_dir ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_subdirectory(lib)
 
+if(EVMONE_TOOLS)
+    add_subdirectory(tools)
+endif()
+
 if(EVMONE_TESTING)
     enable_testing()
     add_subdirectory(test)
@@ -169,8 +168,8 @@ set(install_targets evmone)
 if(TARGET evmone-standalone)
     list(APPEND install_targets evmone-standalone)
 endif()
-if(TARGET evm-test)
-    list(APPEND install_targets evm-test)
+if(TARGET evmone-cli)
+    list(APPEND install_targets evmone-cli)
 endif()
 if(TARGET evmone-bench)
     list(APPEND install_targets evmone-bench)

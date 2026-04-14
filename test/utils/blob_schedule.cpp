@@ -34,6 +34,8 @@ state::BlobParams get_blob_params(
         fork = timestamp >= 15'000 ? "BPO3" : "BPO2";
     else if (network == "BPO3ToBPO4AtTime15k")
         fork = timestamp >= 15'000 ? "BPO4" : "BPO3";
+    else if (network == "BPO2ToAmsterdamAtTime15k")
+        fork = timestamp >= 15'000 ? "Amsterdam" : "BPO2";
     else
         fork = network;
     if (const auto it = blob_schedule.find(fork); it != blob_schedule.end())

@@ -55,6 +55,46 @@ struct Result
 struct TermResult : Result
 {};
 
+
+/// Swap two values.
+constexpr void fast_swap(uint256& x, uint256& y) noexcept
+{
+    // The simple std::swap(stack.top(), stack[N]) is not used to work around
+    // clang missed optimization: https://github.com/llvm/llvm-project/issues/59116
+    // TODO(clang): Check if #59116 bug fix has been released.
+
+    auto t0 = x[0];
+    auto t1 = x[1];
+    auto t2 = x[2];
+    auto t3 = x[3];
+    x = y;
+    y[0] = t0;
+    y[1] = t1;
+    y[2] = t2;
+    y[3] = t3;
+}
+
+/// Decode DUPN/SWAPN immediate. Returns the stack depth n [17–235],
+/// or std::nullopt if the immediate is in the forbidden range [0x5b–0x7f].
+constexpr std::optional<int> decode_dupn_swapn_imm(uint8_t imm) noexcept
+{
+    if (imm >= 0x5b && imm <= 0x7f)
+        return std::nullopt;
+    return static_cast<uint8_t>(imm + 0x91);
+}
+
+/// Decode EXCHANGE immediate. Returns the pair (n, m) with 1 <= n < m and n + m <= 30,
+/// or std::nullopt if the immediate is in the forbidden range [0x52–0x7f].
+constexpr std::optional<std::pair<int, int>> decode_exchange_imm(uint8_t imm) noexcept
+{
+    if (imm >= 0x52 && imm <= 0x7f)
+        return std::nullopt;
+    const auto k = imm ^ 0x8f;
+    const auto q = k / 16;
+    const auto r = k % 16;
+    return (q < r) ? std::pair{q + 1, r + 1} : std::pair{r + 1, 29 - q};
+}
+
 constexpr auto max_buffer_size = std::numeric_limits<uint32_t>::max();
 
 /// The size of the EVM 256-bit word.
@@ -85,7 +125,7 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     int64_t gas_left, Memory& memory, uint64_t new_size) noexcept
 {
     // This implementation recomputes memory.size(). This value is already known to the caller
-    // and can be passed as a parameter, but this make no difference to the performance.
+    // and can be passed as a parameter, but this makes no difference to the performance.
 
     const auto new_words = num_words(new_size);
     const auto current_words = static_cast<int64_t>(memory.size() / word_size);
@@ -867,22 +907,67 @@ template <int N>
 inline void swap(StackTop stack) noexcept
 {
     static_assert(N >= 1 && N <= 16);
+    fast_swap(stack.top(), stack[N]);
+}
 
-    // The simple std::swap(stack.top(), stack[N]) is not used to workaround
-    // clang missed optimization: https://github.com/llvm/llvm-project/issues/59116
-    // TODO(clang): Check if #59116 bug fix has been released.
+inline code_iterator dupn(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
+{
+    const auto n = decode_dupn_swapn_imm(pos[1]);
+    if (!n)
+    {
+        state.status = EVMC_UNDEFINED_INSTRUCTION;
+        return nullptr;
+    }
 
-    auto& a = stack[N];
-    auto& t = stack.top();
-    auto t0 = t[0];
-    auto t1 = t[1];
-    auto t2 = t[2];
-    auto t3 = t[3];
-    t = a;
-    a[0] = t0;
-    a[1] = t1;
-    a[2] = t2;
-    a[3] = t3;
+    // Stack overflow is checked by check_requirements() (stack_height_change=+1).
+    const auto stack_size = stack.end() - state.stack_space.bottom();
+    if (*n > stack_size)
+    {
+        state.status = EVMC_STACK_UNDERFLOW;
+        return nullptr;
+    }
+
+    stack.push(stack[*n - 1]);
+    return pos + 2;
+}
+
+inline code_iterator swapn(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
+{
+    const auto n = decode_dupn_swapn_imm(pos[1]);
+    if (!n)
+    {
+        state.status = EVMC_UNDEFINED_INSTRUCTION;
+        return nullptr;
+    }
+
+    if (const auto stack_size = stack.end() - state.stack_space.bottom(); *n >= stack_size)
+    {
+        state.status = EVMC_STACK_UNDERFLOW;
+        return nullptr;
+    }
+
+    fast_swap(stack.top(), stack[*n]);
+    return pos + 2;
+}
+
+inline code_iterator exchange(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
+{
+    const auto decoded = decode_exchange_imm(pos[1]);
+    if (!decoded)
+    {
+        state.status = EVMC_UNDEFINED_INSTRUCTION;
+        return nullptr;
+    }
+
+    const auto [n, m] = *decoded;
+    if (const auto stack_size = stack.end() - state.stack_space.bottom(); m >= stack_size)
+    {
+        state.status = EVMC_STACK_UNDERFLOW;
+        return nullptr;
+    }
+
+    fast_swap(stack[n], stack[m]);
+    return pos + 2;
 }
 
 inline Result mcopy(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept

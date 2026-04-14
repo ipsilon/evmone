@@ -276,9 +276,9 @@
     ON_OPCODE_UNDEFINED(0xe3)                               \
     ON_OPCODE_UNDEFINED(0xe4)                               \
     ON_OPCODE_UNDEFINED(0xe5)                               \
-    ON_OPCODE_UNDEFINED(0xe6)                               \
-    ON_OPCODE_UNDEFINED(0xe7)                               \
-    ON_OPCODE_UNDEFINED(0xe8)                               \
+    ON_OPCODE_IDENTIFIER(OP_DUPN, dupn)                     \
+    ON_OPCODE_IDENTIFIER(OP_SWAPN, swapn)                   \
+    ON_OPCODE_IDENTIFIER(OP_EXCHANGE, exchange)             \
     ON_OPCODE_UNDEFINED(0xe9)                               \
     ON_OPCODE_UNDEFINED(0xea)                               \
     ON_OPCODE_UNDEFINED(0xeb)                               \

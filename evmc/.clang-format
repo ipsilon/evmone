@@ -1,0 +1,69 @@
+---
+Language:        Cpp
+BasedOnStyle:  Chromium
+AccessModifierOffset: -4
+AlignAfterOpenBracket: Align
+BinPackParameters: false
+BraceWrapping:
+  AfterCaseLabel:        true
+  AfterClass:            true
+  AfterControlStatement: true
+  AfterEnum:             true
+  AfterFunction:         true
+  AfterNamespace:        true
+  AfterStruct:           true
+  AfterUnion:            true
+  # AfterExternBlock:      true
+  BeforeCatch:           true
+  BeforeElse:            true
+  # BeforeLambdaBody:      true
+  # BeforeWhile:           true
+  SplitEmptyFunction:    false
+  SplitEmptyRecord:      false
+  SplitEmptyNamespace: false
+BreakBeforeBraces: Custom
+BreakBeforeTernaryOperators: false
+ColumnLimit:     100
+ConstructorInitializerIndentWidth: 2
+IncludeBlocks: Preserve
+IncludeCategories:
+
+  # Local includes "":
+  - Regex:           '^".*'
+    Priority:        1
+
+  # Third party libraries:
+  - Regex:           '^<cryptopp/.*'
+    Priority:        70
+
+  # Standard library extensions / common generic purpose libraries:
+  - Regex:           '^<boost/.*'
+    Priority:        80
+
+  # Testing libraries:
+  - Regex:           '^<benchmark/.*'
+    Priority:        90
+  - Regex:           '^<gtest/.*'
+    Priority:        90
+
+  # Public includes <>:
+  - Regex:           '^<.*\.h|hpp>'
+    Priority:        2
+
+  # C++ standard library:
+  - Regex:           '^<[^.]*>$'
+    Priority:        100
+
+  # Anything else:
+  - Regex:           '.*'
+    Priority:        4
+
+IncludeIsMainRegex: '(Test)?$'
+IndentCaseLabels: false
+IndentWidth:     4
+MaxEmptyLinesToKeep: 2
+PenaltyBreakAssignment: 1
+PenaltyBreakComment: 50
+TabWidth:        4
+...
+

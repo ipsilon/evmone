@@ -4,10 +4,25 @@
 
 set(PREFIX ${PROJECT_NAME}/integration)
 
-get_target_property(EVMONE_LIB_TYPE evmone TYPE)
-if(EVMONE_LIB_TYPE STREQUAL SHARED_LIBRARY)
+if(TARGET evmone-cli)
 
-    add_test(NAME ${PREFIX}/histogram COMMAND evmc::tool --vm $<TARGET_FILE:evmone>,histogram run 6000808080800101010200)
+    add_test(NAME ${PREFIX}/run COMMAND evmone-cli run 6000)
+    set_tests_properties(
+        ${PREFIX}/run PROPERTIES PASS_REGULAR_EXPRESSION
+        "Result:   success\nGas used: 3\n")
+
+    add_test(NAME ${PREFIX}/version COMMAND evmone-cli --version)
+    set_tests_properties(
+        ${PREFIX}/version PROPERTIES PASS_REGULAR_EXPRESSION "evmone")
+
+    # Test loading code from a file via @file syntax.
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/code.hex "60 00 80 80 80 80 01 01 01 02 00")
+    add_test(NAME ${PREFIX}/file_input COMMAND evmone-cli run @${CMAKE_CURRENT_BINARY_DIR}/code.hex)
+    set_tests_properties(
+        ${PREFIX}/file_input PROPERTIES PASS_REGULAR_EXPRESSION
+        "Result:   success\n")
+
+    add_test(NAME ${PREFIX}/histogram COMMAND evmone-cli --histogram run 6000808080800101010200)
     set_tests_properties(
         ${PREFIX}/histogram PROPERTIES PASS_REGULAR_EXPRESSION
         "--- # HISTOGRAM depth=0
@@ -19,7 +34,7 @@ PUSH1,1
 DUP1,4
 ")
 
-    add_test(NAME ${PREFIX}/trace COMMAND evmc::tool --vm $<TARGET_FILE:evmone>,trace run 60006002800103)
+    add_test(NAME ${PREFIX}/trace COMMAND evmone-cli --trace run 60006002800103)
     set_tests_properties(
         ${PREFIX}/trace PROPERTIES PASS_REGULAR_EXPRESSION
         "\"pc\":0,\"op\":96,\"gas\":\"0xf4240\",\"gasCost\":\"0x3\",\"memSize\":0,\"stack\":\\[\\],\"depth\":1,\"refund\":0,\"opName\":\"PUSH1\"}

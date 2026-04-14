@@ -547,7 +547,7 @@ ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8
         return {EVMC_PRECOMPILE_FAILURE, 0};
 
     std::vector<std::pair<evmmax::bn254::Point, evmmax::bn254::ExtPoint>> pairs;
-    pairs.reserve(input_size / PAIR_SIZE);
+    pairs.reserve(input_size / PAIR_SIZE);  // TODO: may throw std::bad_alloc.
     for (auto input_ptr = input; input_ptr != input + input_size; input_ptr += PAIR_SIZE)
     {
         const evmmax::bn254::Point p{
@@ -664,6 +664,7 @@ ExecutionResult bls12_g1msm_execute(const uint8_t* input, size_t input_size, uin
     }
     else
     {
+        // TODO: g1_msm() may throw std::bad_alloc.
         if (!crypto::bls::g1_msm(output, &output[64], input, input_size))
             return {EVMC_PRECOMPILE_FAILURE, 0};
     }
@@ -700,6 +701,7 @@ ExecutionResult bls12_g2msm_execute(const uint8_t* input, size_t input_size, uin
     }
     else
     {
+        // TODO: g2_msm() may throw std::bad_alloc.
         if (!crypto::bls::g2_msm(output, &output[128], input, input_size))
             return {EVMC_PRECOMPILE_FAILURE, 0};
     }
@@ -862,7 +864,7 @@ evmc::Result call_precompile(evmc_revision rev, const evmc_message& msg) noexcep
 
     // Allocate buffer for the precompile's output and pass its ownership to evmc::Result.
     // TODO: This can be done more elegantly by providing constructor evmc::Result(std::unique_ptr).
-    const auto output_data = new (std::nothrow) uint8_t[max_output_size];
+    const auto output_data = new (std::nothrow) uint8_t[max_output_size];  // TODO: handle nullptr.
     const auto [status_code, output_size] =
         execute(msg.input_data, msg.input_size, output_data, max_output_size);
     const evmc_result result{status_code, status_code == EVMC_SUCCESS ? gas_left : 0, 0,

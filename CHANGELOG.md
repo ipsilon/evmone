@@ -5,6 +5,60 @@ Documentation of all notable changes to the **evmone** project.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.21.0] — 2026-04-09
+
+This release merges the required contents of the former [EVMC] project
+directly into evmone, replacing the git submodule. This allows evmone to
+evolve the EVM interface independently for future EVM revisions.
+
+### Added
+
+- **`evmone` CLI tool** replacing the `evmc` tool. Links evmone directly instead of
+  dynamic loading via EVMC loader. Supports `--trace` and `--histogram` flags.
+  [#1502](https://github.com/ipsilon/evmone/pull/1502)
+- New `EVMONE_TOOLS` CMake option (default: `PROJECT_IS_TOP_LEVEL`).
+  [#1502](https://github.com/ipsilon/evmone/pull/1502)
+
+### Changed
+
+- **EVMC merged into evmone**: the [EVMC] git submodule has been replaced with
+  vendored source code and its filtered git history.
+  [#1499](https://github.com/ipsilon/evmone/pull/1499)
+- Minimum CMake version bumped to 3.22.
+  [#1501](https://github.com/ipsilon/evmone/pull/1501)
+
+### Removed
+
+- `EVMC_TOOLS` and `EVMC_INSTALL` CMake options.
+  [#1499](https://github.com/ipsilon/evmone/pull/1499)
+- Old `evmc` CLI tool and EVMC loader library (dynamic VM loading).
+  [#1504](https://github.com/ipsilon/evmone/pull/1504)
+- External VM support in `evmone-bench`.
+  [#1503](https://github.com/ipsilon/evmone/pull/1503)
+
+## [0.20.0] — 2026-04-07
+
+### Added
+
+- Build option `-DASSERTIONS=ON` to force assertions in release builds.
+  [#1474](https://github.com/ipsilon/evmone/pull/1474)
+
+### Changed
+
+- **Modular exponentiation (`modexp`) continued optimizations**:
+  CRT-based flow unified, memory allocation consolidated, scratch space reduced,
+  256-bit Montgomery multiplication specialized, first multiplication iteration optimized.
+  [#1464](https://github.com/ipsilon/evmone/pull/1464)
+  [#1465](https://github.com/ipsilon/evmone/pull/1465)
+  [#1466](https://github.com/ipsilon/evmone/pull/1466)
+  [#1467](https://github.com/ipsilon/evmone/pull/1467)
+  [#1469](https://github.com/ipsilon/evmone/pull/1469)
+  [#1470](https://github.com/ipsilon/evmone/pull/1470)
+  [#1471](https://github.com/ipsilon/evmone/pull/1471)
+  [#1472](https://github.com/ipsilon/evmone/pull/1472)
+  [#1473](https://github.com/ipsilon/evmone/pull/1473)
+  [#1475](https://github.com/ipsilon/evmone/pull/1475)
+
 ## [0.19.0] — 2026-03-04
 
 ### Added
@@ -1193,6 +1247,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 - Exposes [EVMC] 6 ABI.
 - The [intx 0.2.0](https://github.com/chfast/intx/releases/tag/v0.2.0) library is used for 256-bit precision arithmetic. 
 
+[0.20.0]: https://github.com/ethereum/evmone/releases/tag/v0.20.0
 [0.19.0]: https://github.com/ethereum/evmone/releases/tag/v0.19.0
 [0.18.0]: https://github.com/ethereum/evmone/releases/tag/v0.18.0
 [0.17.0]: https://github.com/ethereum/evmone/releases/tag/v0.17.0
@@ -1274,7 +1329,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 [Prague]: https://eips.ethereum.org/EIPS/eip-7600
 [Osaka]: https://eips.ethereum.org/EIPS/eip-7607
 
-[EVMC]: https://github.com/ethereum/evmc
+[EVMC]: https://github.com/ipsilon/evmc
 [EVMC 12.1.0]: https://github.com/ethereum/evmc/releases/tag/v12.1.0
 [EVMC 12.0.0]: https://github.com/ethereum/evmc/releases/tag/v12.0.0
 [EVMC 11.0.1]: https://github.com/ethereum/evmc/releases/tag/v11.0.1
