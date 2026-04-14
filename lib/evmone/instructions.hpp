@@ -8,8 +8,6 @@
 #include "instructions_traits.hpp"
 #include "instructions_xmacro.hpp"
 #include <evmone_precompiles/keccak.hpp>
-#include <optional>
-#include <utility>
 
 namespace evmone
 {
