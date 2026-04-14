@@ -74,8 +74,8 @@ constexpr void fast_swap(uint256& x, uint256& y) noexcept
     y[3] = t3;
 }
 
-/// Decode DUPN/SWAPN immediate. Returns the stack depth n (17..235),
-/// or std::nullopt if the immediate is in the forbidden range (0x5b..0x7f).
+/// Decode DUPN/SWAPN immediate. Returns the stack depth n [17–235],
+/// or std::nullopt if the immediate is in the forbidden range [0x5b–0x7f].
 constexpr std::optional<int> decode_dupn_swapn_imm(uint8_t imm) noexcept
 {
     if (imm >= 0x5b && imm <= 0x7f)
@@ -84,7 +84,7 @@ constexpr std::optional<int> decode_dupn_swapn_imm(uint8_t imm) noexcept
 }
 
 /// Decode EXCHANGE immediate. Returns the pair (n, m) with 1 <= n < m and n + m <= 30,
-/// or std::nullopt if the immediate is in the forbidden range (0x52..0x7f).
+/// or std::nullopt if the immediate is in the forbidden range [0x52–0x7f].
 constexpr std::optional<std::pair<int, int>> decode_exchange_imm(uint8_t imm) noexcept
 {
     if (imm >= 0x52 && imm <= 0x7f)

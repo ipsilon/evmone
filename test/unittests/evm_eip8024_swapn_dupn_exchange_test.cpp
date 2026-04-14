@@ -40,7 +40,7 @@ TEST_P(evm, dupn_invalid_immediate)
         return;
 
     rev = EVMC_AMSTERDAM;
-    // 0x5b is in the forbidden range (0x5b..0x7f).
+    // 0x5b is in the forbidden range [0x5b–0x7f].
     execute(17 * OP_PUSH0 + "e65b");
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
 }
@@ -101,7 +101,7 @@ TEST_P(evm, swapn_invalid_immediate)
         return;
 
     rev = EVMC_AMSTERDAM;
-    // 0x5b is in the forbidden range (0x5b..0x7f).
+    // 0x5b is in the forbidden range [0x5b–0x7f].
     execute(18 * OP_PUSH0 + "e75b");
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
 }
@@ -112,7 +112,7 @@ TEST_P(evm, swapn_invalid_immediate_boundaries)
         return;
 
     rev = EVMC_AMSTERDAM;
-    // Verify boundary values of the forbidden range (0x5b..0x7f).
+    // Verify boundary values of the forbidden range [0x5b–0x7f].
     for (const auto* hex : {"e75b", "e75c", "e75f", "e760", "e77e", "e77f"})
     {
         execute(18 * OP_PUSH0 + hex);
@@ -183,7 +183,7 @@ TEST_P(evm, exchange_invalid_immediate)
         return;
 
     rev = EVMC_AMSTERDAM;
-    // 0x52 is the first byte in the forbidden range (0x52..0x7f).
+    // 0x52 is the first byte in the forbidden range [0x52–0x7f].
     execute(3 * OP_PUSH0 + "e852");
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
 }
