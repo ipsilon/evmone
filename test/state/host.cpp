@@ -312,9 +312,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     sender_acc.balance -= value;
     new_acc->balance += value;  // The new account may be prefunded.
 
-    // EIP-7708
-    if (m_rev >= EVMC_AMSTERDAM && value != 0 &&
-        evmc::address{msg.sender} != evmc::address{msg.recipient})
+    // EIP-7708: CREATE address is always different from sender.
+    if (m_rev >= EVMC_AMSTERDAM && value != 0)
         emit_transfer_log(m_logs, msg.sender, msg.recipient, value);
 
     auto create_msg = msg;
