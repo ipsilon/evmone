@@ -21,7 +21,8 @@ inline uint64_t rotr(uint64_t x, unsigned r) noexcept
 /// The G primitive function mixes two input words, "x" and "y", into
 /// four words indexed by "a", "b", "c", and "d" in the working vector v[0..15].
 [[gnu::always_inline, clang::no_sanitize("coverage"), clang::no_sanitize("undefined")]]
-void g(uint64_t v[16], size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y) noexcept
+inline void g(
+    uint64_t v[16], size_t a, size_t b, size_t c, size_t d, uint64_t x, uint64_t y) noexcept
 {
     v[a] = v[a] + v[b] + x;
     v[d] = rotr(v[d] ^ v[a], 32);

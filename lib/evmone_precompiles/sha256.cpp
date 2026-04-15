@@ -135,7 +135,7 @@ static bool calc_chunk(uint8_t chunk[CHUNK_SIZE], struct BufferState* state)
     return true;
 }
 
-[[gnu::always_inline, msvc::forceinline]] static void sha_256_implementation(
+[[gnu::always_inline, msvc::forceinline]] static inline void sha_256_implementation(
     uint32_t h[8], const std::byte* input, size_t len)
 {
     /*
@@ -251,7 +251,7 @@ __attribute__((target("bmi,bmi2"))) static void sha_256_x86_bmi(
     sha_256_implementation(h, input, len);
 }
 
-[[gnu::always_inline]] static __m128i set(uint64_t a, uint64_t b) noexcept
+[[gnu::always_inline]] static inline __m128i set(uint64_t a, uint64_t b) noexcept
 {
     // NOLINTNEXTLINE(*-runtime-int)
     return _mm_set_epi64x(static_cast<long long>(a), static_cast<long long>(b));

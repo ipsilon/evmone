@@ -361,8 +361,9 @@ void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
 /// Almost Montgomery Multiplication specialized for 4-word (256-bit) operands.
 /// Delegates to mul_amm_256 in mulmod.cpp.
 template <>
-[[gnu::always_inline]] void mul_amm<4>(std::span<uint64_t, 4> r, std::span<const uint64_t, 4> x,
-    std::span<const uint64_t, 4> y, std::span<const uint64_t, 4> mod, uint64_t mod_inv) noexcept
+[[gnu::always_inline]] inline void mul_amm<4>(std::span<uint64_t, 4> r,
+    std::span<const uint64_t, 4> x, std::span<const uint64_t, 4> y,
+    std::span<const uint64_t, 4> mod, uint64_t mod_inv) noexcept
 {
     mul_amm_256(r, x, y, mod, mod_inv);
 }
