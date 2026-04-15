@@ -79,9 +79,6 @@ public:
     State(State&&) = delete;
     State& operator=(State&&) = delete;
 
-    /// Returns the modified accounts map (for iteration).
-    [[nodiscard]] const auto& get_modified_accounts() const noexcept { return m_modified; }
-
     /// Inserts the new account at the address.
     /// There must not exist any account under this address before.
     Account& insert(const address& addr, Account account = {});

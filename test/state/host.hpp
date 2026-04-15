@@ -43,6 +43,7 @@ class Host : public evmc::Host
     const BlockHashes& m_block_hashes;
     const Transaction& m_tx;
     std::vector<Log> m_logs;
+    std::vector<address> m_destructed;  ///< Addresses of accounts selfdestructed in this tx.
 
 public:
     Host(evmc_revision rev, evmc::VM& vm, State& state, const BlockInfo& block,
@@ -51,6 +52,10 @@ public:
     {}
 
     [[nodiscard]] std::vector<Log>&& take_logs() noexcept { return std::move(m_logs); }
+    [[nodiscard]] const std::vector<address>& get_destructed() const noexcept
+    {
+        return m_destructed;
+    }
 
     evmc::Result call(const evmc_message& msg) noexcept override;
 

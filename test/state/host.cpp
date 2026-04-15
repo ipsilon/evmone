@@ -171,6 +171,7 @@ bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcep
     {
         m_state.journal_destruct(addr);
         acc.destructed = true;
+        m_destructed.push_back(addr);
         return true;
     }
     return false;
