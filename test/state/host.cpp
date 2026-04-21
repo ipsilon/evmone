@@ -149,8 +149,17 @@ bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcep
 
     // Transfer may happen multiple times per single account as account's balance
     // can be increased with a call following previous selfdestruct.
-    beneficiary_acc.balance += balance;
-    acc.balance = 0;  // Zero balance if acc is the beneficiary.
+    if (addr != beneficiary)
+    {
+        beneficiary_acc.balance += balance;
+        acc.balance = 0;
+    }
+    else if (m_rev < EVMC_AMSTERDAM)
+    {
+        // Pre-Amsterdam: SELFDESTRUCT to self burns the balance.
+        // Amsterdam+ (EIP-7708 nerf): balance preserved on self-destruct-to-self.
+        acc.balance = 0;
+    }
 
     // Mark the destruction if not done already.
     if (!acc.destructed)

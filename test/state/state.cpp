@@ -206,6 +206,20 @@ StateDiff State::build_diff(evmc_revision rev) const
     {
         if (m.destructed)
         {
+            // EIP-7708 (Amsterdam+): a destructed account with non-zero balance
+            // becomes a balance-only account — code, nonce and storage are cleared,
+            // but the balance is preserved. This eliminates any ETH burn.
+            // With zero balance, the empty-account rule (EIP-161) removes it as before.
+            if (rev >= EVMC_AMSTERDAM && m.balance != 0)
+            {
+                // NOLINTNEXTLINE(modernize-use-emplace)
+                auto& a = diff.modified_accounts.emplace_back(
+                    StateDiff::Entry{addr, 0, m.balance});
+                a.code = bytes{};  // Clear code.
+                // Storage: m.storage slots have original=0 (just_created), final=0 (cleared),
+                // so no modified_storage entries are needed.
+                continue;
+            }
             // TODO: This must be done even for just_created
             //   because destructed may pre-date just_created. Add test to evmone (EEST has it).
             diff.deleted_accounts.emplace_back(addr);
