@@ -9,20 +9,20 @@ namespace evmone
 std::optional<evmc::address> get_delegate_address(
     const evmc::HostInterface& host, const evmc::address& addr) noexcept
 {
-    // Load the code prefix up to the delegation designation size.
-    // The HostInterface::copy_code() copies up to the addr's code size
-    // and returns the number of bytes copied.
-    uint8_t designation_buffer[std::size(DELEGATION_MAGIC) + sizeof(evmc::address)];
+    // A valid EIP-7702 delegation designator is exactly 23 bytes. Reject longer
+    // 0xef01...-prefixed code because is_code_delegated sees only copy_code's
+    // truncated prefix and can't distinguish a 23-byte designator from a longer blob.
+    if (host.get_code_size(addr) != DELEGATION_DESIGNATOR_SIZE)
+        return {};
+
+    uint8_t designation_buffer[DELEGATION_DESIGNATOR_SIZE];
     const auto size = host.copy_code(addr, 0, designation_buffer, std::size(designation_buffer));
     const bytes_view designation{designation_buffer, size};
 
     if (!is_code_delegated(designation))
         return {};
 
-    // Copy the delegate address from the designation buffer.
     evmc::address delegate_address;
-    // Assume the designation with the valid magic has also valid length.
-    assert(designation.size() == std::size(designation_buffer));
     std::ranges::copy(designation.substr(std::size(DELEGATION_MAGIC)), delegate_address.bytes);
     return delegate_address;
 }
