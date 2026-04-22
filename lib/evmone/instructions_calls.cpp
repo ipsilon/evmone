@@ -208,14 +208,21 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     if (result.status_code == EVMC_SUCCESS)
     {
         // Success: accumulate child's state_gas_used, take leftover reservoir.
+        // Inherit any pending phantom reservoir from the child.
         state.state_gas_left = result.state_gas_left;
         state.state_gas_used += result.state_gas_used;
+        state.state_gas_refund += result.state_gas_refund;
     }
     else if (state.rev >= EVMC_AMSTERDAM)
     {
-        // Failure: child's state was reverted. Return ALL child state gas
-        // (leftover + used) to parent's reservoir. Don't accumulate used.
-        state.state_gas_left = result.state_gas_left + result.state_gas_used;
+        // EIP-8037: on child REVERT/HALT, restore consumed state gas to parent's
+        // reservoir, but discard the phantom portion (0->X->0 refund credits and
+        // CREATE refunds on sub-frame failure) per spec:
+        //   "On revert or exceptional halt of an ancestor frame, the refund's
+        //    credit to state_gas_reservoir ... is not inherited by its parent."
+        // Phantom = result.state_gas_refund; subtract it from reservoir transfer.
+        state.state_gas_left =
+            result.state_gas_left + result.state_gas_used - result.state_gas_refund;
     }
     else
     {
@@ -277,12 +284,16 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     if ((gas_left -= init_code_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    // EIP-8037: on light failure (depth/balance), refund the state gas just charged.
+    // EIP-8037: refund the 112*CPSB state gas charged for account creation when
+    // no account is actually created (light failures before child frame entry,
+    // or child frame REVERT/HALT). Track as phantom reservoir so an ancestor
+    // revert discards this gain (it doesn't correspond to real gas consumed).
     const auto refund_create_state_gas = [&]() noexcept {
         if (create_state_gas_charged != 0)
         {
             state.state_gas_left += create_state_gas_charged;
             state.state_gas_used -= create_state_gas_charged;
+            state.state_gas_refund += create_state_gas_charged;
         }
     };
 
@@ -327,13 +338,16 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
         // Success: accumulate child's state_gas_used, take leftover reservoir.
         state.state_gas_left = result.state_gas_left;
         state.state_gas_used += result.state_gas_used;
+        state.state_gas_refund += result.state_gas_refund;
     }
     else if (state.rev >= EVMC_AMSTERDAM)
     {
-        // Failure: child's state was reverted. Return ALL child state gas
-        // (leftover + used) to parent's reservoir. Don't accumulate used.
-        state.state_gas_left = result.state_gas_left + result.state_gas_used;
-        // Also refund the parent's CREATE state gas charge (no account was created).
+        // EIP-8037: on init REVERT/HALT, restore consumed state gas to parent's
+        // reservoir; discard the phantom portion (0->X->0 refunds inside init)
+        // per spec (not inherited by ancestor on revert).
+        state.state_gas_left =
+            result.state_gas_left + result.state_gas_used - result.state_gas_refund;
+        // Refund the CREATE state gas charge (no account was created).
         refund_create_state_gas();
     }
     else

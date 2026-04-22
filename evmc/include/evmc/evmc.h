@@ -521,6 +521,16 @@ struct evmc_result
      * Used for block gas accounting: block_gas = max(regular, state).
      */
     int64_t state_gas_used;
+
+    /**
+     * Phantom state gas tracked for EIP-8037 revert semantics.
+     *
+     * Sum of 0->X->0 SSTORE refund credits (and CREATE state gas refunds on
+     * sub-frame failure) that are present in state_gas_left but should be
+     * discarded by the caller when this frame or an ancestor reverts: they
+     * represent reservoir gains that don't correspond to real gas consumed.
+     */
+    int64_t state_gas_refund;
 };
 
 

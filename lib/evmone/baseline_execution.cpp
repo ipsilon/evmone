@@ -305,6 +305,10 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
     // EIP-8037: always return remaining reservoir (even on OOG).
     result.state_gas_left = std::max(int64_t{0}, state.state_gas_left);
     result.state_gas_used = state.state_gas_used;
+    // Phantom reservoir amount (from 0->X->0 refunds and CREATE state-gas refunds
+    // on sub-frame failure). Parent uses this to discard non-inheritable gains
+    // when the returning frame reverts or exceptionally halts.
+    result.state_gas_refund = state.state_gas_refund;
 
     if (INTX_UNLIKELY(tracer != nullptr))
         tracer->notify_execution_end(result);
