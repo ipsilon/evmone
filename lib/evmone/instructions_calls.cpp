@@ -264,10 +264,11 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     // EIP-8037: charge state gas for account creation.
     // Must be after initcode size check to avoid persisting state_gas_used
     // for an account that was never created (oversized initcode).
+    int64_t create_state_gas_charged = 0;
     if (state.rev >= EVMC_AMSTERDAM)
     {
-        if (!charge_state_gas(
-                gas_left, state, 112 * compute_cpsb(state.get_tx_context().block_gas_limit)))
+        create_state_gas_charged = 112 * compute_cpsb(state.get_tx_context().block_gas_limit);
+        if (!charge_state_gas(gas_left, state, create_state_gas_charged))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -276,12 +277,27 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     if ((gas_left -= init_code_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
+    // EIP-8037: on light failure (depth/balance), refund the state gas just charged.
+    const auto refund_create_state_gas = [&]() noexcept {
+        if (create_state_gas_charged != 0)
+        {
+            state.state_gas_left += create_state_gas_charged;
+            state.state_gas_used -= create_state_gas_charged;
+        }
+    };
+
     if (state.msg->depth >= 1024)
+    {
+        refund_create_state_gas();
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
+    }
 
     if (endowment != 0 &&
         intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < endowment)
+    {
+        refund_create_state_gas();
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
+    }
 
     evmc_message msg{.kind = to_call_kind(Op)};
     msg.gas = gas_left;
@@ -317,6 +333,8 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
         // Failure: child's state was reverted. Return ALL child state gas
         // (leftover + used) to parent's reservoir. Don't accumulate used.
         state.state_gas_left = result.state_gas_left + result.state_gas_used;
+        // Also refund the parent's CREATE state gas charge (no account was created).
+        refund_create_state_gas();
     }
     else
     {
