@@ -153,8 +153,10 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
         }
         else if (status == EVMC_STORAGE_ADDED_DELETED)
         {
-            // Refund state gas for set-then-clear (0 -> Y -> 0).
-            state.gas_refund += 32 * cpsb;
+            // EIP-8037: Refund state gas directly to the reservoir (not via gas_refund)
+            // for set-then-clear (0 -> Y -> 0).
+            state.state_gas_left += 32 * cpsb;
+            state.state_gas_used -= 32 * cpsb;
         }
     }
     state.gas_refund += gas_refund;
