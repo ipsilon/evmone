@@ -31,6 +31,7 @@ enum ErrorCode : int  // NOLINT(*-use-enum-class)
     CREATE_SET_CODE_TX,
     EMPTY_AUTHORIZATION_LIST,
     MAX_GAS_LIMIT_EXCEEDED,
+    WRONG_CHAIN_ID,
     UNKNOWN_ERROR,
 };
 
@@ -85,6 +86,8 @@ inline const std::error_category& evmone_category() noexcept
                 return "empty authorization list";
             case MAX_GAS_LIMIT_EXCEEDED:
                 return "max gas limit exceeded";
+            case WRONG_CHAIN_ID:
+                return "invalid chain id";
             case UNKNOWN_ERROR:
                 return "Unknown error";
             default:

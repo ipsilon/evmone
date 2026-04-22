@@ -33,6 +33,9 @@ struct Withdrawal
 
 struct BlockInfo
 {
+    /// The chain id the block belongs to. 0 disables the tx chain_id check in
+    /// validate_transaction so existing tests that don't set it keep working.
+    uint64_t chain_id = 0;
     int64_t number = 0;
     int64_t timestamp = 0;
     hash256 hash;
