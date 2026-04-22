@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "state.hpp"
+#include "../utils/rlp.hpp"
+#include "../utils/rlp_encode.hpp"
 #include "../utils/stdx/utility.hpp"
+#include "hash_utils.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
 #include <evmone/constants.hpp>
@@ -105,28 +108,24 @@ int64_t process_authorization_list(
 
         // 3. Verify if the signer has been successfully recovered from the signature.
         //    authority = ecrecover(...)
-        // y_parity must be 0 or 1 for EIP-7702/2930 signatures.
-        if (auth.v > 1)
+        // Validates v (y_parity ∈ {0, 1}), r/s bounds, and the EIP-2 low-s constraint.
+        const auto recovered = recover_authorization_signer(auth);
+        if (!recovered.has_value())
             continue;
-        // TODO: We actually only do "partial" verification by assuming the signature is valid
-        //   when the test has the signer specified.
-        if (!auth.signer.has_value())
-            continue;
-
-        // s value must be less than or equal to secp256k1n/2, as specified in EIP-2.
-        if (auth.s > SECP256K1N_OVER_2)
+        // If the caller supplied an expected signer, it must match the recovered address.
+        if (auth.signer.has_value() && *auth.signer != *recovered)
             continue;
 
         // Get or create the authority account.
         // It is still empty at this point until nonce bump following successful authorization.
-        auto& authority = state.get_or_insert(*auth.signer, {.erase_if_empty = true});
+        auto& authority = state.get_or_insert(*recovered, {.erase_if_empty = true});
 
         // 4. Add authority to accessed_addresses (as defined in EIP-2929.)
         authority.access_status = EVMC_ACCESS_WARM;
 
         // 5. Verify the code of authority is either empty or already delegated.
         if (authority.code_hash != Account::EMPTY_CODE_HASH &&
-            !is_code_delegated(state.get_code(*auth.signer)))
+            !is_code_delegated(state.get_code(*recovered)))
             continue;
 
         // 6. Verify the nonce of authority is equal to nonce.
@@ -413,6 +412,128 @@ void State::rollback(size_t checkpoint)
             m_journal.back());
         m_journal.pop_back();
     }
+}
+
+evmc::bytes32 compute_tx_signing_hash(const Transaction& tx) noexcept
+{
+    const auto to_view = tx.to.has_value() ? bytes_view(tx.to.value()) : bytes_view();
+
+    switch (tx.type)
+    {
+    case Transaction::Type::legacy:
+        // EIP-155 signing payload: rlp(nonce, gas_price, gas_limit, to, value, data,
+        //                              chain_id, 0, 0). Pre-EIP-155 omits the trailing fields.
+        if (tx.chain_id != 0)
+        {
+            return keccak256(rlp::encode_tuple(tx.nonce, tx.max_gas_price,
+                static_cast<uint64_t>(tx.gas_limit), to_view, tx.value, tx.data,
+                tx.chain_id, uint64_t{0}, uint64_t{0}));
+        }
+        return keccak256(rlp::encode_tuple(tx.nonce, tx.max_gas_price,
+            static_cast<uint64_t>(tx.gas_limit), to_view, tx.value, tx.data));
+
+    case Transaction::Type::access_list:
+    case Transaction::Type::eip1559:
+    case Transaction::Type::blob:
+    case Transaction::Type::set_code:
+    {
+        bytes payload;
+        if (tx.type == Transaction::Type::access_list)
+        {
+            payload = rlp::encode_tuple(tx.chain_id, tx.nonce, tx.max_gas_price,
+                static_cast<uint64_t>(tx.gas_limit), to_view, tx.value, tx.data, tx.access_list);
+        }
+        else if (tx.type == Transaction::Type::eip1559)
+        {
+            payload = rlp::encode_tuple(tx.chain_id, tx.nonce, tx.max_priority_gas_price,
+                tx.max_gas_price, static_cast<uint64_t>(tx.gas_limit), to_view, tx.value, tx.data,
+                tx.access_list);
+        }
+        else if (tx.type == Transaction::Type::blob)
+        {
+            payload = rlp::encode_tuple(tx.chain_id, tx.nonce, tx.max_priority_gas_price,
+                tx.max_gas_price, static_cast<uint64_t>(tx.gas_limit), to_view, tx.value, tx.data,
+                tx.access_list, tx.max_blob_gas_price, tx.blob_hashes);
+        }
+        else  // set_code
+        {
+            payload = rlp::encode_tuple(tx.chain_id, tx.nonce, tx.max_priority_gas_price,
+                tx.max_gas_price, static_cast<uint64_t>(tx.gas_limit), to_view, tx.value, tx.data,
+                tx.access_list, tx.authorization_list);
+        }
+        bytes msg;
+        msg.reserve(1 + payload.size());
+        msg.push_back(stdx::to_underlying(tx.type));
+        msg.append(payload);
+        return keccak256(msg);
+    }
+    }
+    return {};
+}
+
+evmc::bytes32 compute_authorization_signing_hash(const Authorization& auth) noexcept
+{
+    // EIP-7702: keccak256(0x05 || rlp(chain_id, address, nonce))
+    auto payload = rlp::encode_tuple(auth.chain_id, auth.addr, auth.nonce);
+    bytes msg;
+    msg.reserve(1 + payload.size());
+    msg.push_back(0x05);
+    msg.append(payload);
+    return keccak256(msg);
+}
+
+namespace
+{
+/// Perform the signature-level validation common to transactions and authorizations,
+/// then delegate to evmmax::secp256k1::ecrecover. Checks r, s in (0, secp256k1n) (via
+/// ecrecover) plus the EIP-2 constraint that s is in the lower half of the curve order.
+std::optional<evmc::address> ecrecover_with_s_bound(
+    const evmc::bytes32& hash, const uint256& r, const uint256& s, bool y_parity) noexcept
+{
+    // EIP-2: the signature's s value must be in the lower half of the curve order.
+    if (s > SECP256K1N_OVER_2 || s == 0 || r == 0)
+        return std::nullopt;
+
+    uint8_t r_bytes[32];
+    uint8_t s_bytes[32];
+    intx::be::store(r_bytes, r);
+    intx::be::store(s_bytes, s);
+
+    return evmmax::secp256k1::ecrecover(hash.bytes, r_bytes, s_bytes, y_parity);
+}
+}  // namespace
+
+std::optional<evmc::address> recover_sender(const Transaction& tx) noexcept
+{
+    // Decode y_parity from tx.v by tx type.
+    bool y_parity;
+    if (tx.type == Transaction::Type::legacy)
+    {
+        // EIP-155: v = 35 + 2*chain_id + y_parity, pre-155: v ∈ {27, 28}.
+        if (tx.v == 27 || tx.v == 28)
+            y_parity = (tx.v == 28);
+        else if (tx.v >= 35)
+            y_parity = ((tx.v - 35) & 1) != 0;
+        else
+            return std::nullopt;
+    }
+    else
+    {
+        // Typed transactions carry y_parity directly in {0, 1}.
+        if (tx.v > 1)
+            return std::nullopt;
+        y_parity = tx.v != 0;
+    }
+
+    return ecrecover_with_s_bound(compute_tx_signing_hash(tx), tx.r, tx.s, y_parity);
+}
+
+std::optional<evmc::address> recover_authorization_signer(const Authorization& auth) noexcept
+{
+    if (auth.v > 1)
+        return std::nullopt;
+    return ecrecover_with_s_bound(
+        compute_authorization_signing_hash(auth), auth.r, auth.s, auth.v != 0);
 }
 
 /// Validates transaction and computes its execution gas limit (the amount of gas provided to EVM).

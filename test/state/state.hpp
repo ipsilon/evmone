@@ -150,4 +150,21 @@ TransactionReceipt transition(const StateView& state, const BlockInfo& block,
 [[nodiscard]] std::variant<TransactionProperties, std::error_code> validate_transaction(
     const StateView& state_view, const BlockInfo& block, const Transaction& tx, evmc_revision rev,
     int64_t block_gas_left, int64_t blob_gas_left) noexcept;
+
+/// Compute the transaction signing hash, dispatching on tx.type per EIP-2718.
+[[nodiscard]] evmc::bytes32 compute_tx_signing_hash(const Transaction& tx) noexcept;
+
+/// Compute the EIP-7702 authorization signing hash: keccak256(0x05 || rlp(chain_id, addr, nonce)).
+[[nodiscard]] evmc::bytes32 compute_authorization_signing_hash(const Authorization& auth) noexcept;
+
+/// Recover the sender address from a signed transaction.
+/// Performs full signature validation: r/s in (0, secp256k1n), s <= secp256k1n/2 (EIP-2),
+/// and y_parity within the range valid for tx.type. Returns std::nullopt if the signature
+/// is malformed or ecrecover yields the point at infinity.
+[[nodiscard]] std::optional<evmc::address> recover_sender(const Transaction& tx) noexcept;
+
+/// Recover the signer address from a signed EIP-7702 authorization tuple. Performs the same
+/// validation as recover_sender and additionally enforces y_parity in {0, 1}.
+[[nodiscard]] std::optional<evmc::address> recover_authorization_signer(
+    const Authorization& auth) noexcept;
 }  // namespace evmone::state
