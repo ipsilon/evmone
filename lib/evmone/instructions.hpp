@@ -1128,10 +1128,12 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
             state.gas_refund += 24000;
         else if (state.rev >= EVMC_AMSTERDAM)
         {
-            // EIP-8037: Full refund of state gas for same-tx selfdestructs.
-            // Host returns true only when the account is actually destructed
-            // (just-created under EIP-6780), so refund the creation state gas.
-            state.state_gas_left += 112 * compute_cpsb(state.get_tx_context().block_gas_limit);
+            // EIP-8037: Full refund of state gas for same-tx selfdestructs of accounts
+            // created by the CREATE opcode (depth > 0). Tx-level CREATE charges are
+            // handled at the intrinsic level, not in the EVM reservoir.
+            if (state.msg->depth > 0)
+                state.state_gas_left +=
+                    112 * compute_cpsb(state.get_tx_context().block_gas_limit);
         }
     }
     return {EVMC_SUCCESS, gas_left};

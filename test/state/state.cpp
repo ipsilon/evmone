@@ -705,7 +705,10 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 
     // EIP-8037: On top-level failure (revert or exceptional halt), refund all state gas
     // consumed by EVM execution back to the reservoir, since nothing was created.
-    if (rev >= EVMC_AMSTERDAM && result.status_code != EVMC_SUCCESS)
+    // Exception: depth-0 CREATE collision uses state_gas_used = -1 as a sentinel;
+    // the Host already preserved state_gas_left in that case.
+    if (rev >= EVMC_AMSTERDAM && result.status_code != EVMC_SUCCESS &&
+        result.state_gas_used > 0)
     {
         result.raw().state_gas_left += result.state_gas_used;
         result.raw().state_gas_used = 0;
