@@ -21,20 +21,17 @@ field and does not generate the BAL structure. All failures are in
 Requires a dedicated EIP-7928 implementation: track per-tx access/write sets,
 aggregate into a BAL per block, hash-commit into the header.
 
-### EIP-7708 Transfer log emission (4 state, 7 blockchain failures)
+### EIP-7708 Transfer log emission — ALREADY CORRECT
 
-In `amsterdam/eip7708_eth_transfer_logs/burn_logs/` and `transfer_logs/`.
-Expected log stream per test mixes two topics from system address
-`0xff...fe`:
+On closer inspection, the Transfer and Burn log emission is already complete
+and the log sequences match the fixtures (no `logs_hash` mismatches).
 
-- `Transfer(address,address,uint256)` — `0xddf252ad...` — emitted on every
-  value-carrying CALL (including to/from selfdestructed accounts).
-- `Burn(address,uint256)` — `0xcc16f5db...` — emitted at tx finalization for
-  accounts selfdestructed this tx that still hold balance.
-
-Current `test/state/` emits the burn event but not the transfer event on
-value CALLs. Fix is in `test/state/host.cpp` (call path) — emit a Transfer
-log for every non-zero value transfer between accounts.
+The 4 burn_logs state failures and 7 blockchain failures in
+`amsterdam/eip7708_eth_transfer_logs/` are actually state-root mismatches
+caused by gas accounting differences on the underlying CREATE+SELFDESTRUCT
+scenarios: balances (especially coinbase) diverge because state-gas refund
+for same-tx selfdestruct in nested CREATE/CALL patterns is off. Reclassified
+as EIP-8037 SELFDESTRUCT edge cases (next section).
 
 ### EIP-8037 SELFDESTRUCT state-gas refund (11 blockchain failures)
 
