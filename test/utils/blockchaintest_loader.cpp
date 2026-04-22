@@ -51,6 +51,7 @@ BlockHeader from_json<BlockHeader>(const json::json& j)
         .blob_gas_used = load_optional<uint64_t>(j, "blobGasUsed"),
         .excess_blob_gas = load_optional<uint64_t>(j, "excessBlobGas"),
         .requests_hash = load_if_exists<hash256>(j, "requestsHash"),
+        .block_access_list_hash = load_if_exists<hash256>(j, "blockAccessListHash"),
         .slot_number = load_if_exists<int64_t>(j, "slotNumber"),
     };
 }

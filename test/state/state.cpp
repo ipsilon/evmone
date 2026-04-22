@@ -253,6 +253,12 @@ StateDiff State::build_diff(evmc_revision rev) const
     StateDiff diff;
     for (const auto& [addr, m] : m_modified)
     {
+        // Skip placeholders created only for access-list warming. Their data
+        // was either never fetched (loaded==false) or confirmed absent
+        // (exists_in_state==false with no subsequent modifications).
+        if (!m.loaded || !m.exists_in_state)
+            continue;
+
         if (m.destructed)
         {
             // TODO: This must be done even for just_created
@@ -290,9 +296,26 @@ StateDiff State::build_diff(evmc_revision rev) const
 
 Account& State::insert(const address& addr, Account account)
 {
-    const auto r = m_modified.insert({addr, std::move(account)});
-    assert(r.second);
-    return r.first->second;
+    auto [it, inserted] = m_modified.try_emplace(addr);
+    if (inserted)
+    {
+        it->second = std::move(account);
+        return it->second;
+    }
+
+    // The entry already exists — it must be a "warm-only" placeholder (either
+    // still unloaded, or loaded and confirmed absent from the StateView).
+    // Overwriting a real loaded account here would silently corrupt state.
+    assert(!it->second.loaded || !it->second.exists_in_state);
+    const auto was_warm = (it->second.access_status == EVMC_ACCESS_WARM);
+    const auto was_touched = it->second.erase_if_empty;
+    it->second = std::move(account);
+    if (was_warm)
+        it->second.access_status = EVMC_ACCESS_WARM;
+    it->second.erase_if_empty = it->second.erase_if_empty || was_touched;
+    it->second.loaded = true;
+    it->second.exists_in_state = true;
+    return it->second;
 }
 
 Account* State::find(const address& addr) noexcept
@@ -300,7 +323,25 @@ Account* State::find(const address& addr) noexcept
     // TODO: Avoid double lookup (find+insert) and not cached initial state lookup for non-existent
     //   accounts. If we want to cache non-existent account we need a proper flag for it.
     if (const auto it = m_modified.find(addr); it != m_modified.end())
+    {
+        if (it->second.loaded)
+            return it->second.exists_in_state ? &it->second : nullptr;
+
+        // Access-list placeholder: lazy-load from StateView now.
+        const auto cacc = m_initial.get_account(addr);
+        it->second.loaded = true;
+        if (!cacc)
+        {
+            it->second.exists_in_state = false;
+            return nullptr;  // Account doesn't exist; the entry stays warm-only.
+        }
+        it->second.nonce = cacc->nonce;
+        it->second.balance = cacc->balance;
+        it->second.code_hash = cacc->code_hash;
+        it->second.has_initial_storage = cacc->has_storage;
+        it->second.exists_in_state = true;
         return &it->second;
+    }
     if (const auto cacc = m_initial.get_account(addr); cacc)
         return &insert(addr, {.nonce = cacc->nonce,
                                  .balance = cacc->balance,
@@ -320,7 +361,24 @@ Account& State::get_or_insert(const address& addr, Account account)
 {
     if (const auto acc = find(addr); acc != nullptr)
         return *acc;
+    // find() may return null while a warm-only placeholder is still in m_modified
+    // (for an address not present in the underlying StateView). Our insert()
+    // promotes the placeholder in that case, preserving its warm/touched flags.
     return insert(addr, std::move(account));
+}
+
+Account& State::get_or_insert_for_access(const address& addr)
+{
+    // Fast path: entry already present (loaded or warm-only placeholder).
+    if (const auto it = m_modified.find(addr); it != m_modified.end())
+        return it->second;
+
+    // Insert a lightweight placeholder without querying the cold StateView.
+    // The real balance/nonce/code will be fetched on-demand by find().
+    Account placeholder{};
+    placeholder.erase_if_empty = true;
+    placeholder.loaded = false;
+    return insert(addr, std::move(placeholder));
 }
 
 bytes_view State::get_code(const address& addr)
@@ -349,12 +407,25 @@ Account& State::touch(const address& addr)
 StorageValue& State::get_storage(const address& addr, const bytes32& key)
 {
     // TODO: Avoid account lookup by giving the reference to the account's storage to Host.
-    auto& acc = get(addr);
-    const auto [it, missing] = acc.storage.try_emplace(key);
-    if (missing)
+    // Work on any entry already in m_modified (including access-only placeholders)
+    // without triggering a StateView account fetch; fall back to lazy-load or
+    // create an access-only placeholder if nothing is there.
+    Account* acc = find_modified(addr);
+    if (acc == nullptr)
     {
+        acc = find(addr);
+        if (acc == nullptr)
+            acc = &get_or_insert_for_access(addr);
+    }
+    const auto [it, _] = acc->storage.try_emplace(key);
+    if (!it->second.loaded)
+    {
+        // The slot may have been created by access_storage() without a fetch.
+        // Load the underlying value now; preserve access_status set earlier.
         const auto initial_value = m_initial.get_storage(addr, key);
-        it->second = {initial_value, initial_value};
+        it->second.current = initial_value;
+        it->second.original = initial_value;
+        it->second.loaded = true;
     }
     return it->second;
 }
@@ -368,6 +439,12 @@ void State::journal_storage_change(
     const address& addr, const bytes32& key, const StorageValue& value)
 {
     m_journal.emplace_back(JournalStorageChange{{addr}, key, value.current, value.access_status});
+}
+
+void State::journal_storage_access(
+    const address& addr, const bytes32& key, evmc_access_status prev_status, bool was_fresh)
+{
+    m_journal.emplace_back(JournalStorageAccess{{addr}, key, prev_status, was_fresh});
 }
 
 void State::journal_transient_storage_change(
@@ -398,33 +475,45 @@ void State::journal_access_account(const address& addr)
 
 void State::rollback(size_t checkpoint)
 {
+    // Rollback lookups never go through the StateView: every journal entry is
+    // paired with an in-m_modified account, so find_modified() is safe and
+    // also keeps cold-read hooks quiet.
+    const auto modified_get = [this](const address& addr) -> Account& {
+        auto* const a = find_modified(addr);
+        assert(a != nullptr);
+        return *a;
+    };
     while (m_journal.size() != checkpoint)
     {
         std::visit(
-            [this](const auto& e) {
+            [&](const auto& e) {
                 using T = std::decay_t<decltype(e)>;
                 if constexpr (std::is_same_v<T, JournalNonceBump>)
                 {
-                    get(e.addr).nonce -= 1;
+                    modified_get(e.addr).nonce -= 1;
                 }
                 else if constexpr (std::is_same_v<T, JournalTouched>)
                 {
-                    get(e.addr).erase_if_empty = false;
+                    modified_get(e.addr).erase_if_empty = false;
                 }
                 else if constexpr (std::is_same_v<T, JournalDestruct>)
                 {
-                    get(e.addr).destructed = false;
+                    modified_get(e.addr).destructed = false;
                 }
                 else if constexpr (std::is_same_v<T, JournalAccessAccount>)
                 {
-                    get(e.addr).access_status = EVMC_ACCESS_COLD;
+                    // The entry may have already been erased by a JournalCreate
+                    // rollback (access_account-created placeholder followed by a
+                    // failed CREATE). Skip silently in that case.
+                    if (auto* a = find_modified(e.addr); a != nullptr)
+                        a->access_status = EVMC_ACCESS_COLD;
                 }
                 else if constexpr (std::is_same_v<T, JournalCreate>)
                 {
                     if (e.existed)
                     {
                         // This account is not always "touched". TODO: Why?
-                        auto& a = get(e.addr);
+                        auto& a = modified_get(e.addr);
                         a.nonce = 0;
                         a.code_hash = Account::EMPTY_CODE_HASH;
                         a.code.clear();
@@ -440,18 +529,26 @@ void State::rollback(size_t checkpoint)
                 }
                 else if constexpr (std::is_same_v<T, JournalStorageChange>)
                 {
-                    auto& s = get(e.addr).storage.find(e.key)->second;
+                    auto& s = modified_get(e.addr).storage.find(e.key)->second;
                     s.current = e.prev_value;
                     s.access_status = e.prev_access_status;
                 }
+                else if constexpr (std::is_same_v<T, JournalStorageAccess>)
+                {
+                    auto& storage = modified_get(e.addr).storage;
+                    if (e.was_fresh)
+                        storage.erase(e.key);
+                    else
+                        storage.find(e.key)->second.access_status = e.prev_access_status;
+                }
                 else if constexpr (std::is_same_v<T, JournalTransientStorageChange>)
                 {
-                    auto& s = get(e.addr).transient_storage.find(e.key)->second;
+                    auto& s = modified_get(e.addr).transient_storage.find(e.key)->second;
                     s = e.prev_value;
                 }
                 else if constexpr (std::is_same_v<T, JournalBalanceChange>)
                 {
-                    get(e.addr).balance = e.prev_balance;
+                    modified_get(e.addr).balance = e.prev_balance;
                 }
                 else
                 {
