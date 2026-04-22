@@ -596,6 +596,14 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     case Transaction::Type::legacy:;
     }
 
+    // When the block carries a chain_id, enforce the tx matches it. Legacy
+    // transactions signed without EIP-155 replay protection carry chain_id == 0
+    // and are accepted regardless. BlockInfo::chain_id == 0 disables the check
+    // for callers that don't plumb chain config through.
+    if (block.chain_id != 0 && tx.chain_id != block.chain_id &&
+        !(tx.type == Transaction::Type::legacy && tx.chain_id == 0))
+        return make_error_code(WRONG_CHAIN_ID);
+
     assert(tx.max_priority_gas_price <= tx.max_gas_price);
 
     if (rev >= EVMC_OSAKA && tx.gas_limit > MAX_TX_GAS_LIMIT)
