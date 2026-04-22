@@ -154,10 +154,11 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
         else if (status == EVMC_STORAGE_ADDED_DELETED)
         {
             // EIP-8037: Refund state gas directly to the reservoir (not via gas_refund)
-            // for set-then-clear (0 -> Y -> 0). state_gas_used is not decremented because
-            // it tracks cumulative state gas consumed during the tx; the refund flows back
-            // to state_gas_left (the reservoir) instead.
+            // for set-then-clear (0 -> Y -> 0). Both state_gas_left and state_gas_used are
+            // adjusted so that the refund is correctly reverted along with the SSTORE if
+            // the current frame (or an ancestor) reverts.
             state.state_gas_left += 32 * cpsb;
+            state.state_gas_used -= 32 * cpsb;
         }
     }
     state.gas_refund += gas_refund;
