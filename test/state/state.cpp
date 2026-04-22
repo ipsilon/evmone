@@ -714,6 +714,35 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         result.raw().state_gas_used = 0;
     }
 
+    // EIP-8037: Refund state gas for accounts created AND destroyed in the same
+    // transaction (EIP-6780). Covers the account-creation charge, each created
+    // storage slot, and the code-deposit state gas. Capped at state_gas_used.
+    if (rev >= EVMC_AMSTERDAM && result.status_code == EVMC_SUCCESS)
+    {
+        const auto cpsb = evmone::compute_cpsb(block.gas_limit);
+        int64_t selfdestruct_refund = 0;
+        for (const auto& addr : host.get_destructed())
+        {
+            const auto* acc = state.find(addr);
+            if (acc == nullptr || !acc->just_created)
+                continue;
+            // Account creation state gas.
+            selfdestruct_refund += 112 * cpsb;
+            // Storage creation state gas: each slot written to a non-zero
+            // value during this account's lifetime.
+            for (const auto& [k, v] : acc->storage)
+            {
+                if (v.current != bytes32{})
+                    selfdestruct_refund += 32 * cpsb;
+            }
+            // Code deposit state gas: 1 byte per CPSB.
+            selfdestruct_refund += static_cast<int64_t>(acc->code.size()) * cpsb;
+        }
+        selfdestruct_refund = std::min(selfdestruct_refund, result.state_gas_used);
+        result.raw().state_gas_left += selfdestruct_refund;
+        result.raw().state_gas_used -= selfdestruct_refund;
+    }
+
     // EIP-8037: actual gas consumed = gas_limit - regular_unspent - reservoir_unspent.
     auto gas_used = tx.gas_limit - result.gas_left - result.state_gas_left;
 
