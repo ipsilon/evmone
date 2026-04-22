@@ -11,6 +11,7 @@
 #include <evmone/delegation.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
 #include <algorithm>
+#include <unordered_set>
 
 using namespace intx;
 
@@ -721,8 +722,17 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     {
         const auto cpsb = evmone::compute_cpsb(block.gas_limit);
         int64_t selfdestruct_refund = 0;
+        // m_destructed is append-only: if an inner frame reverts and an outer
+        // frame later selfdestructs the same account, the address appears
+        // twice. Dedupe here.
+        std::unordered_set<address, decltype([](const address& a) {
+            return std::hash<std::string_view>{}(
+                std::string_view(reinterpret_cast<const char*>(a.bytes), sizeof(a.bytes)));
+        })> seen;
         for (const auto& addr : host.get_destructed())
         {
+            if (!seen.insert(addr).second)
+                continue;
             const auto* acc = state.find(addr);
             if (acc == nullptr || !acc->destructed || !acc->just_created)
                 continue;
