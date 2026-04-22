@@ -58,6 +58,16 @@ int64_t compute_access_list_cost(const AccessList& access_list) noexcept
     return cost;
 }
 
+/// EIP-7981: Number of calldata-floor tokens contributed by access-list data.
+/// Each address = 20 bytes, each storage key = 32 bytes, 4 tokens per byte.
+size_t compute_access_list_tokens(const AccessList& access_list) noexcept
+{
+    size_t bytes = 0;
+    for (const auto& [_, keys] : access_list)
+        bytes += 20 + keys.size() * 32;
+    return 4 * bytes;
+}
+
 struct TransactionCost
 {
     int64_t intrinsic = 0;        ///< Regular intrinsic gas.
@@ -86,7 +96,13 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(rev, tx.data));
     const auto data_cost = num_tokens * DATA_TOKEN_COST;
 
-    const auto access_list_cost = compute_access_list_cost(tx.access_list);
+    // EIP-7981: In Amsterdam+ access-list data bytes contribute an extra cost
+    // (TOTAL_COST_FLOOR_PER_TOKEN * floor_tokens_in_access_list) to the regular intrinsic,
+    // and the same tokens are counted in the floor.
+    const auto access_list_tokens = (rev >= EVMC_AMSTERDAM) ?
+        static_cast<int64_t>(compute_access_list_tokens(tx.access_list)) : int64_t{0};
+    const auto access_list_cost =
+        compute_access_list_cost(tx.access_list) + access_list_tokens * total_cost_floor_per_token;
 
     // EIP-8037: Amsterdam splits auth cost: regular 7500, state (112+23)*CPSB per tuple.
     const auto per_auth_regular = (rev >= EVMC_AMSTERDAM) ?
@@ -104,7 +120,9 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
 
     // EIP-7623: Compute the minimum cost for the transaction by. If disabled, just use 0.
     // EIP-7976: Amsterdam counts every calldata byte as 4 tokens in the floor.
-    const auto floor_tokens = static_cast<int64_t>(compute_tx_data_floor_tokens(rev, tx.data));
+    // EIP-7981: Amsterdam includes access-list tokens in the floor.
+    const auto floor_tokens = static_cast<int64_t>(compute_tx_data_floor_tokens(rev, tx.data))
+                              + access_list_tokens;
     const auto min_cost =
         rev >= EVMC_PRAGUE ? TX_BASE_COST + floor_tokens * total_cost_floor_per_token : 0;
 
