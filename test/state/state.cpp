@@ -39,6 +39,14 @@ size_t compute_tx_data_tokens(evmc_revision rev, bytes_view data) noexcept
     return (nonzero_byte_multiplier * num_nonzero_bytes) + num_zero_bytes;
 }
 
+/// EIP-7976 floor token count in Amsterdam: every calldata byte counts as 4 tokens.
+size_t compute_tx_data_floor_tokens(evmc_revision rev, bytes_view data) noexcept
+{
+    if (rev >= EVMC_AMSTERDAM)
+        return 4 * data.size();
+    return compute_tx_data_tokens(rev, data);
+}
+
 int64_t compute_access_list_cost(const AccessList& access_list) noexcept
 {
     static constexpr auto ADDRESS_COST = 2400;
@@ -64,7 +72,8 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     static constexpr auto TX_CREATE_COST = 32000;
     static constexpr auto DATA_TOKEN_COST = 4;
     static constexpr auto INITCODE_WORD_COST = 2;
-    static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
+    // EIP-7976: Amsterdam raises the calldata floor per-token cost from 10 to 16.
+    const auto total_cost_floor_per_token = (rev >= EVMC_AMSTERDAM) ? int64_t{16} : int64_t{10};
 
     const auto is_create = !tx.to.has_value();
 
@@ -94,8 +103,10 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
         TX_BASE_COST + create_cost + data_cost + access_list_cost + auth_list_cost + initcode_cost;
 
     // EIP-7623: Compute the minimum cost for the transaction by. If disabled, just use 0.
+    // EIP-7976: Amsterdam counts every calldata byte as 4 tokens in the floor.
+    const auto floor_tokens = static_cast<int64_t>(compute_tx_data_floor_tokens(rev, tx.data));
     const auto min_cost =
-        rev >= EVMC_PRAGUE ? TX_BASE_COST + num_tokens * TOTAL_COST_FLOOR_PER_TOKEN : 0;
+        rev >= EVMC_PRAGUE ? TX_BASE_COST + floor_tokens * total_cost_floor_per_token : 0;
 
     const auto intrinsic_state_cost = create_state_cost + auth_state_cost;
 
