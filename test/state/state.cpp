@@ -733,9 +733,11 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         // regular component).
         const auto exec_state_gas = std::max(int64_t{0}, result.state_gas_used);
         const auto intrinsic_state = tx_props.intrinsic_state_gas;
-        const auto net_intrinsic_state =
-            std::max(int64_t{0}, intrinsic_state - delegation_refund);
-        const auto state_gas_used = exec_state_gas + net_intrinsic_state;
+        // EIP-7778: tx_state for block metering uses GROSS intrinsic state gas
+        // (EELS: `tx_state_gas = intrinsic_state_gas + exec_state_gas_used`).
+        // Delegation refund reduces sender's payment (returned via reservoir)
+        // but does not reduce the block-level state component.
+        const auto state_gas_used = exec_state_gas + intrinsic_state;
         const auto refund_discarded = std::max(int64_t{0}, result.state_gas_refund_discarded);
         // Regular gas = total consumed + delegation_refund - gross intrinsic state
         // - exec state - refund_discarded.
