@@ -11,6 +11,30 @@ namespace evmone::state
 using namespace rlp;
 using intx::uint256;
 
+static void rlp_decode(bytes_view& from, Authorization& to)
+{
+    const auto h = decode_header(from);
+    if (!h.is_list)
+        throw std::runtime_error("rlp decoding error: authorization must be a list");
+    if (h.payload_length > from.size())
+        throw std::runtime_error("rlp decoding error: authorization payload exceeds data");
+    auto payload = from.substr(0, static_cast<size_t>(h.payload_length));
+    from.remove_prefix(static_cast<size_t>(h.payload_length));
+
+    decode(payload, to.chain_id);
+    decode(payload, to.addr.bytes);
+    decode(payload, to.nonce);
+    uint256 v_u256{};
+    decode<uint256>(payload, v_u256);
+    to.v = static_cast<uint8_t>(v_u256);
+    if (to.v > 1 || v_u256 > 1)
+        throw std::runtime_error("rlp decoding error: invalid authorization y_parity");
+    decode(payload, to.r);
+    decode(payload, to.s);
+    if (!payload.empty())
+        throw std::runtime_error("rlp decoding error: trailing data in authorization");
+}
+
 void rlp_decode(bytes_view& from, Transaction& to)
 {
     const auto h = decode_header(from);
@@ -25,7 +49,7 @@ void rlp_decode(bytes_view& from, Transaction& to)
         decode(from, t);
 
         if (t > stdx::to_underlying(Transaction::Type::legacy) &&
-            t <= stdx::to_underlying(Transaction::Type::eip1559))
+            t <= stdx::to_underlying(Transaction::Type::set_code))
             to.type = static_cast<Transaction::Type>(t);
         else
             throw std::runtime_error("rlp decoding error: unexpected transaction type.");
@@ -45,14 +69,15 @@ void rlp_decode(bytes_view& from, Transaction& to)
 
     decode(from, to.nonce);
 
-    // Decode max priority fee per gas.
-    if (to.type == Transaction::Type::eip1559)
+    // Decode max priority fee per gas for dynamic-fee transactions.
+    if (to.type == Transaction::Type::eip1559 || to.type == Transaction::Type::blob ||
+        to.type == Transaction::Type::set_code)
         rlp::decode(from, to.max_priority_gas_price);
 
     decode(from, to.max_gas_price);
 
-    // Init max_priority_gas_price as max_gas_price for pre-eip1559.
-    if (to.type != Transaction::Type::eip1559)
+    // Init max_priority_gas_price as max_gas_price for pre-eip1559 tx types.
+    if (to.type == Transaction::Type::legacy || to.type == Transaction::Type::access_list)
         to.max_priority_gas_price = to.max_gas_price;
 
     uint64_t gas_limit{};
@@ -76,6 +101,15 @@ void rlp_decode(bytes_view& from, Transaction& to)
     else
     {
         decode(from, to.access_list);
+        if (to.type == Transaction::Type::blob)
+        {
+            decode(from, to.max_blob_gas_price);
+            decode(from, to.blob_hashes);
+        }
+        else if (to.type == Transaction::Type::set_code)
+        {
+            decode(from, to.authorization_list);
+        }
         decode(from, to.v);
         if (to.v > 1)
             throw std::runtime_error("rlp decoding error: invalid y_parity value");
