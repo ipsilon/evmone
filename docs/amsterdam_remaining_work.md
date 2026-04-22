@@ -3,7 +3,7 @@
 Status against `bal@v5.7.0` test fixtures.
 
 - State tests: 10442 passed / 0 failed ✓ **full pass**
-- Blockchain tests: partial EIP-7928 support (see below)
+- Blockchain tests (for_amsterdam subset): 2759 / 2777 passing
 
 Direct EIP coverage is fully green:
 
@@ -13,25 +13,28 @@ Direct EIP coverage is fully green:
 | EIP-7708 (eth transfer logs) | 38/38 | 42/42 |
 | EIP-7778 (block gas accounting) | — | 6/6 |
 
-## EIP-7928 Block-Level Access Lists (WIP)
+## EIP-7928 Block-Level Access Lists
 
-Initial implementation landed: data model (`test/state/bal.hpp/.cpp`), RLP +
-keccak256 encoding, gas-limit check, builder + StateView decorator, and
-blockchain-runner wiring that validates `blockAccessListHash` against the
-execution-derived BAL for Amsterdam+.
+Implemented: data model (`test/state/bal.hpp/.cpp`), RLP + keccak256 encoding,
+gas-limit check, builder + StateView decorator, and blockchain-runner wiring
+that validates `blockAccessListHash` against the execution-derived BAL for
+Amsterdam+.
 
-Against the `eip7928_block_level_access_lists/` suite (134 tests):
-**111 passing / 23 failing**.
+Against `blockchain_tests/for_amsterdam/` (2777 tests):
+- Overall: **2759 passing / 16 failing**.
+- Direct EIP-7928 suite (134 tests): **124 passing / 10 failing** (all EIP-7702
+  delegation-related).
 
-To keep OOG'd SLOAD reads out of the BAL, storage and account access was made
-lazy at the State level (see `Account::loaded` / `exists_in_state`, the new
-`JournalStorageAccess`, and `State::find()` lazy-load path). That refactor
-introduced regressions on ~71 ported tests where the execution-time BAL now
-contains extra account entries not present in the fixture's reference BAL.
+Design: cold account/storage accesses are deferred to the point where the EVM
+actually needs the value. `Host::access_storage` / `Host::access_account` mark
+slots/accounts warm via lightweight placeholders without hitting the StateView;
+the underlying fetch is triggered by `State::find()` / `State::get_storage()`
+on demand. `JournalStorageAccess` separates access-status reverts from value
+reverts so journal rollback cannot overwrite values loaded after the journal
+was written. `call_impl` in `lib/evmone/instructions_calls.cpp` was reordered
+to charge memory + value-transfer gas before the delegation lookup, matching
+geth's ordering and keeping OOG'd targets out of the BAL.
 
-Remaining work to finish EIP-7928:
-- Diagnose the extra-account sources on ported tests (likely one remaining
-  code path in evmone hits `m_initial.get_account` for addresses that EELS /
-  geth consider untouched).
-- Unblock the 23 EIP-7928 failures — mostly EIP-7702 delegation interactions
-  and a handful of OOG-after-access variants.
+Remaining EIP-7928 failures are all EIP-7702-specific BAL tests
+(`block_access_lists_eip7702/*`) plus `bal_create_and_oog`; those need deeper
+investigation of delegation-writer interactions with the builder.

@@ -761,7 +761,13 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     {
         host.access_account(a);
         for (const auto& key : storage_keys)
-            state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
+        {
+            // Warm the slot without fetching the value — matches how
+            // access_storage() handles opcode-level warming so that BAL readers
+            // only observe a slot when it's actually read post gas check.
+            auto& acc = state.get_or_insert_for_access(a);
+            acc.storage[key].access_status = EVMC_ACCESS_WARM;
+        }
     }
     // EIP-3651: Warm COINBASE.
     // This may create an empty coinbase account. The account cannot be created unconditionally
