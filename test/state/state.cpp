@@ -76,8 +76,11 @@ struct TransactionCost
 };
 
 /// Compute the transaction intrinsic gas 𝑔₀ (Yellow Paper, 6.2) and minimal gas (EIP-7623).
-TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& tx) noexcept
+TransactionCost compute_tx_intrinsic_cost(
+    evmc_revision rev, const Transaction& tx, int64_t block_gas_limit) noexcept
 {
+    // EIP-8037: cost per state byte is dynamic based on block gas limit.
+    const auto cpsb = (rev >= EVMC_AMSTERDAM) ? evmone::compute_cpsb(block_gas_limit) : int64_t{0};
     static constexpr auto TX_BASE_COST = 21000;
     static constexpr auto TX_CREATE_COST = 32000;
     static constexpr auto DATA_TOKEN_COST = 4;
@@ -91,7 +94,7 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto tx_create_regular = (rev >= EVMC_AMSTERDAM) ? int64_t{9000} : TX_CREATE_COST;
     const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? tx_create_regular : 0;
     const auto create_state_cost =
-        (rev >= EVMC_AMSTERDAM && is_create) ? int64_t{112 * 1174} : 0;
+        (rev >= EVMC_AMSTERDAM && is_create) ? int64_t{112 * cpsb} : 0;
 
     const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(rev, tx.data));
     const auto data_cost = num_tokens * DATA_TOKEN_COST;
@@ -110,7 +113,7 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto auth_list_cost =
         static_cast<int64_t>(tx.authorization_list.size()) * per_auth_regular;
     const auto auth_state_cost = (rev >= EVMC_AMSTERDAM) ?
-        static_cast<int64_t>(tx.authorization_list.size()) * (112 + 23) * 1174 : int64_t{0};
+        static_cast<int64_t>(tx.authorization_list.size()) * (112 + 23) * cpsb : int64_t{0};
 
     const auto initcode_cost =
         (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(tx.data.size()) : 0;
@@ -133,7 +136,7 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
 
 int64_t process_authorization_list(
     State& state, uint64_t chain_id, const AuthorizationList& authorization_list,
-    evmc_revision rev = EVMC_PRAGUE)
+    evmc_revision rev = EVMC_PRAGUE, int64_t cpsb = 0)
 {
     int64_t delegation_refund = 0;
     for (const auto& auth : authorization_list)
@@ -188,7 +191,7 @@ int64_t process_authorization_list(
             // EIP-8037: For Amsterdam, refund the account creation portion (112 * CPSB).
             // Pre-Amsterdam: refund EMPTY - BASE = 25000 - 12500 = 12500.
             const auto existing_auth_refund = (rev >= EVMC_AMSTERDAM) ?
-                int64_t{112 * 1174} : int64_t{AUTHORIZATION_EMPTY_ACCOUNT_COST - AUTHORIZATION_BASE_COST};
+                int64_t{112 * cpsb} : int64_t{AUTHORIZATION_EMPTY_ACCOUNT_COST - AUTHORIZATION_BASE_COST};
             delegation_refund += existing_auth_refund;
         }
 
@@ -577,7 +580,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
         return make_error_code(INSUFFICIENT_FUNDS);
 
     const auto [intrinsic_cost, intrinsic_state, min_cost] =
-        compute_tx_intrinsic_cost(rev, tx);
+        compute_tx_intrinsic_cost(rev, tx, block.gas_limit);
     // EIP-8037: total intrinsic includes both regular and state components.
     const auto total_intrinsic = intrinsic_cost + intrinsic_state;
     if (tx.gas_limit < std::max(total_intrinsic, min_cost))
@@ -625,7 +628,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     ++sender_acc.nonce;                            // Bump sender nonce.
 
     const auto delegation_refund =
-        process_authorization_list(state, tx.chain_id, tx.authorization_list, rev);
+        process_authorization_list(state, tx.chain_id, tx.authorization_list, rev,
+            rev >= EVMC_AMSTERDAM ? evmone::compute_cpsb(block.gas_limit) : int64_t{0});
 
     const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
     assert(tx.max_gas_price >= base_fee);                   // Required for valid tx.

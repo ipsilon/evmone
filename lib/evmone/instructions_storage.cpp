@@ -145,15 +145,16 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 
     if (state.rev >= EVMC_AMSTERDAM)
     {
+        const auto cpsb = compute_cpsb(state.get_tx_context().block_gas_limit);
         if (status == EVMC_STORAGE_ADDED)
         {
-            if (!charge_state_gas(gas_left, state, 32 * CPSB))
+            if (!charge_state_gas(gas_left, state, 32 * cpsb))
                 return {EVMC_OUT_OF_GAS, gas_left};
         }
         else if (status == EVMC_STORAGE_ADDED_DELETED)
         {
             // Refund state gas for set-then-clear (0 -> Y -> 0).
-            state.gas_refund += 32 * CPSB;
+            state.gas_refund += 32 * cpsb;
         }
     }
     state.gas_refund += gas_refund;

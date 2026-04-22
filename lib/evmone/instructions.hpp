@@ -4,6 +4,7 @@
 #pragma once
 
 #include "baseline.hpp"
+#include "constants.hpp"
 #include "execution_state.hpp"
 #include "instructions_traits.hpp"
 #include "instructions_xmacro.hpp"
@@ -114,8 +115,6 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     return num_words(size_in_bytes) * WordCopyCost;
 }
 
-/// EIP-8037: Cost per state byte for devnet-3.
-inline constexpr int64_t CPSB = 1174;
 
 /// Charge state gas (EIP-8037). Draws from state_gas_left first, spills into gas_left.
 /// Only increments state_gas_used on success (prevents inflation on OOG).
@@ -1110,7 +1109,8 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
                 if (state.rev >= EVMC_AMSTERDAM)
                 {
                     // EIP-8037: charge state gas instead of regular gas.
-                    if (!charge_state_gas(gas_left, state, 112 * CPSB))
+                    if (!charge_state_gas(
+                            gas_left, state, 112 * compute_cpsb(state.get_tx_context().block_gas_limit)))
                         return {EVMC_OUT_OF_GAS, gas_left};
                 }
                 else

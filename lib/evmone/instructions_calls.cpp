@@ -141,7 +141,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
                 if (state.rev >= EVMC_AMSTERDAM)
                 {
                     // EIP-8037: charge state gas instead of regular ACCOUNT_CREATION_COST.
-                    call_state_gas_charged = 112 * CPSB;
+                    call_state_gas_charged = 112 * compute_cpsb(state.get_tx_context().block_gas_limit);
                     if (!charge_state_gas(gas_left, state, call_state_gas_charged))
                         return {EVMC_OUT_OF_GAS, gas_left};
                 }
@@ -266,7 +266,8 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     // for an account that was never created (oversized initcode).
     if (state.rev >= EVMC_AMSTERDAM)
     {
-        if (!charge_state_gas(gas_left, state, 112 * CPSB))
+        if (!charge_state_gas(
+                gas_left, state, 112 * compute_cpsb(state.get_tx_context().block_gas_limit)))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 

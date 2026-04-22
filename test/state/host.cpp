@@ -364,7 +364,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     {
         // EIP-8037: split code deposit into regular and state components.
         const auto regular_cost = 6 * ((std::ssize(code) + 31) / 32);
-        const auto state_cost = std::ssize(code) * int64_t{1174};
+        const auto state_cost = std::ssize(code) * evmone::compute_cpsb(m_block.gas_limit);
         gas_left -= regular_cost;
         if (gas_left < 0)
         {
