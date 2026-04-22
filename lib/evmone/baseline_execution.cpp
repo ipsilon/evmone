@@ -309,6 +309,7 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
     // on sub-frame failure). Parent uses this to discard non-inheritable gains
     // when the returning frame reverts or exceptionally halts.
     result.state_gas_refund = state.state_gas_refund;
+    result.state_gas_refund_discarded = state.state_gas_refund_discarded;
 
     if (INTX_UNLIKELY(tracer != nullptr))
         tracer->notify_execution_end(result);

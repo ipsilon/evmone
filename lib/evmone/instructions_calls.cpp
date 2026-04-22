@@ -223,11 +223,19 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
         // Phantom = result.state_gas_refund; subtract it from reservoir transfer.
         state.state_gas_left =
             result.state_gas_left + result.state_gas_used - result.state_gas_refund;
+        // Track the discarded phantom for block-level EIP-7778 accounting:
+        // the matching charges spilled from gas_left are real gas paid but don't
+        // count as state growth, so tx_regular must exclude them.
+        state.state_gas_refund_discarded += result.state_gas_refund;
     }
     else
     {
         state.state_gas_left = result.state_gas_left;
     }
+    // Propagate accumulated discarded refunds from descendants (on both success
+    // and failure — already-discarded amounts stay discarded).
+    if (state.rev >= EVMC_AMSTERDAM)
+        state.state_gas_refund_discarded += result.state_gas_refund_discarded;
     return {EVMC_SUCCESS, gas_left};
 }
 
@@ -347,9 +355,13 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
         // per spec (not inherited by ancestor on revert).
         state.state_gas_left =
             result.state_gas_left + result.state_gas_used - result.state_gas_refund;
+        // Track discarded phantom for EIP-7778 block accounting.
+        state.state_gas_refund_discarded += result.state_gas_refund;
         // Refund the CREATE state gas charge (no account was created).
         refund_create_state_gas();
     }
+    if (state.rev >= EVMC_AMSTERDAM)
+        state.state_gas_refund_discarded += result.state_gas_refund_discarded;
     else
     {
         state.state_gas_left = result.state_gas_left;

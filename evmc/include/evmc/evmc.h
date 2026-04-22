@@ -531,6 +531,20 @@ struct evmc_result
      * represent reservoir gains that don't correspond to real gas consumed.
      */
     int64_t state_gas_refund;
+
+    /**
+     * Cumulative state gas refunds that were discarded across ancestor
+     * reverts during this tx (EIP-8037).
+     *
+     * When a child frame fails, its state_gas_refund is dropped rather than
+     * inherited by the parent's reservoir. The matching charges (spilled from
+     * gas_left) are real gas consumed that the sender pays, but from the
+     * block-level 2D gas accounting (EIP-7778) perspective no state growth
+     * happened, so this amount must be excluded from tx_regular. Tracked here
+     * so the state transition can compute
+     * tx_regular = total_consumed - state_gas_used - state_gas_refund_discarded.
+     */
+    int64_t state_gas_refund_discarded;
 };
 
 

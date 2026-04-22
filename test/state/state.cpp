@@ -727,14 +727,18 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 
         // EIP-7778: block gas_used = max(sum_regular, sum_state) at block level.
         // State gas = EVM-tracked + intrinsic state gas (CREATE + auth, minus refund).
-        // Regular gas = total consumed - state gas.
+        // Regular gas = total consumed - state gas - refunds discarded at ancestor
+        // reverts (EIP-8037: spilled charges whose refunds were dropped at the
+        // revert boundary don't represent state growth and must not inflate the
+        // regular component).
         const auto exec_state_gas = std::max(int64_t{0}, result.state_gas_used);
         const auto intrinsic_state = tx_props.intrinsic_state_gas;
         const auto net_intrinsic_state =
             std::max(int64_t{0}, intrinsic_state - delegation_refund);
         const auto state_gas_used = exec_state_gas + net_intrinsic_state;
-        // Regular gas = total consumed + delegation_refund - gross intrinsic state - exec state.
-        // Matches geth: txRegular = gas.RegularGas + execGasUsed.RegularGas.
+        const auto refund_discarded = std::max(int64_t{0}, result.state_gas_refund_discarded);
+        // Regular gas = total consumed + delegation_refund - gross intrinsic state
+        // - exec state - refund_discarded.
         //
         // Special case: on collision/early-failure (gas_left=0, state_gas_used=0,
         // state_gas_left preserved), no EVM execution happened. The burned gas is
@@ -746,8 +750,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto is_collision = (result.state_gas_used == -1);
         const auto regular_gas = is_collision ?
             tx_props.intrinsic_regular_gas :
-            std::max(int64_t{0},
-                total_consumed + delegation_refund - intrinsic_state - exec_state_gas);
+            std::max(int64_t{0}, total_consumed + delegation_refund - intrinsic_state -
+                                     exec_state_gas - refund_discarded);
         const auto block_gas = std::max(regular_gas, state_gas_used);
 
         // Store components for block-level aggregation.
