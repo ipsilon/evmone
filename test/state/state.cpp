@@ -505,25 +505,20 @@ std::optional<evmc::address> ecrecover_with_s_bound(
 
 std::optional<evmc::address> recover_sender(const Transaction& tx) noexcept
 {
-    // Decode y_parity from tx.v by tx type.
+    // Both rlp_decode and sign_transaction (for typed txs) normalise tx.v to the
+    // y_parity bit in {0, 1}. For legacy txs the raw 27/28/EIP-155 encoding is
+    // split by the decoder: tx.v holds y_parity, tx.chain_id holds the chain id.
+    // Accept the raw legacy encoding too so callers constructing a Transaction
+    // without round-tripping through rlp_decode still work.
     bool y_parity;
-    if (tx.type == Transaction::Type::legacy)
-    {
-        // EIP-155: v = 35 + 2*chain_id + y_parity, pre-155: v ∈ {27, 28}.
-        if (tx.v == 27 || tx.v == 28)
-            y_parity = (tx.v == 28);
-        else if (tx.v >= 35)
-            y_parity = ((tx.v - 35) & 1) != 0;
-        else
-            return std::nullopt;
-    }
-    else
-    {
-        // Typed transactions carry y_parity directly in {0, 1}.
-        if (tx.v > 1)
-            return std::nullopt;
+    if (tx.type == Transaction::Type::legacy && (tx.v == 27 || tx.v == 28))
+        y_parity = (tx.v == 28);
+    else if (tx.type == Transaction::Type::legacy && tx.v >= 35)
+        y_parity = ((tx.v - 35) & 1) != 0;
+    else if (tx.v <= 1)
         y_parity = tx.v != 0;
-    }
+    else
+        return std::nullopt;
 
     return ecrecover_with_s_bound(compute_tx_signing_hash(tx), tx.r, tx.s, y_parity);
 }
