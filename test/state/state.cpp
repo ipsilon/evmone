@@ -792,16 +792,20 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     receipt.state_block_gas = amsterdam_state_gas;
     receipt.logs = host.take_logs();
 
-    // EIP-7708: Emit burn logs for destructed accounts with remaining balance.
-    // Spec requires lexical (address) ordering. Currently no EEST test exercises >1 burn entry.
+    // EIP-7708: Emit burn logs for destructed accounts with remaining balance,
+    // in lexicographical order of account address.
     if (rev >= EVMC_AMSTERDAM)
     {
+        std::vector<std::pair<address, intx::uint256>> burn_entries;
         for (const auto& addr : host.get_destructed())
         {
             const auto* acc = state.find(addr);
             if (acc != nullptr && acc->destructed && acc->balance != 0)
-                emit_burn_log(receipt.logs, addr, acc->balance);
+                burn_entries.emplace_back(addr, acc->balance);
         }
+        std::ranges::sort(burn_entries, {}, &std::pair<address, intx::uint256>::first);
+        for (const auto& [addr, balance] : burn_entries)
+            emit_burn_log(receipt.logs, addr, balance);
     }
     receipt.logs_bloom_filter = compute_bloom_filter(receipt.logs);
     receipt.state_diff = state.build_diff(rev);
