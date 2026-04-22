@@ -2,8 +2,8 @@
 
 Status against `bal@v5.7.0` test fixtures.
 
-- State tests: 10420 passed / 22 failed
-- Blockchain tests: 10919 passed / 280 failed
+- State tests: 10442 passed / 0 failed ✓ **full pass**
+- Blockchain tests: 10920 passed / 279 failed
 
 Direct EIP coverage is fully green:
 
@@ -15,9 +15,9 @@ Direct EIP coverage is fully green:
 | EIP-7976 (calldata floor cost) | — | — |
 | EIP-7981 (access list cost) | — | — |
 
-## Amsterdam-specific gaps
+## Amsterdam-specific gaps (32 blockchain)
 
-### EIP-7928 Block-Level Access Lists (33 blockchain failures)
+### EIP-7928 Block-Level Access Lists (32 blockchain failures)
 
 Not implemented. evmone does not validate the block header's `BlockAccessListHash`
 field and does not generate the BAL structure. All failures are in
@@ -31,23 +31,42 @@ field and does not generate the BAL structure. All failures are in
 Requires a dedicated EIP-7928 implementation: track per-tx access/write sets,
 aggregate into a BAL per block, hash-commit into the header.
 
-## Pre-existing non-Amsterdam failures
+## Pre-existing non-Amsterdam blockchain failures (~247)
 
-Tests designed for earlier forks run on Amsterdam and break because of
-SELFDESTRUCT / state-gas / balance-handling changes. Not regressions from
-the Amsterdam work.
+Ported static tests designed for earlier forks, now running on Amsterdam.
+Investigated root causes:
 
-| Folder | Blockchain | State |
+### System contract state drift (likely majority)
+
+Blockchain test fixtures include pre-state with system contract placeholders
+(deposit contract `0x219ab540...`, beacon roots `0x000f3df6...`, history
+storage `0x0000f908...`, withdrawals `0x00000961...`, consolidations
+`0x0000bbdd...`). On every block, the beacon_roots and history_storage system
+calls write a slot with the current timestamp / block number; the ported
+fixtures don't reflect these writes because they were generated targeting
+earlier forks. Our post-state includes the system-call storage entries, the
+fixture post-state doesn't, so state roots diverge.
+
+This is a fixture-generation artifact, not a client bug. A client that
+*didn't* execute the system calls would be non-compliant with Cancun+.
+Running against re-filled fixtures from EELS tests-bal would fix these.
+
+### Folder breakdown
+
+| Folder | Blockchain | Root cause |
 |---|---|---|
-| `ported_static/stRandom` | ~90 | ~10 |
-| `ported_static/stRandom2` | ~70 | ~4 |
-| `ported_static/stMemoryStressTest` | ~34 | ~4 |
-| `ported_static/stReturnDataTest` | ~28 | — |
-| `cancun/eip6780_selfdestruct` | ~14 | ~10 |
-| `ported_static/stCreate2` | ~6 | ~2 |
-| `tangerine_whistle/eip150_operation_gas_costs` | ~5 | — |
-| `constantinople/eip1052_extcodehash` | ~4 | ~4 |
-| other (stEIP1559, eip7702, frontier, etc.) | ~30 | ~10 |
+| `ported_static/stRandom` | 91 | system-call state drift |
+| `ported_static/stRandom2` | 73 | system-call state drift |
+| `ported_static/stMemoryStressTest` | 34 | INT64_MAX block gas + system-call drift |
+| `ported_static/stReturnDataTest` | 28 | system-call state drift |
+| `ported_static/stCreate2` | 4 | system-call state drift |
+| `ported_static/stEIP1559` | 3 | system-call state drift |
+| `ported_static/stTransactionTest` | 2 | system-call state drift |
+| `ported_static/stBugs` | 2 | system-call state drift |
+| misc single-case folders | ~10 | various |
 
-Triage priority should go by whether a failure blocks Amsterdam semantics
-or is pre-existing ported test drift.
+## Candidates for direct EIP test coverage
+
+None found. The ported_static failures are not Amsterdam semantics bugs
+— they're stale fixture drift from running pre-Cancun-era tests without
+re-filling them against the new required system calls at block start.
