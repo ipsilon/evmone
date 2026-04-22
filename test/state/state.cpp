@@ -701,7 +701,15 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         message.state_gas += delegation_refund;
     }
 
-    const auto result = host.call(message);
+    auto result = host.call(message);
+
+    // EIP-8037: On top-level failure (revert or exceptional halt), refund all state gas
+    // consumed by EVM execution back to the reservoir, since nothing was created.
+    if (rev >= EVMC_AMSTERDAM && result.status_code != EVMC_SUCCESS)
+    {
+        result.raw().state_gas_left += result.state_gas_used;
+        result.raw().state_gas_used = 0;
+    }
 
     // EIP-8037: actual gas consumed = gas_limit - regular_unspent - reservoir_unspent.
     auto gas_used = tx.gas_limit - result.gas_left - result.state_gas_left;
