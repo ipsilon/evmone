@@ -724,7 +724,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         for (const auto& addr : host.get_destructed())
         {
             const auto* acc = state.find(addr);
-            if (acc == nullptr || !acc->just_created)
+            if (acc == nullptr || !acc->destructed || !acc->just_created)
                 continue;
             // Account creation state gas.
             selfdestruct_refund += 112 * cpsb;
