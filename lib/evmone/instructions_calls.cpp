@@ -290,9 +290,17 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     else if (state.rev >= EVMC_SHANGHAI && state.rev < EVMC_AMSTERDAM && init_code_size > 0xC000)
         return {EVMC_OUT_OF_GAS, gas_left};
 
+    // EIP-3860/7954: regular init-code word cost. Charged BEFORE the EIP-8037
+    // state-gas charge per EIP-8037 line 126 ("regular gas MUST be applied
+    // first"); otherwise a state charge that succeeds via spill can leave a
+    // committed `state_gas_used` even when the following regular check OOGs,
+    // producing wrong block_gas_used = max(regular_sum, state_sum).
+    const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);
+    const auto init_code_cost = num_words(init_code_size) * init_code_word_cost;
+    if ((gas_left -= init_code_cost) < 0)
+        return {EVMC_OUT_OF_GAS, gas_left};
+
     // EIP-8037: charge state gas for account creation.
-    // Must be after initcode size check to avoid persisting state_gas_used
-    // for an account that was never created (oversized initcode).
     int64_t create_state_gas_charged = 0;
     if (state.rev >= EVMC_AMSTERDAM)
     {
@@ -300,11 +308,6 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
         if (!charge_state_gas(gas_left, state, create_state_gas_charged))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
-
-    const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);
-    const auto init_code_cost = num_words(init_code_size) * init_code_word_cost;
-    if ((gas_left -= init_code_cost) < 0)
-        return {EVMC_OUT_OF_GAS, gas_left};
 
     // EIP-8037: refund the 112*CPSB state gas charged for account creation when
     // no account is actually created (light failures before child frame entry,
