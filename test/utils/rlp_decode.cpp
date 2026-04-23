@@ -95,8 +95,21 @@ void rlp_decode(bytes_view& from, Transaction& to)
     {
         uint256 v_u256;
         decode<uint256>(from, v_u256);
-        to.v = (v_u256 - 35) % 2 == 0 ? 0 : 1;
-        to.chain_id = ((v_u256 - 35 - to.v) / 2)[0];
+        // Pre-EIP-155 legacy transactions carry v ∈ {27, 28} with no embedded
+        // chain_id (chain_id = 0 means "not replay-protected"). Handle them
+        // explicitly — otherwise (v - 35) underflows the uint256 and the chain
+        // extraction produces garbage (2^64 - 4 in the low word), which later
+        // trips WRONG_CHAIN_ID.
+        if (v_u256 == 27 || v_u256 == 28)
+        {
+            to.v = (v_u256 == 28) ? 1 : 0;
+            to.chain_id = 0;
+        }
+        else
+        {
+            to.v = (v_u256 - 35) % 2 == 0 ? 0 : 1;
+            to.chain_id = ((v_u256 - 35 - to.v) / 2)[0];
+        }
     }
     else
     {
