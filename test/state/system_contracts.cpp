@@ -97,6 +97,10 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
         if (code.empty())
             continue;
 
+        // EIP-7928: ensure the executed system contract's address is observed
+        // by the BAL tracker even if the contract body makes no state access.
+        (void)state_view.get_account(addr);
+
         // Snapshot before the system call so that an exceptional halt (e.g. OOG
         // with huge block_gas_limit under EIP-8037's dynamic CPSB) doesn't leave
         // partial state changes visible to subsequent system calls or user txs.
@@ -125,6 +129,10 @@ std::optional<RequestsResult> system_call_block_end(const StateView& state_view,
         const auto code = state_view.get_account_code(addr);
         if (code.empty())
             return std::nullopt;
+
+        // EIP-7928: ensure the executed system contract's address is observed
+        // by the BAL tracker even if the contract body makes no state access.
+        (void)state_view.get_account(addr);
 
         const auto res = execute_system_call(state, block, block_hashes, rev, vm, addr, code, {});
         if (res.status_code != EVMC_SUCCESS)

@@ -516,8 +516,11 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
         m_logs.resize(logs_checkpoint);
 
         // The 0x03 quirk: the touch on this address is never reverted.
+        // Use the access-list insertion path so the re-touch doesn't surface
+        // the address to BAL trackers (EIP-7928) — the probe is evmone-internal
+        // and does not represent a genuine state access.
         if (is_03_touched && m_rev >= EVMC_SPURIOUS_DRAGON)
-            m_state.touch(addr_03);
+            m_state.get_or_insert_for_access(addr_03).erase_if_empty = true;
     }
     return result;
 }
