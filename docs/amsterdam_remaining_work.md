@@ -3,7 +3,7 @@
 Status against `bal@v5.7.0` test fixtures.
 
 - State tests: 10442 passed / 0 failed ✓ **full pass**
-- Blockchain tests (for_amsterdam subset): 2759 / 2777 passing
+- Blockchain tests (for_amsterdam subset): 2769 / 2777 passing
 
 Direct EIP coverage is fully green:
 
@@ -21,9 +21,8 @@ that validates `blockAccessListHash` against the execution-derived BAL for
 Amsterdam+.
 
 Against `blockchain_tests/for_amsterdam/` (2777 tests):
-- Overall: **2759 passing / 16 failing**.
-- Direct EIP-7928 suite (134 tests): **124 passing / 10 failing** (all EIP-7702
-  delegation-related).
+- Overall: **2769 passing / 6 failing**.
+- Direct EIP-7928 suite (134 tests): **133 passing / 1 failing**.
 
 Design: cold account/storage accesses are deferred to the point where the EVM
 actually needs the value. `Host::access_storage` / `Host::access_account` mark
@@ -35,6 +34,7 @@ was written. `call_impl` in `lib/evmone/instructions_calls.cpp` was reordered
 to charge memory + value-transfer gas before the delegation lookup, matching
 geth's ordering and keeping OOG'd targets out of the BAL.
 
-Remaining EIP-7928 failures are all EIP-7702-specific BAL tests
-(`block_access_lists_eip7702/*`) plus `bal_create_and_oog`; those need deeper
-investigation of delegation-writer interactions with the builder.
+The only remaining EIP-7928 failure is `bal_create_and_oog[oog_before_target_access]`
+(CREATE and CREATE2 variants), where evmone's CREATE gas accounting diverges
+from EELS at the `oog_before_target_access` boundary — unrelated to BAL
+tracking itself.

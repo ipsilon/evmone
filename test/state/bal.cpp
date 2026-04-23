@@ -166,7 +166,14 @@ void BalBuilder::record_diff(
         if (entry.balance != pre_balance)
             ad.balance_changes.push_back({tx_index, entry.balance});
         if (entry.code.has_value())
-            ad.code_changes.push_back({tx_index, *entry.code});
+        {
+            // Record only an actual code change: EIP-7702 authorizations can
+            // leave code_changed==true with the same final bytes (e.g. a pair
+            // of self-canceling auths in the same tx).
+            const auto pre_code = pre_state.get_account_code(entry.addr);
+            if (*entry.code != pre_code)
+                ad.code_changes.push_back({tx_index, *entry.code});
+        }
 
         for (const auto& [slot, new_val] : entry.modified_storage)
             ad.storage_writes[slot].push_back({tx_index, new_val});

@@ -385,22 +385,27 @@ static void from_json_tx_common(const json::json& j, state::Transaction& o)
             o.to = from_json<evmc::address>(*to_it);
     }
 
-    if (const auto gas_price_it = j.find("gasPrice"); gas_price_it != j.end())
-    {
-        o.type = state::Transaction::Type::legacy;
-        o.max_gas_price = from_json<intx::uint256>(*gas_price_it);
-        o.max_priority_gas_price = o.max_gas_price;
-        if (j.contains("maxFeePerGas") || j.contains("maxPriorityFeePerGas"))
-        {
-            throw std::invalid_argument(
-                "invalid transaction: contains both legacy and EIP-1559 fees");
-        }
-    }
-    else
+    // Blockchain-test fixtures often emit both `gasPrice` (as an informational
+    // legacy-style effective price) and `maxFeePerGas` / `maxPriorityFeePerGas`
+    // on typed transactions (type >= 2). Prefer the typed-tx fee fields when
+    // either is present; fall back to `gasPrice` only for true legacy txs.
+    const bool has_eip1559_fees =
+        j.contains("maxFeePerGas") || j.contains("maxPriorityFeePerGas");
+    if (has_eip1559_fees)
     {
         o.type = state::Transaction::Type::eip1559;
         o.max_gas_price = from_json<intx::uint256>(j.at("maxFeePerGas"));
         o.max_priority_gas_price = from_json<intx::uint256>(j.at("maxPriorityFeePerGas"));
+    }
+    else if (const auto gas_price_it = j.find("gasPrice"); gas_price_it != j.end())
+    {
+        o.type = state::Transaction::Type::legacy;
+        o.max_gas_price = from_json<intx::uint256>(*gas_price_it);
+        o.max_priority_gas_price = o.max_gas_price;
+    }
+    else
+    {
+        throw std::invalid_argument("transaction missing fee fields");
     }
 
     if (const auto it = j.find("maxFeePerBlobGas"); it != j.end())
