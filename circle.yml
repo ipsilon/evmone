@@ -453,6 +453,7 @@ jobs:
             stExample.*:\
             stTransactionTest.*"
           command: >
+            LLVM_PROFILE_FILE=state_tests.profraw
             bin/evmone-statetest
             --gtest_filter=$GTEST_FILTER
             ~/tests/LegacyTests/Cancun/GeneralStateTests
@@ -461,6 +462,7 @@ jobs:
           name: "Blockchain tests (ValidBlocks)"
           working_directory: ~/build
           command: >
+            LLVM_PROFILE_FILE=blockchain_tests_valid.profraw
             bin/evmone-blockchaintest
             --gtest_filter='-bcValidBlockTest.SimpleTx3LowS'
             ~/tests/BlockchainTests/ValidBlocks
@@ -469,6 +471,7 @@ jobs:
           name: "Blockchain tests (InvalidBlocks)"
           working_directory: ~/build
           command: >
+            LLVM_PROFILE_FILE=blockchain_tests_invalid.profraw
             bin/evmone-blockchaintest
             --gtest_filter='-bc4895-withdrawals.shanghaiWithoutWithdrawalsRLP:bcInvalidHeaderTest.*:bcUncleHeaderValidity.gasLimitTooLowExactBound'
             ~/tests/BlockchainTests/InvalidBlocks
