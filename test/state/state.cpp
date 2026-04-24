@@ -520,11 +520,22 @@ void State::rollback(size_t checkpoint)
                     }
                     else
                     {
-                        // TODO: Before Spurious Dragon we don't clear empty accounts ("erasable")
-                        //       so we need to delete them here explicitly.
-                        //       This should be changed by tuning "erasable" flag
-                        //       and clear in all revisions.
-                        m_modified.erase(e.addr);
+                        // Per EIP-2929, "access to new created address is never
+                        // reverted." The access-list warming happens BEFORE the
+                        // Host::call checkpoint (in prepare_message), so the
+                        // JournalAccessAccount entry survives rollback — but
+                        // erasing the account here would drop the access_status
+                        // record along with it. Instead, reset the entry to a
+                        // warm-only placeholder so a subsequent access to the
+                        // same address from the caller returns WARM (and
+                        // build_diff still treats it as non-existent).
+                        auto& a = modified_get(e.addr);
+                        const auto was_warm = (a.access_status == EVMC_ACCESS_WARM);
+                        a = Account{};
+                        a.loaded = true;
+                        a.exists_in_state = false;
+                        if (was_warm)
+                            a.access_status = EVMC_ACCESS_WARM;
                     }
                 }
                 else if constexpr (std::is_same_v<T, JournalStorageChange>)

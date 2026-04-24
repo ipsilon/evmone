@@ -7,7 +7,7 @@ Status against `bal@v5.7.0` test fixtures (`~/proj/fixtures/bal-570/`).
 | Suite | Passing | Failing | Notes |
 |---|---|---|---|
 | `state_tests/` | 10442 / 10442 | 0 | ✓ full pass |
-| `blockchain_tests/for_amsterdam/` | 2774 / 2777 | 1 | 1 pre-existing CREATE bug |
+| `blockchain_tests/for_amsterdam/` | 2775 / 2777 | 0 | ✓ (2 fixture-level skips) |
 | `blockchain_tests_engine/for_amsterdam/` | 0 / 2778 | 2778 | engine-payload format unsupported |
 | `blockchain_tests_sync/for_amsterdam/` | 0 / 4 | 4 | engine-payload format unsupported |
 
@@ -22,30 +22,7 @@ Direct EIP coverage is fully green against state+blockchain fixtures:
 
 ## Remaining failures
 
-### 1. `ported_static/stCreateTest/create_address_warm_after_fail` — CREATE gas accounting
-
-**Fails at HEAD and all prior commits we've tested.** Not BAL-related.
-
-- 8 of 14 parameterized sub-variants fail: `0xef`, `code-too-big`,
-  `constructor-revert`, `invalid-opcode` × `create`/`create2`.
-- Post-tx storage at slot `0x0c` of the caller contract
-  `0x00000000000000000000000000000000000c0dec` differs: **we write `0x0b0c`,
-  EELS writes `0x0148`** (delta `0x09c4` = 2500 — cold-access-cost order of
-  magnitude).
-- Same pattern across all 8 failing sub-variants, so a single root cause.
-- The caller is a dispatcher that runs one of 14 CREATE/CREATE2 scenarios
-  based on `calldata[4]`; each stores a function of gas remaining before/after
-  the CREATE at a different slot. The `0x0c` slot is written in the branches
-  that exercise post-init-code rejection (0xEF, code-too-big, REVERT, INVALID),
-  suggesting evmone's CREATE failure path charges/preserves gas differently
-  from EELS for these specific failure kinds (as opposed to the OOG path,
-  which passes).
-
-**Next step**: step-by-step EVM trace of one variant (e.g. `create-invalid-opcode`)
-comparing gas values at each opcode against EELS. Likely a cold-access charge
-or refund that's getting mis-attributed on init-code rejection.
-
-### 2. `blockchain_tests_engine/*` and `blockchain_tests_sync/*` — unsupported format
+### 1. `blockchain_tests_engine/*` and `blockchain_tests_sync/*` — unsupported format
 
 Fixtures use the engine-payload format (`engineNewPayloads` at the top level
 instead of `blocks`). `test/utils/blockchaintest_loader.cpp` doesn't parse this
@@ -60,6 +37,18 @@ conventional block format), so they're low priority.
 equivalent `blocks` entries. Straightforward but not required for correctness.
 
 ## Historical notes
+
+### `create_address_warm_after_fail` (fixed)
+
+Pre-existing CREATE gas-accounting bug surfaced during EIP-7928 work. On
+sub-frame init-code rejection (EIP-3541 `0xEF`, code-too-big, REVERT, INVALID),
+the caller observed a cold-access charge (2500 gas delta) for the CREATE
+recipient when making a follow-on access, because `JournalCreate` rollback
+erased the recipient from `m_modified` along with its EIP-2929 warm flag.
+
+Per EIP-2929, "access to new created address is never reverted". Fixed by
+resetting the entry to a warm-only placeholder on rollback instead of erasing,
+preserving the warm flag while still treating the address as non-existent.
 
 ### EIP-7928 Block-Level Access Lists (shipped)
 
