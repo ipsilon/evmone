@@ -84,9 +84,23 @@ void rlp_decode(bytes_view& from, Transaction& to)
     decode(from, gas_limit);
     to.gas_limit = static_cast<int64_t>(gas_limit);
 
-    // Init address field. It's std::optional.
-    to.to = evmc::address{};
-    decode(from, to.to->bytes);
+    // Decode the optional `to` address. An empty RLP payload (0x80) marks a
+    // CREATE transaction (to = nullopt); a 20-byte payload sets the address.
+    {
+        bytes to_payload;
+        decode(from, to_payload);
+        if (to_payload.empty())
+            to.to = std::nullopt;
+        else if (to_payload.size() == sizeof(evmc::address))
+        {
+            evmc::address to_addr;
+            std::ranges::copy(to_payload, to_addr.bytes);
+            to.to = to_addr;
+        }
+        else
+            throw std::runtime_error(
+                "rlp decoding error: 'to' field must be empty or 20 bytes");
+    }
     decode(from, to.value);
     decode(from, to.data);
 
