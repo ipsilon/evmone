@@ -51,6 +51,7 @@ BlockHeader from_json<BlockHeader>(const json::json& j)
         .blob_gas_used = load_optional<uint64_t>(j, "blobGasUsed"),
         .excess_blob_gas = load_optional<uint64_t>(j, "excessBlobGas"),
         .requests_hash = load_if_exists<hash256>(j, "requestsHash"),
+        .slot_number = load_if_exists<uint64_t>(j, "slotNumber"),
     };
 }
 
@@ -81,6 +82,7 @@ static TestBlock load_test_block(
         tb.block_info.parent_beacon_block_root = tb.expected_block_header.parent_beacon_block_root;
         tb.block_info.blob_gas_used = tb.expected_block_header.blob_gas_used;
         tb.block_info.excess_blob_gas = tb.expected_block_header.excess_blob_gas;
+        tb.block_info.slot_number = tb.expected_block_header.slot_number;
 
         tb.block_info.blob_base_fee = tb.block_info.excess_blob_gas.has_value() ?
                                           std::optional(state::compute_blob_gas_price(

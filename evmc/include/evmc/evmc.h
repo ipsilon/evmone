@@ -209,6 +209,7 @@ struct evmc_tx_context
     int64_t block_number;              /**< The block number. */
     int64_t block_timestamp;           /**< The block timestamp. */
     int64_t block_gas_limit;           /**< The block gas limit. */
+    uint64_t block_slot_number;         /**< The beacon chain slot number (EIP-7843). */
     evmc_uint256be block_prev_randao;  /**< The block previous RANDAO (EIP-4399). */
     evmc_uint256be chain_id;           /**< The blockchain's ChainID. */
     evmc_uint256be block_base_fee;     /**< The block base fee per gas (EIP-1559, EIP-3198). */
