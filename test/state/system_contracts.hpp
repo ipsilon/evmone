@@ -4,7 +4,9 @@
 #pragma once
 
 #include "requests.hpp"
+#include "transaction.hpp"
 #include <evmc/evmc.hpp>
+#include <intx/intx.hpp>
 
 namespace evmone::state
 {
@@ -24,6 +26,42 @@ constexpr auto WITHDRAWAL_REQUEST_ADDRESS = 0x00000961EF480EB55E80D19AD83579A64C
 
 /// The address of the system contract processing consolidations (EIP-7251).
 constexpr auto CONSOLIDATION_REQUEST_ADDRESS = 0x0000BBDDC7CE488642FB579F8B00F3A590007251_address;
+
+/// EIP-7708: keccak256("Transfer(address,address,uint256)")
+constexpr auto TRANSFER_EVENT_TOPIC =
+    0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef_bytes32;
+
+/// EIP-7708: keccak256("Burn(address,uint256)")
+constexpr auto BURN_EVENT_TOPIC =
+    0xcc16f5dbb4873280815c1ee09dbd06736cffcc184412cf7a71a0fdb75d397ca5_bytes32;
+
+/// Converts an address to a left-padded bytes32 topic value.
+inline bytes32 addr_to_topic(const address& addr) noexcept
+{
+    bytes32 topic{};
+    std::memcpy(&topic.bytes[12], addr.bytes, sizeof(addr.bytes));
+    return topic;
+}
+
+/// EIP-7708: Emits an ETH burn log (LOG2) from the SYSTEM_ADDRESS.
+inline void emit_burn_log(
+    std::vector<Log>& logs, const address& burned_addr, const intx::uint256& amount)
+{
+    const auto val_be = intx::be::store<evmc::uint256be>(amount);
+    logs.push_back({SYSTEM_ADDRESS,
+        {val_be.bytes, val_be.bytes + sizeof(val_be.bytes)},
+        {BURN_EVENT_TOPIC, addr_to_topic(burned_addr)}});
+}
+
+/// EIP-7708: Emits an ETH transfer log (LOG3) from the SYSTEM_ADDRESS.
+inline void emit_transfer_log(std::vector<Log>& logs, const address& sender,
+    const address& recipient, const intx::uint256& amount)
+{
+    const auto val_be = intx::be::store<evmc::uint256be>(amount);
+    logs.push_back({SYSTEM_ADDRESS,
+        {val_be.bytes, val_be.bytes + sizeof(val_be.bytes)},
+        {TRANSFER_EVENT_TOPIC, addr_to_topic(sender), addr_to_topic(recipient)}});
+}
 
 struct BlockInfo;
 struct StateDiff;
