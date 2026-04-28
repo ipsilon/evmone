@@ -334,6 +334,8 @@ public:
     using evmc_result::output_data;
     using evmc_result::output_size;
     using evmc_result::state_gas_left;
+    using evmc_result::state_gas_refund;
+    using evmc_result::state_gas_refund_discarded;
     using evmc_result::state_gas_used;
     using evmc_result::status_code;
 

@@ -128,8 +128,16 @@ class ExecutionState
 {
 public:
     int64_t gas_refund = 0;
-    int64_t state_gas_left = 0;   ///< EIP-8037: remaining state gas reservoir.
-    int64_t state_gas_used = 0;   ///< EIP-8037: total state gas consumed.
+    int64_t state_gas_left = 0;    ///< EIP-8037: remaining state gas reservoir.
+    int64_t state_gas_used = 0;    ///< EIP-8037: total state gas consumed.
+    int64_t state_gas_refund = 0;  ///< EIP-8037: phantom reservoir amount from 0->X->0
+                                   ///< SSTORE refunds and CREATE state-gas refunds on
+                                   ///< sub-frame failure. Discarded by caller on revert.
+    int64_t state_gas_refund_discarded = 0;  ///< EIP-8037: cumulative refunds dropped at
+                                             ///< ancestor-revert boundaries this tx.
+                                             ///< Subtracted from tx_regular at block level
+                                             ///< so spill-then-revert-refund doesn't
+                                             ///< inflate regular-gas component of EIP-7778.
     Memory memory;
     const evmc_message* msg = nullptr;
     evmc::HostContext host;
@@ -176,6 +184,8 @@ public:
         gas_refund = 0;
         state_gas_left = 0;
         state_gas_used = 0;
+        state_gas_refund = 0;
+        state_gas_refund_discarded = 0;
         memory.clear();
         msg = &message;
         host = {host_interface, host_ctx};

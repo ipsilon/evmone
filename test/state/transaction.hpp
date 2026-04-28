@@ -88,6 +88,12 @@ struct TransactionProperties
     /// The amount of gas provided to the EVM for the transaction execution.
     int64_t execution_gas_limit = 0;
 
+    /// EIP-8037: The state gas portion of the intrinsic cost.
+    int64_t intrinsic_state_gas = 0;
+
+    /// The regular portion of the intrinsic cost.
+    int64_t intrinsic_regular_gas = 0;
+
     /// The minimal amount of gas the transaction must use.
     int64_t min_gas_cost = 0;
 };
