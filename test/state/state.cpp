@@ -49,6 +49,16 @@ int64_t compute_access_list_cost(const AccessList& access_list) noexcept
     return cost;
 }
 
+/// EIP-7981: Number of calldata-floor tokens contributed by access-list data.
+/// Each address = 20 bytes, each storage key = 32 bytes, 4 tokens per byte.
+size_t compute_access_list_tokens(const AccessList& access_list) noexcept
+{
+    size_t bytes = 0;
+    for (const auto& [_, keys] : access_list)
+        bytes += 20 + keys.size() * 32;
+    return 4 * bytes;
+}
+
 struct TransactionCost
 {
     int64_t intrinsic = 0;
@@ -72,7 +82,13 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(rev, tx.data));
     const auto data_cost = num_tokens * DATA_TOKEN_COST;
 
-    const auto access_list_cost = compute_access_list_cost(tx.access_list);
+    // EIP-7981: In Amsterdam+ access-list data bytes contribute an extra cost
+    // (TOTAL_COST_FLOOR_PER_BYTE * floor_bytes_in_access_list) to the regular intrinsic,
+    // and those bytes are counted in the floor.
+    const auto access_list_tokens = (rev >= EVMC_AMSTERDAM) ?
+        static_cast<int64_t>(compute_access_list_tokens(tx.access_list)) : int64_t{0};
+    const auto access_list_cost = compute_access_list_cost(tx.access_list) +
+                                  access_list_tokens * (TOTAL_COST_FLOOR_PER_BYTE / 4);
 
     const auto auth_list_cost =
         static_cast<int64_t>(tx.authorization_list.size()) * AUTHORIZATION_EMPTY_ACCOUNT_COST;
@@ -84,8 +100,12 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
         TX_BASE_COST + create_cost + data_cost + access_list_cost + auth_list_cost + initcode_cost;
 
     int64_t min_cost = 0;
-    if (rev >= EVMC_AMSTERDAM)  // EIP-7976: unified cost per byte
-        min_cost = TX_BASE_COST + TOTAL_COST_FLOOR_PER_BYTE * static_cast<int64_t>(tx.data.size());
+    if (rev >= EVMC_AMSTERDAM)  // EIP-7976: unified cost per byte; EIP-7981: access-list bytes.
+    {
+        const auto access_list_floor_bytes = access_list_tokens / 4;
+        const auto floor_bytes = static_cast<int64_t>(tx.data.size()) + access_list_floor_bytes;
+        min_cost = TX_BASE_COST + TOTAL_COST_FLOOR_PER_BYTE * floor_bytes;
+    }
     else if (rev >= EVMC_PRAGUE)  // EIP-7623: cost per token capturing num of zero-nonzero bytes.
         min_cost = TX_BASE_COST + TOTAL_COST_FLOOR_PER_TOKEN * num_tokens;
 
