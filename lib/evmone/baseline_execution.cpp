@@ -265,12 +265,12 @@ TARGET_OP_UNDEFINED:
 evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* ctx,
     evmc_revision rev, const evmc_message& msg, const CodeAnalysis& analysis) noexcept
 {
-    const auto code = analysis.executable_code();
+    const auto code = analysis.code();
     const auto code_begin = code.data();
     auto gas = msg.gas;
 
     auto& state = vm.get_execution_state(static_cast<size_t>(msg.depth));
-    state.reset(msg, rev, host, ctx, analysis.raw_code());
+    state.reset(msg, rev, host, ctx, code);
 
     state.analysis.baseline = &analysis;  // Assign code analysis for instruction implementations.
 

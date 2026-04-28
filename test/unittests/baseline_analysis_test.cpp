@@ -13,7 +13,6 @@ TEST(baseline_analysis, legacy)
     const auto code = push(1) + ret_top();
     const auto analysis = evmone::baseline::analyze(code);
 
-    EXPECT_EQ(analysis.executable_code(), code);
-    EXPECT_EQ(analysis.raw_code(), code);
-    EXPECT_NE(analysis.raw_code().data(), code.data()) << "copy should be made";
+    EXPECT_EQ(analysis.code(), code);
+    EXPECT_NE(analysis.code().data(), code.data()) << "copy should be made";
 }

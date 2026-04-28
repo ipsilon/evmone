@@ -764,7 +764,7 @@ inline code_iterator jump_impl(ExecutionState& state, const uint256& dst) noexce
         return nullptr;
     }
 
-    return &state.analysis.baseline->executable_code()[static_cast<size_t>(dst[0])];
+    return &state.analysis.baseline->code()[static_cast<size_t>(dst[0])];
 }
 
 /// JUMP instruction implementation using baseline::CodeAnalysis.
@@ -783,7 +783,7 @@ inline code_iterator jumpi(StackTop stack, ExecutionState& state, code_iterator 
 
 inline code_iterator pc(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
-    stack.push(static_cast<uint64_t>(pos - state.analysis.baseline->executable_code().data()));
+    stack.push(static_cast<uint64_t>(pos - state.analysis.baseline->code().data()));
     return pos + 1;
 }
 

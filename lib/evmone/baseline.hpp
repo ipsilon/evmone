@@ -56,11 +56,10 @@ namespace baseline
 class CodeAnalysis
 {
 private:
-    bytes_view m_raw_code;         ///< Unmodified full code.
-    bytes_view m_executable_code;  ///< Executable code section.
+    bytes_view m_code;  ///< The executable code.
 
     /// Padded code for faster legacy code execution.
-    /// If not nullptr the executable_code must point to it.
+    /// If not nullptr m_code must point to it.
     std::unique_ptr<uint8_t[]> m_padded_code;
 
     BitsetSpan m_jumpdest_bitset{nullptr};
@@ -68,23 +67,18 @@ private:
 public:
     /// Constructor for legacy code.
     CodeAnalysis(std::unique_ptr<uint8_t[]> padded_code, size_t code_size, BitsetSpan map)
-      : m_raw_code{padded_code.get(), code_size},
-        m_executable_code{padded_code.get(), code_size},
+      : m_code{padded_code.get(), code_size},
         m_padded_code{std::move(padded_code)},
         m_jumpdest_bitset{map}
     {}
 
-    /// The raw code as stored in accounts or passes as initcode.
-    /// TODO: Merge back raw_code() and executable_code() after EOF removal.
-    [[nodiscard]] bytes_view raw_code() const noexcept { return m_raw_code; }
-
-    /// The pre-processed executable code. This is where interpreter should start execution.
-    [[nodiscard]] bytes_view executable_code() const noexcept { return m_executable_code; }
+    /// The executable code. This is where the interpreter should start execution.
+    [[nodiscard]] bytes_view code() const noexcept { return m_code; }
 
     /// Check if given position is valid jump destination. Use only for legacy code.
     [[nodiscard]] bool check_jumpdest(uint64_t position) const noexcept
     {
-        if (position >= m_raw_code.size())
+        if (position >= m_code.size())
             return false;
         return m_jumpdest_bitset.test(static_cast<size_t>(position));
     }
