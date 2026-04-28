@@ -66,6 +66,7 @@ target_sources(
     state_transition_block_test.cpp
     state_transition_call_test.cpp
     state_transition_create_test.cpp
+    state_transition_eip7610_test.cpp
     state_transition_eip7702_test.cpp
     state_transition_eip7778_block_gas_test.cpp
     state_transition_eip8037_test.cpp

@@ -73,9 +73,10 @@ evmc_storage_status Host::set_storage(
             status = EVMC_STORAGE_MODIFIED_RESTORED;  // X → Y → X
     }
 
-    // Journal the value change. access_storage() also journals the access-status
-    // transition separately (via JournalStorageAccess); pre-Berlin we combine
-    // both via JournalStorageChange.
+    // Journal the value change. From Berlin onward access_storage() journals the
+    // access-status transition separately via JournalStorageAccess so the warm
+    // flag and the slot value can roll back independently (EIP-7928 needs the
+    // warm bit to survive certain reverts that discard the value).
     m_state.journal_storage_change(addr, key, storage_slot);
     storage_slot.current = value;  // Update current value.
     return status;
@@ -579,6 +580,13 @@ evmc_access_status Host::access_storage(const address& addr, const bytes32& key)
     // commits, which matches EIP-7928 BAL semantics. The journal only captures
     // the access-status change — the value itself (current/original) is managed
     // by subsequent get_storage()/set_storage() calls and their own journaling.
+    //
+    // Invariant: `m_state.get(addr)` asserts the account is already loaded.
+    // SLOAD/SSTORE always operate on `state.msg->recipient`, whose code was
+    // already loaded by execute_message() before the opcode dispatch, so
+    // `find(addr)` is guaranteed to have succeeded. Any future opcode that
+    // calls `access_storage` on a non-recipient address must lazy-load first
+    // (e.g. via `m_state.find(addr)` and the placeholder upgrade path).
     auto& acc = m_state.get(addr);
     const auto [it, fresh] = acc.storage.try_emplace(key);
     const auto prev_status = std::exchange(it->second.access_status, EVMC_ACCESS_WARM);

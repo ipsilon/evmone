@@ -386,12 +386,10 @@ Account& State::get_or_insert(const address& addr, Account account)
 
 Account& State::get_or_insert_for_access(const address& addr)
 {
-    // Fast path: entry already present (loaded or warm-only placeholder).
-    if (const auto it = m_modified.find(addr); it != m_modified.end())
-        return it->second;
-
-    // Insert a lightweight placeholder without querying the cold StateView.
-    // The real balance/nonce/code will be fetched on-demand by find().
+    // Single hash-table op: hit returns the existing entry as-is (loaded or
+    // warm-only placeholder); miss default-constructs an Account and we tag
+    // it as an unloaded placeholder so a subsequent `find()` lazy-fetches
+    // the real state.
     //
     // `erase_if_empty` is intentionally left at its default `false`.
     // EIP-2929 access-warming does not constitute an EIP-158 "touch":
@@ -400,9 +398,10 @@ Account& State::get_or_insert_for_access(const address& addr)
     // a SELFDESTRUCT beneficiary access), the loaded account must not
     // be marked for end-of-tx deletion. Genuine touches (balance
     // transfer, etc.) record the flag separately via `touch()`.
-    Account placeholder{};
-    placeholder.loaded = false;
-    return insert(addr, std::move(placeholder));
+    auto [it, inserted] = m_modified.try_emplace(addr);
+    if (inserted)
+        it->second.loaded = false;
+    return it->second;
 }
 
 bytes_view State::get_code(const address& addr)
