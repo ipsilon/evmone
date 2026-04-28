@@ -309,7 +309,15 @@ Account& State::insert(const address& addr, Account account)
     assert(!it->second.loaded || !it->second.exists_in_state);
     const auto was_warm = (it->second.access_status == EVMC_ACCESS_WARM);
     const auto was_touched = it->second.erase_if_empty;
+    // Preserve any storage slots that were warmed via the EIP-2930 access
+    // list (or BAL) before this address was promoted to a real account.
+    // The placeholder's storage entries hold access_status=WARM (with
+    // current=0/original=0/loaded=false placeholders); discarding them
+    // would force a CREATE'd account's subsequent SSTOREs to re-warm cold
+    // slots that the tx already paid for, breaking gas/refund accounting.
+    auto saved_storage = std::move(it->second.storage);
     it->second = std::move(account);
+    it->second.storage = std::move(saved_storage);
     if (was_warm)
         it->second.access_status = EVMC_ACCESS_WARM;
     it->second.erase_if_empty = it->second.erase_if_empty || was_touched;
