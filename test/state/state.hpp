@@ -39,6 +39,18 @@ class State
         evmc_access_status prev_access_status;
     };
 
+    /// EIP-2929 warm/cold transition on a storage slot. Separate from
+    /// JournalStorageChange so that reverting a cold-access hook doesn't
+    /// accidentally overwrite a value loaded by a later SLOAD/SSTORE.
+    struct JournalStorageAccess : JournalBase
+    {
+        bytes32 key;
+        evmc_access_status prev_access_status;
+        /// The slot entry was newly inserted by access_storage — on revert the
+        /// entry itself should be removed (keeps the storage map pristine).
+        bool was_fresh;
+    };
+
     struct JournalTransientStorageChange : JournalBase
     {
         bytes32 key;
@@ -61,7 +73,8 @@ class State
 
     using JournalEntry =
         std::variant<JournalBalanceChange, JournalTouched, JournalStorageChange, JournalNonceBump,
-            JournalCreate, JournalTransientStorageChange, JournalDestruct, JournalAccessAccount>;
+            JournalCreate, JournalTransientStorageChange, JournalDestruct, JournalAccessAccount,
+            JournalStorageAccess>;
 
     /// The read-only view of the initial (cold) state.
     const StateView& m_initial;
@@ -86,11 +99,25 @@ public:
     /// Returns the pointer to the account at the address if the account exists. Null otherwise.
     Account* find(const address& addr) noexcept;
 
+    /// Looks up an account only in the locally modified set. Does NOT query the
+    /// underlying StateView, so it won't surface a cold read to trackers/hooks.
+    /// Returns nullptr if the account hasn't been touched in this State yet.
+    Account* find_modified(const address& addr) noexcept
+    {
+        const auto it = m_modified.find(addr);
+        return it != m_modified.end() ? &it->second : nullptr;
+    }
+
     /// Gets the account at the address (the account must exist).
     Account& get(const address& addr) noexcept;
 
     /// Gets an existing account or inserts new account.
     Account& get_or_insert(const address& addr, Account account = {});
+
+    /// Gets an existing account or inserts a lightweight placeholder for access-list
+    /// warming. Does NOT query the underlying StateView — deferring the fetch keeps
+    /// cold-reads observable only when the account is actually loaded (see find()).
+    Account& get_or_insert_for_access(const address& addr);
 
     bytes_view get_code(const address& addr);
 
@@ -114,6 +141,13 @@ public:
     void journal_balance_change(const address& addr, const intx::uint256& prev_balance);
 
     void journal_storage_change(const address& addr, const bytes32& key, const StorageValue& value);
+
+    /// Journal an access-status transition on a storage slot without capturing
+    /// the slot's value (matches access_storage() semantics).
+    /// @p was_fresh indicates whether the slot was just inserted by the caller
+    /// (on revert the entry should be erased entirely).
+    void journal_storage_access(
+        const address& addr, const bytes32& key, evmc_access_status prev_status, bool was_fresh);
 
     void journal_transient_storage_change(
         const address& addr, const bytes32& key, const bytes32& value);

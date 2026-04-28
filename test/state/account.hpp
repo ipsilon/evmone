@@ -24,6 +24,12 @@ struct StorageValue
     bytes32 original;
 
     evmc_access_status access_status = EVMC_ACCESS_COLD;
+
+    /// Whether @a current / @a original have been fetched from the cold StateView.
+    /// Set to false when the slot is created by access_storage() (to mark warm
+    /// without performing the StateView read). Set to true after the first
+    /// fetch via State::get_storage().
+    bool loaded = false;
 };
 
 /// The state account.
@@ -77,6 +83,17 @@ struct Account
     bool code_changed = false;
 
     evmc_access_status access_status = EVMC_ACCESS_COLD;
+
+    /// Whether the balance/nonce/code_hash/has_initial_storage fields have been
+    /// populated from the underlying StateView. Entries created purely for
+    /// access-list warming (via access_account) are initialized with loaded=false;
+    /// State::find() performs the StateView fetch on first real access.
+    bool loaded = true;
+
+    /// Once loaded, whether the address was present in the underlying StateView.
+    /// Only meaningful when loaded==true. Lets State::find() distinguish a warmed
+    /// placeholder for a non-existent account from a real loaded account.
+    bool exists_in_state = true;
 
     [[nodiscard]] bool is_empty() const noexcept
     {

@@ -4,8 +4,11 @@
 
 #include "blockchaintest_runner.hpp"
 #include <gtest/gtest.h>
+#include <test/state/bal.hpp>
 #include <test/state/ethash_difficulty.hpp>
 #include <test/state/requests.hpp>
+#include <test/state/state.hpp>
+#include <test/state/system_contracts.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
@@ -37,6 +40,9 @@ struct TransitionResult
     state::BloomFilter bloom;
     int64_t blob_gas_left;
     TestState block_state;
+    state::BlockAccessList block_access_list;
+    hash256 block_access_list_hash;
+    bool block_access_list_gas_limit_exceeded = false;
 };
 
 namespace
@@ -46,7 +52,20 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
     evmc_revision rev, std::optional<int64_t> block_reward)
 {
     TestState block_state(state);
-    system_call_block_start(block_state, block, block_hashes, rev, vm);
+
+    // EIP-7928 BAL wiring: a BalStateView decorator forwards StateView calls to
+    // `block_state` while capturing every cold storage-slot read. The builder
+    // accumulates per-tx state diffs alongside those reads.
+    state::BalBuilder bal_builder;
+    state::BalStateView bal_view{block_state, bal_builder};
+    const auto tx_idx_pre = uint16_t{0};
+    const auto tx_idx_post = static_cast<uint16_t>(txs.size() + 1);
+
+    {
+        auto diff = state::system_call_block_start(bal_view, block, block_hashes, rev, vm);
+        bal_builder.record_diff(tx_idx_pre, diff, block_state);
+        block_state.apply(diff);
+    }
 
     std::vector<state::Log> txs_logs;
     int64_t block_gas_left = block.gas_limit;
@@ -63,34 +82,37 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         const auto& tx = txs[i];
 
         const auto computed_tx_hash = keccak256(rlp::encode(tx));
-        auto res = test::transition(
-            block_state, block, block_hashes, tx, rev, vm, block_gas_left, blob_gas_left);
 
-        if (holds_alternative<std::error_code>(res))
+        const auto tx_props_or_err = state::validate_transaction(
+            bal_view, block, tx, rev, block_gas_left, blob_gas_left);
+        if (std::holds_alternative<std::error_code>(tx_props_or_err))
         {
-            const auto ec = std::get<std::error_code>(res);
+            const auto ec = std::get<std::error_code>(tx_props_or_err);
             rejected_txs.push_back({computed_tx_hash, i, ec.message()});
+            continue;
         }
-        else
-        {
-            auto& receipt = get<state::TransactionReceipt>(res);
 
-            const auto& tx_logs = receipt.logs;
+        auto receipt = state::transition(bal_view, block, block_hashes, tx, rev, vm,
+            std::get<state::TransactionProperties>(tx_props_or_err));
 
-            txs_logs.insert(txs_logs.end(), tx_logs.begin(), tx_logs.end());
-            cumulative_gas_used += receipt.gas_used;
-            receipt.cumulative_gas_used = cumulative_gas_used;
-            // EIP-8037/7778: track block-level gas separately.
-            const auto tx_block_gas = (receipt.block_gas_used != 0) ?
-                receipt.block_gas_used : receipt.gas_used;
-            cumulative_block_gas_used += tx_block_gas;
-            if (rev < EVMC_BYZANTIUM)
-                receipt.post_state = state::mpt_hash(block_state);
+        const auto tx_idx = static_cast<uint16_t>(i + 1);
+        bal_builder.record_diff(tx_idx, receipt.state_diff, block_state);
+        block_state.apply(receipt.state_diff);
 
-            block_gas_left -= tx_block_gas;
-            blob_gas_left -= static_cast<int64_t>(tx.blob_gas_used());
-            receipts.emplace_back(std::move(receipt));
-        }
+        const auto& tx_logs = receipt.logs;
+
+        txs_logs.insert(txs_logs.end(), tx_logs.begin(), tx_logs.end());
+        cumulative_gas_used += receipt.gas_used;
+        receipt.cumulative_gas_used = cumulative_gas_used;
+        // EIP-8037/7778: accumulate components for block-level 2D formula.
+        sum_regular_gas += receipt.regular_block_gas;
+        sum_state_gas += receipt.state_block_gas;
+        if (rev < EVMC_BYZANTIUM)
+            receipt.post_state = state::mpt_hash(block_state);
+
+        block_gas_left -= receipt.block_gas_used;
+        blob_gas_left -= static_cast<int64_t>(tx.blob_gas_used());
+        receipts.emplace_back(std::move(receipt));
     }
 
     auto requests = [&]() -> std::optional<std::vector<state::Requests>> {
@@ -104,23 +126,34 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
             collected.emplace_back(std::move(*opt_deposits));
         }
 
-        auto requests_result = system_call_block_end(block_state, block, block_hashes, rev, vm);
+        auto requests_result = state::system_call_block_end(bal_view, block, block_hashes, rev, vm);
         if (!requests_result.has_value())
             return std::nullopt;
-        std::ranges::move(*requests_result, std::back_inserter(collected));
-
+        bal_builder.record_diff(tx_idx_post, requests_result->state_diff, block_state);
+        block_state.apply(requests_result->state_diff);
+        std::ranges::move(requests_result->requests, std::back_inserter(collected));
         return collected;
     }();
 
-    finalize(block_state, rev, block.coinbase, block_reward, block.ommers, block.withdrawals);
+    {
+        auto fin_diff = state::finalize(
+            bal_view, rev, block.coinbase, block_reward, block.ommers, block.withdrawals);
+        bal_builder.record_diff(tx_idx_post, fin_diff, block_state);
+        block_state.apply(fin_diff);
+    }
 
     const auto bloom = compute_bloom_filter(receipts);
 
-    // EIP-8037/7778: use block-level gas for header comparison.
-    const auto header_gas_used =
-        (cumulative_block_gas_used != 0) ? cumulative_block_gas_used : cumulative_gas_used;
+    // EIP-7928: assemble the block access list and commit its hash.
+    const auto bal = bal_builder.build();
+    const auto bal_hash = bal.hash();
+    const auto bal_gas_exceeded = bal.exceeds_gas_limit(static_cast<uint64_t>(block.gas_limit));
+
+    // EIP-8037/7778: block-level 2D gas formula: max(sum_regular, sum_state).
+    const auto header_gas_used = (sum_regular_gas != 0 || sum_state_gas != 0) ?
+        std::max(sum_regular_gas, sum_state_gas) : cumulative_gas_used;
     return {std::move(receipts), std::move(rejected_txs), std::move(requests), header_gas_used,
-        bloom, blob_gas_left, std::move(block_state)};
+        bloom, blob_gas_left, std::move(block_state), bal, bal_hash, bal_gas_exceeded};
 }
 
 bool validate_block(evmc_revision rev, state::BlobParams blob_params, const TestBlock& test_block,
@@ -328,6 +361,11 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                     rev, mining_reward(rev));
 
                 ASSERT_TRUE(res.requests.has_value());
+                if (rev >= EVMC_AMSTERDAM)
+                {
+                    ASSERT_FALSE(res.block_access_list_gas_limit_exceeded)
+                        << "BAL item count exceeds block gas limit / 2000";
+                }
 
                 block_hashes[test_block.expected_block_header.block_number] =
                     test_block.expected_block_header.hash;
@@ -371,6 +409,11 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 EXPECT_EQ(res.gas_used, test_block.expected_block_header.gas_used);
                 EXPECT_EQ(
                     bytes_view{res.bloom}, bytes_view{test_block.expected_block_header.logs_bloom});
+                if (rev >= EVMC_AMSTERDAM)
+                {
+                    EXPECT_EQ(res.block_access_list_hash,
+                        test_block.expected_block_header.block_access_list_hash);
+                }
             }
             else
             {
@@ -409,6 +452,14 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 if (bytes_view{res.bloom} !=
                     bytes_view{test_block.expected_block_header.logs_bloom})
                     continue;
+                if (rev >= EVMC_AMSTERDAM)
+                {
+                    if (res.block_access_list_gas_limit_exceeded)
+                        continue;
+                    if (res.block_access_list_hash !=
+                        test_block.expected_block_header.block_access_list_hash)
+                        continue;
+                }
 
                 EXPECT_TRUE(false) << "Expected block to be invalid but resulted valid";
             }

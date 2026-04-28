@@ -27,7 +27,8 @@ evmc_storage_status Host::set_storage(
     // and EIP-2200 specification https://eips.ethereum.org/EIPS/eip-2200.
 
     auto& storage_slot = m_state.get_storage(addr, key);
-    const auto& [current, original, _] = storage_slot;
+    const auto& current = storage_slot.current;
+    const auto& original = storage_slot.original;
 
     const auto dirty = original != current;
     const auto restored = original == value;
@@ -62,9 +63,10 @@ evmc_storage_status Host::set_storage(
             status = EVMC_STORAGE_MODIFIED_RESTORED;  // X → Y → X
     }
 
-    // In Berlin this is handled in access_storage().
-    if (m_rev < EVMC_BERLIN)
-        m_state.journal_storage_change(addr, key, storage_slot);
+    // Journal the value change. access_storage() also journals the access-status
+    // transition separately (via JournalStorageAccess); pre-Berlin we combine
+    // both via JournalStorageChange.
+    m_state.journal_storage_change(addr, key, storage_slot);
     storage_slot.current = value;  // Update current value.
     return status;
 }
@@ -463,7 +465,10 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
     if (result.status_code != EVMC_SUCCESS)
     {
         static constexpr auto addr_03 = 0x03_address;
-        auto* const acc_03 = m_state.find(addr_03);
+        // Check only the in-tx modified set — a cold fetch would surface the
+        // address to access hooks (e.g. EIP-7928 BAL trackers) even though the
+        // probe is purely an implementation detail of the revert logic.
+        auto* const acc_03 = m_state.find_modified(addr_03);
         const auto is_03_touched = acc_03 != nullptr && acc_03->erase_if_empty;
 
         // Revert.
@@ -471,8 +476,11 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
         m_logs.resize(logs_checkpoint);
 
         // The 0x03 quirk: the touch on this address is never reverted.
+        // Use the access-list insertion path so the re-touch doesn't surface
+        // the address to BAL trackers (EIP-7928) — the probe is evmone-internal
+        // and does not represent a genuine state access.
         if (is_03_touched && m_rev >= EVMC_SPURIOUS_DRAGON)
-            m_state.touch(addr_03);
+            m_state.get_or_insert_for_access(addr_03).erase_if_empty = true;
     }
     return result;
 }
@@ -519,9 +527,14 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
-    auto& acc = m_state.get_or_insert(addr, {.erase_if_empty = true});
+    if (is_precompile(m_rev, addr))
+        return EVMC_ACCESS_WARM;
 
-    if (acc.access_status == EVMC_ACCESS_WARM || is_precompile(m_rev, addr))
+    // Use the "for access" insertion variant: lazy placeholder without a
+    // StateView fetch (keeps trackers from observing accesses that may end up
+    // reverted, per EIP-7928 BAL semantics).
+    auto& acc = m_state.get_or_insert_for_access(addr);
+    if (acc.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;
 
     m_state.journal_access_account(addr);
@@ -531,9 +544,17 @@ evmc_access_status Host::access_account(const address& addr) noexcept
 
 evmc_access_status Host::access_storage(const address& addr, const bytes32& key) noexcept
 {
-    auto& storage_slot = m_state.get_storage(addr, key);
-    m_state.journal_storage_change(addr, key, storage_slot);
-    return std::exchange(storage_slot.access_status, EVMC_ACCESS_WARM);
+    // Warm the slot without fetching its value from the underlying StateView.
+    // Deferring the fetch to State::get_storage() (which runs after the SLOAD
+    // gas check) keeps the cold-read observable only when the read actually
+    // commits, which matches EIP-7928 BAL semantics. The journal only captures
+    // the access-status change — the value itself (current/original) is managed
+    // by subsequent get_storage()/set_storage() calls and their own journaling.
+    auto& acc = m_state.get(addr);
+    const auto [it, fresh] = acc.storage.try_emplace(key);
+    const auto prev_status = std::exchange(it->second.access_status, EVMC_ACCESS_WARM);
+    m_state.journal_storage_access(addr, key, prev_status, fresh);
+    return prev_status;
 }
 
 
