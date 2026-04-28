@@ -55,7 +55,7 @@ struct TransactionCost
     int64_t min = 0;
 };
 
-/// Compute the transaction intrinsic gas 𝑔₀ (Yellow Paper, 6.2) and minimal gas (EIP-7623).
+/// Compute the transaction intrinsic gas 𝑔₀ (Yellow Paper, 6.2) and minimal gas (floor cost).
 TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& tx) noexcept
 {
     static constexpr auto TX_BASE_COST = 21000;
@@ -63,6 +63,7 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     static constexpr auto DATA_TOKEN_COST = 4;
     static constexpr auto INITCODE_WORD_COST = 2;
     static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
+    static constexpr auto TOTAL_COST_FLOOR_PER_BYTE = 16 * 4;
 
     const auto is_create = !tx.to.has_value();
 
@@ -82,9 +83,11 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto intrinsic_cost =
         TX_BASE_COST + create_cost + data_cost + access_list_cost + auth_list_cost + initcode_cost;
 
-    // EIP-7623: Compute the minimum cost for the transaction by. If disabled, just use 0.
-    const auto min_cost =
-        rev >= EVMC_PRAGUE ? TX_BASE_COST + num_tokens * TOTAL_COST_FLOOR_PER_TOKEN : 0;
+    int64_t min_cost = 0;
+    if (rev >= EVMC_AMSTERDAM)  // EIP-7976: unified cost per byte
+        min_cost = TX_BASE_COST + TOTAL_COST_FLOOR_PER_BYTE * static_cast<int64_t>(tx.data.size());
+    else if (rev >= EVMC_PRAGUE)  // EIP-7623: cost per token capturing num of zero-nonzero bytes.
+        min_cost = TX_BASE_COST + TOTAL_COST_FLOOR_PER_TOKEN * num_tokens;
 
     return {intrinsic_cost, min_cost};
 }
