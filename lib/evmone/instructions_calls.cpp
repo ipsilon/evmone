@@ -159,7 +159,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
                 if (state.rev >= EVMC_AMSTERDAM)
                 {
                     // EIP-8037: charge state gas instead of regular ACCOUNT_CREATION_COST.
-                    call_state_gas_charged = 112 * CPSB;
+                    call_state_gas_charged = 112 * compute_cpsb(state.get_tx_context().block_gas_limit);
                     if (!charge_state_gas(gas_left, state, call_state_gas_charged))
                     {
                         state.state_gas_used -= call_state_gas_charged;
@@ -290,6 +290,11 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     else if (state.rev >= EVMC_SHANGHAI && state.rev < EVMC_AMSTERDAM && init_code_size > 0xC000)
         return {EVMC_OUT_OF_GAS, gas_left};
 
+    // EIP-3860/7954: regular init-code word cost. Charged BEFORE the EIP-8037
+    // state-gas charge per EIP-8037 line 126 ("regular gas MUST be applied
+    // first"); otherwise a state charge that succeeds via spill can leave a
+    // committed `state_gas_used` even when the following regular check OOGs,
+    // producing wrong block_gas_used = max(regular_sum, state_sum).
     const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);
     const auto init_code_cost = num_words(init_code_size) * init_code_word_cost;
     if ((gas_left -= init_code_cost) < 0)
@@ -299,7 +304,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     int64_t create_state_gas_charged = 0;
     if (state.rev >= EVMC_AMSTERDAM)
     {
-        create_state_gas_charged = 112 * CPSB;
+        create_state_gas_charged = 112 * compute_cpsb(state.get_tx_context().block_gas_limit);
         if (!charge_state_gas(gas_left, state, create_state_gas_charged))
             return {EVMC_OUT_OF_GAS, gas_left};
     }

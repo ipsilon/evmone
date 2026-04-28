@@ -11,6 +11,7 @@
 #include <evmone/delegation.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
 #include <algorithm>
+#include <unordered_set>
 
 using namespace intx;
 
@@ -638,8 +639,13 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     if (rev >= EVMC_OSAKA && rev < EVMC_AMSTERDAM && tx.gas_limit > MAX_TX_GAS_LIMIT)
         return make_error_code(MAX_GAS_LIMIT_EXCEEDED);
 
+    // EIP-8037: For Amsterdam, per-tx cumulative gas check is relaxed.
+    // But tx.gas_limit must still not exceed the block's total gas limit.
     if (tx.gas_limit > block_gas_left)
-        return make_error_code(GAS_LIMIT_REACHED);
+    {
+        if (rev < EVMC_AMSTERDAM || tx.gas_limit > block.gas_limit)
+            return make_error_code(GAS_LIMIT_REACHED);
+    }
 
     if (tx.max_gas_price < block.base_fee)
         return make_error_code(FEE_CAP_LESS_THAN_BLOCKS);
@@ -812,7 +818,56 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         message.state_gas += delegation_refund;
     }
 
-    const auto result = host.call(message);
+    auto result = host.call(message);
+
+    // EIP-8037: On top-level failure (revert or exceptional halt), refund all state gas
+    // consumed by EVM execution back to the reservoir, since nothing was created.
+    // Exception: depth-0 CREATE collision uses state_gas_used = -1 as a sentinel;
+    // the Host already preserved state_gas_left in that case.
+    if (rev >= EVMC_AMSTERDAM && result.status_code != EVMC_SUCCESS &&
+        result.state_gas_used > 0)
+    {
+        result.raw().state_gas_left += result.state_gas_used;
+        result.raw().state_gas_used = 0;
+    }
+
+    // EIP-8037: Refund state gas for accounts created AND destroyed in the same
+    // transaction (EIP-6780). Covers the account-creation charge, each created
+    // storage slot, and the code-deposit state gas. Capped at state_gas_used.
+    if (rev >= EVMC_AMSTERDAM && result.status_code == EVMC_SUCCESS)
+    {
+        const auto cpsb = evmone::compute_cpsb(block.gas_limit);
+        int64_t selfdestruct_refund = 0;
+        // m_destructed is append-only: if an inner frame reverts and an outer
+        // frame later selfdestructs the same account, the address appears
+        // twice. Dedupe here.
+        std::unordered_set<address, decltype([](const address& a) {
+            return std::hash<std::string_view>{}(
+                std::string_view(reinterpret_cast<const char*>(a.bytes), sizeof(a.bytes)));
+        })> seen;
+        for (const auto& addr : host.get_destructed())
+        {
+            if (!seen.insert(addr).second)
+                continue;
+            const auto* acc = state.find(addr);
+            if (acc == nullptr || !acc->destructed || !acc->just_created)
+                continue;
+            // Account creation state gas.
+            selfdestruct_refund += 112 * cpsb;
+            // Storage creation state gas: each slot written to a non-zero
+            // value during this account's lifetime.
+            for (const auto& [k, v] : acc->storage)
+            {
+                if (v.current != bytes32{})
+                    selfdestruct_refund += 32 * cpsb;
+            }
+            // Code deposit state gas: 1 byte per CPSB.
+            selfdestruct_refund += static_cast<int64_t>(acc->code.size()) * cpsb;
+        }
+        selfdestruct_refund = std::min(selfdestruct_refund, result.state_gas_used);
+        result.raw().state_gas_left += selfdestruct_refund;
+        result.raw().state_gas_used -= selfdestruct_refund;
+    }
 
     // EIP-8037: actual gas consumed = gas_limit - regular_unspent - reservoir_unspent.
     auto gas_used = tx.gas_limit - result.gas_left - result.state_gas_left;
@@ -864,7 +919,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto refund_limit = total_consumed / 5;
         const auto refund = std::min(result.gas_refund, refund_limit);
 
-        // EIP-7623: block gas_used must be at least min_gas_cost.
+        // EIP-7623: per-tx block gas = max(max(regular, state), min_gas_cost).
+        // Used for block_gas_left. Block header uses max(sum_regular, sum_state) in runner.
         gas_used = std::max(block_gas, tx_props.min_gas_cost);
 
         // Sender pays: total consumed minus gas refund.

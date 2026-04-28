@@ -105,11 +105,11 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
         // with huge block_gas_limit under EIP-8037's dynamic CPSB) doesn't leave
         // partial state changes visible to subsequent system calls or user txs.
         const auto checkpoint = state.checkpoint();
-
         const auto input32 = get_input(block, block_hashes);
         const auto res =
             execute_system_call(state, block, block_hashes, rev, vm, addr, code, input32);
-        assert(res.status_code == EVMC_SUCCESS);
+        if (res.status_code != EVMC_SUCCESS)
+            state.rollback(checkpoint);
     }
     // TODO: Should we return empty diff if no system contracts?
     return state.build_diff(rev);

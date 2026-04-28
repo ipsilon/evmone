@@ -281,7 +281,20 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (!new_acc_exists)
         new_acc = &m_state.insert(msg.recipient);
     else if (is_create_collision(*new_acc))
-        return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
+    {
+        auto r = evmc::Result{EVMC_FAILURE};
+        if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
+        {
+            // Mark depth-0 collision with sentinel for block formula.
+            r.raw().state_gas_used = -1;
+        }
+        else
+        {
+            // Preserve reservoir for opcode-level collision.
+            r.raw().state_gas_left = msg.state_gas;
+        }
+        return r;
+    }
     m_state.journal_create(msg.recipient, new_acc_exists);
 
     assert(new_acc != nullptr);
@@ -308,32 +321,14 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     create_msg.input_data = nullptr;
     create_msg.input_size = 0;
 
-    // EIP-8037: Charge CREATE state gas (112 * CPSB) for transaction-level CREATE only.
-    // Opcode-level CREATE already charged in instructions_calls.cpp.
-    int64_t host_state_gas_used = 0;
-    if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
-    {
-        constexpr int64_t create_state_gas = 112 * 1174;
-        if (create_msg.state_gas >= create_state_gas)
-        {
-            create_msg.state_gas -= create_state_gas;
-        }
-        else
-        {
-            const auto remainder = create_state_gas - create_msg.state_gas;
-            create_msg.state_gas = 0;
-            create_msg.gas -= remainder;
-        }
-        host_state_gas_used += create_state_gas;
-    }
+    // EIP-8037: Depth-0 CREATE state gas (112*CPSB) is now in the intrinsic cost.
+    // Opcode-level CREATE (depth > 0) is charged in create_impl.
 
     const bytes_view initcode{msg.input_data, msg.input_size};
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
     {
         result.create_address = msg.recipient;
-        // EIP-8037: propagate state gas from child and account for host charges.
-        result.state_gas_used += host_state_gas_used;
         return result;
     }
 
@@ -359,18 +354,18 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     {
         auto r = evmc::Result{EVMC_FAILURE};
         r.raw().state_gas_left = result.state_gas_left;
-        r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
+        r.raw().state_gas_used = result.state_gas_used;
         return r;
     }
 
     // Code deployment cost.
     auto state_gas_left = result.state_gas_left;
-    auto total_state_gas_used = result.state_gas_used + host_state_gas_used;
+    auto total_state_gas_used = result.state_gas_used;
     if (m_rev >= EVMC_AMSTERDAM)
     {
         // EIP-8037: split code deposit into regular and state components.
         const auto regular_cost = 6 * ((std::ssize(code) + 31) / 32);
-        const auto state_cost = std::ssize(code) * int64_t{1174};
+        const auto state_cost = std::ssize(code) * evmone::compute_cpsb(m_block.gas_limit);
         gas_left -= regular_cost;
         if (gas_left < 0)
         {

@@ -28,16 +28,20 @@ constexpr auto MAX_INITCODE_SIZE_AMSTERDAM = 2 * MAX_CODE_SIZE_AMSTERDAM;
 ///          shifted = raw + 9578
 ///          shift = max(bit_width(shifted) - 5, 0)
 ///          CPSB = max(((shifted >> shift) << shift) - 9578, 1)
+///
+/// Uses 128-bit intermediate to handle block gas limits up to INT64_MAX
+/// (some tests use INT64_MAX as a sentinel) without overflow.
 inline constexpr int64_t compute_cpsb(int64_t block_gas_limit) noexcept
 {
     constexpr uint64_t TARGET_STATE_GROWTH_PER_YEAR = uint64_t{100} * 1024 * 1024 * 1024;
     constexpr uint64_t CPSB_SIGNIFICANT_BITS = 5;
     constexpr uint64_t CPSB_OFFSET = 9578;
+    constexpr uint64_t BLOCKS_PER_YEAR = 2'628'000;
 
     const auto gl = static_cast<uint64_t>(block_gas_limit);
-    const auto numerator = gl * uint64_t{2'628'000};
     const auto denominator = uint64_t{2} * TARGET_STATE_GROWTH_PER_YEAR;
-    const auto raw = (numerator + denominator - 1) / denominator;  // ceil division
+    const auto numerator = static_cast<__uint128_t>(gl) * BLOCKS_PER_YEAR;
+    const auto raw = static_cast<uint64_t>((numerator + denominator - 1) / denominator);
     const auto shifted = raw + CPSB_OFFSET;
     const auto bw = static_cast<uint64_t>(std::bit_width(shifted));
     const auto shift = (bw > CPSB_SIGNIFICANT_BITS) ? bw - CPSB_SIGNIFICANT_BITS : uint64_t{0};

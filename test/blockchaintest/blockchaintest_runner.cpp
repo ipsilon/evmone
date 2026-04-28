@@ -75,7 +75,9 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
     std::vector<state::TransactionReceipt> receipts;
 
     int64_t cumulative_gas_used = 0;
-    int64_t cumulative_block_gas_used = 0;  // EIP-8037/7778: for block header.
+    // EIP-8037/7778: track regular and state gas separately for block-level 2D formula.
+    int64_t sum_regular_gas = 0;
+    int64_t sum_state_gas = 0;
 
     for (size_t i = 0; i < txs.size(); ++i)
     {
