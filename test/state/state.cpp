@@ -6,6 +6,7 @@
 #include "../utils/stdx/utility.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
+#include "system_contracts.hpp"
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
 #include <evmone_precompiles/secp256k1.hpp>
@@ -664,6 +665,22 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     // Cumulative gas used is unknown in this scope.
     TransactionReceipt receipt{
         tx.type, result.status_code, gas_used, {}, host.take_logs(), {}, state.build_diff(rev)};
+
+    // EIP-7708: Emit burn logs for destructed accounts with remaining balance,
+    // in lexicographical order of account address.
+    if (rev >= EVMC_AMSTERDAM)
+    {
+        std::vector<std::pair<address, intx::uint256>> burn_entries;
+        for (const auto& addr : host.get_destructed())
+        {
+            const auto* acc = state.find(addr);
+            if (acc != nullptr && acc->destructed && acc->balance != 0)
+                burn_entries.emplace_back(addr, acc->balance);
+        }
+        std::ranges::sort(burn_entries, {}, &std::pair<address, intx::uint256>::first);
+        for (const auto& [addr, balance] : burn_entries)
+            emit_burn_log(receipt.logs, addr, balance);
+    }
 
     // Cannot put it into constructor call because logs are std::moved from host instance.
     receipt.logs_bloom_filter = compute_bloom_filter(receipt.logs);
