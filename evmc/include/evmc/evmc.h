@@ -202,14 +202,6 @@ struct evmc_message
     size_t code_size;
 };
 
-/** The hashed initcode used for TXCREATE instruction. */
-typedef struct evmc_tx_initcode
-{
-    evmc_bytes32 hash;   /**< The initcode hash. */
-    const uint8_t* code; /**< The code. */
-    size_t code_size;    /**< The length of the code. */
-} evmc_tx_initcode;
-
 /** The transaction and block data for execution. */
 struct evmc_tx_context
 {
@@ -225,8 +217,6 @@ struct evmc_tx_context
     evmc_uint256be blob_base_fee;      /**< The blob base fee (EIP-7516). */
     const evmc_bytes32* blob_hashes;   /**< The array of blob hashes (EIP-4844). */
     size_t blob_hashes_count;          /**< The number of blob hashes (EIP-4844). */
-    const evmc_tx_initcode* initcodes; /**< The array of transaction initcodes (TXCREATE). */
-    size_t initcodes_count;            /**< The number of transaction initcodes (TXCREATE). */
 };
 
 /**
