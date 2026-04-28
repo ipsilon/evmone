@@ -216,7 +216,6 @@ address compute_create2_address(
 
 std::optional<evmc_message> Host::prepare_message(evmc_message msg) noexcept
 {
-    assert(msg.kind != EVMC_EOFCREATE);
     if (msg.depth == 0 || msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
     {
         auto& sender_acc = m_state.get(msg.sender);
@@ -329,7 +328,6 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
 evmc::Result Host::execute_message(const evmc_message& msg) noexcept
 {
-    assert(msg.kind != EVMC_EOFCREATE);
     if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
         return create(msg);
 

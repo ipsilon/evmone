@@ -19,9 +19,6 @@ constexpr auto create_address = 0xc9ea7ed000000000000000000000000000000001_addre
 /// The gas limit for contract creation.
 constexpr auto create_gas = 10'000'000;
 
-/// MAGIC bytes denoting an EOF container.
-constexpr uint8_t MAGIC[] = {0xef, 0x00};
-
 auto bench(MockedHost& host,
            evmc::VM& vm,
            evmc_revision rev,
@@ -60,11 +57,6 @@ auto bench(MockedHost& host,
             << " (avg of " << num_iterations << " iterations)\n";
     }
 }
-
-bool is_eof_container(bytes_view code)
-{
-    return code.size() >= 2 && code[0] == MAGIC[0] && code[1] == MAGIC[1];
-}
 }  // namespace
 
 int run(VM& vm,
@@ -90,7 +82,7 @@ int run(VM& vm,
     if (create)
     {
         evmc_message create_msg{};
-        create_msg.kind = is_eof_container(code) ? EVMC_EOFCREATE : EVMC_CREATE;
+        create_msg.kind = EVMC_CREATE;
         create_msg.recipient = create_address;
         create_msg.gas = create_gas;
 

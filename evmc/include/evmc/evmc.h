@@ -80,7 +80,6 @@ enum evmc_call_kind
     EVMC_CALLCODE = 2,     /**< Request CALLCODE. */
     EVMC_CREATE = 3,       /**< Request CREATE. */
     EVMC_CREATE2 = 4,      /**< Request CREATE2. Valid since Constantinople.*/
-    EVMC_EOFCREATE = 5     /**< Request EOFCREATE. Valid since Osaka.*/
 };
 
 /** The flags for ::evmc_message. */
@@ -170,8 +169,7 @@ struct evmc_message
     /**
      * The optional value used in new contract address construction.
      *
-     * Needed only for a Host to calculate created address when kind is ::EVMC_CREATE2 or
-     * ::EVMC_EOFCREATE.
+     * Needed only for a Host to calculate created address when kind is ::EVMC_CREATE2.
      * Ignored in evmc_execute_fn().
      */
     evmc_bytes32 create2_salt;
@@ -182,7 +180,7 @@ struct evmc_message
      * For ::EVMC_CALLCODE or ::EVMC_DELEGATECALL this may be different from
      * the evmc_message::recipient.
      * Not required when invoking evmc_execute_fn(), only when invoking evmc_call_fn().
-     * Ignored if kind is ::EVMC_CREATE, ::EVMC_CREATE2 or ::EVMC_EOFCREATE.
+     * Ignored if kind is ::EVMC_CREATE or ::EVMC_CREATE2.
      *
      * In case of ::EVMC_CAPABILITY_PRECOMPILES implementation, this fields should be inspected
      * to identify the requested precompile.
