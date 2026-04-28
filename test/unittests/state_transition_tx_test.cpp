@@ -225,3 +225,59 @@ TEST_F(state_transition, tx_data_floor_osaka_uses_eip7623)
 
     expect.gas_used = 21000 + MIN_GAS;
 }
+
+TEST_F(state_transition, access_list_cost_amsterdam_address_only)
+{
+    // EIP-7981: an access-list address adds 64 * 20 = 1280 gas to the intrinsic cost.
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    tx.access_list = {{To, {}}};
+    // intrinsic = 21000 + 2400 (address) + 1280 (EIP-7981 address) = 24680
+    // floor     = 21000 + 64 * 20                                  = 22280
+    expect.gas_used = 24680;
+}
+
+TEST_F(state_transition, access_list_cost_amsterdam_with_key)
+{
+    // EIP-7981: a storage key adds 64 * 32 = 2048 gas to the intrinsic cost.
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    tx.access_list = {{To, {0x01_bytes32}}};
+    // intrinsic = 21000 + 2400 + 1900 + 1280 + 2048 = 28628
+    // floor     = 21000 + 64 * (20 + 32)            = 24328
+    expect.gas_used = 28628;
+}
+
+TEST_F(state_transition, access_list_cost_amsterdam_multiple)
+{
+    // EIP-7981: 2 addresses + 3 storage keys.
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    tx.access_list = {{To, {0x01_bytes32}}, {Sender, {0x02_bytes32, 0x03_bytes32}}};
+    // intrinsic = 21000 + 2*2400 + 3*1900 + 2*1280 + 3*2048 = 40204
+    // floor     = 21000 + 64 * (2*20 + 3*32)                = 29704
+    expect.gas_used = 40204;
+}
+
+TEST_F(state_transition, access_list_cost_osaka_unchanged)
+{
+    // EIP-7981 is not yet active in Osaka; the access-list cost is unchanged.
+    rev = EVMC_OSAKA;
+    tx.to = To;
+    tx.access_list = {{To, {0x01_bytes32}}};
+    // intrinsic = 21000 + 2400 + 1900 = 25300
+    expect.gas_used = 25300;
+}
+
+TEST_F(state_transition, access_list_floor_amsterdam)
+{
+    // EIP-7981: access-list bytes also bump the floor when execution is small.
+    // 100 zero calldata bytes + 1 access-list address.
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    tx.data = bytes(100, 0x00);
+    tx.access_list = {{To, {}}};
+    // intrinsic = 21000 + 100*4 + 2400 + 1280 = 25080
+    // floor     = 21000 + 64*(100 + 20)       = 28680   <-- dominates
+    expect.gas_used = 28680;
+}
