@@ -74,9 +74,11 @@ evmc_storage_status Host::set_storage(
             status = EVMC_STORAGE_MODIFIED_RESTORED;  // X → Y → X
     }
 
-    // In Berlin this is handled in access_storage().
-    if (m_rev < EVMC_BERLIN)
-        m_state.journal_storage_change(addr, key, storage_slot);
+    // Journal the value change. From Berlin onward access_storage() journals the
+    // access-status transition separately via JournalStorageAccess so the warm
+    // flag and the slot value can roll back independently (EIP-7928 needs the
+    // warm bit to survive certain reverts that discard the value).
+    m_state.journal_storage_change(addr, key, storage_slot);
     storage_slot.current = value;  // Update current value.
     return status;
 }
@@ -555,9 +557,24 @@ evmc_access_status Host::access_account(const address& addr) noexcept
 
 evmc_access_status Host::access_storage(const address& addr, const bytes32& key) noexcept
 {
-    auto& storage_slot = m_state.get_storage(addr, key);
-    m_state.journal_storage_change(addr, key, storage_slot);
-    return std::exchange(storage_slot.access_status, EVMC_ACCESS_WARM);
+    // Warm the slot without fetching its value from the underlying StateView.
+    // Deferring the fetch to State::get_storage() (which runs after the SLOAD
+    // gas check) keeps the cold-read observable only when the read actually
+    // commits, which matches EIP-7928 BAL semantics. The journal only captures
+    // the access-status change — the value itself (current/original) is managed
+    // by subsequent get_storage()/set_storage() calls and their own journaling.
+    //
+    // Invariant: `m_state.get(addr)` asserts the account is already loaded.
+    // SLOAD/SSTORE always operate on `state.msg->recipient`, whose code was
+    // already loaded by execute_message() before the opcode dispatch, so
+    // `find(addr)` is guaranteed to have succeeded. Any future opcode that
+    // calls `access_storage` on a non-recipient address must lazy-load first
+    // (e.g. via `m_state.find(addr)` and the placeholder upgrade path).
+    auto& acc = m_state.get(addr);
+    const auto [it, fresh] = acc.storage.try_emplace(key);
+    const auto prev_status = std::exchange(it->second.access_status, EVMC_ACCESS_WARM);
+    m_state.journal_storage_access(addr, key, prev_status, fresh);
+    return prev_status;
 }
 
 

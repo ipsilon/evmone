@@ -642,6 +642,13 @@ inline Result extcodecopy(StackTop stack, int64_t gas_left, ExecutionState& stat
         if (const auto num_bytes_to_clear = s - num_bytes_copied; num_bytes_to_clear > 0)
             std::memset(&state.memory[dst + num_bytes_copied], 0, num_bytes_to_clear);
     }
+    else if (state.rev >= EVMC_AMSTERDAM)
+    {
+        // EIP-7928: fetch target code even when copying 0 bytes so the BAL
+        // tracker observes the access (matches geth's opExtCodeCopy, which
+        // always calls GetCode regardless of size).
+        (void)state.host.copy_code(addr, 0, nullptr, 0);
+    }
 
     return {EVMC_SUCCESS, gas_left};
 }
