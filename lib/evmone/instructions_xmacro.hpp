@@ -111,7 +111,7 @@
     ON_OPCODE_IDENTIFIER(OP_BASEFEE, basefee)               \
     ON_OPCODE_IDENTIFIER(OP_BLOBHASH, blobhash)             \
     ON_OPCODE_IDENTIFIER(OP_BLOBBASEFEE, blobbasefee)       \
-    ON_OPCODE_UNDEFINED(0x4b)                               \
+    ON_OPCODE_IDENTIFIER(OP_SLOTNUM, slotnum)               \
     ON_OPCODE_UNDEFINED(0x4c)                               \
     ON_OPCODE_UNDEFINED(0x4d)                               \
     ON_OPCODE_UNDEFINED(0x4e)                               \

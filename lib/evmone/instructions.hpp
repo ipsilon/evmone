@@ -568,6 +568,11 @@ inline void blobbasefee(StackTop stack, ExecutionState& state) noexcept
     stack.push(intx::be::load<uint256>(state.get_tx_context().blob_base_fee));
 }
 
+inline void slotnum(StackTop stack, ExecutionState& state) noexcept
+{
+    stack.push(state.get_tx_context().block_slot_number);
+}
+
 inline Result extcodesize(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     auto& x = stack.top();
