@@ -332,6 +332,26 @@ Account& State::get_or_insert(const address& addr, Account account)
     return insert(addr, std::move(account));
 }
 
+Account& State::get_or_insert_for_access(const address& addr)
+{
+    // Single hash-table op: hit returns the existing entry as-is (loaded or
+    // warm-only placeholder); miss default-constructs an Account and we tag
+    // it as an unloaded placeholder so a subsequent `find()` lazy-fetches
+    // the real state.
+    //
+    // `erase_if_empty` is intentionally left at its default `false`.
+    // EIP-2929 access-warming does not constitute an EIP-158 "touch":
+    // if a later `find()` upgrades this placeholder to a real account
+    // (e.g. a CREATE collision on an EIP-7610 storage-only account, or
+    // a SELFDESTRUCT beneficiary access), the loaded account must not
+    // be marked for end-of-tx deletion. Genuine touches (balance
+    // transfer, etc.) record the flag separately via `touch()`.
+    auto [it, inserted] = m_modified.try_emplace(addr);
+    if (inserted)
+        it->second.loaded = false;
+    return it->second;
+}
+
 bytes_view State::get_code(const address& addr)
 {
     auto* a = find(addr);
