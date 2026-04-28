@@ -342,7 +342,18 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     const bytes_view code{result.output_data, result.output_size};
 
+    // EIP-3541: Reject new contract code starting with the 0xEF byte.
+    // Must be checked before code deposit gas to avoid charging for rejected code.
+    if (!code.empty() && m_rev >= EVMC_LONDON && code[0] == 0xEF)
+    {
+        auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+        r.raw().state_gas_left = result.state_gas_left;
+        r.raw().state_gas_used = result.state_gas_used;
+        return r;
+    }
+
     // EIP-7954: Amsterdam increases max code size.
+    // Checked before code deposit gas (per geth) to avoid inflating state gas.
     const auto max_code_size = m_rev >= EVMC_AMSTERDAM ? MAX_CODE_SIZE_AMSTERDAM : MAX_CODE_SIZE;
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > static_cast<size_t>(max_code_size))
     {
@@ -353,37 +364,69 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     }
 
     // Code deployment cost.
-    const auto cost = std::ssize(code) * 200;
-    gas_left -= cost;
-    if (gas_left < 0)
+    auto state_gas_left = result.state_gas_left;
+    auto total_state_gas_used = result.state_gas_used + host_state_gas_used;
+    if (m_rev >= EVMC_AMSTERDAM)
     {
-        if (m_rev == EVMC_FRONTIER)
-            return evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient};
-        auto r = evmc::Result{EVMC_FAILURE};
-        r.raw().state_gas_left = result.state_gas_left;
-        r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
-        return r;
+        // EIP-8037: split code deposit into regular and state components.
+        const auto regular_cost = 6 * ((std::ssize(code) + 31) / 32);
+        const auto state_cost = std::ssize(code) * int64_t{1174};
+        gas_left -= regular_cost;
+        if (gas_left < 0)
+        {
+            auto r = evmc::Result{EVMC_FAILURE};
+            r.raw().state_gas_left = state_gas_left;
+            r.raw().state_gas_used = total_state_gas_used;
+            return r;
+        }
+        // Draw state cost from reservoir, spill to gas_left.
+        const auto saved_state_gas = state_gas_left;
+        if (state_gas_left >= state_cost)
+        {
+            state_gas_left -= state_cost;
+        }
+        else
+        {
+            const auto remainder = state_cost - state_gas_left;
+            state_gas_left = 0;
+            if ((gas_left -= remainder) < 0)
+            {
+                // Code deposit failed — restore reservoir.
+                state_gas_left = saved_state_gas;
+                auto r = evmc::Result{EVMC_FAILURE};
+                r.raw().state_gas_left = state_gas_left;
+                r.raw().state_gas_used = total_state_gas_used;
+                return r;
+            }
+        }
+        total_state_gas_used += state_cost;
+    }
+    else
+    {
+        const auto cost = std::ssize(code) * 200;
+        gas_left -= cost;
+        if (gas_left < 0)
+        {
+            if (m_rev == EVMC_FRONTIER)
+                return evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund,
+                    msg.recipient};
+            auto r = evmc::Result{EVMC_FAILURE};
+            r.raw().state_gas_left = state_gas_left;
+            r.raw().state_gas_used = total_state_gas_used;
+            return r;
+        }
     }
 
     if (!code.empty())
     {
-        // EIP-3541: Reject new contract code starting with the 0xEF byte.
-        if (m_rev >= EVMC_LONDON && code[0] == 0xEF)
-        {
-            auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
-            r.raw().state_gas_left = result.state_gas_left;
-            r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
-            return r;
-        }
-
         new_acc->code_hash = keccak256(code);
         new_acc->code = code;
         new_acc->code_changed = true;
     }
 
     auto r = evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
-    r.raw().state_gas_left = result.state_gas_left;
-    r.raw().state_gas_used = result.state_gas_used + host_state_gas_used;
+    r.raw().state_gas_left = state_gas_left;
+    r.raw().state_gas_used = total_state_gas_used;
     return r;
 }
 
