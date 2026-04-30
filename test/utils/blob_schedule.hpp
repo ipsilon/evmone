@@ -10,8 +10,9 @@ namespace evmone::test
 using BlobSchedule = std::unordered_map<std::string, state::BlobParams>;
 
 /// Returns the hardcoded blob params for the given EVM revision.
-/// After Prague, the blob params must be derived from config.
-state::BlobParams get_blob_params(evmc_revision rev);
+/// After Prague, the blob params should be taken from a BPO config. However, for unit tests this
+/// function still can be used to get a reasonable default.
+state::BlobParams get_blob_params(evmc_revision rev) noexcept;
 
 /// Returns the blob params for the given EVM revision and a blob schedule.
 state::BlobParams get_blob_params(evmc_revision rev, const BlobSchedule& blob_schedule);
