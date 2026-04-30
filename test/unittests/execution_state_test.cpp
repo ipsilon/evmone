@@ -24,9 +24,11 @@ TEST(execution_state, construct)
     evmc_message msg{};
     msg.gas = -1;
     const evmc_host_interface host_interface{};
-    const uint8_t code[]{0x0f};
-    const evmone::ExecutionState st{
-        msg, EVMC_MAX_REVISION, host_interface, nullptr, {code, std::size(code)}};
+    // Empty code so the constructor's eager tx_context fetch is skipped —
+    // the host_interface here is zero-initialized (null fn pointers) and
+    // is unsafe to call.  This test only verifies the trivial field
+    // initialisation, not behavior under a real host.
+    const evmone::ExecutionState st{msg, EVMC_MAX_REVISION, host_interface, nullptr, {}};
 
     EXPECT_EQ(st.memory.size(), 0);
     EXPECT_EQ(st.msg, &msg);
@@ -105,9 +107,9 @@ TEST(execution_state, reset_advanced)
         evmc_message msg2{};
         msg2.gas = 13;
         const evmc_host_interface host_interface2{};
-        const uint8_t code2[]{0x80, 0x81};
-
-        st.reset(msg2, EVMC_HOMESTEAD, host_interface2, nullptr, {code2, std::size(code2)});
+        // Empty code so the eager tx_context fetch is skipped — see note in
+        // the construct test above.
+        st.reset(msg2, EVMC_HOMESTEAD, host_interface2, nullptr, {});
 
         // TODO: We are not able to test HostContext with current API. It may require an execution
         //       test.

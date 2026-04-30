@@ -142,6 +142,13 @@ public:
     size_t output_size = 0;
 
 private:
+    /// Cached transaction context.
+    ///
+    /// Fetched eagerly at the start of each top-level execute() (via reset()
+    /// or the message constructor) — provided the code being executed is
+    /// non-empty.  Empty-code calls (calls to EOAs, precompiles wrapped by
+    /// the host, or contracts with no runtime code) skip the fetch since
+    /// no instruction inside the dispatch loop will ever read it.
     evmc_tx_context m_tx = {};
 
 public:
@@ -164,7 +171,10 @@ public:
         const evmc_host_interface& host_interface, evmc_host_context* host_ctx,
         bytes_view _code) noexcept
       : msg{&message}, host{host_interface, host_ctx}, rev{revision}, original_code{_code}
-    {}
+    {
+        if (!_code.empty())
+            m_tx = host.get_tx_context();
+    }
 
     /// Resets the contents of the ExecutionState so that it could be reused.
     void reset(const evmc_message& message, evmc_revision revision,
@@ -181,16 +191,16 @@ public:
         status = EVMC_SUCCESS;
         output_offset = 0;
         output_size = 0;
-        m_tx = {};
+        // Eager tx_context fetch — guarded by non-empty code so
+        // EOA/precompile-shaped frames don't pay for an unused vcall.
+        if (!_code.empty())
+            m_tx = host.get_tx_context();
+        else
+            m_tx = {};
     }
 
     [[nodiscard]] bool in_static_mode() const { return (msg->flags & EVMC_STATIC) != 0; }
 
-    const evmc_tx_context& get_tx_context() noexcept
-    {
-        if (INTX_UNLIKELY(m_tx.block_timestamp == 0))
-            m_tx = host.get_tx_context();
-        return m_tx;
-    }
+    [[nodiscard]] const evmc_tx_context& get_tx_context() const noexcept { return m_tx; }
 };
 }  // namespace evmone
