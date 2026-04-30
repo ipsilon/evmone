@@ -103,6 +103,16 @@ int64_t process_authorization_list(
             continue;
 
         // 2. Verify the nonce is less than 2**64 - 1.
+        // TODO: investigate divergence from geth/erigon/revm/nethermind/besu found by
+        // evmone-fuzz on 2026-04-29. Inputs with `auth.nonce == NonceMax - 1` and
+        // `authority.nonce == NonceMax - 1` (e.g. when r = secp256k1 G.x makes both
+        // auth tuples recover to the SENDER, which the tx-nonce bump has just lifted
+        // to that value) cause evmone to apply the auth and increment authority.nonce
+        // to NonceMax (the EIP-2681 sentinel). Every other client rejects, leaving the
+        // SENDER unchanged. Decide whether the fix belongs here (skip when post-bump
+        // would land on NonceMax) or post-recovery (skip when authority.nonce + 1
+        // would overflow per EIP-2681); also confirm against the latest EIP-7702 text
+        // and execution-spec test fixtures before tightening.
         if (auth.nonce == Account::NonceMax)
             continue;
 
