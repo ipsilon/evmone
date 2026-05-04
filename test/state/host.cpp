@@ -217,40 +217,48 @@ address compute_create2_address(
 std::optional<evmc_message> Host::prepare_message(evmc_message msg) noexcept
 {
     assert(msg.kind != EVMC_EOFCREATE);
-    if (msg.depth == 0 || msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
+    // EIP-2681 sender-nonce check + bump for inner CREATE/CREATE2.
+    // For depth==0 (top-level tx call) the sender's nonce was already bumped
+    // during transaction validation; checking again here breaks legitimate
+    // EIP-7702 sequences where a successful auth-list pushes the sender's
+    // nonce to NonceMax (a legal terminal state per EIP-2681's rationale).
+    if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
     {
         auto& sender_acc = m_state.get(msg.sender);
 
-        // EIP-2681 (already checked for depth 0 during transaction validation).
-        if (sender_acc.nonce == Account::NonceMax)
-            return {};  // Light early exception.
-
+        // For inner CREATE: enforce EIP-2681 and bump the sender's nonce.
+        // For depth==0 CREATE: the sender's nonce was already validated and
+        // bumped during transaction validation, so don't check or bump here.
+        // (Doing so would also break EIP-7702 sequences where the auth-list
+        // pushes the top-level sender's nonce to NonceMax — a legal terminal
+        // state per EIP-2681's rationale, but one that the previous depth==0
+        // check incorrectly rejected as an exception.)
         if (msg.depth != 0)
         {
+            if (sender_acc.nonce == Account::NonceMax)
+                return {};  // Light early exception.
+
             m_state.journal_bump_nonce(msg.sender);
             ++sender_acc.nonce;  // Bump sender nonce.
         }
 
-        if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
+        // Compute and set the address of the account being created.
+        assert(msg.recipient == address{});
+        assert(msg.code_address == address{});
+        // Nonce was already incremented, but creation calculation needs non-incremented value
+        assert(sender_acc.nonce != 0);
+        const auto creation_sender_nonce = sender_acc.nonce - 1;
+        if (msg.kind == EVMC_CREATE)
+            msg.recipient = compute_create_address(msg.sender, creation_sender_nonce);
+        else
         {
-            // Compute and set the address of the account being created.
-            assert(msg.recipient == address{});
-            assert(msg.code_address == address{});
-            // Nonce was already incremented, but creation calculation needs non-incremented value
-            assert(sender_acc.nonce != 0);
-            const auto creation_sender_nonce = sender_acc.nonce - 1;
-            if (msg.kind == EVMC_CREATE)
-                msg.recipient = compute_create_address(msg.sender, creation_sender_nonce);
-            else
-            {
-                assert(msg.kind == EVMC_CREATE2);
-                msg.recipient = compute_create2_address(
-                    msg.sender, msg.create2_salt, {msg.input_data, msg.input_size});
-            }
-
-            // By EIP-2929, the access to new created address is never reverted.
-            access_account(msg.recipient);
+            assert(msg.kind == EVMC_CREATE2);
+            msg.recipient = compute_create2_address(
+                msg.sender, msg.create2_salt, {msg.input_data, msg.input_size});
         }
+
+        // By EIP-2929, the access to new created address is never reverted.
+        access_account(msg.recipient);
     }
 
     return msg;
