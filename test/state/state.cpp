@@ -83,11 +83,14 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto intrinsic_cost =
         TX_BASE_COST + create_cost + data_cost + access_list_cost + auth_list_cost + initcode_cost;
 
-    int64_t min_cost = 0;
-    if (rev >= EVMC_AMSTERDAM)  // EIP-7976: unified cost per byte
-        min_cost = TX_BASE_COST + TOTAL_COST_FLOOR_PER_BYTE * static_cast<int64_t>(tx.data.size());
-    else if (rev >= EVMC_PRAGUE)  // EIP-7623: cost per token capturing num of zero-nonzero bytes.
-        min_cost = TX_BASE_COST + TOTAL_COST_FLOOR_PER_TOKEN * num_tokens;
+    int64_t data_min_cost = 0;
+    if (rev >= EVMC_AMSTERDAM)  // Unified cost per byte (EIP-7976).
+        data_min_cost = TOTAL_COST_FLOOR_PER_BYTE * static_cast<int64_t>(tx.data.size());
+    else if (rev >= EVMC_PRAGUE)  // Cost per token capturing num of zero-nonzero bytes (EIP-7623).
+        data_min_cost = TOTAL_COST_FLOOR_PER_TOKEN * num_tokens;
+
+    // Compute "floor" cost (EIP-7623).
+    const auto min_cost = (rev >= EVMC_PRAGUE) ? TX_BASE_COST + data_min_cost : 0;
 
     return {intrinsic_cost, min_cost};
 }
