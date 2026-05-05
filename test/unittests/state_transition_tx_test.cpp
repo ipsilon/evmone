@@ -257,3 +257,14 @@ TEST_F(state_transition, access_list_floor_amsterdam)
     // floor     = 21000 + 64*(100 + 20)       = 28680  (dominates)
     expect.gas_used = 28680;
 }
+
+TEST_F(state_transition, invalid_access_list_amsterdam_gas_limit_below_floor)
+{
+    // EIP-7981: gas limit must cover the floor (28680) — pre-7981 intrinsic (23800) is not enough.
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    tx.data = bytes(100, 0x00);
+    tx.access_list = {{To, {}}};
+    tx.gas_limit = 28679;
+    expect.tx_error = INTRINSIC_GAS_TOO_LOW;
+}
