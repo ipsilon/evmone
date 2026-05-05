@@ -38,8 +38,8 @@ option(BENCHMARK_ENABLE_LIBPFM "Enable performance counters provided by libpfm" 
 
 hunter_config(
     benchmark
-    VERSION 1.9.4
+    VERSION 1.9.5
     CMAKE_ARGS BENCHMARK_ENABLE_LIBPFM=${BENCHMARK_ENABLE_LIBPFM}
-    URL https://github.com/google/benchmark/archive/v1.9.4.tar.gz
-    SHA1 46984dfbfc5fbfa42a0b60bfd3a962ef0d7d1c93
+    URL https://github.com/google/benchmark/archive/v1.9.5.tar.gz
+    SHA1 1923d665fc134fca137fea0951403d043b5b7732
 )
