@@ -79,8 +79,8 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto data_cost = num_tokens * DATA_TOKEN_COST;
 
     const auto [num_addresses, num_storage_keys] = count_access_list(tx.access_list);
-    const auto access_list_num_bytes = static_cast<int64_t>(
-        num_addresses * sizeof(address) + num_storage_keys * sizeof(bytes32));
+    const auto access_list_num_bytes =
+        static_cast<int64_t>(num_addresses * sizeof(address) + num_storage_keys * sizeof(bytes32));
     const auto access_list_cost = static_cast<int64_t>(
         num_addresses * ACCESS_LIST_ADDRESS_COST + num_storage_keys * ACCESS_LIST_STORAGE_KEY_COST);
 
