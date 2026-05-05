@@ -113,8 +113,12 @@ struct TransactionReceipt
     Transaction::Type type = Transaction::Type::legacy;
     evmc_status_code status = EVMC_INTERNAL_ERROR;
 
-    /// Amount of gas used by this transaction.
+    /// Amount of gas used by this transaction (after refund, with the min gas applied).
     int64_t gas_used = 0;
+
+    /// Amount of gas refund applied to gas_used (capped by the min gas cost of EIP-7623).
+    /// Effectively, the difference between "block" and "user" gas.
+    int64_t gas_refund = 0;
 
     /// Amount of gas used by this and previous transactions in the block.
     int64_t cumulative_gas_used = 0;

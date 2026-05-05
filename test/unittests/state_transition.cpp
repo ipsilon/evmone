@@ -84,6 +84,10 @@ void state_transition::TearDown()
         {
             EXPECT_EQ(receipt.gas_used, *expect.gas_used);
         }
+        if (expect.gas_refund.has_value())
+        {
+            EXPECT_EQ(receipt.gas_refund, *expect.gas_refund);
+        }
         // Update default expectations - valid transaction means coinbase exists unless explicitly
         // requested otherwise
         if (!expect.post.contains(Coinbase))

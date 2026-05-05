@@ -58,6 +58,10 @@ protected:
         /// The expected amount of gas used by the transaction.
         std::optional<int64_t> gas_used;
 
+        /// The expected EIP-7778 block-side gas refund stored on the receipt
+        /// (`gas_used + gas_refund` equals `max(pre-refund gas, EIP-7623 floor)`).
+        std::optional<int64_t> gas_refund;
+
         /// The expected post-execution state.
         std::unordered_map<address, ExpectedAccount> post;
 
