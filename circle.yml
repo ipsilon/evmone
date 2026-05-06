@@ -53,7 +53,7 @@ executors:
   linux-base:
     docker:
       - image: cimg/base:edge-22.04
-    resource_class: small
+    resource_class: medium
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   macos:
