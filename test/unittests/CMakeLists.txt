@@ -84,6 +84,13 @@ target_sources(
 )
 target_link_libraries(evmone-unittests PRIVATE evmone evmone::evmmax evmone::experimental evmone::state evmone::testutils GTest::gtest GTest::gtest_main)
 target_include_directories(evmone-unittests PRIVATE ${evmone_private_include_dir})
+target_precompile_headers(
+    evmone-unittests PRIVATE
+    <intx/intx.hpp>
+    <evmc/evmc.hpp>
+    <evmc/hex.hpp>
+    <gtest/gtest.h>
+)
 
 gtest_discover_tests(
     evmone-unittests
