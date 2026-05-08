@@ -6,6 +6,8 @@
 
 namespace evmone::crypto
 {
+#ifndef __x86_64__
+// On x86_64 the asm implementation in mul_mont.cpp provides mul_amm_256.
 void mul_amm_256(std::span<uint64_t, 4> r, std::span<const uint64_t, 4> x,
     std::span<const uint64_t, 4> y, std::span<const uint64_t, 4> mod, uint64_t mod_inv) noexcept
 {
@@ -51,4 +53,5 @@ void mul_amm_256(std::span<uint64_t, 4> r, std::span<const uint64_t, 4> x,
 
     std::ranges::copy(t, r.begin());
 }
+#endif  // !__x86_64__
 }  // namespace evmone::crypto

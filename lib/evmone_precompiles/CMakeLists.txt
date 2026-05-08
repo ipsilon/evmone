@@ -29,6 +29,7 @@ target_sources(
     modexp.cpp
     mulmod.hpp
     mulmod.cpp
+    mul_mont.cpp
     ripemd160.hpp
     ripemd160.cpp
     secp256k1.hpp

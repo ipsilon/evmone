@@ -34,7 +34,8 @@ inline void init_mul(uint64_t& a0, uint64_t& a1, uint64_t& a2, uint64_t& a3, uin
         "adcq $0, %[a4]"
         : [a0] "=&r"(a0), [a1] "=&r"(a1), [a2] "=&r"(a2),
           [a3] "=&r"(a3), [a4] "=&r"(a4), [t] "=&r"(t)
-        : [x] "r"(&x), "d"(y_word), "m"(x));
+        : [x] "r"(&x), "d"(y_word), "m"(x)
+        : "cc");
 }
 
 /// Multiply-accumulate: a[0..3] += x[0..3] * y_word (in rdx), producing carry c.
@@ -107,12 +108,15 @@ inline void reduce(uint64_t a0, uint64_t& a1, uint64_t& a2, uint64_t& a3, uint64
 /// The no-tree-vectorize attribute prevents GCC from replacing the four scalar stores
 /// at the end with vmovdqa, which causes a store-forwarding stall.
 [[gnu::target("bmi2,adx"), gnu::optimize("no-tree-vectorize")]]
-#ifdef __clang__
-[[clang::preserve_none]]
-#endif
-void mont_amm_256(mem256& r, const mem256& x, const mem256& y, const mem256& mod,
+void mul_amm_256(std::span<uint64_t, 4> r_sp, std::span<const uint64_t, 4> x_sp,
+    std::span<const uint64_t, 4> y_sp, std::span<const uint64_t, 4> mod_sp,
     uint64_t mod_inv) noexcept
 {
+    auto& r = *reinterpret_cast<mem256*>(r_sp.data());
+    const auto& x = *reinterpret_cast<const mem256*>(x_sp.data());
+    const auto& y = *reinterpret_cast<const mem256*>(y_sp.data());
+    const auto& mod = *reinterpret_cast<const mem256*>(mod_sp.data());
+
     uint64_t t0, t1, t2, t3, t4;
 
     // Iteration 0: initial multiply x[] * y[0].

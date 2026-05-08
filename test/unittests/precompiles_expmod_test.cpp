@@ -7,6 +7,8 @@
 #include <intx/intx.hpp>
 #include <test/state/precompiles_internal.hpp>
 #include <test/utils/utils.hpp>
+
+#include <random>
 #ifdef EVMONE_PRECOMPILES_GMP
 #include <test/state/precompiles_gmp.hpp>
 #endif
@@ -365,6 +367,137 @@ TEST_P(expmod, inputs)
         const auto result =
             run(*evmc::from_hex(base_hex), *evmc::from_hex(exp_hex), *evmc::from_hex(mod_hex));
         EXPECT_EQ(hex(result), expected_result_hex);
+    }
+}
+
+TEST_P(expmod, asm_amm_4word_corner_cases)
+{
+    // Repro vectors for bugs in the 256-bit Montgomery-multiply asm path
+    // (lib/evmone_precompiles/mul_mont.cpp), which is exercised whenever the
+    // trimmed modulus is exactly 4 words (32 bytes, top byte non-zero) and odd.
+    //
+    // Strategy: pick (base, exp, mod) so that the AMM iteration's t4 carry word
+    // and the mul_add CF-chain residual reach their corner-case values.
+    // Cross-check against intx::mulmod-based reference.
+
+    using namespace intx;
+
+    auto powmod_ref = [](uint256 base, uint256 exp, uint256 mod) {
+        base = base % mod;
+        uint256 r = 1;
+        while (exp != 0)
+        {
+            if ((exp & 1) != 0)
+                r = mulmod(r, base, mod);
+            exp >>= 1;
+            if (exp != 0)
+                base = mulmod(base, base, mod);
+        }
+        return r;
+    };
+
+    auto to_be32 = [](uint256 v) {
+        evmc::bytes out(32, 0);
+        be::unsafe::store(out.data(), v);
+        return out;
+    };
+
+    struct Case
+    {
+        uint256 base;
+        uint256 exp;
+        uint256 mod;  // must be odd, top word != 0
+        const char* note;
+    };
+
+    // 2^256 - 189 (odd, near max — secp256k1-style top-word saturation).
+    constexpr auto MOD_NEAR_MAX = ~uint256{} - 188;
+    // 2^256 - 1 (max odd).
+    constexpr auto MOD_MAX_ODD = ~uint256{};
+    // 2^255 - 19 (Curve25519 modulus shape, smaller top byte).
+    constexpr auto MOD_25519 = (uint256{1} << 255) - 19;
+
+    const std::array cases{
+        // setb-truncation suspects: stress r_carry in mul_add by maximizing the
+        // pre-asm t4 value via (base = mod-1)^large_exp.
+        Case{MOD_NEAR_MAX - 1, MOD_NEAR_MAX, MOD_NEAR_MAX, "base=mod-1, exp=mod, near-max odd"},
+        Case{MOD_MAX_ODD - 1, MOD_MAX_ODD, MOD_MAX_ODD, "base=mod-1, exp=mod, mod=2^256-1"},
+        Case{MOD_25519 - 1, MOD_25519, MOD_25519, "base=mod-1, exp=mod, 25519"},
+
+        // mul_add CF-chain residual: pick y_word words near 2^64-1 by exponents
+        // that cause the running result to be all-ones-like for many iters.
+        Case{(uint256{1} << 192) | 1, ~uint256{} >> 1, MOD_NEAR_MAX,
+            "high+low base bits, max signed exp"},
+        Case{0xffffffffffffffffffffffff_u256, MOD_NEAR_MAX, MOD_NEAR_MAX,
+            "96-bit ones base, exp=mod"},
+
+        // All ones in every limb of base, exp, mod near max.
+        Case{~uint256{}, ~uint256{} - 2, MOD_NEAR_MAX, "base=2^256-1, exp=2^256-3, near-max mod"},
+    };
+
+    for (const auto& c : cases)
+    {
+        ASSERT_EQ(c.mod & 1, 1) << c.note;
+        ASSERT_NE(c.mod >> 192, 0) << c.note;  // top word nonzero ⇒ n=4 path
+
+        const auto expected = powmod_ref(c.base, c.exp, c.mod);
+        const auto result_bytes = run(to_be32(c.base), to_be32(c.exp), to_be32(c.mod));
+        ASSERT_EQ(result_bytes.size(), 32u) << c.note;
+        const auto result = be::unsafe::load<uint256>(result_bytes.data());
+        EXPECT_EQ(result, expected) << c.note << " (got 0x" << hex(result_bytes) << ")";
+    }
+}
+
+TEST_P(expmod, asm_amm_4word_random_diff)
+{
+    // Randomized differential test for the 4-word AMM asm path.
+    // Uses a deterministic seed so failures reproduce exactly.
+    // intx::mulmod (full 512-bit umul + udivrem) provides the reference.
+    using namespace intx;
+
+    auto powmod_ref = [](uint256 base, uint256 exp, uint256 mod) {
+        base = base % mod;
+        uint256 r = 1;
+        while (exp != 0)
+        {
+            if ((exp & 1) != 0)
+                r = mulmod(r, base, mod);
+            exp >>= 1;
+            if (exp != 0)
+                base = mulmod(base, base, mod);
+        }
+        return r;
+    };
+
+    auto to_be32 = [](uint256 v) {
+        evmc::bytes out(32, 0);
+        be::unsafe::store(out.data(), v);
+        return out;
+    };
+
+    std::mt19937_64 rng{0xC011B011D0DEC0DEull};
+    auto rand_u256 = [&] {
+        return uint256{rng(), rng(), rng(), rng()};
+    };
+
+    constexpr int N = 2000;
+    for (int i = 0; i < N; ++i)
+    {
+        // Force odd modulus and top-word nonzero ⇒ 4-word AMM path.
+        auto mod = rand_u256() | uint256{1};
+        if ((mod >> 192) == 0)
+            mod |= uint256{1} << 255;
+
+        const auto base = rand_u256();
+        const auto exp = rand_u256();
+
+        const auto expected = powmod_ref(base, exp, mod);
+        const auto result_bytes = run(to_be32(base), to_be32(exp), to_be32(mod));
+        ASSERT_EQ(result_bytes.size(), 32u);
+        const auto result = be::unsafe::load<uint256>(result_bytes.data());
+        ASSERT_EQ(result, expected) << "i=" << i << " mod=" << hex(to_be32(mod))
+                                    << " base=" << hex(to_be32(base))
+                                    << " exp=" << hex(to_be32(exp));
     }
 }
 
