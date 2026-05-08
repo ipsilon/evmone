@@ -40,8 +40,12 @@ inline void init_mul(uint64_t& a0, uint64_t& a1, uint64_t& a2, uint64_t& a3, uin
 
 /// Multiply-accumulate: a[0..3] += x[0..3] * y_word (in rdx), producing carry c.
 /// Uses adox (OF chain) for low products, adcx (CF chain) for high products.
-/// The residual CF from the adcx chain is combined with prev_carry via a final adc.
 /// r_carry: on input, the carry from the previous reduce. On output, overflow flag.
+///
+/// 3-instruction tail: c = 0 + prev + OF_residual (adoxq prev,c) + t2 + CF_residual
+/// (adcxq t2,c). CF_out captures the overflow bit, read by setb. Note that t2 (high
+/// half of x[3]*y_word) is ≤ 2^64-2, so t2 + cf_residual ≤ 2^64-1 cannot wrap —
+/// the simpler 2-adx form is sufficient and correct.
 inline void mul_add(uint64_t& a0, uint64_t& a1, uint64_t& a2, uint64_t& a3,
     uint64_t& c, uint64_t& r_carry, const mem256& x, uint64_t y_word) noexcept
 {
@@ -58,11 +62,8 @@ inline void mul_add(uint64_t& a0, uint64_t& a1, uint64_t& a2, uint64_t& a3,
         "adcxq %[t2], %[a3]\n\t"
         "mulxq 24(%[x]), %[t1], %[t2]\n\t"
         "adoxq %[t1], %[a3]\n\t"
-        "adcxq %[c], %[t2]\n\t"
-        "adoxq %[t2], %[c]\n\t"
-        "movq $0, %[t1]\n\t"
-        "adoxq %[t1], %[c]\n\t"
-        "adcq %[prev], %[c]\n\t"
+        "adoxq %[prev], %[c]\n\t"
+        "adcxq %[t2], %[c]\n\t"
         "setb %b[prev]"
         : [a0] "+r"(a0), [a1] "+r"(a1), [a2] "+r"(a2), [a3] "+r"(a3),
           [c] "=&r"(c), [prev] "+q"(r_carry), [t1] "=&r"(t1), [t2] "=&r"(t2)
