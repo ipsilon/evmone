@@ -24,11 +24,14 @@ static void rlp_decode(bytes_view& from, Authorization& to)
     decode(payload, to.chain_id);
     decode(payload, to.addr.bytes);
     decode(payload, to.nonce);
-    uint256 v_u256{};
-    decode<uint256>(payload, v_u256);
-    to.v = static_cast<uint8_t>(v_u256);
-    if (to.v > 1 || v_u256 > 1)
-        throw std::runtime_error("rlp decoding error: invalid authorization y_parity");
+    // EIP-7702 bounds y_parity to < 2**8; whether the value is in {0, 1} is a
+    // recovery-time check, not a wire-format check. Accept any v ∈ [0, 255]
+    // and let recover_authorization_signer return nullopt for v > 1, which
+    // causes the auth entry to be silently skipped. Reject v >= 2**8 to match
+    // geth (V uint8) and revm/alloy (y_parity: U8), which fail the whole tx.
+    decode<uint256>(payload, to.v);
+    if (to.v >= 0x100)
+        throw std::runtime_error("rlp decoding error: authorization y_parity exceeds 2**8");
     decode(payload, to.r);
     decode(payload, to.s);
     if (!payload.empty())
