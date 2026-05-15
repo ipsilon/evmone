@@ -181,6 +181,8 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_AMSTERDAM][OP_DUPN] = 3;
     table[EVMC_AMSTERDAM][OP_SWAPN] = 3;
     table[EVMC_AMSTERDAM][OP_EXCHANGE] = 3;
+    table[EVMC_AMSTERDAM][OP_CREATE] = 9000;   // EIP-8037: was 32000, state component separate.
+    table[EVMC_AMSTERDAM][OP_CREATE2] = 9000;  // EIP-8037: was 32000, state component separate.
 
     table[EVMC_EXPERIMENTAL] = table[EVMC_AMSTERDAM];
 

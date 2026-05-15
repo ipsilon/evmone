@@ -2,6 +2,7 @@
 // Copyright 2019 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "constants.hpp"
 #include "delegation.hpp"
 #include "instructions.hpp"
 #include <variant>
@@ -34,6 +35,13 @@ inline std::variant<evmc::address, Result> get_target_address(
 
     if ((gas_left -= delegate_account_access_cost) < 0)
         return Result{EVMC_OUT_OF_GAS, gas_left};
+
+    // EIP-7928: once the access cost is committed (no OOG), the delegate
+    // address must appear in the block access list even if the CALL itself
+    // light-fails (e.g. insufficient funds) without doing any other state
+    // touch on it. Force the lazy-load now so the BAL StateView decorator
+    // observes the read.
+    (void)state.host.account_exists(*delegate_addr);
 
     return *delegate_addr;
 }
@@ -81,17 +89,21 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     stack.push(0);  // Assume failure.
     state.return_data.clear();
 
+    // EIP-7702/EIP-7928: in a static context, a value-transferring CALL must
+    // fail before touching the target's code (which the delegation lookup does
+    // via copy_code), otherwise the target would be wrongly recorded in the
+    // block access list.
+    if constexpr (Op == OP_CALL)
+    {
+        if (value != 0 && state.in_static_mode())
+            return {EVMC_STATIC_MODE_VIOLATION, gas_left};
+    }
+
     if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
     {
         if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
-
-    const auto target_addr_or_result = get_target_address(dst, gas_left, state);
-    if (const auto* result = std::get_if<Result>(&target_addr_or_result))
-        return *result;
-
-    const auto& code_addr = std::get<evmc::address>(target_addr_or_result);
 
     if (!check_memory(gas_left, state.memory, input_offset_u256, input_size_u256))
         return {EVMC_OUT_OF_GAS, gas_left};
@@ -103,6 +115,24 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     const auto input_size = static_cast<size_t>(input_size_u256);
     const auto output_offset = static_cast<size_t>(output_offset_u256);
     const auto output_size = static_cast<size_t>(output_size_u256);
+
+    // EIP-7928: charge the value-transfer intrinsic before any stateful lookup
+    // so an OOG here does not leak the target to the BAL tracker via delegation
+    // resolution or account-existence checks.
+    if constexpr (HAS_VALUE_ARG)
+    {
+        if (has_value)
+        {
+            if ((gas_left -= CALL_VALUE_COST) < 0)
+                return {EVMC_OUT_OF_GAS, gas_left};
+        }
+    }
+
+    const auto target_addr_or_result = get_target_address(dst, gas_left, state);
+    if (const auto* result = std::get_if<Result>(&target_addr_or_result))
+        return *result;
+
+    const auto& code_addr = std::get<evmc::address>(target_addr_or_result);
 
     evmc_message msg{.kind = to_call_kind(Op)};
     msg.flags = (Op == OP_STATICCALL) ? uint32_t{EVMC_STATIC} : state.msg->flags;
@@ -126,19 +156,22 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     if constexpr (HAS_VALUE_ARG)
     {
-        auto cost = has_value ? CALL_VALUE_COST : 0;
-
         if constexpr (Op == OP_CALL)
         {
-            if (has_value && state.in_static_mode())
-                return {EVMC_STATIC_MODE_VIOLATION, gas_left};
-
             if ((has_value || state.rev < EVMC_SPURIOUS_DRAGON) && !state.host.account_exists(dst))
-                cost += ACCOUNT_CREATION_COST;
+            {
+                if (state.rev >= EVMC_AMSTERDAM)
+                {
+                    // EIP-8037: charge state gas instead of regular ACCOUNT_CREATION_COST.
+                    if (!charge_state_gas(gas_left, state, NEW_ACCOUNT_STATE_GAS))
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
+                else if ((gas_left -= ACCOUNT_CREATION_COST) < 0)
+                {
+                    return {EVMC_OUT_OF_GAS, gas_left};
+                }
+            }
         }
-
-        if ((gas_left -= cost) < 0)
-            return {EVMC_OUT_OF_GAS, gas_left};
     }
 
     msg.gas = std::numeric_limits<int64_t>::max();
@@ -171,6 +204,9 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     if (state.msg->depth >= 1024)
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
 
+    // EIP-8037: pass state gas to child execution.
+    msg.state_gas = state.state_gas_left;
+
     const auto result = state.host.call(msg);
     state.return_data.assign(result.output_data, result.output_size);
     stack.top() = result.status_code == EVMC_SUCCESS;
@@ -181,6 +217,11 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     const auto gas_used = msg.gas - result.gas_left;
     gas_left -= gas_used;
     state.gas_refund += result.gas_refund;
+    // EIP-8037 (bal-devnet-7, PR #2823): handle child state gas.
+    //   Success: accumulate child's `state_gas_used`, take its leftover reservoir.
+    //   Error: return `state_gas_used + state_gas_left` to the parent's reservoir
+    //          (any spill from `gas_left` is reclassified back to state gas).
+    accumulate_child_state_gas(state, result.raw());
     return {EVMC_SUCCESS, gas_left};
 }
 
@@ -218,17 +259,57 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     if (state.rev >= EVMC_SHANGHAI && init_code_size > 0xC000)
         return {EVMC_OUT_OF_GAS, gas_left};
 
+    // EIP-3860: regular init-code word cost. Charged BEFORE the EIP-8037
+    // state-gas charge per EIP-8037 line 126 ("regular gas MUST be applied
+    // first"); otherwise a state charge that succeeds via spill can leave a
+    // committed `state_gas_used` even when the following regular check OOGs,
+    // producing wrong block_gas_used = max(regular_sum, state_sum).
     const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);
     const auto init_code_cost = num_words(init_code_size) * init_code_word_cost;
     if ((gas_left -= init_code_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
+    // EIP-8037: charge state gas for account creation.
+    int64_t create_state_gas_charged = 0;
+    if (state.rev >= EVMC_AMSTERDAM)
+    {
+        create_state_gas_charged = NEW_ACCOUNT_STATE_GAS;
+        if (!charge_state_gas(gas_left, state, create_state_gas_charged))
+            return {EVMC_OUT_OF_GAS, gas_left};
+    }
+
+    // EIP-8037 (bal-devnet-7, PR #2823): refund the NEW_ACCOUNT*CPSB state-gas
+    // charge when no account is actually created (light failure before child
+    // frame entry, or child frame REVERT/HALT). No phantom tracking needed:
+    // the ancestor-revert path simply returns `state_gas_used + state_gas_left`.
+    //
+    // NOTE: this restores only the state-gas reservoir. If `charge_state_gas`
+    // spilled into `gas_left` (reservoir was insufficient), the regular-side
+    // deficit is NOT reclaimed — by design, regular spill stays charged at
+    // the frame level. The reclassified state-gas amount returns to the
+    // reservoir, and tx-level accounting balances via `total_consumed` at
+    // end of `transition()`, but the caller's `gas_left` budget remains
+    // permanently reduced for the rest of this frame.
+    const auto refund_create_state_gas = [&]() noexcept {
+        if (create_state_gas_charged != 0)
+        {
+            state.state_gas_left += create_state_gas_charged;
+            state.state_gas_used -= create_state_gas_charged;
+        }
+    };
+
     if (state.msg->depth >= 1024)
+    {
+        refund_create_state_gas();
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
+    }
 
     if (endowment != 0 &&
         intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < endowment)
+    {
+        refund_create_state_gas();
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
+    }
 
     evmc_message msg{.kind = to_call_kind(Op)};
     msg.gas = gas_left;
@@ -246,9 +327,19 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     msg.create2_salt = intx::be::store<evmc::bytes32>(salt);
     msg.value = intx::be::store<evmc::uint256be>(endowment);
 
+    // EIP-8037: pass state gas to child execution.
+    msg.state_gas = state.state_gas_left;
+
     const auto result = state.host.call(msg);
     gas_left -= msg.gas - result.gas_left;
     state.gas_refund += result.gas_refund;
+    // EIP-8037 (bal-devnet-7, PR #2823): handle child state gas.
+    //   Success: accumulate `state_gas_used`, take leftover reservoir.
+    //   Error: return `state_gas_used + state_gas_left` and refund the
+    //          NEW_ACCOUNT pre-charge (no account created).
+    accumulate_child_state_gas(state, result.raw());
+    if (result.status_code != EVMC_SUCCESS && state.rev >= EVMC_AMSTERDAM)
+        refund_create_state_gas();
 
     state.return_data.assign(result.output_data, result.output_size);
     if (result.status_code == EVMC_SUCCESS)
