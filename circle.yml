@@ -543,7 +543,7 @@ jobs:
     executor: linux-clang-selfhosted
     environment:
       TOOLCHAIN: clang-libcxx-debug
-      CMAKE_OPTIONS: -DBUILD_SHARED_LIBS=NO -DASSERTIONS=ON -DSANITIZE=address,undefined,shift-exponent,implicit-conversion,nullability
+      CMAKE_OPTIONS: -DBUILD_SHARED_LIBS=NO -DASSERTIONS=ON -DSANITIZE=address,undefined,implicit-conversion,local-bounds,nullability
       UBSAN_OPTIONS: halt_on_error=1
     steps:
       - build
