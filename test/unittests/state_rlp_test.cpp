@@ -6,6 +6,7 @@
 #include <test/state/hash_utils.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
+#include <test/utils/rlp_decode.hpp>
 #include <test/utils/rlp_encode.hpp>
 #include <test/utils/utils.hpp>
 #include <bit>
@@ -599,4 +600,93 @@ TEST(state_rlp, tx_to_rlp_blob_invalid_to_value)
         "09"                                                                    // sig_r
         "0a"                                                                    // sig_s
     );
+}
+
+// EIP-7702: y_parity must be < 2**8, but whether the value is in {0, 1} is a
+// recovery-time check, not a wire-format check. The decoder accepts any
+// v ∈ [0, 255] so the outer typed-4 tx remains decodable; recovery silently
+// drops the auth entry when v > 1.
+TEST(state_rlp, tx_to_rlp_set_code_auth_y_parity_round_trip)
+{
+    state::Transaction tx{};
+    tx.type = evmone::state::Transaction::Type::set_code;
+    tx.chain_id = 1;
+    tx.nonce = 0;
+    tx.max_priority_gas_price = 0;
+    tx.max_gas_price = 7;
+    tx.gas_limit = 0x186a0;
+    tx.to = 0x1111_address;
+    tx.value = 0;
+    tx.data = {};
+    tx.access_list = {};
+    tx.authorization_list = {
+        // Three entries with valid-RLP y_parity values that EIP-7702 will
+        // skip at recovery time (only v ∈ {0, 1} pass recovery).
+        {.chain_id = 1_u256, .addr = 0x2222_address, .nonce = 0,
+            .r = 0x1234_u256, .s = 0x5678_u256, .v = 2_u256},
+        {.chain_id = 1_u256, .addr = 0x3333_address, .nonce = 7,
+            .r = 0x9abc_u256, .s = 0xdef0_u256, .v = 27_u256},
+        {.chain_id = 1_u256, .addr = 0x4444_address, .nonce = 42,
+            .r = 0xaaaa_u256, .s = 0xbbbb_u256, .v = 0xff_u256},
+    };
+    tx.v = 0;
+    tx.r = 1_u256;
+    tx.s = 2_u256;
+
+    const auto encoded = rlp::encode(tx);
+
+    state::Transaction decoded{};
+    bytes_view view = encoded;
+    state::rlp_decode(view, decoded);
+
+    ASSERT_EQ(decoded.type, evmone::state::Transaction::Type::set_code);
+    ASSERT_EQ(decoded.authorization_list.size(), 3u);
+    EXPECT_EQ(decoded.authorization_list[0].addr, 0x2222_address);
+    EXPECT_EQ(decoded.authorization_list[0].nonce, 0u);
+    EXPECT_EQ(decoded.authorization_list[0].v, 2_u256);
+    EXPECT_EQ(decoded.authorization_list[0].r, 0x1234_u256);
+    EXPECT_EQ(decoded.authorization_list[0].s, 0x5678_u256);
+    EXPECT_EQ(decoded.authorization_list[1].addr, 0x3333_address);
+    EXPECT_EQ(decoded.authorization_list[1].nonce, 7u);
+    EXPECT_EQ(decoded.authorization_list[1].v, 27_u256);
+    EXPECT_EQ(decoded.authorization_list[1].r, 0x9abc_u256);
+    EXPECT_EQ(decoded.authorization_list[1].s, 0xdef0_u256);
+    EXPECT_EQ(decoded.authorization_list[2].addr, 0x4444_address);
+    EXPECT_EQ(decoded.authorization_list[2].nonce, 42u);
+    EXPECT_EQ(decoded.authorization_list[2].v, 0xff_u256);
+    EXPECT_EQ(decoded.authorization_list[2].r, 0xaaaa_u256);
+    EXPECT_EQ(decoded.authorization_list[2].s, 0xbbbb_u256);
+}
+
+// EIP-7702: y_parity is bounded to < 2**8. Match geth (V uint8) and
+// revm/alloy (y_parity: U8), which fail the whole tx at decode time.
+// Without this check evmone would silently produce a state-changing tx
+// that no other client accepts — a consensus divergence the differential
+// fuzzer would otherwise surface.
+TEST(state_rlp, tx_to_rlp_set_code_auth_y_parity_overflow_rejected)
+{
+    state::Transaction tx{};
+    tx.type = evmone::state::Transaction::Type::set_code;
+    tx.chain_id = 1;
+    tx.nonce = 0;
+    tx.max_priority_gas_price = 0;
+    tx.max_gas_price = 7;
+    tx.gas_limit = 0x186a0;
+    tx.to = 0x1111_address;
+    tx.value = 0;
+    tx.data = {};
+    tx.access_list = {};
+    tx.authorization_list = {
+        {.chain_id = 1_u256, .addr = 0x2222_address, .nonce = 0,
+            .r = 0x1234_u256, .s = 0x5678_u256, .v = 0x100_u256},  // == 2**8
+    };
+    tx.v = 0;
+    tx.r = 1_u256;
+    tx.s = 2_u256;
+
+    const auto encoded = rlp::encode(tx);
+
+    state::Transaction decoded{};
+    bytes_view view = encoded;
+    EXPECT_THROW(state::rlp_decode(view, decoded), std::runtime_error);
 }
