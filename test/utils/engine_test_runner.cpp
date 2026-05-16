@@ -117,6 +117,19 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
     TestBlockHashes block_hashes{{0, t.genesis.hash}};
     hash256 last_accepted_block_hash = t.genesis.hash;
 
+    struct ParentContext
+    {
+        uint64_t blob_gas_used = 0;
+        uint64_t excess_blob_gas = 0;
+        uint64_t base_fee_per_gas = 0;
+    };
+
+    ParentContext parent_ctx{
+        .blob_gas_used = t.genesis.blob_gas_used.value_or(0),
+        .excess_blob_gas = t.genesis.excess_blob_gas.value_or(0),
+        .base_fee_per_gas = t.genesis.base_fee_per_gas,
+    };
+
     for (size_t pi = 0; pi < t.payloads.size(); ++pi)
     {
         const auto& p = t.payloads[pi];
@@ -128,6 +141,36 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
             return {false, os.str()};
         };
         const auto expected_invalid = p.validation_error.has_value();
+
+        // 0. Pre-execution header validation.
+        const auto header_error = [&]() -> std::optional<std::string> {
+            if (rev >= EVMC_CANCUN)
+            {
+                const auto blob_params =
+                    get_blob_params(t.network, t.blob_schedule, p.block_info.timestamp);
+                if (!p.block_info.excess_blob_gas.has_value() ||
+                    !p.block_info.blob_gas_used.has_value())
+                    return "missing blob gas fields";
+
+                const auto parent_blob_base_fee =
+                    state::compute_blob_gas_price(blob_params, parent_ctx.excess_blob_gas);
+                const auto expected_excess = state::calc_excess_blob_gas(rev, blob_params,
+                    parent_ctx.blob_gas_used, parent_ctx.excess_blob_gas,
+                    parent_ctx.base_fee_per_gas, parent_blob_base_fee);
+                if (*p.block_info.excess_blob_gas != expected_excess)
+                    return "excess_blob_gas mismatch (got " +
+                           std::to_string(*p.block_info.excess_blob_gas) + ", expected " +
+                           std::to_string(expected_excess) + ")";
+            }
+            return std::nullopt;
+        }();
+
+        if (header_error.has_value())
+        {
+            if (expected_invalid)
+                continue;
+            return fail(*header_error);
+        }
 
         // 1. Decode transactions.
         std::vector<Transaction> txs;
@@ -205,6 +248,11 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
             current_state = std::move(res.block_state);
             block_hashes[p.block_info.number] = p.expected_block_hash;
             last_accepted_block_hash = p.expected_block_hash;
+            parent_ctx = {
+                .blob_gas_used = p.block_info.blob_gas_used.value_or(0),
+                .excess_blob_gas = p.block_info.excess_blob_gas.value_or(0),
+                .base_fee_per_gas = p.block_info.base_fee,
+            };
         }
 
     next_payload:

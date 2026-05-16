@@ -6,6 +6,7 @@
 #include <evmone/evmone.h>
 #include <gmock/gmock.h>
 #include <test/utils/engine_test.hpp>
+#include <test/utils/mpt_hash.hpp>
 #include <test/utils/utils.hpp>
 #include <cstdlib>
 #include <filesystem>
@@ -255,4 +256,63 @@ TEST(engine_test_runner, run_engine_tests_path_directory_mode)
     // Output should include the SUMMARY line.
     EXPECT_THAT(out.str(), HasSubstr("SUMMARY:"));
     EXPECT_THAT(out.str(), HasSubstr("files passed"));
+}
+
+namespace
+{
+EngineTest make_test_with_bad_excess_blob_gas()
+{
+    EngineTest t;
+    t.name = "bad_excess_blob_gas";
+    t.network = "Osaka";
+    t.rev = to_rev_schedule(t.network);
+    t.genesis.hash =
+        0x0000000000000000000000000000000000000000000000000000000000000003_bytes32;
+    t.genesis.blob_gas_used = 0u;
+    t.genesis.excess_blob_gas = 0u;
+    t.genesis.base_fee_per_gas = 7;
+
+    // Build an Osaka blob schedule so calc_excess_blob_gas resolves correctly.
+    t.blob_schedule["Osaka"] = state::BlobParams{0x06, 0x09, 0x4c6964};
+
+    EnginePayload p;
+    p.block_info.number = 1;
+    p.block_info.gas_limit = 0x7270e00;
+    p.block_info.gas_used = 0;
+    p.block_info.timestamp = 0x3e8;
+    p.block_info.base_fee = 7;
+    p.block_info.coinbase = 0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba_address;
+    p.block_info.parent_hash = t.genesis.hash;
+    p.block_info.blob_gas_used = 0u;
+    p.block_info.excess_blob_gas = 0xdeadbeefu;  // bogus
+    p.block_info.parent_beacon_block_root = bytes32{};
+    p.expected_block_hash =
+        0x0000000000000000000000000000000000000000000000000000000000000099_bytes32;
+    p.expected_state_root = state::EMPTY_MPT_HASH;
+    p.expected_receipts_root = state::EMPTY_MPT_HASH;
+    p.expected_gas_used = 0;
+
+    t.payloads.push_back(p);
+    t.last_block_hash = t.genesis.hash;  // payload rejected → head stays at genesis
+    return t;
+}
+}  // namespace
+
+TEST(engine_test_runner, excess_blob_gas_mismatch_caught_as_header_error)
+{
+    // Without validation_error, this must FAIL with a descriptive header error.
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(make_test_with_bad_excess_blob_gas(), vm);
+    EXPECT_FALSE(result.passed);
+    EXPECT_THAT(result.error, HasSubstr("excess_blob_gas mismatch"));
+}
+
+TEST(engine_test_runner, excess_blob_gas_mismatch_satisfies_validation_error)
+{
+    // Same payload as above, but with validation_error set → must PASS.
+    auto t = make_test_with_bad_excess_blob_gas();
+    t.payloads[0].validation_error = "BlockException.INCORRECT_EXCESS_BLOB_GAS";
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_TRUE(result.passed) << result.error;
 }
