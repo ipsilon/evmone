@@ -38,6 +38,11 @@ struct EnginePayload
     state::BloomFilter expected_logs_bloom;
     int64_t expected_gas_used = 0;
 
+    /// Execution requests as found in params[3] of the engine payload.
+    /// Each element is the EIP-7685 raw form: <type_byte> || <data>.
+    /// Empty if the payload pre-dates Prague (or has no requests).
+    std::vector<bytes> expected_requests;
+
     /// EEST `validationError`. Present ⇒ the payload is expected to be rejected.
     std::optional<std::string> validation_error;
 };

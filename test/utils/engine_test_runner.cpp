@@ -258,6 +258,30 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
                 if (res.gas_used != p.expected_gas_used)
                     return "gas used mismatch (got " + std::to_string(res.gas_used) +
                            ", expected " + std::to_string(p.expected_gas_used) + ")";
+
+                // Verify execution requests (Prague+).
+                // Per EIP-7685 the payload's params[3] lists only the non-empty
+                // requests (each entry is <type_byte> || <data>), so we filter
+                // out empty-data entries from the computed result before
+                // comparing element-wise.
+                if (rev >= EVMC_PRAGUE)
+                {
+                    std::vector<bytes_view> got;
+                    got.reserve(res.requests->size());
+                    for (const auto& r : *res.requests)
+                    {
+                        if (!r.data().empty())
+                            got.emplace_back(r.raw_data);
+                    }
+                    if (got.size() != p.expected_requests.size())
+                        return "requests count mismatch (got " + std::to_string(got.size()) +
+                               ", expected " + std::to_string(p.expected_requests.size()) + ")";
+                    for (size_t i = 0; i < got.size(); ++i)
+                    {
+                        if (got[i] != bytes_view{p.expected_requests[i]})
+                            return "requests[" + std::to_string(i) + "] mismatch";
+                    }
+                }
                 return std::nullopt;
             }();
 

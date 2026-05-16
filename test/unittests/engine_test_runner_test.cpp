@@ -423,3 +423,70 @@ TEST(engine_test_runner, blob_gas_used_over_cap_caught)
     EXPECT_FALSE(result.passed);
     EXPECT_THAT(result.error, HasSubstr("blob_gas_used exceeds max_blob_gas_per_block"));
 }
+
+namespace
+{
+// Load a Prague fixture that exercises the requests pipeline end-to-end
+// (system contracts pre-deployed, requests collection succeeds). Returns
+// empty optional if the fixture set is unavailable.
+std::optional<std::vector<EngineTest>> load_prague_e2e_fixture()
+{
+    const auto* dir = std::getenv("EVMONE_FIXTURES_DIR");
+    if (dir == nullptr)
+        return std::nullopt;
+    const std::filesystem::path path = std::filesystem::path{dir} /
+        "blockchain_tests_engine/for_osaka/prague/eip2537_bls_12_381_precompiles/"
+        "bls12_variable_length_input_contracts/valid_gas_pairing.json";
+    if (!std::filesystem::exists(path))
+        return std::nullopt;
+    std::ifstream f{path};
+    const std::string json{
+        std::istreambuf_iterator<char>{f}, std::istreambuf_iterator<char>{}};
+    return load_engine_tests(json);
+}
+}  // namespace
+
+TEST(engine_test_runner, requests_count_mismatch_caught)
+{
+    // Use a real Prague fixture so the Prague system contracts (withdrawal,
+    // consolidation) are pre-deployed in pre_state and apply_block actually
+    // produces a `requests` result. Tamper with expected_requests to force a
+    // count mismatch. Without validation_error → FAIL with "requests count
+    // mismatch".
+    auto opt_tests = load_prague_e2e_fixture();
+    if (!opt_tests.has_value())
+        GTEST_SKIP() << "EVMONE_FIXTURES_DIR not set or fixture missing";
+    ASSERT_FALSE(opt_tests->empty());
+    auto& t = (*opt_tests)[0];
+    ASSERT_FALSE(t.payloads.empty());
+    // Deliberate mismatch: claim one expected request, but the block
+    // produces zero (this fixture has empty params[3]).
+    t.payloads[0].expected_requests.push_back(*evmc::from_hex("0x00deadbeef"));
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_FALSE(result.passed);
+    EXPECT_THAT(result.error, HasSubstr("requests count mismatch"));
+}
+
+TEST(engine_test_runner, requests_mismatch_satisfies_validation_error)
+{
+    // Same tampering as above, but flag the payload as expected-invalid →
+    // the mismatch becomes the expected outcome and the test must PASS.
+    auto opt_tests = load_prague_e2e_fixture();
+    if (!opt_tests.has_value())
+        GTEST_SKIP() << "EVMONE_FIXTURES_DIR not set or fixture missing";
+    ASSERT_FALSE(opt_tests->empty());
+    auto& t = (*opt_tests)[0];
+    ASSERT_FALSE(t.payloads.empty());
+    t.payloads[0].expected_requests.push_back(*evmc::from_hex("0x00deadbeef"));
+    t.payloads[0].validation_error = "BlockException.INVALID_REQUESTS";
+    // The (now-rejected) payload no longer advances the chain head, so the
+    // accepted chain head is the genesis and the final state equals pre_state.
+    t.last_block_hash = t.genesis.hash;
+    t.post_state = t.pre_state;
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_TRUE(result.passed) << result.error;
+}

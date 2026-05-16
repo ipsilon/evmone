@@ -228,6 +228,7 @@ TEST(engine_test_loader, single_payload_with_validation_error)
     EXPECT_EQ(p.expected_receipts_root,
         0x0000000000000000000000000000000000000000000000000000000000000021_bytes32);
     EXPECT_EQ(p.expected_gas_used, 0x534a);
+    EXPECT_TRUE(p.expected_requests.empty());
 
     // validation_error propagated.
     ASSERT_TRUE(p.validation_error.has_value());

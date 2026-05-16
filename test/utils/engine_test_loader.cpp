@@ -40,7 +40,13 @@ EnginePayload load_engine_payload(
     const auto& exec_payload = params[0];
     // params[1] (blob versioned hashes) is not stored; covered indirectly by state root.
     const auto& parent_beacon_root_j = params[2];
-    // params[3] (execution requests) is not stored; verified implicitly via state root.
+
+    // params[3] (execution requests) — list of EIP-7685 raw blobs.
+    if (params.size() >= 4)
+    {
+        for (const auto& req_hex : params[3])
+            p.expected_requests.push_back(from_json<bytes>(req_hex));
+    }
 
     p.block_info.parent_hash = from_json<hash256>(exec_payload.at("parentHash"));
     p.block_info.coinbase = from_json<address>(exec_payload.at("feeRecipient"));
