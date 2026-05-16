@@ -156,7 +156,8 @@ size_t compute_block_rlp_size(const bytes& header_encoded,
 BlockResult apply_block(
     const TestState& state, evmc::VM& vm, const state::BlockInfo& block,
     const state::BlockHashes& block_hashes,
-    const std::vector<state::Transaction>& txs, evmc_revision rev)
+    const std::vector<state::Transaction>& txs,
+    std::span<const bytes> txs_rlp, evmc_revision rev)
 {
     TestState block_state(state);
     system_call_block_start(block_state, block, block_hashes, rev, vm);
@@ -172,7 +173,7 @@ BlockResult apply_block(
     for (size_t i = 0; i < txs.size(); ++i)
     {
         const auto& tx = txs[i];
-        const auto tx_hash = keccak256(rlp::encode(tx));
+        const auto tx_hash = keccak256(txs_rlp[i]);
         auto res = transition(
             block_state, block, block_hashes, tx, rev, vm, block_gas_left, blob_gas_left);
         if (std::holds_alternative<std::error_code>(res))
@@ -385,7 +386,8 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
 
         {
             // 3. Apply the block.
-            auto res = apply_block(current_state, vm, p.block_info, block_hashes, txs, rev);
+            auto res = apply_block(current_state, vm, p.block_info, block_hashes, txs,
+                p.transactions_rlp, rev);
 
             // 4. Verify expected outputs.
             const auto verify_failed = [&]() -> std::optional<std::string> {
