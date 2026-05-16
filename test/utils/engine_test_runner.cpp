@@ -9,6 +9,7 @@
 #include <test/state/requests.hpp>
 #include <test/state/state.hpp>
 #include <test/utils/rlp_decode.hpp>
+#include <algorithm>
 #include <sstream>
 
 namespace evmone::test
@@ -219,6 +220,38 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
     }
 
     return {true, ""};
+}
+
+int run_engine_tests_json(std::string_view json, evmc::VM& vm, std::ostream& out)
+{
+    std::vector<EngineTest> tests;
+    try
+    {
+        tests = load_engine_tests(json);
+    }
+    catch (const std::exception& ex)
+    {
+        out << "ERROR: " << ex.what() << "\n";
+        return 1;
+    }
+
+    size_t failures = 0;
+    for (const auto& t : tests)
+    {
+        const auto r = run_engine_test(t, vm);
+        if (r.passed)
+        {
+            out << "PASS " << t.name << "\n";
+        }
+        else
+        {
+            ++failures;
+            out << "FAIL " << t.name << "\n  " << r.error << "\n";
+        }
+    }
+    out << (tests.size() - failures) << "/" << tests.size() << " passed\n";
+
+    return static_cast<int>(std::min<size_t>(failures, 255));
 }
 
 }  // namespace evmone::test

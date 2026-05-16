@@ -7,6 +7,7 @@
 #include <gmock/gmock.h>
 #include <test/utils/engine_test.hpp>
 #include <test/utils/utils.hpp>
+#include <sstream>
 
 using namespace evmone;
 using namespace evmone::test;
@@ -110,4 +111,61 @@ TEST(engine_test_runner, validation_error_with_bad_rlp_passes)
     evmc::VM vm{evmc_create_evmone()};
     const auto result = run_engine_test(t, vm);
     EXPECT_TRUE(result.passed) << result.error;
+}
+
+TEST(engine_test_runner, run_engine_tests_json_prints_pass_for_empty_fixture)
+{
+    constexpr auto json = R"({
+        "minimal_test": {
+            "network": "Osaka",
+            "lastblockhash": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "config": {
+                "network": "Osaka",
+                "chainid": "0x01",
+                "blobSchedule": {
+                    "Osaka": {
+                        "target": "0x06",
+                        "max": "0x09",
+                        "baseFeeUpdateFraction": "0x4c6964"
+                    }
+                }
+            },
+            "pre": {},
+            "postState": {},
+            "genesisBlockHeader": {
+                "parentHash":  "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "uncleHash":   "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+                "coinbase":    "0x0000000000000000000000000000000000000000",
+                "stateRoot":   "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                "transactionsTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                "receiptTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                "bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "difficulty": "0x00",
+                "number": "0x00",
+                "gasLimit": "0x07270e00",
+                "gasUsed": "0x00",
+                "timestamp": "0x00",
+                "extraData": "0x00",
+                "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "nonce": "0x0000000000000000",
+                "baseFeePerGas": "0x07",
+                "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                "blobGasUsed": "0x00",
+                "excessBlobGas": "0x00",
+                "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "requestsHash": "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "hash": "0x0000000000000000000000000000000000000000000000000000000000000003"
+            },
+            "engineNewPayloads": [],
+            "_info": { "fixture-format": "blockchain_test_engine" }
+        }
+    })";
+
+    evmc::VM vm{evmc_create_evmone()};
+    std::ostringstream out;
+    const int rc = run_engine_tests_json(json, vm, out);
+    EXPECT_EQ(rc, 0);
+    const auto s = out.str();
+    EXPECT_THAT(s, HasSubstr("PASS minimal_test"));
+    EXPECT_THAT(s, HasSubstr("1/1 passed"));
 }
