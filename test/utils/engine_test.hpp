@@ -9,6 +9,7 @@
 #include <test/utils/blob_schedule.hpp>
 #include <test/utils/blockchaintest.hpp>  // BlockHeader, UnsupportedTestFeature
 #include <test/utils/test_state.hpp>
+#include <filesystem>
 #include <iosfwd>
 #include <optional>
 #include <string>
@@ -72,5 +73,10 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm);
 /// Top-level CLI glue: parse `json`, run every test, write PASS/FAIL lines to `out`,
 /// return failure count (clamped to 255) as an exit code.
 int run_engine_tests_json(std::string_view json, evmc::VM& vm, std::ostream& out);
+
+/// Run a single fixture file, or every `.json` (except `index.json`) under a directory.
+/// Prints per-file headers and a final summary. Returns the failure count clamped to 255.
+int run_engine_tests_path(
+    const std::filesystem::path& path, evmc::VM& vm, std::ostream& out);
 
 }  // namespace evmone::test

@@ -10,6 +10,9 @@
 #include <test/state/state.hpp>
 #include <test/utils/rlp_decode.hpp>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <ranges>
 #include <sstream>
 
 namespace evmone::test
@@ -246,6 +249,50 @@ int run_engine_tests_json(std::string_view json, evmc::VM& vm, std::ostream& out
     out << (tests.size() - failures) << "/" << tests.size() << " passed\n";
 
     return static_cast<int>(std::min<size_t>(failures, 255));
+}
+
+int run_engine_tests_path(
+    const std::filesystem::path& path, evmc::VM& vm, std::ostream& out)
+{
+    namespace fs = std::filesystem;
+
+    const auto read_file = [](const fs::path& file) {
+        std::ifstream f{file};
+        return std::string{
+            std::istreambuf_iterator<char>{f}, std::istreambuf_iterator<char>{}};
+    };
+
+    if (!fs::is_directory(path))
+        return run_engine_tests_json(read_file(path), vm, out);
+
+    std::vector<fs::path> files;
+    for (const auto& entry : fs::recursive_directory_iterator{path})
+    {
+        if (entry.is_regular_file() &&
+            entry.path().extension() == ".json" &&
+            entry.path().filename() != "index.json")
+        {
+            files.push_back(entry.path());
+        }
+    }
+    std::ranges::sort(files);
+
+    size_t total_failures = 0;
+    size_t total_files_failed = 0;
+    for (const auto& file : files)
+    {
+        out << "=== " << fs::relative(file, path).string() << " ===\n";
+        const int rc = run_engine_tests_json(read_file(file), vm, out);
+        if (rc > 0)
+        {
+            total_failures += static_cast<size_t>(rc);
+            ++total_files_failed;
+        }
+    }
+    out << "\nSUMMARY: " << (files.size() - total_files_failed) << "/" << files.size()
+        << " files passed (" << total_failures << " individual test failures)\n";
+
+    return static_cast<int>(std::min<size_t>(total_failures, 255));
 }
 
 }  // namespace evmone::test

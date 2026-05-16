@@ -213,3 +213,46 @@ TEST(engine_test_runner, e2e_bal711_blake2_delegatecall_passes)
     const int rc = run_engine_tests_json(json, vm, out);
     EXPECT_EQ(rc, 0) << out.str();
 }
+
+TEST(engine_test_runner, run_engine_tests_path_file_mode)
+{
+    // File-mode dispatch: a single fixture file should behave exactly like
+    // run_engine_tests_json. Use the existing env-var-gated path so CI without
+    // the fixture set stays green.
+    const auto* dir = std::getenv("EVMONE_FIXTURES_DIR");
+    if (dir == nullptr)
+        GTEST_SKIP() << "EVMONE_FIXTURES_DIR not set";
+
+    const std::filesystem::path path = std::filesystem::path{dir} /
+        "blockchain_tests_engine/for_osaka/istanbul/eip152_blake2/blake2_delegatecall/"
+        "blake2_precompile_delegatecall.json";
+    if (!std::filesystem::exists(path))
+        GTEST_SKIP() << "fixture not found: " << path;
+
+    evmc::VM vm{evmc_create_evmone()};
+    std::ostringstream out;
+    const int rc = run_engine_tests_path(path, vm, out);
+    EXPECT_EQ(rc, 0) << out.str();
+    EXPECT_THAT(out.str(), HasSubstr("PASS "));
+}
+
+TEST(engine_test_runner, run_engine_tests_path_directory_mode)
+{
+    const auto* dir = std::getenv("EVMONE_FIXTURES_DIR");
+    if (dir == nullptr)
+        GTEST_SKIP() << "EVMONE_FIXTURES_DIR not set";
+
+    // Use one of the smallest existing subdirectories so the test is reasonably fast.
+    const std::filesystem::path subdir = std::filesystem::path{dir} /
+        "blockchain_tests_engine/for_osaka/istanbul/eip152_blake2/blake2_delegatecall";
+    if (!std::filesystem::is_directory(subdir))
+        GTEST_SKIP() << "directory not found: " << subdir;
+
+    evmc::VM vm{evmc_create_evmone()};
+    std::ostringstream out;
+    const int rc = run_engine_tests_path(subdir, vm, out);
+    EXPECT_EQ(rc, 0) << out.str();
+    // Output should include the SUMMARY line.
+    EXPECT_THAT(out.str(), HasSubstr("SUMMARY:"));
+    EXPECT_THAT(out.str(), HasSubstr("files passed"));
+}

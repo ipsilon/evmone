@@ -85,8 +85,8 @@ int main(int argc, const char* const* argv) noexcept
         std::string test_path;
         auto& test_cmd = *app.add_subcommand("test",
             "Run an Engine-format blockchain test fixture")->fallthrough();
-        test_cmd.add_option("path", test_path, "Path to JSON fixture file")
-            ->required()->check(CLI::ExistingFile);
+        test_cmd.add_option("path", test_path, "Path to JSON fixture file or directory")
+            ->required()->check(CLI::ExistingPath);
 #endif
 
         try
@@ -118,10 +118,7 @@ int main(int argc, const char* const* argv) noexcept
 #ifdef EVMONE_HAS_TEST_SUBCOMMAND
             if (test_cmd)
             {
-                std::ifstream f{test_path};
-                const std::string json{
-                    std::istreambuf_iterator<char>{f}, std::istreambuf_iterator<char>{}};
-                return evmone::test::run_engine_tests_json(json, vm, std::cout);
+                return evmone::test::run_engine_tests_path(test_path, vm, std::cout);
             }
 #endif
 
