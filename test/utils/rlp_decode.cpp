@@ -26,6 +26,11 @@ static void rlp_decode(bytes_view& from, Authorization& to)
     decode(payload, to.nonce);
     uint256 v_u256{};
     decode<uint256>(payload, v_u256);
+    // NOTE: Diverges from origin/fuzzing/main (commit f11aaeab, which threw
+    // on v_u256 > 1). Sync this change back to fuzzing/main when the
+    // engine-test branch lands; otherwise a re-cherry-pick from upstream
+    // would silently revert it. See evmone-test commits 12677b7f, 43853493.
+    //
     // Preserve the original wire-encoded y_parity (truncated to the low
     // byte). Per EIP-7702 invalid auths are silently skipped during
     // processing rather than rejected at RLP decode, and
