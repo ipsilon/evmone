@@ -87,3 +87,27 @@ TEST(engine_test_runner, state_root_mismatch_fails)
     EXPECT_FALSE(result.passed);
     EXPECT_THAT(result.error, HasSubstr("state root mismatch"));
 }
+
+TEST(engine_test_runner, validation_error_with_invalid_block_passes)
+{
+    auto t = make_test_with_bad_state_root();
+    t.payloads[0].validation_error = "BlockException.INVALID_STATE_ROOT";
+    // With validation_error set, the state-root mismatch is the expected
+    // outcome → result is PASS.
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_TRUE(result.passed) << result.error;
+}
+
+TEST(engine_test_runner, validation_error_with_bad_rlp_passes)
+{
+    auto t = make_test_with_bad_state_root();
+    // Replace the (currently empty) RLP list with garbage that will fail
+    // decoding before apply_block runs. With validation_error set, the
+    // decode failure is the expected outcome → PASS.
+    t.payloads[0].transactions_rlp.push_back(*evmc::from_hex("0xff"));
+    t.payloads[0].validation_error = "BlockException.INVALID_TRANSACTION";
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_TRUE(result.passed) << result.error;
+}
