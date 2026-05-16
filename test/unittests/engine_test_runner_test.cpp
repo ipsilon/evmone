@@ -523,6 +523,42 @@ TEST(engine_test_runner, block_hash_mismatch_caught_when_payload_lies)
     EXPECT_THAT(result.error, HasSubstr("block hash mismatch"));
 }
 
+TEST(engine_test_runner, e2e_wrong_chain_id_tx_caught)
+{
+    // Load a real fixture (transactions have chain_id=1), tamper with
+    // BlockInfo::chain_id so the tx's chain_id no longer matches → the runner
+    // must surface state::validate_transaction's WRONG_CHAIN_ID error
+    // ("invalid chain id"). Guards against a regression of the loader silently
+    // leaving block.chain_id == 0, which disables the check.
+    const auto* dir = std::getenv("EVMONE_FIXTURES_DIR");
+    if (dir == nullptr)
+        GTEST_SKIP() << "EVMONE_FIXTURES_DIR not set";
+
+    const std::filesystem::path path = std::filesystem::path{dir} /
+        "blockchain_tests_engine/for_osaka/istanbul/eip152_blake2/blake2_delegatecall/"
+        "blake2_precompile_delegatecall.json";
+    if (!std::filesystem::exists(path))
+        GTEST_SKIP() << "fixture not found: " << path;
+
+    std::ifstream f{path};
+    const std::string json{
+        std::istreambuf_iterator<char>{f}, std::istreambuf_iterator<char>{}};
+
+    auto tests = load_engine_tests(json);
+    ASSERT_FALSE(tests.empty());
+    ASSERT_FALSE(tests[0].payloads.empty());
+    // Sanity-check the loader-side fix: config.chainid was propagated.
+    EXPECT_EQ(tests[0].payloads[0].block_info.chain_id, 1u);
+    // Tamper: declare a chain_id that doesn't match the tx's chain_id (1).
+    for (auto& p : tests[0].payloads)
+        p.block_info.chain_id = 2;
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(tests[0], vm);
+    EXPECT_FALSE(result.passed);
+    EXPECT_THAT(result.error, AnyOf(HasSubstr("chain"), HasSubstr("WRONG_CHAIN_ID")));
+}
+
 TEST(engine_test_runner, block_rlp_size_over_limit_satisfies_validation_error)
 {
     // EIP-7934: the canonical block RLP must be <= 8 MB on Osaka+.

@@ -204,6 +204,8 @@ TEST(engine_test_loader, single_payload_with_validation_error)
     EXPECT_EQ(p.block_info.gas_used, 0x534a);
     EXPECT_EQ(p.block_info.timestamp, 0x3e8);
     EXPECT_EQ(p.block_info.base_fee, 0x7u);
+    // chain_id is propagated from config.chainid.
+    EXPECT_EQ(p.block_info.chain_id, 1u);
     EXPECT_EQ(p.block_info.coinbase,
         0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba_address);
     EXPECT_EQ(p.block_info.parent_hash,

@@ -101,8 +101,11 @@ EngineTest load_engine_test_case(const std::string& name, const json::json& j)
     et.network = j.at("network").get<std::string>();
     et.rev = to_rev_schedule(et.network);
 
+    uint64_t chain_id = 0;
     if (const auto config_it = j.find("config"); config_it != j.end())
     {
+        if (const auto cid_it = config_it->find("chainid"); cid_it != config_it->end())
+            chain_id = from_json<uint64_t>(*cid_it);
         if (const auto bs_it = config_it->find("blobSchedule"); bs_it != config_it->end())
             et.blob_schedule = from_json<BlobSchedule>(*bs_it);
     }
@@ -113,7 +116,11 @@ EngineTest load_engine_test_case(const std::string& name, const json::json& j)
     et.last_block_hash = from_json<hash256>(j.at("lastblockhash"));
 
     for (const auto& payload_j : j.at("engineNewPayloads"))
-        et.payloads.emplace_back(load_engine_payload(payload_j, et.network, et.blob_schedule));
+    {
+        auto& p = et.payloads.emplace_back(
+            load_engine_payload(payload_j, et.network, et.blob_schedule));
+        p.block_info.chain_id = chain_id;
+    }
 
     return et;
 }
