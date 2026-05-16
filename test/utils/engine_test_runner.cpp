@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "engine_test.hpp"
+#include "mpt.hpp"
 #include "mpt_hash.hpp"
 #include "rlp.hpp"
 #include "rlp_encode.hpp"
@@ -37,6 +38,66 @@ struct BlockResult
     int64_t blob_gas_left;
     TestState block_state;
 };
+
+/// The uncle hash for a PoS block: keccak256(RLP([])).
+constexpr auto EMPTY_UNCLE_HASH =
+    0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347_bytes32;
+
+/// Fields needed to reconstruct an Osaka-era execution-layer block header
+/// for the purpose of recomputing its block hash. PoS-only: difficulty=0,
+/// nonce=0, ommers hash = EMPTY_UNCLE_HASH.
+struct AssembledHeader
+{
+    hash256 parent_hash;
+    address coinbase;
+    hash256 state_root;
+    hash256 transactions_root;
+    hash256 receipts_root;
+    state::BloomFilter logs_bloom;
+    int64_t block_number;
+    int64_t gas_limit;
+    int64_t gas_used;
+    int64_t timestamp;
+    bytes extra_data;
+    bytes32 prev_randao;
+    uint64_t base_fee_per_gas;
+    hash256 withdrawals_root;
+    uint64_t blob_gas_used;
+    uint64_t excess_blob_gas;
+    hash256 parent_beacon_block_root;
+    hash256 requests_hash;
+};
+
+/// Computes the transactions-trie root directly from the wire-format RLP
+/// payloads carried by the engine payload. Using the raw bytes (rather than
+/// re-encoding decoded `state::Transaction` values) preserves the canonical
+/// signature `v` for legacy transactions — our decoder lowers `v` to a
+/// y-parity bit and extracts chain_id separately, so a round-trip through
+/// `rlp_encode(Transaction)` would produce a different (and incorrect) root.
+hash256 transactions_root_from_rlp(std::span<const bytes> txs_rlp)
+{
+    state::MPT trie;
+    for (size_t i = 0; i < txs_rlp.size(); ++i)
+        trie.insert(rlp::encode(i), bytes{txs_rlp[i]});
+    return trie.hash();
+}
+
+/// Reconstructs the canonical Ethereum mainnet block hash from a fully
+/// populated Osaka-era header. Field order is per the yellow-paper /
+/// post-Prague spec.
+hash256 compute_engine_block_hash(const AssembledHeader& h)
+{
+    using namespace rlp;
+    static const bytes nonce_8(8, 0x00);
+    const uint64_t difficulty = 0;
+    const auto encoded = encode_tuple(h.parent_hash, EMPTY_UNCLE_HASH, h.coinbase, h.state_root,
+        h.transactions_root, h.receipts_root, bytes_view{h.logs_bloom}, difficulty,
+        static_cast<uint64_t>(h.block_number), static_cast<uint64_t>(h.gas_limit),
+        static_cast<uint64_t>(h.gas_used), static_cast<uint64_t>(h.timestamp), h.extra_data,
+        h.prev_randao, bytes_view{nonce_8}, h.base_fee_per_gas, h.withdrawals_root,
+        h.blob_gas_used, h.excess_blob_gas, h.parent_beacon_block_root, h.requests_hash);
+    return keccak256(encoded);
+}
 
 // Modeled on blockchaintest_runner.cpp:apply_block. Returns a BlockResult.
 // Transactions are pre-decoded (by the caller) into state::Transaction values.
@@ -281,6 +342,38 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
                         if (got[i] != bytes_view{p.expected_requests[i]})
                             return "requests[" + std::to_string(i) + "] mismatch";
                     }
+                }
+
+                // Verify block hash by reconstructing the EL header. This is
+                // the canonical check real execution layers do: it catches
+                // payloads whose declared blockHash diverges from the hash
+                // implied by their other fields (e.g. tampered withdrawals
+                // list — INVALID_WITHDRAWALS_ROOT / INVALID_BLOCK_HASH).
+                {
+                    const AssembledHeader header{
+                        .parent_hash = p.block_info.parent_hash,
+                        .coinbase = p.block_info.coinbase,
+                        .state_root = mpt_hash(res.block_state),
+                        .transactions_root = transactions_root_from_rlp(p.transactions_rlp),
+                        .receipts_root = mpt_hash(res.receipts),
+                        .logs_bloom = res.bloom,
+                        .block_number = p.block_info.number,
+                        .gas_limit = p.block_info.gas_limit,
+                        .gas_used = res.gas_used,
+                        .timestamp = p.block_info.timestamp,
+                        .extra_data = p.block_info.extra_data,
+                        .prev_randao = p.block_info.prev_randao,
+                        .base_fee_per_gas = p.block_info.base_fee,
+                        .withdrawals_root = mpt_hash(p.block_info.withdrawals),
+                        .blob_gas_used = p.block_info.blob_gas_used.value_or(0),
+                        .excess_blob_gas = p.block_info.excess_blob_gas.value_or(0),
+                        .parent_beacon_block_root = p.block_info.parent_beacon_block_root,
+                        .requests_hash = calculate_requests_hash(*res.requests),
+                    };
+                    const auto computed_hash = compute_engine_block_hash(header);
+                    if (computed_hash != p.expected_block_hash)
+                        return "block hash mismatch (got 0x" + hex(computed_hash) + ", expected 0x" +
+                               hex(p.expected_block_hash) + ")";
                 }
                 return std::nullopt;
             }();

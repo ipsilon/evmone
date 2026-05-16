@@ -490,3 +490,35 @@ TEST(engine_test_runner, requests_mismatch_satisfies_validation_error)
     const auto result = run_engine_test(t, vm);
     EXPECT_TRUE(result.passed) << result.error;
 }
+
+TEST(engine_test_runner, block_hash_mismatch_caught_when_payload_lies)
+{
+    // Use the e2e fixture but corrupt the expected_block_hash so the
+    // recomputed hash won't match. The runner must surface a "block hash
+    // mismatch" error (i.e. the canonical EL header check catches that
+    // the declared blockHash diverges from the hash implied by the
+    // reconstructed header).
+    const auto* dir = std::getenv("EVMONE_FIXTURES_DIR");
+    if (dir == nullptr)
+        GTEST_SKIP() << "EVMONE_FIXTURES_DIR not set";
+
+    const std::filesystem::path path = std::filesystem::path{dir} /
+        "blockchain_tests_engine/for_osaka/istanbul/eip152_blake2/blake2_delegatecall/"
+        "blake2_precompile_delegatecall.json";
+    if (!std::filesystem::exists(path))
+        GTEST_SKIP() << "fixture not found: " << path;
+
+    std::ifstream f{path};
+    const std::string json{
+        std::istreambuf_iterator<char>{f}, std::istreambuf_iterator<char>{}};
+
+    auto tests = load_engine_tests(json);
+    ASSERT_EQ(tests.size(), 1u);
+    ASSERT_FALSE(tests[0].payloads.empty());
+    tests[0].payloads[0].expected_block_hash = bytes32{};  // corrupt
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(tests[0], vm);
+    EXPECT_FALSE(result.passed);
+    EXPECT_THAT(result.error, HasSubstr("block hash mismatch"));
+}
