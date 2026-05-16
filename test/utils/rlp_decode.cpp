@@ -26,9 +26,12 @@ static void rlp_decode(bytes_view& from, Authorization& to)
     decode(payload, to.nonce);
     uint256 v_u256{};
     decode<uint256>(payload, v_u256);
-    to.v = static_cast<uint8_t>(v_u256);
-    if (to.v > 1 || v_u256 > 1)
-        throw std::runtime_error("rlp decoding error: invalid authorization y_parity");
+    // Cap out-of-range y_parity at 2 so recover_authorization_signer
+    // (which returns nullopt for v > 1) handles any non-{0,1} value
+    // uniformly, including values whose low byte happens to be 0 or 1.
+    // Per EIP-7702 invalid auths are silently skipped during processing
+    // rather than rejected at RLP decode.
+    to.v = (v_u256 <= 1) ? static_cast<uint8_t>(v_u256) : uint8_t{2};
     decode(payload, to.r);
     decode(payload, to.s);
     if (!payload.empty())
