@@ -17,6 +17,7 @@ target_sources(
     bytecode.hpp
     engine_test.hpp
     engine_test_loader.cpp
+    engine_test_runner.cpp
     mpt.hpp
     mpt.cpp
     mpt_hash.hpp

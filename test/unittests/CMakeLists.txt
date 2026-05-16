@@ -11,6 +11,7 @@ target_sources(
     blockchaintest_loader_test.cpp
     bytecode_test.cpp
     engine_test_loader_test.cpp
+    engine_test_runner_test.cpp
     evm_fixture.cpp
     evm_fixture.hpp
     evm_test.cpp
