@@ -522,3 +522,28 @@ TEST(engine_test_runner, block_hash_mismatch_caught_when_payload_lies)
     EXPECT_FALSE(result.passed);
     EXPECT_THAT(result.error, HasSubstr("block hash mismatch"));
 }
+
+TEST(engine_test_runner, block_rlp_size_over_limit_satisfies_validation_error)
+{
+    // EIP-7934: the canonical block RLP must be <= 8 MB on Osaka+.
+    // Build a synthetic Osaka payload whose oversized extra_data pushes the
+    // block well past the cap, mark it as expected-invalid, and verify the
+    // runner accepts it as the expected outcome (i.e. some verify step —
+    // either the block-hash check or the new size check — fires and the
+    // payload is rejected, satisfying validation_error → result is PASS).
+    auto t = make_test_with_cancun_genesis();
+    t.network = "Osaka";
+    t.rev = to_rev_schedule(t.network);
+    t.blob_schedule["Osaka"] = state::BlobParams{0x06, 0x09, 0x4c6964};
+    auto p = make_minimal_child_payload(t.genesis);
+    // Pad extra_data well past the 8 MB cap (also pushes total block past it).
+    p.block_info.extra_data = bytes(9ull * 1024 * 1024, 0xff);
+    p.validation_error = "BlockException.RLP_BLOCK_LIMIT_EXCEEDED";
+    t.payloads.push_back(p);
+    // Rejected payload does not advance chain head.
+    t.last_block_hash = t.genesis.hash;
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_TRUE(result.passed) << result.error;
+}

@@ -46,6 +46,21 @@ template <typename InputIterator>
 inline bytes encode_container(InputIterator begin, InputIterator end);
 }  // namespace internal
 
+/// Returns the number of bytes the RLP list-header prefix will occupy for a
+/// payload of the given size. Mirrors `internal::encode_length<192, 247>` but
+/// only reports the prefix length so callers can compute the total wrapped
+/// size without materializing the bytes.
+inline size_t list_header_size(size_t payload_size) noexcept
+{
+    if (payload_size <= 55)
+        return 1;
+    if (payload_size <= 0xff)
+        return 2;
+    if (payload_size <= 0xffff)
+        return 3;
+    return 4;
+}
+
 inline bytes_view trim(bytes_view b) noexcept
 {
     b.remove_prefix(std::min(b.find_first_not_of(uint8_t{0x00}), b.size()));

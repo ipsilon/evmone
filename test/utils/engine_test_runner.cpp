@@ -43,6 +43,13 @@ struct BlockResult
 constexpr auto EMPTY_UNCLE_HASH =
     0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347_bytes32;
 
+/// CL gossip protocol max block size (EIP-7934).
+constexpr size_t MAX_BLOCK_SIZE = 10ull * 1024 * 1024;
+/// Safety margin for beacon block content (EIP-7934).
+constexpr size_t SAFETY_MARGIN = 2ull * 1024 * 1024;
+/// Maximum EL block size when RLP encoded (EIP-7934). 8 MB.
+constexpr size_t MAX_RLP_BLOCK_SIZE = MAX_BLOCK_SIZE - SAFETY_MARGIN;
+
 /// Fields needed to reconstruct an Osaka-era execution-layer block header
 /// for the purpose of recomputing its block hash. PoS-only: difficulty=0,
 /// nonce=0, ommers hash = EMPTY_UNCLE_HASH.
@@ -82,21 +89,66 @@ hash256 transactions_root_from_rlp(std::span<const bytes> txs_rlp)
     return trie.hash();
 }
 
-/// Reconstructs the canonical Ethereum mainnet block hash from a fully
-/// populated Osaka-era header. Field order is per the yellow-paper /
+/// Encodes the canonical Ethereum mainnet block header as an RLP list,
+/// returning the wrapped list bytes. Field order is per the yellow-paper /
 /// post-Prague spec.
-hash256 compute_engine_block_hash(const AssembledHeader& h)
+bytes encode_engine_header(const AssembledHeader& h)
 {
     using namespace rlp;
     static const bytes nonce_8(8, 0x00);
     const uint64_t difficulty = 0;
-    const auto encoded = encode_tuple(h.parent_hash, EMPTY_UNCLE_HASH, h.coinbase, h.state_root,
+    return encode_tuple(h.parent_hash, EMPTY_UNCLE_HASH, h.coinbase, h.state_root,
         h.transactions_root, h.receipts_root, bytes_view{h.logs_bloom}, difficulty,
         static_cast<uint64_t>(h.block_number), static_cast<uint64_t>(h.gas_limit),
         static_cast<uint64_t>(h.gas_used), static_cast<uint64_t>(h.timestamp), h.extra_data,
         h.prev_randao, bytes_view{nonce_8}, h.base_fee_per_gas, h.withdrawals_root,
         h.blob_gas_used, h.excess_blob_gas, h.parent_beacon_block_root, h.requests_hash);
-    return keccak256(encoded);
+}
+
+/// Computes the canonical block RLP size (EIP-7934):
+///   RLP([header, transactions, uncles=[], withdrawals]).
+/// Legacy tx wire bytes (first byte >= 0xc0) embed as sub-lists; typed tx
+/// wire bytes (first byte <= 0x7f, EIP-2718) are wrapped as opaque RLP byte
+/// strings within the transactions list.
+size_t compute_block_rlp_size(const bytes& header_encoded,
+    const std::vector<bytes>& transactions_rlp,
+    const std::vector<state::Withdrawal>& withdrawals)
+{
+    // Transactions list payload (concatenation of per-tx encodings).
+    bytes tx_list_payload;
+    for (const auto& tx_wire : transactions_rlp)
+    {
+        if (tx_wire.empty())
+            continue;  // defensive
+        if (tx_wire[0] >= 0xc0)
+        {
+            // Legacy: wire bytes are already an RLP list — embed directly.
+            tx_list_payload.append(tx_wire);
+        }
+        else
+        {
+            // Typed (EIP-2718): wrap as opaque byte string.
+            tx_list_payload.append(rlp::encode(bytes_view{tx_wire}));
+        }
+    }
+
+    // Withdrawals list payload.
+    bytes wd_list_payload;
+    for (const auto& w : withdrawals)
+        wd_list_payload.append(rlp_encode(w));
+
+    // Sum the four element-encodings (each wrapped at its own list level):
+    //   header_encoded is already wrapped.
+    //   transactions: list_header + tx_list_payload
+    //   uncles: single byte 0xc0 (empty list, post-Merge).
+    //   withdrawals: list_header + wd_list_payload.
+    const auto inner_size = header_encoded.size() +
+        rlp::list_header_size(tx_list_payload.size()) + tx_list_payload.size() +
+        1 +  // uncles
+        rlp::list_header_size(wd_list_payload.size()) + wd_list_payload.size();
+
+    // Outer block list framing.
+    return rlp::list_header_size(inner_size) + inner_size;
 }
 
 // Modeled on blockchaintest_runner.cpp:apply_block. Returns a BlockResult.
@@ -349,31 +401,40 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
                 // payloads whose declared blockHash diverges from the hash
                 // implied by their other fields (e.g. tampered withdrawals
                 // list — INVALID_WITHDRAWALS_ROOT / INVALID_BLOCK_HASH).
+                const AssembledHeader header{
+                    .parent_hash = p.block_info.parent_hash,
+                    .coinbase = p.block_info.coinbase,
+                    .state_root = mpt_hash(res.block_state),
+                    .transactions_root = transactions_root_from_rlp(p.transactions_rlp),
+                    .receipts_root = mpt_hash(res.receipts),
+                    .logs_bloom = res.bloom,
+                    .block_number = p.block_info.number,
+                    .gas_limit = p.block_info.gas_limit,
+                    .gas_used = res.gas_used,
+                    .timestamp = p.block_info.timestamp,
+                    .extra_data = p.block_info.extra_data,
+                    .prev_randao = p.block_info.prev_randao,
+                    .base_fee_per_gas = p.block_info.base_fee,
+                    .withdrawals_root = mpt_hash(p.block_info.withdrawals),
+                    .blob_gas_used = p.block_info.blob_gas_used.value_or(0),
+                    .excess_blob_gas = p.block_info.excess_blob_gas.value_or(0),
+                    .parent_beacon_block_root = p.block_info.parent_beacon_block_root,
+                    .requests_hash = calculate_requests_hash(*res.requests),
+                };
+                const auto header_encoded = encode_engine_header(header);
+                const auto computed_hash = keccak256(header_encoded);
+                if (computed_hash != p.expected_block_hash)
+                    return "block hash mismatch (got 0x" + hex(computed_hash) + ", expected 0x" +
+                           hex(p.expected_block_hash) + ")";
+
+                // EIP-7934 block RLP size limit (Osaka+).
+                if (rev >= EVMC_OSAKA)
                 {
-                    const AssembledHeader header{
-                        .parent_hash = p.block_info.parent_hash,
-                        .coinbase = p.block_info.coinbase,
-                        .state_root = mpt_hash(res.block_state),
-                        .transactions_root = transactions_root_from_rlp(p.transactions_rlp),
-                        .receipts_root = mpt_hash(res.receipts),
-                        .logs_bloom = res.bloom,
-                        .block_number = p.block_info.number,
-                        .gas_limit = p.block_info.gas_limit,
-                        .gas_used = res.gas_used,
-                        .timestamp = p.block_info.timestamp,
-                        .extra_data = p.block_info.extra_data,
-                        .prev_randao = p.block_info.prev_randao,
-                        .base_fee_per_gas = p.block_info.base_fee,
-                        .withdrawals_root = mpt_hash(p.block_info.withdrawals),
-                        .blob_gas_used = p.block_info.blob_gas_used.value_or(0),
-                        .excess_blob_gas = p.block_info.excess_blob_gas.value_or(0),
-                        .parent_beacon_block_root = p.block_info.parent_beacon_block_root,
-                        .requests_hash = calculate_requests_hash(*res.requests),
-                    };
-                    const auto computed_hash = compute_engine_block_hash(header);
-                    if (computed_hash != p.expected_block_hash)
-                        return "block hash mismatch (got 0x" + hex(computed_hash) + ", expected 0x" +
-                               hex(p.expected_block_hash) + ")";
+                    const auto block_size = compute_block_rlp_size(
+                        header_encoded, p.transactions_rlp, p.block_info.withdrawals);
+                    if (block_size > MAX_RLP_BLOCK_SIZE)
+                        return "block RLP size " + std::to_string(block_size) +
+                               " exceeds limit " + std::to_string(MAX_RLP_BLOCK_SIZE);
                 }
                 return std::nullopt;
             }();
