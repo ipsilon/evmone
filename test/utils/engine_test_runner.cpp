@@ -122,12 +122,16 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
         uint64_t blob_gas_used = 0;
         uint64_t excess_blob_gas = 0;
         uint64_t base_fee_per_gas = 0;
+        uint64_t gas_limit = 0;
+        uint64_t gas_used = 0;
     };
 
     ParentContext parent_ctx{
         .blob_gas_used = t.genesis.blob_gas_used.value_or(0),
         .excess_blob_gas = t.genesis.excess_blob_gas.value_or(0),
         .base_fee_per_gas = t.genesis.base_fee_per_gas,
+        .gas_limit = static_cast<uint64_t>(t.genesis.gas_limit),
+        .gas_used = static_cast<uint64_t>(t.genesis.gas_used),
     };
 
     for (size_t pi = 0; pi < t.payloads.size(); ++pi)
@@ -144,6 +148,27 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
 
         // 0. Pre-execution header validation.
         const auto header_error = [&]() -> std::optional<std::string> {
+            // gas_limit window vs parent (Yellow Paper).
+            const auto child_gas_limit = static_cast<uint64_t>(p.block_info.gas_limit);
+            if (p.block_info.gas_limit < 5000)
+                return "gas_limit below 5000 floor";
+            if (child_gas_limit >= parent_ctx.gas_limit + parent_ctx.gas_limit / 1024)
+                return "gas_limit exceeds parent + parent/1024";
+            if (child_gas_limit <= parent_ctx.gas_limit - parent_ctx.gas_limit / 1024)
+                return "gas_limit below parent - parent/1024";
+
+            // base_fee_per_gas formula (London+).
+            if (rev >= EVMC_LONDON)
+            {
+                const auto expected_base_fee = state::calc_base_fee(
+                    static_cast<int64_t>(parent_ctx.gas_limit),
+                    static_cast<int64_t>(parent_ctx.gas_used), parent_ctx.base_fee_per_gas);
+                if (p.block_info.base_fee != expected_base_fee)
+                    return "base_fee_per_gas mismatch (got " +
+                           std::to_string(p.block_info.base_fee) + ", expected " +
+                           std::to_string(expected_base_fee) + ")";
+            }
+
             if (rev >= EVMC_CANCUN)
             {
                 const auto blob_params =
@@ -151,6 +176,9 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
                 if (!p.block_info.excess_blob_gas.has_value() ||
                     !p.block_info.blob_gas_used.has_value())
                     return "missing blob gas fields";
+
+                if (*p.block_info.blob_gas_used > state::max_blob_gas_per_block(blob_params))
+                    return "blob_gas_used exceeds max_blob_gas_per_block";
 
                 const auto parent_blob_base_fee =
                     state::compute_blob_gas_price(blob_params, parent_ctx.excess_blob_gas);
@@ -252,6 +280,8 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
                 .blob_gas_used = p.block_info.blob_gas_used.value_or(0),
                 .excess_blob_gas = p.block_info.excess_blob_gas.value_or(0),
                 .base_fee_per_gas = p.block_info.base_fee,
+                .gas_limit = static_cast<uint64_t>(p.block_info.gas_limit),
+                .gas_used = static_cast<uint64_t>(res.gas_used),
             };
         }
 
