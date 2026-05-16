@@ -112,6 +112,10 @@ state::BlobParams from_json<state::BlobParams>(const json::json& j);
 template <>
 BlobSchedule from_json<BlobSchedule>(const json::json& j);
 
+struct BlockHeader;
+template <>
+BlockHeader from_json<BlockHeader>(const json::json& j);
+
 /// Exports the State (accounts) to JSON format (aka pre/post/alloc state).
 json::json to_json(const TestState& state);
 
