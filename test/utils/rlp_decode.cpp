@@ -26,12 +26,15 @@ static void rlp_decode(bytes_view& from, Authorization& to)
     decode(payload, to.nonce);
     uint256 v_u256{};
     decode<uint256>(payload, v_u256);
-    // Cap out-of-range y_parity at 2 so recover_authorization_signer
-    // (which returns nullopt for v > 1) handles any non-{0,1} value
-    // uniformly, including values whose low byte happens to be 0 or 1.
-    // Per EIP-7702 invalid auths are silently skipped during processing
-    // rather than rejected at RLP decode.
-    to.v = (v_u256 <= 1) ? static_cast<uint8_t>(v_u256) : uint8_t{2};
+    // Preserve the original wire-encoded y_parity (truncated to the low
+    // byte). Per EIP-7702 invalid auths are silently skipped during
+    // processing rather than rejected at RLP decode, and
+    // recover_authorization_signer returns nullopt for v > 1. Capping
+    // here would change the value used by compute_tx_signing_hash when
+    // re-encoding the auth list — and that would corrupt the signing
+    // hash for transactions whose authorizations carry an out-of-range
+    // y_parity, leading to wrong tx-level sender recovery.
+    to.v = static_cast<uint8_t>(v_u256);
     decode(payload, to.r);
     decode(payload, to.s);
     if (!payload.empty())
