@@ -102,8 +102,10 @@ BlockResult apply_block(
 
     finalize(block_state, rev, block.coinbase, std::nullopt, block.ommers, block.withdrawals);
 
+    const auto bloom = compute_bloom_filter(receipts);
+
     return {std::move(receipts), std::move(rejected_txs), std::move(requests), block_gas_used,
-        compute_bloom_filter(receipts), blob_gas_left, std::move(block_state)};
+        bloom, blob_gas_left, std::move(block_state)};
 }
 }  // namespace
 
