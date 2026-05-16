@@ -75,3 +75,33 @@ TEST(engine_test_loader, minimal_fixture)
     EXPECT_EQ(tests[0].genesis.hash,
         0x0000000000000000000000000000000000000000000000000000000000000003_bytes32);
 }
+
+TEST(engine_test_loader, rejects_blockchain_test_format)
+{
+    constexpr auto json = R"({
+        "t": { "_info": { "fixture-format": "blockchain_test" } }
+    })";
+    EXPECT_THROW(load_engine_tests(json), UnsupportedTestFeature);
+}
+
+TEST(engine_test_loader, rejects_state_test_format)
+{
+    constexpr auto json = R"({
+        "t": { "_info": { "fixture-format": "state_test" } }
+    })";
+    EXPECT_THROW(load_engine_tests(json), UnsupportedTestFeature);
+}
+
+TEST(engine_test_loader, rejects_blockchain_test_engine_x_format)
+{
+    constexpr auto json = R"({
+        "t": { "_info": { "fixture-format": "blockchain_test_engine_x" } }
+    })";
+    EXPECT_THROW(load_engine_tests(json), UnsupportedTestFeature);
+}
+
+TEST(engine_test_loader, rejects_missing_info)
+{
+    constexpr auto json = R"({ "t": { "network": "Osaka" } })";
+    EXPECT_THROW(load_engine_tests(json), UnsupportedTestFeature);
+}

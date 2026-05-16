@@ -47,7 +47,17 @@ std::vector<EngineTest> load_engine_tests(std::string_view json_str)
     std::vector<EngineTest> tests;
     for (const auto& [name, entry] : j.items())
     {
-        // Format detection comes in the next task.
+        const auto info_it = entry.find("_info");
+        if (info_it == entry.end())
+            throw UnsupportedTestFeature{"unsupported fixture format: <missing _info>"};
+        const auto fmt_it = info_it->find("fixture-format");
+        if (fmt_it == info_it->end())
+            throw UnsupportedTestFeature{
+                "unsupported fixture format: <missing fixture-format>"};
+        const auto fmt = fmt_it->get<std::string>();
+        if (fmt != "blockchain_test_engine")
+            throw UnsupportedTestFeature{"unsupported fixture format: " + fmt};
+
         tests.emplace_back(load_engine_test_case(name, entry));
     }
     return tests;
