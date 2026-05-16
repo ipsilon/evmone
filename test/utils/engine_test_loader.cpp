@@ -115,7 +115,10 @@ EngineTest load_engine_test_case(const std::string& name, const json::json& j)
     et.genesis = from_json<BlockHeader>(j.at("genesisBlockHeader"));
     et.last_block_hash = from_json<hash256>(j.at("lastblockhash"));
 
-    for (const auto& payload_j : j.at("engineNewPayloads"))
+    const auto& payloads_json = j.at("engineNewPayloads");
+    if (!payloads_json.is_array())
+        throw std::runtime_error{"engineNewPayloads: expected an array"};
+    for (const auto& payload_j : payloads_json)
     {
         auto& p = et.payloads.emplace_back(
             load_engine_payload(payload_j, et.network, et.blob_schedule));

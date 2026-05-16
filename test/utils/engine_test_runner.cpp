@@ -110,12 +110,16 @@ bytes encode_engine_header(const AssembledHeader& h)
 /// Legacy tx wire bytes (first byte >= 0xc0) embed as sub-lists; typed tx
 /// wire bytes (first byte <= 0x7f, EIP-2718) are wrapped as opaque RLP byte
 /// strings within the transactions list.
+///
+/// Accumulates element sizes directly rather than materializing intermediate
+/// payload buffers — avoids the ~10 MB allocations seen in `@bigmem` block
+/// tests where a single block packs near the EIP-7934 limit.
 size_t compute_block_rlp_size(const bytes& header_encoded,
     const std::vector<bytes>& transactions_rlp,
     const std::vector<state::Withdrawal>& withdrawals)
 {
-    // Transactions list payload (concatenation of per-tx encodings).
-    bytes tx_list_payload;
+    // Transactions list payload size (sum of per-tx encoded sizes).
+    size_t tx_payload_size = 0;
     for (const auto& tx_wire : transactions_rlp)
     {
         if (tx_wire.empty())
@@ -123,29 +127,34 @@ size_t compute_block_rlp_size(const bytes& header_encoded,
         if (tx_wire[0] >= 0xc0)
         {
             // Legacy: wire bytes are already an RLP list — embed directly.
-            tx_list_payload.append(tx_wire);
+            tx_payload_size += tx_wire.size();
         }
         else
         {
-            // Typed (EIP-2718): wrap as opaque byte string.
-            tx_list_payload.append(rlp::encode(bytes_view{tx_wire}));
+            // Typed (EIP-2718): wrapped as opaque RLP byte string. The
+            // string single-byte special case (size==1 && data[0]<0x80)
+            // never applies — typed tx wire bytes are never length 1.
+            // `list_header_size` and the byte-string header size share the
+            // same length table, so we reuse it here.
+            tx_payload_size += rlp::list_header_size(tx_wire.size()) + tx_wire.size();
         }
     }
 
-    // Withdrawals list payload.
-    bytes wd_list_payload;
+    // Withdrawals: per-block count is small (<=16 typical), so allocating
+    // each encoded withdrawal is cheap; we just sum the sizes.
+    size_t wd_payload_size = 0;
     for (const auto& w : withdrawals)
-        wd_list_payload.append(rlp_encode(w));
+        wd_payload_size += rlp_encode(w).size();
 
     // Sum the four element-encodings (each wrapped at its own list level):
     //   header_encoded is already wrapped.
-    //   transactions: list_header + tx_list_payload
+    //   transactions: list_header + tx_payload_size
     //   uncles: single byte 0xc0 (empty list, post-Merge).
-    //   withdrawals: list_header + wd_list_payload.
+    //   withdrawals: list_header + wd_payload_size.
     const auto inner_size = header_encoded.size() +
-        rlp::list_header_size(tx_list_payload.size()) + tx_list_payload.size() +
+        rlp::list_header_size(tx_payload_size) + tx_payload_size +
         1 +  // uncles
-        rlp::list_header_size(wd_list_payload.size()) + wd_list_payload.size();
+        rlp::list_header_size(wd_payload_size) + wd_payload_size;
 
     // Outer block list framing.
     return rlp::list_header_size(inner_size) + inner_size;
@@ -174,7 +183,7 @@ BlockResult apply_block(
     {
         const auto& tx = txs[i];
         const auto tx_hash = keccak256(txs_rlp[i]);
-        auto res = transition(
+        auto res = evmone::test::transition(
             block_state, block, block_hashes, tx, rev, vm, block_gas_left, blob_gas_left);
         if (std::holds_alternative<std::error_code>(res))
         {
@@ -347,44 +356,60 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
             return fail(*header_error);
         }
 
-        // 1. Decode transactions.
-        std::vector<Transaction> txs;
-        txs.reserve(p.transactions_rlp.size());
-        for (size_t ti = 0; ti < p.transactions_rlp.size(); ++ti)
+        // Steps 1-4 + chain-head advance, returning a tri-state outcome.
+        // `Skip` short-circuits when a payload that was expected to be
+        // invalid actually fails — analogous to the previous `goto
+        // next_payload;` sites.
+        enum class PayloadOutcome
         {
-            try
-            {
-                Transaction tx;
-                bytes_view view{p.transactions_rlp[ti]};
-                rlp_decode(view, tx);
-                txs.emplace_back(std::move(tx));
-            }
-            catch (const std::exception& ex)
-            {
-                if (expected_invalid)
-                    goto next_payload;
-                std::ostringstream os;
-                os << "tx " << ti << " RLP decode error: " << ex.what();
-                return fail(os.str());
-            }
-        }
+            Accept,  // block validated; chain head already advanced.
+            Skip,    // block rejected as expected (validation_error set).
+            Fail,    // unexpected failure or accept; caller stops the test.
+        };
+        struct PayloadStepResult
+        {
+            PayloadOutcome outcome;
+            std::string error;  // populated only for Fail.
+        };
 
-        // 2. Recover senders.
-        for (size_t ti = 0; ti < txs.size(); ++ti)
-        {
-            auto sender = recover_sender(txs[ti]);
-            if (!sender.has_value())
+        const auto process_payload = [&]() -> PayloadStepResult {
+            // 1. Decode transactions.
+            std::vector<Transaction> txs;
+            txs.reserve(p.transactions_rlp.size());
+            for (size_t ti = 0; ti < p.transactions_rlp.size(); ++ti)
             {
-                if (expected_invalid)
-                    goto next_payload;
-                std::ostringstream os;
-                os << "tx " << ti << " sender recovery failed";
-                return fail(os.str());
+                try
+                {
+                    Transaction tx;
+                    bytes_view view{p.transactions_rlp[ti]};
+                    rlp_decode(view, tx);
+                    txs.emplace_back(std::move(tx));
+                }
+                catch (const std::exception& ex)
+                {
+                    if (expected_invalid)
+                        return {PayloadOutcome::Skip, {}};
+                    std::ostringstream os;
+                    os << "tx " << ti << " RLP decode error: " << ex.what();
+                    return {PayloadOutcome::Fail, os.str()};
+                }
             }
-            txs[ti].sender = *sender;
-        }
 
-        {
+            // 2. Recover senders.
+            for (size_t ti = 0; ti < txs.size(); ++ti)
+            {
+                auto sender = recover_sender(txs[ti]);
+                if (!sender.has_value())
+                {
+                    if (expected_invalid)
+                        return {PayloadOutcome::Skip, {}};
+                    std::ostringstream os;
+                    os << "tx " << ti << " sender recovery failed";
+                    return {PayloadOutcome::Fail, os.str()};
+                }
+                txs[ti].sender = *sender;
+            }
+
             // 3. Apply the block.
             auto res = apply_block(current_state, vm, p.block_info, block_hashes, txs,
                 p.transactions_rlp, rev);
@@ -477,13 +502,14 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
             if (verify_failed.has_value())
             {
                 if (expected_invalid)
-                    goto next_payload;
-                return fail(*verify_failed);
+                    return {PayloadOutcome::Skip, {}};
+                return {PayloadOutcome::Fail, *verify_failed};
             }
 
             if (expected_invalid)
-                return fail("expected validation error '" + *p.validation_error +
-                            "' but block was accepted");
+                return {PayloadOutcome::Fail,
+                    "expected validation error '" + *p.validation_error +
+                        "' but block was accepted"};
 
             // Advance chain head.
             current_state = std::move(res.block_state);
@@ -498,10 +524,14 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
                 .timestamp = p.block_info.timestamp,
                 .block_number = p.block_info.number,
             };
-        }
+            return {PayloadOutcome::Accept, {}};
+        };
 
-    next_payload:
-        continue;
+        const auto step = process_payload();
+        if (step.outcome == PayloadOutcome::Fail)
+            return fail(step.error);
+        // Accept (state already advanced) and Skip both fall through to the
+        // next payload.
     }
 
     // Final checks.
@@ -561,7 +591,11 @@ int run_engine_tests_path(
         return run_engine_tests_json(read_file(path), vm, out);
 
     std::vector<fs::path> files;
-    for (const auto& entry : fs::recursive_directory_iterator{path})
+    // `skip_permission_denied` keeps iteration robust over fixture trees with
+    // odd ACLs. Note: this still follows symlinks (C++23 has no opt-out); in
+    // practice fixture trees don't contain symlinks, so cycle risk is nil.
+    for (const auto& entry : fs::recursive_directory_iterator{
+             path, fs::directory_options::skip_permission_denied})
     {
         if (entry.is_regular_file() &&
             entry.path().extension() == ".json" &&
