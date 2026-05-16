@@ -600,3 +600,26 @@ TEST(state_rlp, tx_to_rlp_blob_invalid_to_value)
         "0a"                                                                    // sig_s
     );
 }
+
+// EIP-7685 / general RLP: long-string length encoding with attacker-controlled
+// length bytes must not overflow the uint64 bounds check. The malformed input
+// below has prefix 0xbf (long string, len_of_str_len = 8) followed by 8 bytes
+// of 0xff (str_len = UINT64_MAX). Before the fix, str_len + len_of_str_len
+// wrapped to 7, which compared as < input_len (= 9) and the check passed.
+// After the fix, the subtraction-form check (str_len >= input_len -
+// len_of_str_len) correctly throws.
+TEST(state_rlp, decode_header_long_string_length_no_overflow)
+{
+    const auto malformed =
+        *evmc::from_hex("0xbfffffffffffffffffff");  // 0xbf + 8x 0xff
+    bytes_view view{malformed};
+    EXPECT_THROW(rlp::decode_header(view), std::runtime_error);
+}
+
+TEST(state_rlp, decode_header_long_list_length_no_overflow)
+{
+    const auto malformed =
+        *evmc::from_hex("0xffffffffffffffffffff");  // 0xff + 8x 0xff
+    bytes_view view{malformed};
+    EXPECT_THROW(rlp::decode_header(view), std::runtime_error);
+}

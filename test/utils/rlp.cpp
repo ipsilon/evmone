@@ -45,7 +45,12 @@ namespace evmone::rlp
                 "rlp decoding error: non-canonical long-string length encoding");
 
         const auto str_len = evmone::rlp::load<uint64_t>(input.substr(1, len_of_str_len));
-        if (str_len + len_of_str_len >= input_len)
+        // NOTE: Diverges from origin/fuzzing/main. Rewritten from
+        // `str_len + len_of_str_len >= input_len` to subtract on the side
+        // proven non-zero (len_of_str_len < input_len above), so a
+        // wire-attacker-controlled str_len near UINT64_MAX cannot wrap the
+        // sum and pass the check. Sync back to fuzzing/main on landing.
+        if (str_len >= input_len - len_of_str_len)
             throw std::runtime_error("rlp decoding error: input too short");
 
         // Canonicality: long-form is reserved for strings of length >= 56;
@@ -78,7 +83,9 @@ namespace evmone::rlp
                 "rlp decoding error: non-canonical long-list length encoding");
 
         const auto list_len = evmone::rlp::load<uint64_t>(input.substr(1, len_of_list_len));
-        if (list_len + len_of_list_len >= input_len)
+        // See note on the long-string sibling above: subtract on the
+        // proven-non-zero side to avoid attacker-controlled wraparound.
+        if (list_len >= input_len - len_of_list_len)
             throw std::runtime_error("rlp decoding error: input too short");
 
         // Canonicality: long-form is reserved for lists of length >= 56;
