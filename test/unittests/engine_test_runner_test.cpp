@@ -7,6 +7,9 @@
 #include <gmock/gmock.h>
 #include <test/utils/engine_test.hpp>
 #include <test/utils/utils.hpp>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <sstream>
 
 using namespace evmone;
@@ -168,4 +171,26 @@ TEST(engine_test_runner, run_engine_tests_json_prints_pass_for_empty_fixture)
     const auto s = out.str();
     EXPECT_THAT(s, HasSubstr("PASS minimal_test"));
     EXPECT_THAT(s, HasSubstr("1/1 passed"));
+}
+
+TEST(engine_test_runner, e2e_bal711_blake2_delegatecall_passes)
+{
+    const auto* dir = std::getenv("EVMONE_FIXTURES_DIR");
+    if (dir == nullptr)
+        GTEST_SKIP() << "EVMONE_FIXTURES_DIR not set; skipping on-disk fixture test";
+
+    const std::filesystem::path path = std::filesystem::path{dir} /
+        "blockchain_tests_engine/for_osaka/istanbul/eip152_blake2/blake2_delegatecall/"
+        "blake2_precompile_delegatecall.json";
+    if (!std::filesystem::exists(path))
+        GTEST_SKIP() << "fixture not found: " << path;
+
+    std::ifstream f{path};
+    const std::string json{
+        std::istreambuf_iterator<char>{f}, std::istreambuf_iterator<char>{}};
+
+    evmc::VM vm{evmc_create_evmone()};
+    std::ostringstream out;
+    const int rc = run_engine_tests_json(json, vm, out);
+    EXPECT_EQ(rc, 0) << out.str();
 }
