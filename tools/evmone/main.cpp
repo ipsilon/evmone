@@ -7,6 +7,9 @@
 #include <evmc/tooling.hpp>
 #include <evmone/evmone.h>
 #include <fstream>
+#ifdef EVMONE_HAS_TEST_SUBCOMMAND
+#include <test/utils/engine_test.hpp>
+#endif
 
 namespace
 {
@@ -78,6 +81,14 @@ int main(int argc, const char* const* argv) noexcept
         run_cmd.add_flag("--bench", bench,
             "Benchmark execution time (state modification may result in unexpected behaviour)");
 
+#ifdef EVMONE_HAS_TEST_SUBCOMMAND
+        std::string test_path;
+        auto& test_cmd = *app.add_subcommand("test",
+            "Run an Engine-format blockchain test fixture")->fallthrough();
+        test_cmd.add_option("path", test_path, "Path to JSON fixture file")
+            ->required()->check(CLI::ExistingFile);
+#endif
+
         try
         {
             app.parse(argc, argv);
@@ -103,6 +114,16 @@ int main(int argc, const char* const* argv) noexcept
                 const auto input = load_from_hex(input_arg);
                 return tooling::run(vm, rev, gas, code, input, create, bench, std::cout);
             }
+
+#ifdef EVMONE_HAS_TEST_SUBCOMMAND
+            if (test_cmd)
+            {
+                std::ifstream f{test_path};
+                const std::string json{
+                    std::istreambuf_iterator<char>{f}, std::istreambuf_iterator<char>{}};
+                return evmone::test::run_engine_tests_json(json, vm, std::cout);
+            }
+#endif
 
             return 0;
         }

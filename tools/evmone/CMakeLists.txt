@@ -8,3 +8,8 @@ find_package(CLI11 CONFIG REQUIRED)
 add_executable(evmone-cli main.cpp)
 set_target_properties(evmone-cli PROPERTIES OUTPUT_NAME evmone)
 target_link_libraries(evmone-cli PRIVATE evmone evmc::tooling CLI11::CLI11)
+
+if(EVMONE_TESTING)
+    target_link_libraries(evmone-cli PRIVATE evmone::testutils)
+    target_compile_definitions(evmone-cli PRIVATE EVMONE_HAS_TEST_SUBCOMMAND=1)
+endif()
