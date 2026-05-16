@@ -27,6 +27,8 @@ EngineTest make_empty_engine_test()
     t.rev = to_rev_schedule(t.network);
     t.genesis.hash =
         0x0000000000000000000000000000000000000000000000000000000000000003_bytes32;
+    t.genesis.block_number = 0;
+    t.genesis.timestamp = 0;
     t.last_block_hash = t.genesis.hash;  // no payloads → head stays at genesis
     return t;
 }
@@ -79,6 +81,8 @@ EngineTest make_test_with_bad_state_root()
     t.rev = to_rev_schedule(t.network);
     t.genesis.hash =
         0x0000000000000000000000000000000000000000000000000000000000000003_bytes32;
+    t.genesis.block_number = 0;
+    t.genesis.timestamp = 0;
     t.genesis.gas_limit = 0x7270e00;  // match child so gas_limit window check passes
     t.genesis.gas_used = 0;
     t.genesis.base_fee_per_gas = 7;   // match child so base_fee check passes
@@ -271,6 +275,8 @@ EngineTest make_test_with_bad_excess_blob_gas()
     t.rev = to_rev_schedule(t.network);
     t.genesis.hash =
         0x0000000000000000000000000000000000000000000000000000000000000003_bytes32;
+    t.genesis.block_number = 0;
+    t.genesis.timestamp = 0;
     t.genesis.gas_limit = 0x7270e00;  // match child so gas_limit window check passes
     t.genesis.gas_used = 0;
     t.genesis.blob_gas_used = 0u;
@@ -332,6 +338,7 @@ EngineTest make_test_with_cancun_genesis()
     t.genesis.hash =
         0x0000000000000000000000000000000000000000000000000000000000000003_bytes32;
     t.genesis.block_number = 0;
+    t.genesis.timestamp = 0;
     t.genesis.gas_limit = 0x1c9c380;  // 30M
     t.genesis.gas_used = 0;
     t.genesis.base_fee_per_gas = 0x7;
@@ -422,6 +429,96 @@ TEST(engine_test_runner, blob_gas_used_over_cap_caught)
     const auto result = run_engine_test(t, vm);
     EXPECT_FALSE(result.passed);
     EXPECT_THAT(result.error, HasSubstr("blob_gas_used exceeds max_blob_gas_per_block"));
+}
+
+TEST(engine_test_runner, non_sequential_block_number_caught)
+{
+    auto t = make_test_with_cancun_genesis();
+    auto p = make_minimal_child_payload(t.genesis);
+    p.block_info.number = 5;  // genesis is 0; expected 1
+    t.payloads.push_back(p);
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_FALSE(result.passed);
+    EXPECT_THAT(result.error, HasSubstr("block_number not sequential"));
+}
+
+TEST(engine_test_runner, gas_used_exceeds_gas_limit_caught)
+{
+    auto t = make_test_with_cancun_genesis();
+    auto p = make_minimal_child_payload(t.genesis);
+    p.block_info.gas_used = p.block_info.gas_limit + 1;
+    t.payloads.push_back(p);
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_FALSE(result.passed);
+    EXPECT_THAT(result.error, HasSubstr("gas_used exceeds gas_limit"));
+}
+
+TEST(engine_test_runner, non_increasing_timestamp_caught)
+{
+    auto t = make_test_with_cancun_genesis();
+    t.genesis.timestamp = 1000;
+    auto p = make_minimal_child_payload(t.genesis);
+    p.block_info.timestamp = 1000;  // equal, not greater
+    t.payloads.push_back(p);
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_FALSE(result.passed);
+    EXPECT_THAT(result.error, HasSubstr("timestamp not strictly increasing"));
+}
+
+TEST(engine_test_runner, oversized_extra_data_caught)
+{
+    auto t = make_test_with_cancun_genesis();
+    auto p = make_minimal_child_payload(t.genesis);
+    p.block_info.extra_data = bytes(33, 0xff);
+    t.payloads.push_back(p);
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_FALSE(result.passed);
+    EXPECT_THAT(result.error, HasSubstr("extra_data exceeds 32 bytes"));
+}
+
+TEST(engine_test_runner, pre_cancun_blob_fields_present_caught)
+{
+    // Build a Berlin (pre-Cancun) EngineTest with blob fields present.
+    EngineTest t;
+    t.network = "Berlin";
+    t.rev = to_rev_schedule(t.network);
+    t.genesis.hash =
+        0x0000000000000000000000000000000000000000000000000000000000000003_bytes32;
+    t.genesis.block_number = 0;
+    t.genesis.timestamp = 0;
+    t.genesis.gas_limit = 0x1c9c380;
+    t.genesis.gas_used = 0;
+    t.genesis.base_fee_per_gas = 0;  // Berlin: no base_fee
+    t.last_block_hash = t.genesis.hash;
+
+    EnginePayload p;
+    p.block_info.number = 1;
+    p.block_info.gas_limit = t.genesis.gas_limit;
+    p.block_info.gas_used = 0;
+    p.block_info.timestamp = 1;
+    p.block_info.base_fee = 0;
+    p.block_info.coinbase = 0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba_address;
+    p.block_info.parent_hash = t.genesis.hash;
+    p.block_info.parent_beacon_block_root = bytes32{};
+    p.block_info.blob_gas_used = 0u;  // present pre-Cancun → invalid
+    p.expected_block_hash = bytes32{};
+    p.expected_state_root = state::EMPTY_MPT_HASH;
+    p.expected_receipts_root = state::EMPTY_MPT_HASH;
+    p.expected_gas_used = 0;
+    t.payloads.push_back(p);
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_FALSE(result.passed);
+    EXPECT_THAT(result.error, HasSubstr("blob gas fields present pre-Cancun"));
 }
 
 namespace

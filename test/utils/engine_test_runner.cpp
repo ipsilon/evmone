@@ -237,6 +237,8 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
         uint64_t base_fee_per_gas = 0;
         uint64_t gas_limit = 0;
         uint64_t gas_used = 0;
+        int64_t timestamp = 0;
+        int64_t block_number = 0;
     };
 
     ParentContext parent_ctx{
@@ -245,6 +247,8 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
         .base_fee_per_gas = t.genesis.base_fee_per_gas,
         .gas_limit = static_cast<uint64_t>(t.genesis.gas_limit),
         .gas_used = static_cast<uint64_t>(t.genesis.gas_used),
+        .timestamp = t.genesis.timestamp,
+        .block_number = t.genesis.block_number,
     };
 
     for (size_t pi = 0; pi < t.payloads.size(); ++pi)
@@ -261,6 +265,35 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
 
         // 0. Pre-execution header validation.
         const auto header_error = [&]() -> std::optional<std::string> {
+            // Sequential block number.
+            if (p.block_info.number != parent_ctx.block_number + 1)
+                return "block_number not sequential (got " +
+                       std::to_string(p.block_info.number) + ", expected " +
+                       std::to_string(parent_ctx.block_number + 1) + ")";
+
+            // gas_used must not exceed gas_limit.
+            if (p.block_info.gas_used > p.block_info.gas_limit)
+                return "gas_used exceeds gas_limit";
+
+            // Timestamp must strictly increase. Cast through uint64_t to mirror
+            // blockchaintest_runner's handling of timestamps that don't fit
+            // int64_t.
+            if (static_cast<uint64_t>(p.block_info.timestamp) <=
+                static_cast<uint64_t>(parent_ctx.timestamp))
+                return "timestamp not strictly increasing";
+
+            // extra_data must be <= 32 bytes.
+            if (p.block_info.extra_data.size() > 32)
+                return "extra_data exceeds 32 bytes";
+
+            // Pre-Cancun: blob gas fields must be absent.
+            if (rev < EVMC_CANCUN)
+            {
+                if (p.block_info.blob_gas_used.has_value() ||
+                    p.block_info.excess_blob_gas.has_value())
+                    return "blob gas fields present pre-Cancun";
+            }
+
             // gas_limit window vs parent (Yellow Paper).
             const auto child_gas_limit = static_cast<uint64_t>(p.block_info.gas_limit);
             if (p.block_info.gas_limit < 5000)
@@ -460,6 +493,8 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
                 .base_fee_per_gas = p.block_info.base_fee,
                 .gas_limit = static_cast<uint64_t>(p.block_info.gas_limit),
                 .gas_used = static_cast<uint64_t>(res.gas_used),
+                .timestamp = p.block_info.timestamp,
+                .block_number = p.block_info.number,
             };
         }
 
