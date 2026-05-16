@@ -97,7 +97,9 @@ TEST(engine_test_runner, validation_error_with_invalid_block_passes)
     auto t = make_test_with_bad_state_root();
     t.payloads[0].validation_error = "BlockException.INVALID_STATE_ROOT";
     // With validation_error set, the state-root mismatch is the expected
-    // outcome → result is PASS.
+    // outcome → result is PASS. The accepted chain head stays at genesis,
+    // so lastblockhash must equal genesis.hash.
+    t.last_block_hash = t.genesis.hash;
     evmc::VM vm{evmc_create_evmone()};
     const auto result = run_engine_test(t, vm);
     EXPECT_TRUE(result.passed) << result.error;
@@ -111,9 +113,26 @@ TEST(engine_test_runner, validation_error_with_bad_rlp_passes)
     // decode failure is the expected outcome → PASS.
     t.payloads[0].transactions_rlp.push_back(*evmc::from_hex("0xff"));
     t.payloads[0].validation_error = "BlockException.INVALID_TRANSACTION";
+    t.last_block_hash = t.genesis.hash;
     evmc::VM vm{evmc_create_evmone()};
     const auto result = run_engine_test(t, vm);
     EXPECT_TRUE(result.passed) << result.error;
+}
+
+TEST(engine_test_runner, lastblockhash_mismatch_caught_when_trailing_payload_invalid)
+{
+    auto t = make_test_with_bad_state_root();
+    // Mark the last (and only) payload as expected-invalid → it does not
+    // advance the chain head. The accepted chain head is therefore the genesis.
+    t.payloads[0].validation_error = "BlockException.INVALID_STATE_ROOT";
+    // ...but the test declares lastblockhash to be the rejected payload's
+    // declared block hash. That should be caught as a mismatch.
+    t.last_block_hash = t.payloads[0].expected_block_hash;
+
+    evmc::VM vm{evmc_create_evmone()};
+    const auto result = run_engine_test(t, vm);
+    EXPECT_FALSE(result.passed);
+    EXPECT_THAT(result.error, HasSubstr("lastblockhash"));
 }
 
 TEST(engine_test_runner, run_engine_tests_json_prints_pass_for_empty_fixture)

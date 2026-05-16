@@ -110,6 +110,7 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
 
     TestState current_state = t.pre_state;
     TestBlockHashes block_hashes{{0, t.genesis.hash}};
+    hash256 last_accepted_block_hash = t.genesis.hash;
 
     for (size_t pi = 0; pi < t.payloads.size(); ++pi)
     {
@@ -198,6 +199,7 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
             // Advance chain head.
             current_state = std::move(res.block_state);
             block_hashes[p.block_info.number] = p.expected_block_hash;
+            last_accepted_block_hash = p.expected_block_hash;
         }
 
     next_payload:
@@ -208,16 +210,8 @@ TestResult run_engine_test(const EngineTest& t, evmc::VM& vm)
     if (state::mpt_hash(current_state) != state::mpt_hash(t.post_state))
         return {false, "final: post state mismatch"};
 
-    if (!t.payloads.empty())
-    {
-        const auto& last_p = t.payloads.back();
-        if (!last_p.validation_error.has_value() && last_p.expected_block_hash != t.last_block_hash)
-            return {false, "final: last applied block hash differs from lastblockhash"};
-    }
-    else if (t.last_block_hash != t.genesis.hash)
-    {
-        return {false, "final: lastblockhash differs from genesis hash with no payloads"};
-    }
+    if (last_accepted_block_hash != t.last_block_hash)
+        return {false, "final: lastblockhash differs from last accepted chain head"};
 
     return {true, ""};
 }
