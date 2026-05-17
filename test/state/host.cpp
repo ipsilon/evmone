@@ -422,10 +422,19 @@ evmc::Result Host::execute_message(const evmc_message& msg_in) noexcept
         }
     }
 
-    // Calls to precompile address via EIP-7702 delegation execute empty code instead of precompile.
-    if ((msg.flags & EVMC_DELEGATED) == 0 && is_precompile(m_rev, msg.code_address))
+    // Dispatch to the precompile whenever the call target itself is a precompile,
+    // even if the target has an EIP-7702 designator stored as its code. evmone's
+    // strict reading (delegate-then-exec) disagrees with go-ethereum / erigon /
+    // revm / nethermind / besu, all of which short-circuit to the precompile in
+    // that case. Match the majority for fuzzer parity. call_precompile looks up
+    // the implementation by code_address, so override it to the recipient when
+    // the delegation flow rewrote it to the designator target.
+    if (is_precompile(m_rev, msg.recipient))
     {
-        auto r = call_precompile(m_rev, msg);
+        auto precompile_msg = msg;
+        precompile_msg.code_address = msg.recipient;
+        precompile_msg.flags &= ~std::underlying_type_t<evmc_flags>{EVMC_DELEGATED};
+        auto r = call_precompile(m_rev, precompile_msg);
         // EIP-8037/2780: precompiles consume no execution state gas, but a value transfer funding a
         // zero-balance precompile paid NEW_ACCOUNT state gas above (top_level_sg). On success the
         // account persists, so commit the charge (it lands in the block state dimension). On an
