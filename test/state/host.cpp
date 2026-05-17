@@ -368,14 +368,21 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
         }
     }
 
-    // Dispatch to the precompile whenever the call target itself is a precompile,
-    // even if the target has an EIP-7702 designator stored as its code. evmone's
-    // strict reading (delegate-then-exec) disagrees with go-ethereum / erigon /
-    // revm / nethermind / besu, all of which short-circuit to the precompile in
-    // that case. Match the majority for fuzzer parity. call_precompile looks up
-    // the implementation by code_address, so override it to the recipient when
-    // the delegation flow rewrote it to the designator target.
-    if (is_precompile(m_rev, msg.recipient))
+    // Plain precompile dispatch — no EIP-7702 designator at the call target.
+    // For CALL/STATICCALL this also catches the dst-is-precompile case;
+    // for DELEGATECALL/CALLCODE recipient is the caller, so code_address is
+    // the right place to look.
+    if ((msg.flags & EVMC_DELEGATED) == 0 && is_precompile(m_rev, msg.code_address))
+        return call_precompile(m_rev, msg);
+
+    // EIP-7702 designator on a precompile address: the call setup rewrote
+    // code_address to the designator target, masking the precompile. evmone's
+    // strict reading (run delegate code) disagrees with go-ethereum / erigon /
+    // revm / nethermind / besu, all of which short-circuit to the precompile.
+    // Match the majority — only for CALL/STATICCALL, since DELEGATECALL with
+    // a 7702 designator at dst genuinely should run the delegate code.
+    // (STATICCALL is encoded as kind=EVMC_CALL with the EVMC_STATIC flag.)
+    if (msg.kind == EVMC_CALL && is_precompile(m_rev, msg.recipient))
     {
         auto precompile_msg = msg;
         precompile_msg.code_address = msg.recipient;
