@@ -422,30 +422,48 @@ evmc::Result Host::execute_message(const evmc_message& msg_in) noexcept
         }
     }
 
-    // Dispatch to the precompile whenever the call target itself is a precompile,
-    // even if the target has an EIP-7702 designator stored as its code. evmone's
-    // strict reading (delegate-then-exec) disagrees with go-ethereum / erigon /
-    // revm / nethermind / besu, all of which short-circuit to the precompile in
-    // that case. Match the majority for fuzzer parity. call_precompile looks up
-    // the implementation by code_address, so override it to the recipient when
-    // the delegation flow rewrote it to the designator target.
-    if (is_precompile(m_rev, msg.recipient))
-    {
-        auto precompile_msg = msg;
-        precompile_msg.code_address = msg.recipient;
-        precompile_msg.flags &= ~std::underlying_type_t<evmc_flags>{EVMC_DELEGATED};
-        auto r = call_precompile(m_rev, precompile_msg);
-        // EIP-8037/2780: precompiles consume no execution state gas, but a value transfer funding a
-        // zero-balance precompile paid NEW_ACCOUNT state gas above (top_level_sg). On success the
-        // account persists, so commit the charge (it lands in the block state dimension). On an
-        // exceptional-halt failure nothing persists, so refund it by restoring the entry reservoir,
-        // exactly as a normal frame does on halt — the derived net state used is then 0. Any
-        // spilled portion was taken from msg.gas and is burned with the failed call's gas.
+    // Shared exit for every precompile dispatch below. EIP-8037/2780: precompiles consume no
+    // execution state gas, but a value transfer funding a zero-balance precompile paid
+    // NEW_ACCOUNT state gas above (top_level_sg). On success the account persists, so commit
+    // the charge (it lands in the block state dimension). On an exceptional-halt failure
+    // nothing persists, so refund it by restoring the entry reservoir, exactly as a normal
+    // frame does on halt — the derived net state used is then 0. Any spilled portion was taken
+    // from msg.gas and is burned with the failed call's gas.
+    //
+    // This MUST wrap every call_precompile() return: call_precompile builds a fresh
+    // evmc_result whose state_gas_left defaults to 0, so a bare `return call_precompile(...)`
+    // makes the caller derive `used = msg.state_gas - 0` — the whole reservoir. That is
+    // precisely what this function did between the dispatch split and 2026-08-15, breaking
+    // 230 Amsterdam EEST fixtures whenever tx.gas exceeded EIP-7825's TX_MAX_GAS_LIMIT (the
+    // only case where the reservoir is non-empty). One exit, so a future split cannot drop it.
+    const auto finish_precompile = [&](evmc::Result r) {
         if (r.status_code == EVMC_SUCCESS)
             set_state_gas(r, top_level_sg.left, top_level_sg.spilled);
         else
             r.state_gas_left = msg.state_gas;
         return r;
+    };
+
+    // Plain precompile dispatch — no EIP-7702 designator at the call target.
+    // For CALL/STATICCALL this also catches the dst-is-precompile case;
+    // for DELEGATECALL/CALLCODE recipient is the caller, so code_address is
+    // the right place to look.
+    if ((msg.flags & EVMC_DELEGATED) == 0 && is_precompile(m_rev, msg.code_address))
+        return finish_precompile(call_precompile(m_rev, msg));
+
+    // EIP-7702 designator on a precompile address: the call setup rewrote
+    // code_address to the designator target, masking the precompile. evmone's
+    // strict reading (run delegate code) disagrees with go-ethereum / erigon /
+    // revm / nethermind / besu, all of which short-circuit to the precompile.
+    // Match the majority — only for CALL/STATICCALL, since DELEGATECALL with
+    // a 7702 designator at dst genuinely should run the delegate code.
+    // (STATICCALL is encoded as kind=EVMC_CALL with the EVMC_STATIC flag.)
+    if (msg.kind == EVMC_CALL && is_precompile(m_rev, msg.recipient))
+    {
+        auto precompile_msg = msg;
+        precompile_msg.code_address = msg.recipient;
+        precompile_msg.flags &= ~std::underlying_type_t<evmc_flags>{EVMC_DELEGATED};
+        return finish_precompile(call_precompile(m_rev, precompile_msg));
     }
 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
