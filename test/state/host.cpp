@@ -340,7 +340,10 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     const bytes_view code{result.output_data, result.output_size};
 
-    if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > MAX_CODE_SIZE)
+    // EIP-7954: Amsterdam increases max code size.
+    // Checked before code deposit gas (per geth) to avoid inflating state gas.
+    const auto max_code_size = m_rev >= EVMC_AMSTERDAM ? MAX_CODE_SIZE_AMSTERDAM : MAX_CODE_SIZE;
+    if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > static_cast<size_t>(max_code_size))
     {
         auto r = evmc::Result{EVMC_FAILURE};
         set_state_gas(r, result.state_gas_left, result.state_gas_used);
