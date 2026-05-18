@@ -252,10 +252,13 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     const auto init_code_offset = static_cast<size_t>(init_code_offset_u256);
     const auto init_code_size = static_cast<size_t>(init_code_size_u256);
 
-    if (state.rev >= EVMC_SHANGHAI && init_code_size > 0xC000)
+    // EIP-7954: Amsterdam increases initcode size limit.
+    if (state.rev >= EVMC_AMSTERDAM && init_code_size > MAX_INITCODE_SIZE_AMSTERDAM)
+        return {EVMC_OUT_OF_GAS, gas_left};
+    else if (state.rev >= EVMC_SHANGHAI && state.rev < EVMC_AMSTERDAM && init_code_size > 0xC000)
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    // EIP-3860: regular init-code word cost. Charged BEFORE the EIP-8037 state-gas
+    // EIP-3860/7954: regular init-code word cost. Charged BEFORE the EIP-8037 state-gas
     // charge (reservoir model): regular gas is committed against gas_left first, so a
     // state charge that succeeds via spill cannot leave committed state growth behind a
     // subsequent regular OOG, which would otherwise inflate the block's state component
