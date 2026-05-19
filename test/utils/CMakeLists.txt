@@ -4,7 +4,11 @@
 
 add_library(evmone.testutils STATIC)
 add_library(evmone::testutils ALIAS evmone.testutils)
-target_link_libraries(evmone.testutils PUBLIC evmone::state evmc::evmc_cpp nlohmann_json::nlohmann_json)
+target_link_libraries(
+    evmone.testutils
+    PUBLIC evmone::state evmc::evmc_cpp nlohmann_json::nlohmann_json
+    PRIVATE evmc::mocked_host
+)
 
 target_sources(
     evmone.testutils
@@ -22,6 +26,8 @@ target_sources(
     rlp.hpp
     rlp_encode.hpp
     rlp_encode.cpp
+    run.hpp
+    run.cpp
     statetest.hpp
     statetest_export.cpp
     statetest_loader.cpp
