@@ -14,4 +14,3 @@ target_include_directories(evmc_cpp INTERFACE $<BUILD_INTERFACE:${EVMC_INCLUDE_D
 target_link_libraries(evmc_cpp INTERFACE evmc::evmc)
 
 add_subdirectory(mocked_host)
-add_subdirectory(tooling)

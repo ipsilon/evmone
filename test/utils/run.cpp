@@ -1,16 +1,17 @@
-// EVMC: Ethereum Client-VM Connector API.
-// Copyright 2019-2020 The EVMC Authors.
-// Licensed under the Apache License, Version 2.0.
+// evmone: Fast Ethereum Virtual Machine implementation
+// Copyright 2019 The evmone Authors.
+// SPDX-License-Identifier: Apache-2.0
 
-#include <evmc/evmc.hpp>
+#include "run.hpp"
 #include <evmc/hex.hpp>
 #include <evmc/mocked_host.hpp>
-#include <evmc/tooling.hpp>
 #include <chrono>
 #include <ostream>
 
-namespace evmc::tooling
+namespace evmone::test
 {
+using namespace evmc;
+
 namespace
 {
 /// The address where a new contract is created with --create option.
@@ -19,13 +20,8 @@ constexpr auto create_address = 0xc9ea7ed000000000000000000000000000000001_addre
 /// The gas limit for contract creation.
 constexpr auto create_gas = 10'000'000;
 
-auto bench(MockedHost& host,
-           evmc::VM& vm,
-           evmc_revision rev,
-           const evmc_message& msg,
-           bytes_view code,
-           const evmc::Result& expected_result,
-           std::ostream& out)
+auto bench(MockedHost& host, evmc::VM& vm, evmc_revision rev, const evmc_message& msg,
+    bytes_view code, const evmc::Result& expected_result, std::ostream& out)
 {
     {
         using clock = std::chrono::steady_clock;
@@ -59,14 +55,8 @@ auto bench(MockedHost& host,
 }
 }  // namespace
 
-int run(VM& vm,
-        evmc_revision rev,
-        int64_t gas,
-        bytes_view code,
-        bytes_view input,
-        bool create,
-        bool bench,
-        std::ostream& out)
+int run(VM& vm, evmc_revision rev, int64_t gas, bytes_view code, bytes_view input, bool create,
+    bool bench, std::ostream& out)
 {
     out << (create ? "Creating and executing on " : "Executing on ") << rev << " with " << gas
         << " gas limit\n";
@@ -104,7 +94,7 @@ int run(VM& vm,
     const auto result = vm.execute(host, rev, msg, exec_code.data(), exec_code.size());
 
     if (bench)
-        tooling::bench(host, vm, rev, msg, exec_code, result, out);
+        test::bench(host, vm, rev, msg, exec_code, result, out);
 
     const auto gas_used = msg.gas - result.gas_left;
     out << "Result:   " << result.status_code << "\nGas used: " << gas_used << "\n";
@@ -114,4 +104,4 @@ int run(VM& vm,
 
     return 0;
 }
-}  // namespace evmc::tooling
+}  // namespace evmone::test
