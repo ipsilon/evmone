@@ -269,9 +269,43 @@ int main(int argc, const char* argv[])
                         j_receipt["blockHash"] = hex0x(bytes32{});
                         j_receipt["contractAddress"] = hex0x(address{});
                         j_receipt["logsBloom"] = hex0x(receipt.logs_bloom_filter);
-                        j_receipt["logs"] = json::json::array();  // FIXME: Add to_json<state:Log>
-                        j_receipt["root"] = "";
-                        j_receipt["status"] = "0x1";
+                        // Real receipt logs as JSON. The fill framework rebuilds
+                        // the receipts trie from this list; an empty array (the
+                        // previous placeholder) broke roots for any tx emitting
+                        // logs.
+                        auto& j_logs = j_receipt["logs"] = json::json::array();
+                        for (const auto& log : receipt.logs)
+                        {
+                            json::json j_log;
+                            j_log["address"] = hex0x(log.addr);
+                            auto& j_topics = j_log["topics"] = json::json::array();
+                            for (const auto& t : log.topics)
+                                j_topics.push_back(hex0x(t));
+                            j_log["data"] =
+                                hex0x(bytes_view{log.data.data(), log.data.size()});
+                            j_logs.push_back(std::move(j_log));
+                        }
+                        // Pre-Byzantium receipts encode `post_state` (the
+                        // intermediate state-root hash) instead of EIP-658
+                        // `status`. The framework only includes the field
+                        // that's non-empty in the JSON, so emit exactly one.
+                        if (receipt.post_state.has_value())
+                        {
+                            j_receipt["root"] = hex0x(receipt.post_state.value());
+                            j_receipt["status"] = "";
+                        }
+                        else
+                        {
+                            j_receipt["root"] = "";
+                            // Real EIP-658 status. The previous hard-coded
+                            // "0x1" made OOG'd / reverted txs appear
+                            // successful in the JSON while the t8n's own
+                            // `receiptsRoot` was built from
+                            // `receipt.status`, producing a guaranteed
+                            // mismatch.
+                            j_receipt["status"] =
+                                hex0x(uint64_t{receipt.status == EVMC_SUCCESS});
+                        }
                         j_receipt["transactionIndex"] = hex0x(i);
                         blob_gas_left -= static_cast<int64_t>(tx.blob_gas_used());
                         transactions.emplace_back(std::move(tx));
