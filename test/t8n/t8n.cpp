@@ -6,9 +6,12 @@
 #include <evmone/version.h>
 #include <evmone/vm.hpp>
 #include <nlohmann/json.hpp>
+#include <test/state/bal.hpp>
 #include <test/state/errors.hpp>
 #include <test/state/ethash_difficulty.hpp>
 #include <test/state/requests.hpp>
+#include <test/state/state.hpp>
+#include <test/state/system_contracts.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
@@ -148,11 +151,22 @@ int main(int argc, const char* argv[])
         std::vector<state::TransactionReceipt> receipts;
         int64_t block_gas_left = block.gas_limit;
         std::vector<state::Requests> requests;
+        // EIP-8037/7778: per-tx 2D gas components for block-level
+        // `max(sum_regular, sum_state)` aggregation.
+        int64_t sum_regular_gas = 0;
+        int64_t sum_state_gas = 0;
+
+        // EIP-7928 BAL wiring: a `BalStateView` decorator captures cold
+        // account/storage reads from the inner `state`. The builder also
+        // receives explicit per-step `record_diff` calls for writes.
+        state::BalBuilder bal_builder;
+        state::BalStateView bal_view{state, bal_builder};
 
         // Parse and execute transactions
         if (!txs_file.empty())
         {
             const auto j_txs = json::json::parse(std::ifstream{txs_file});
+            const auto tx_idx_post = state::bal_tx_index::post_block(j_txs.size());
 
             evmc::VM vm{evmc_create_evmone()};
 
@@ -172,7 +186,12 @@ int main(int argc, const char* argv[])
                 j_result["rejected"] = json::json::array();
 
                 if (!pre_state_only)
-                    test::system_call_block_start(state, block, block_hashes, rev, vm);
+                {
+                    auto diff =
+                        state::system_call_block_start(bal_view, block, block_hashes, rev, vm);
+                    bal_builder.record_diff(state::bal_tx_index::PRE_BLOCK, diff, state);
+                    state.apply(diff);
+                }
 
                 for (size_t i = 0; i < j_txs.size(); ++i)
                 {
@@ -207,12 +226,15 @@ int main(int argc, const char* argv[])
                         std::clog.rdbuf(trace_file_output.rdbuf());
                     }
 
-                    auto res = test::transition(
-                        state, block, block_hashes, tx, rev, vm, block_gas_left, blob_gas_left);
+                    // EIP-7928: validate against the bare `state` (not
+                    // `bal_view`) so that a rejected tx never appears in the
+                    // BAL via a sender lookup.
+                    const auto tx_props_or_err = state::validate_transaction(
+                        state, block, tx, rev, block_gas_left, blob_gas_left);
 
-                    if (holds_alternative<std::error_code>(res))
+                    if (holds_alternative<std::error_code>(tx_props_or_err))
                     {
-                        const auto ec = std::get<std::error_code>(res);
+                        const auto ec = std::get<std::error_code>(tx_props_or_err);
                         json::json j_rejected_tx;
                         j_rejected_tx["hash"] = computed_tx_hash_str;
                         j_rejected_tx["index"] = i;
@@ -221,7 +243,11 @@ int main(int argc, const char* argv[])
                     }
                     else
                     {
-                        auto& receipt = get<state::TransactionReceipt>(res);
+                        auto receipt = state::transition(bal_view, block, block_hashes, tx, rev, vm,
+                            std::get<state::TransactionProperties>(tx_props_or_err));
+                        bal_builder.record_diff(
+                            state::bal_tx_index::tx(i), receipt.state_diff, state);
+                        state.apply(receipt.state_diff);
 
                         const auto& tx_logs = receipt.logs;
 
@@ -232,6 +258,10 @@ int main(int argc, const char* argv[])
                         j_receipt["gasUsed"] = hex0x(static_cast<uint64_t>(receipt.gas_used));
                         cumulative_gas_used += receipt.gas_used;
                         receipt.cumulative_gas_used = cumulative_gas_used;
+                        // EIP-8037/7778: per-tx 2D components feed the block
+                        // header's `max(sum_regular, sum_state)` aggregation.
+                        sum_regular_gas += receipt.regular_block_gas;
+                        sum_state_gas += receipt.state_block_gas;
                         if (rev < EVMC_BYZANTIUM)
                             receipt.post_state = state::mpt_hash(state);
                         j_receipt["cumulativeGasUsed"] = hex0x(cumulative_gas_used);
@@ -245,7 +275,10 @@ int main(int argc, const char* argv[])
                         j_receipt["transactionIndex"] = hex0x(i);
                         blob_gas_left -= static_cast<int64_t>(tx.blob_gas_used());
                         transactions.emplace_back(std::move(tx));
-                        block_gas_left -= receipt.gas_used;
+                        // EIP-7778: per-tx block contribution is
+                        // `gas_used + gas_refund` (pre-refund, floored).
+                        // Pre-Amsterdam: `gas_refund == 0`.
+                        block_gas_left -= receipt.gas_used + receipt.gas_refund;
                         receipts.emplace_back(std::move(receipt));
                     }
 
@@ -263,16 +296,25 @@ int main(int argc, const char* argv[])
                 else
                     // Report invalid block in the JSON result when deposit collection fails.
                     j_result["blockException"] = "invalid deposit event layout";
-                auto requests_result = system_call_block_end(state, block, block_hashes, rev, vm);
+                auto requests_result =
+                    state::system_call_block_end(bal_view, block, block_hashes, rev, vm);
                 if (requests_result.has_value())
-                    std::ranges::move(*requests_result, std::back_inserter(requests));
+                {
+                    bal_builder.record_diff(tx_idx_post, requests_result->state_diff, state);
+                    state.apply(requests_result->state_diff);
+                    std::ranges::move(requests_result->requests, std::back_inserter(requests));
+                }
                 else
                     // Report invalid block in the JSON result when requests fail.
                     j_result["blockException"] = "system contract empty or failed";
             }
 
-            test::finalize(
-                state, rev, block.coinbase, block_reward, block.ommers, block.withdrawals);
+            {
+                auto fin_diff = state::finalize(bal_view, rev, block.coinbase, block_reward,
+                    block.ommers, block.withdrawals);
+                bal_builder.record_diff(tx_idx_post, fin_diff, state);
+                state.apply(fin_diff);
+            }
 
             j_result["logsHash"] = hex0x(logs_hash(txs_logs));
             j_result["stateRoot"] = hex0x(state::mpt_hash(state));
@@ -284,7 +326,12 @@ int main(int argc, const char* argv[])
             j_result["withdrawalsRoot"] = hex0x(state::mpt_hash(block.withdrawals));
 
         j_result["txRoot"] = hex0x(state::mpt_hash(transactions));
-        j_result["gasUsed"] = hex0x(cumulative_gas_used);
+        // EIP-8037/7778: block-level `gasUsed = max(sum_regular, sum_state)`.
+        // Pre-Amsterdam both sums equal `cumulative_gas_used`, so the formula
+        // collapses to the legacy value.
+        const auto header_gas_used =
+            (rev >= EVMC_AMSTERDAM) ? std::max(sum_regular_gas, sum_state_gas) : cumulative_gas_used;
+        j_result["gasUsed"] = hex0x(header_gas_used);
         if (rev >= EVMC_CANCUN)
         {
             j_result["blobGasUsed"] = hex0x(
@@ -306,6 +353,17 @@ int main(int argc, const char* argv[])
             auto requests_hash = calculate_requests_hash(requests);
 
             j_result["requestsHash"] = hex0x(requests_hash);
+        }
+
+        if (!pre_state_only && rev >= EVMC_AMSTERDAM)
+        {
+            // EIP-7928: emit RLP-encoded BlockAccessList plus its hash. The
+            // test framework recomputes the hash from `blockAccessList` and
+            // cross-checks it against `blockAccessListHash` (which it copies
+            // into the fixture header's `blockAccessListHash` field).
+            const auto bal = bal_builder.build();
+            j_result["blockAccessList"] = hex0x(bal.rlp_encode());
+            j_result["blockAccessListHash"] = hex0x(bal.hash());
         }
 
         std::ofstream{output_dir / output_result_file} << std::setw(2) << j_result;
