@@ -4,8 +4,8 @@
 
 #include <CLI/CLI.hpp>
 #include <evmc/hex.hpp>
-#include <evmc/tooling.hpp>
 #include <evmone/evmone.h>
+#include <test/utils/run.hpp>
 #include <fstream>
 
 namespace
@@ -101,7 +101,7 @@ int main(int argc, const char* const* argv) noexcept
                 // If code_arg or input_arg contains invalid hex string, an exception is thrown.
                 const auto code = load_from_hex(code_arg);
                 const auto input = load_from_hex(input_arg);
-                return tooling::run(vm, rev, gas, code, input, create, bench, std::cout);
+                return evmone::test::run(vm, rev, gas, code, input, create, bench, std::cout);
             }
 
             return 0;
