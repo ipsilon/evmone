@@ -95,6 +95,9 @@ int main(int argc, const char* argv[])
             s.open(p);
             return &s;
         };
+        auto output_path = [&](const fs::path& name) -> fs::path {
+            return name.empty() ? fs::path{} : output_dir / name;
+        };
         std::ifstream in_alloc;
         std::ifstream in_env;
         std::ifstream in_txs;
@@ -107,10 +110,9 @@ int main(int argc, const char* argv[])
         std::ofstream out_result;
         std::ofstream out_alloc;
         std::ofstream out_body;
-        args.out_result = bind_stream(out_result, output_dir / output_result_file);
-        args.out_alloc = bind_stream(out_alloc, output_dir / output_alloc_file);
-        args.out_body = bind_stream(
-            out_body, output_body_file.empty() ? fs::path{} : output_dir / output_body_file);
+        args.out_result = bind_stream(out_result, output_path(output_result_file));
+        args.out_alloc = bind_stream(out_alloc, output_path(output_alloc_file));
+        args.out_body = bind_stream(out_body, output_path(output_body_file));
 
         tooling::t8n(args);
     }

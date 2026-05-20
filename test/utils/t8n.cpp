@@ -137,6 +137,8 @@ void t8n(const T8NArgs& args)
                     const auto loaded_tx_hash_opt =
                         evmc::from_hex<bytes32>(j_txs[i]["hash"].get<std::string>());
 
+                    // TODO: Distinguish malformed-hex from hash-mismatch; currently a
+                    // malformed loaded hash throws bad_optional_access from .value() below.
                     if (loaded_tx_hash_opt != computed_tx_hash)
                         throw std::logic_error("transaction hash mismatched: computed " +
                                                computed_tx_hash_str + ", expected " +
