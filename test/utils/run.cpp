@@ -8,7 +8,7 @@
 #include <chrono>
 #include <ostream>
 
-namespace evmone::test
+namespace evmone::tooling
 {
 using namespace evmc;
 
@@ -94,7 +94,7 @@ int run(VM& vm, evmc_revision rev, int64_t gas, bytes_view code, bytes_view inpu
     const auto result = vm.execute(host, rev, msg, exec_code.data(), exec_code.size());
 
     if (bench)
-        test::bench(host, vm, rev, msg, exec_code, result, out);
+        tooling::bench(host, vm, rev, msg, exec_code, result, out);
 
     const auto gas_used = msg.gas - result.gas_left;
     out << "Result:   " << result.status_code << "\nGas used: " << gas_used << "\n";
@@ -104,4 +104,4 @@ int run(VM& vm, evmc_revision rev, int64_t gas, bytes_view code, bytes_view inpu
 
     return 0;
 }
-}  // namespace evmone::test
+}  // namespace evmone::tooling

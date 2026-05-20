@@ -6,8 +6,8 @@
 #include <evmc/evmc.hpp>
 #include <iosfwd>
 
-namespace evmone::test
+namespace evmone::tooling
 {
 int run(evmc::VM& vm, evmc_revision rev, int64_t gas, evmc::bytes_view code, evmc::bytes_view input,
     bool create, bool bench, std::ostream& out);
-}  // namespace evmone::test
+}  // namespace evmone::tooling

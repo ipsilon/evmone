@@ -10,6 +10,7 @@
 
 using namespace evmone;
 using namespace evmone::test;
+using namespace evmone::tooling;
 using namespace testing;
 
 TEST(tooling_run, execute)
