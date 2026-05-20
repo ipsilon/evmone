@@ -194,6 +194,7 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
 [[nodiscard]] bool g1_msm(uint8_t _rx[64], uint8_t _ry[64], const uint8_t* _xycs, size_t size)
 {
     constexpr auto SINGLE_ENTRY_SIZE = (64 * 2 + 32);
+    assert(size != 0);
     assert(size % SINGLE_ENTRY_SIZE == 0);
     const auto npoints = size / SINGLE_ENTRY_SIZE;
 
@@ -217,10 +218,6 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
         if (!blst_p1_affine_in_g1(&*p_affine))
             return false;
 
-        // Point at infinity must be filtered out for BLST library.
-        if (blst_p1_affine_is_inf(&*p_affine))
-            continue;
-
         const auto& p = p1_affines.emplace_back(*p_affine);
         p1_affine_ptrs.emplace_back(&p);
 
@@ -229,20 +226,13 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
         const auto& s = scalars.emplace_back(scalar);
         scalars_ptrs.emplace_back(s.b);
     }
+    assert(p1_affine_ptrs.size() == npoints);
 
-    if (p1_affine_ptrs.empty())
-    {
-        std::memset(_rx, 0, 64);
-        std::memset(_ry, 0, 64);
-        return true;
-    }
-
-    const auto scratch_size =
-        blst_p1s_mult_pippenger_scratch_sizeof(p1_affine_ptrs.size()) / sizeof(limb_t);
+    const auto scratch_size = blst_p1s_mult_pippenger_scratch_sizeof(npoints) / sizeof(limb_t);
     const auto scratch_space = std::make_unique_for_overwrite<limb_t[]>(scratch_size);
     blst_p1 out;
-    blst_p1s_mult_pippenger(&out, p1_affine_ptrs.data(), p1_affine_ptrs.size(), scalars_ptrs.data(),
-        256, scratch_space.get());
+    blst_p1s_mult_pippenger(
+        &out, p1_affine_ptrs.data(), npoints, scalars_ptrs.data(), 256, scratch_space.get());
 
     blst_p1_affine result;
     blst_p1_to_affine(&result, &out);
@@ -255,6 +245,7 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
 [[nodiscard]] bool g2_msm(uint8_t _rx[128], uint8_t _ry[128], const uint8_t* _xycs, size_t size)
 {
     constexpr auto SINGLE_ENTRY_SIZE = (128 * 2 + 32);
+    assert(size != 0);
     assert(size % SINGLE_ENTRY_SIZE == 0);
     const auto npoints = size / SINGLE_ENTRY_SIZE;
 
@@ -278,10 +269,6 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
         if (!blst_p2_affine_in_g2(&*p_affine))
             return false;
 
-        // Point at infinity must be filtered out for BLST library.
-        if (blst_p2_affine_is_inf(&*p_affine))
-            continue;
-
         const auto& p = p2_affines.emplace_back(*p_affine);
         p2_affine_ptrs.emplace_back(&p);
 
@@ -290,20 +277,13 @@ void store(uint8_t _rx[128], const blst_fp2& _x) noexcept
         const auto& s = scalars.emplace_back(scalar);
         scalars_ptrs.emplace_back(s.b);
     }
+    assert(p2_affine_ptrs.size() == npoints);
 
-    if (p2_affine_ptrs.empty())
-    {
-        std::memset(_rx, 0, 128);
-        std::memset(_ry, 0, 128);
-        return true;
-    }
-
-    const auto scratch_size =
-        blst_p2s_mult_pippenger_scratch_sizeof(p2_affine_ptrs.size()) / sizeof(limb_t);
+    const auto scratch_size = blst_p2s_mult_pippenger_scratch_sizeof(npoints) / sizeof(limb_t);
     const auto scratch_space = std::make_unique_for_overwrite<limb_t[]>(scratch_size);
     blst_p2 out;
-    blst_p2s_mult_pippenger(&out, p2_affine_ptrs.data(), p2_affine_ptrs.size(), scalars_ptrs.data(),
-        256, scratch_space.get());
+    blst_p2s_mult_pippenger(
+        &out, p2_affine_ptrs.data(), npoints, scalars_ptrs.data(), 256, scratch_space.get());
 
     blst_p2_affine result;
     blst_p2_to_affine(&result, &out);
