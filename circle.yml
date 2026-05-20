@@ -503,8 +503,6 @@ jobs:
 
   gcc-min:
     executor: linux-gcc-min
-    environment:
-      CMAKE_OPTIONS: -DEVMONE_TOOLS=OFF
     steps:
       - build
       - test
