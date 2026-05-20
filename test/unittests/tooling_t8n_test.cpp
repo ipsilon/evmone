@@ -104,3 +104,29 @@ TEST(tooling_t8n, open_trace_called_per_tx)
     EXPECT_THAT(trace_buf.str(), HasSubstr("\"opName\":\"PUSH0\""));
     EXPECT_THAT(trace_buf.str(), HasSubstr("\"opName\":\"RETURN\""));
 }
+
+TEST(tooling_t8n, out_body_is_hex_rlp_of_transactions)
+{
+    std::istringstream env{ENV_JSON};
+    std::istringstream alloc{ALLOC_JSON};
+    std::istringstream txs{TX_JSON};
+    std::ostringstream out_result;
+    std::ostringstream out_alloc;
+    std::ostringstream out_body;
+
+    tooling::T8NArgs args;
+    args.rev = EVMC_SHANGHAI;
+    args.chain_id = 1;
+    args.alloc = &alloc;
+    args.env = &env;
+    args.txs = &txs;
+    args.out_result = &out_result;
+    args.out_alloc = &out_alloc;
+    args.out_body = &out_body;
+
+    tooling::t8n(args);
+
+    // RLP-encoded list of one legacy transaction, hex-prefixed.
+    EXPECT_THAT(out_body.str(), StartsWith("0x"));
+    EXPECT_GT(out_body.str().size(), std::size_t{2});
+}
