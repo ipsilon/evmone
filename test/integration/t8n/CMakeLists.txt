@@ -220,5 +220,39 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION ${EXPECTED_OUT}
 )
 
+set(TEST_CASE cancun_create_tx_trace)
+
+add_test(
+    NAME ${PREFIX}/${TEST_CASE}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cancun_create_tx
+    COMMAND
+    evmone-t8n
+    --state.fork Cancun
+    --state.reward 0
+    --state.chainid 1
+    --input.alloc alloc.json
+    --input.txs txs.json
+    --input.env env.json
+    --output.basedir ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}
+    --output.result out.json
+    --trace
+)
+set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
+
+# The first tx in this fixture is a successful CREATE with bytecode 0x60015ff3
+# (PUSH1 0x01 PUSH0 RETURN). Its trace must be written to a per-tx file whose
+# name includes the computed tx hash.
+add_test(
+    NAME ${PREFIX}/${TEST_CASE}/trace-0.jsonl
+    COMMAND ${CMAKE_COMMAND} -E cat
+    ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}/trace-0-0x03141f8608bc78c8b8fb23275febeb6bf40bd348bd68b703a92bf2ce8ac8bdc0.jsonl
+)
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE}/trace-0.jsonl PROPERTIES
+    FIXTURES_CLEANUP ${TEST_CASE}
+    PASS_REGULAR_EXPRESSION [=["opName":"PUSH1".*"opName":"PUSH0".*"opName":"RETURN"]=]
+)
+
+
 get_directory_property(ALL_TESTS TESTS)
 set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)
