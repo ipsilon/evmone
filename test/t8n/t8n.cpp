@@ -89,7 +89,7 @@ int main(int argc, const char* argv[])
         if (!opcode_count_filename.empty())
             args.opcode_count_file = (output_dir / opcode_count_filename).string();
 
-        auto bind_input = [](std::ifstream& s, const fs::path& p) -> std::istream* {
+        auto bind_stream = [](auto& s, const fs::path& p) -> decltype(&s) {
             if (p.empty())
                 return nullptr;
             s.open(p);
@@ -99,21 +99,18 @@ int main(int argc, const char* argv[])
         std::ifstream in_env;
         std::ifstream in_txs;
         std::ifstream in_blob_params;
-        args.alloc = bind_input(in_alloc, alloc_file);
-        args.env = bind_input(in_env, env_file);
-        args.txs = bind_input(in_txs, txs_file);
-        args.blob_params = bind_input(in_blob_params, blob_params_file);
+        args.alloc = bind_stream(in_alloc, alloc_file);
+        args.env = bind_stream(in_env, env_file);
+        args.txs = bind_stream(in_txs, txs_file);
+        args.blob_params = bind_stream(in_blob_params, blob_params_file);
 
-        std::ofstream out_result{output_dir / output_result_file};
-        std::ofstream out_alloc{output_dir / output_alloc_file};
-        args.out_result = &out_result;
-        args.out_alloc = &out_alloc;
+        std::ofstream out_result;
+        std::ofstream out_alloc;
         std::ofstream out_body;
-        if (!output_body_file.empty())
-        {
-            out_body.open(output_dir / output_body_file);
-            args.out_body = &out_body;
-        }
+        args.out_result = bind_stream(out_result, output_dir / output_result_file);
+        args.out_alloc = bind_stream(out_alloc, output_dir / output_alloc_file);
+        args.out_body = bind_stream(
+            out_body, output_body_file.empty() ? fs::path{} : output_dir / output_body_file);
 
         tooling::t8n(args);
     }
