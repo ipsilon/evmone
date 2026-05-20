@@ -95,24 +95,24 @@ int main(int argc, const char* argv[])
             s.open(p);
             return &s;
         };
-        std::ifstream alloc_in;
-        std::ifstream env_in;
-        std::ifstream txs_in;
-        std::ifstream blob_params_in;
-        args.alloc = bind_input(alloc_in, alloc_file);
-        args.env = bind_input(env_in, env_file);
-        args.txs = bind_input(txs_in, txs_file);
-        args.blob_params = bind_input(blob_params_in, blob_params_file);
+        std::ifstream in_alloc;
+        std::ifstream in_env;
+        std::ifstream in_txs;
+        std::ifstream in_blob_params;
+        args.alloc = bind_input(in_alloc, alloc_file);
+        args.env = bind_input(in_env, env_file);
+        args.txs = bind_input(in_txs, txs_file);
+        args.blob_params = bind_input(in_blob_params, blob_params_file);
 
-        std::ofstream result_out{output_dir / output_result_file};
-        std::ofstream alloc_out{output_dir / output_alloc_file};
-        args.out_result = &result_out;
-        args.out_alloc = &alloc_out;
-        std::ofstream body_out;
+        std::ofstream out_result{output_dir / output_result_file};
+        std::ofstream out_alloc{output_dir / output_alloc_file};
+        args.out_result = &out_result;
+        args.out_alloc = &out_alloc;
+        std::ofstream out_body;
         if (!output_body_file.empty())
         {
-            body_out.open(output_dir / output_body_file);
-            args.out_body = &body_out;
+            out_body.open(output_dir / output_body_file);
+            args.out_body = &out_body;
         }
 
         tooling::t8n(args);
