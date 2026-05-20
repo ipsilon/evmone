@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "t8n.hpp"
+#include <evmone/evmone.h>
 #include <nlohmann/json.hpp>
 #include <test/state/errors.hpp>
 #include <test/state/ethash_difficulty.hpp>
@@ -40,9 +41,10 @@ public:
 };
 }  // namespace
 
-void t8n(evmc::VM& vm, const T8NArgs& args)
+void t8n(const T8NArgs& args)
 {
     const auto rev = args.rev;
+    evmc::VM vm{evmc_create_evmone()};
 
     state::BlockInfo block;
     TestBlockHashes block_hashes;

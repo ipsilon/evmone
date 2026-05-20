@@ -41,7 +41,5 @@ struct T8NArgs
 };
 
 /// Runs the state transition (the body of evmone-t8n's main).
-///
-/// May set EVM-tracing-related options on `vm` (e.g. "trace", "opcode.count").
-void t8n(evmc::VM& vm, const T8NArgs& args);
+void t8n(const T8NArgs& args);
 }  // namespace evmone::tooling

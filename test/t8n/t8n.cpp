@@ -4,7 +4,6 @@
 
 #include <evmc/evmc.hpp>
 #include <evmc/hex.hpp>
-#include <evmone/evmone.h>
 #include <evmone/version.h>
 #include <intx/intx.hpp>
 #include <test/utils/t8n.hpp>
@@ -96,7 +95,10 @@ int main(int argc, const char* argv[])
             s.open(p);
             return &s;
         };
-        std::ifstream alloc_in, env_in, txs_in, blob_params_in;
+        std::ifstream alloc_in;
+        std::ifstream env_in;
+        std::ifstream txs_in;
+        std::ifstream blob_params_in;
         args.alloc = bind_input(alloc_in, alloc_file);
         args.env = bind_input(env_in, env_file);
         args.txs = bind_input(txs_in, txs_file);
@@ -113,8 +115,7 @@ int main(int argc, const char* argv[])
             args.out_body = &body_out;
         }
 
-        evmc::VM vm{evmc_create_evmone()};
-        tooling::t8n(vm, args);
+        tooling::t8n(args);
     }
     catch (const std::exception& e)
     {
