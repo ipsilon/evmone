@@ -158,7 +158,10 @@ TEST(tooling_t8n, pre_byzantium_sets_receipt_post_state)
 
     tooling::t8n(args);
 
-    EXPECT_THAT(out_result.str(), HasSubstr("\"receipts\""));
+    // The "receipts" array is initialized empty on every txs-present run; the
+    // distinguishing signal that a receipt was actually produced (i.e., the
+    // tx wasn't classified as rejected) is the presence of transactionHash.
+    EXPECT_THAT(out_result.str(), HasSubstr("\"transactionHash\""));
 }
 
 TEST(tooling_t8n, mismatched_tx_hash_throws)
