@@ -5,7 +5,6 @@
 #include "t8n.hpp"
 #include <evmone/evmone.h>
 #include <nlohmann/json.hpp>
-#include <test/state/errors.hpp>
 #include <test/state/ethash_difficulty.hpp>
 #include <test/state/requests.hpp>
 #include <test/utils/mpt_hash.hpp>
@@ -24,7 +23,7 @@
 
 namespace evmone::tooling
 {
-namespace json = nlohmann;
+using JSON = nlohmann::json;
 using namespace evmone::test;
 
 namespace
@@ -52,40 +51,36 @@ void t8n(const T8NArgs& args)
     const auto rev = args.rev;
     evmc::VM vm{evmc_create_evmone()};
 
-    state::BlockInfo block;
-    TestBlockHashes block_hashes;
+    const auto blob_params =
+        (args.blob_params != nullptr) ?
+            from_json<state::BlobParams>(JSON::parse(*args.blob_params, nullptr, false)) :
+            get_blob_params(rev);
+
     TestState state;
-
-    state::BlobParams blob_params;
-    if (args.blob_params != nullptr)
-    {
-        const auto j = json::json::parse(*args.blob_params, nullptr, false);
-        blob_params = from_json<state::BlobParams>(j);
-    }
-    else
-    {
-        blob_params = get_blob_params(rev);
-    }
-
     if (args.alloc != nullptr)
     {
-        const auto j = json::json::parse(*args.alloc, nullptr, false);
+        const auto j = JSON::parse(*args.alloc, nullptr, false);
         state = from_json<TestState>(j);
         validate_state(state, rev);
     }
+
+    state::BlockInfo block;
+    TestBlockHashes block_hashes;
     if (args.env != nullptr)
     {
-        const auto j = json::json::parse(*args.env);
+        const auto j = JSON::parse(*args.env);
         block = from_json_with_rev(j, rev, blob_params);
         block_hashes = from_json<TestBlockHashes>(j);
     }
 
-    json::json j_result;
+    JSON j_result;
 
     // Difficulty was received from upstream. No need to calc
     // TODO: Check if it's needed by the blockchain test. If not remove if statement true branch
     if (block.difficulty != 0)
+    {
         j_result["currentDifficulty"] = hex0x(block.difficulty);
+    }
     else
     {
         const auto current_difficulty = state::calculate_difficulty(block.parent_difficulty,
@@ -112,7 +107,7 @@ void t8n(const T8NArgs& args)
     // Parse and execute transactions
     if (args.txs != nullptr)
     {
-        const auto j_txs = json::json::parse(*args.txs);
+        const auto j_txs = JSON::parse(*args.txs);
 
         const bool trace_enabled = static_cast<bool>(args.open_trace);
         if (trace_enabled)
@@ -124,8 +119,8 @@ void t8n(const T8NArgs& args)
 
         if (j_txs.is_array())
         {
-            j_result["receipts"] = json::json::array();
-            j_result["rejected"] = json::json::array();
+            j_result["receipts"] = JSON::array();
+            j_result["rejected"] = JSON::array();
 
             if (!args.pre_state_only)
                 system_call_block_start(state, block, block_hashes, rev, vm);
@@ -162,7 +157,7 @@ void t8n(const T8NArgs& args)
                 if (holds_alternative<std::error_code>(res))
                 {
                     const auto ec = std::get<std::error_code>(res);
-                    json::json j_rejected_tx;
+                    JSON j_rejected_tx;
                     j_rejected_tx["hash"] = computed_tx_hash_str;
                     j_rejected_tx["index"] = i;
                     j_rejected_tx["error"] = ec.message();
@@ -188,7 +183,7 @@ void t8n(const T8NArgs& args)
                     j_receipt["blockHash"] = hex0x(bytes32{});
                     j_receipt["contractAddress"] = hex0x(address{});
                     j_receipt["logsBloom"] = hex0x(receipt.logs_bloom_filter);
-                    j_receipt["logs"] = json::json::array();  // FIXME: Add to_json<state:Log>
+                    j_receipt["logs"] = JSON::array();  // FIXME: Add to_json<state:Log>
                     j_receipt["root"] = "";
                     j_receipt["status"] = "0x1";
                     j_receipt["transactionIndex"] = hex0x(i);
@@ -239,7 +234,7 @@ void t8n(const T8NArgs& args)
     if (rev >= EVMC_PRAGUE)
     {
         // EIP-7685: General purpose execution layer requests
-        j_result["requests"] = json::json::array();
+        j_result["requests"] = JSON::array();
         for (const auto& r : requests)
         {
             if (!r.data().empty())

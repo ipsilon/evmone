@@ -40,11 +40,13 @@ struct T8NArgs
     std::function<std::ostream&(size_t tx_index, const evmc::bytes32& tx_hash)> open_trace;
 };
 
-/// Runs the state transition (the body of evmone-t8n's main).
+/// Runs the state transition (t8n), used for JSON tests "filling".
 ///
-/// The VM is constructed internally so that the EVM-tracing-related options
-/// (e.g. "trace", "opcode.count") this function may set do not leak back to
-/// a caller's VM. (`evmone::tooling::run()` in run.hpp takes a caller-supplied
-/// `evmc::VM&` because it does not set any persistent options on the VM.)
+/// This command takes some JSON inputs, including a list of transactions, and produces the result
+/// post-state as some JSON outputs. The specifics of the JSON formats and options are dictated
+/// by execution specs, see https://steel.ethereum.foundation/docs/execution-specs.
+///
+/// The VM is constructed internally because this is a one-off command,
+/// and it needs to modify the VM's config.
 void t8n(const T8NArgs& args);
 }  // namespace evmone::tooling
