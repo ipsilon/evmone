@@ -61,3 +61,23 @@ TEST(kzg, verify_proof_constant)
     const auto r = kzg_verify_proof(hash.data(), z, y, c, POINT_AT_INFINITY);
     EXPECT_TRUE(r);
 }
+
+TEST(kzg, verify_proof_final_add_doubling)
+{
+    // Force the final G1 addition to be a doubling.
+    //
+    // Setup: π = O, y = 1, z = 0 ⇒ [z]π − [y]G1 = −G1.
+    std::byte z[32]{};
+    std::byte y[32]{};
+    y[31] = std::byte{1};
+
+    // C = −G1 (compressed): same X as G1 with the compressed flag (0x80)
+    // and the Y-sign flag (0x20) set, since y(G1) is the lexicographically
+    // smaller of the two square roots.
+    std::byte c[48]{};
+    intx::be::unsafe::store(reinterpret_cast<uint8_t*>(c), G1_GENERATOR_X);
+    c[0] |= std::byte{0xA0};
+
+    const auto hash = versioned_hash(c);
+    EXPECT_FALSE(kzg_verify_proof(hash.data(), z, y, c, POINT_AT_INFINITY));
+}
