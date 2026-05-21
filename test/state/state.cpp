@@ -585,6 +585,17 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
         return make_error_code(INSUFFICIENT_FUNDS);
 
     const auto [intrinsic_cost, intrinsic_state, min_cost] = compute_tx_intrinsic_cost(rev, tx);
+
+    // EIP-8037 §"Transaction validation" condition 1:
+    //   max(intrinsic_regular_gas, calldata_floor_gas_cost) <= TX_MAX_GAS_LIMIT.
+    // Amsterdam lifts the per-tx cap on tx.gas_limit (above) but keeps this
+    // cap on the regular-gas intrinsic so that the reservoir-model invariant
+    // regular_gas_budget = TX_MAX_GAS_LIMIT - intrinsic_regular_gas
+    // stays non-negative. EELS reference: ethereum/forks/amsterdam/transactions.py
+    // around the line raising on `max(intrinsic.regular, intrinsic.calldata_floor)`.
+    if (rev >= EVMC_AMSTERDAM && std::max(intrinsic_cost, min_cost) > MAX_TX_GAS_LIMIT)
+        return make_error_code(MAX_GAS_LIMIT_EXCEEDED);
+
     // EIP-8037: total intrinsic includes both regular and state components.
     const auto total_intrinsic = intrinsic_cost + intrinsic_state;
     if (tx.gas_limit < std::max(total_intrinsic, min_cost))
