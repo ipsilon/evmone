@@ -137,6 +137,30 @@ TEST(tooling_t8n, out_body_is_hex_rlp_of_transactions)
     EXPECT_GT(out_body.str().size(), std::size_t{2});
 }
 
+TEST(tooling_t8n, pre_byzantium_sets_receipt_post_state)
+{
+    // Pre-Byzantium receipts include the post-state root via receipt.post_state.
+    // The TX_JSON fixture uses PUSH0 in its init code, so the inner CREATE fails
+    // at Homestead, but the outer tx still produces a TransactionReceipt that
+    // exercises the `rev < EVMC_BYZANTIUM` branch in t8n().
+    std::istringstream env{ENV_JSON};
+    std::istringstream alloc{ALLOC_JSON};
+    std::istringstream txs{TX_JSON};
+    std::ostringstream out_result;
+
+    tooling::T8NArgs args;
+    args.rev = EVMC_HOMESTEAD;
+    args.chain_id = 1;
+    args.alloc = &alloc;
+    args.env = &env;
+    args.txs = &txs;
+    args.out_result = &out_result;
+
+    tooling::t8n(args);
+
+    EXPECT_THAT(out_result.str(), HasSubstr("\"receipts\""));
+}
+
 TEST(tooling_t8n, mismatched_tx_hash_throws)
 {
     // TX_JSON's tx with a deliberately wrong "hash" field. t8n() must detect
