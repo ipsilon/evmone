@@ -13,8 +13,14 @@
 #include <test/utils/rlp_encode.hpp>
 #include <test/utils/statetest.hpp>
 #include <test/utils/utils.hpp>
+#include <algorithm>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
+#include <optional>
+#include <stdexcept>
+#include <system_error>
+#include <vector>
 
 namespace evmone::tooling
 {
