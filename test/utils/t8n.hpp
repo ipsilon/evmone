@@ -41,5 +41,10 @@ struct T8NArgs
 };
 
 /// Runs the state transition (the body of evmone-t8n's main).
+///
+/// The VM is constructed internally so that the EVM-tracing-related options
+/// (e.g. "trace", "opcode.count") this function may set do not leak back to
+/// a caller's VM. (`run()` above takes a caller-supplied `evmc::VM&` because
+/// it does not set any persistent options on the VM.)
 void t8n(const T8NArgs& args);
 }  // namespace evmone::tooling
