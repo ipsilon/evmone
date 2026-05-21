@@ -12,11 +12,17 @@ using namespace testing;
 namespace
 {
 // Minimal block env used by the trace test below.
+// currentDifficulty is set so t8n() takes the "difficulty supplied" branch;
+// tests with no env still exercise the calculate_difficulty fallback.
+// currentRandom is also set so that the difficulty value isn't reinterpreted
+// as a bytes32 prev_randao by from_json_with_rev.
 constexpr auto ENV_JSON = R"({
     "currentCoinbase": "0x8888f1f195afa192cfee860698584c030f4c9db1",
     "currentNumber": "0x01",
     "currentTimestamp": "0x54c99069",
-    "currentGasLimit": "0x2fefd8"
+    "currentGasLimit": "0x2fefd8",
+    "currentDifficulty": "0x20000",
+    "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000"
 })";
 
 // Account funding the transaction used in the trace test.
@@ -129,4 +135,37 @@ TEST(tooling_t8n, out_body_is_hex_rlp_of_transactions)
     // RLP-encoded list of one legacy transaction, hex-prefixed.
     EXPECT_THAT(out_body.str(), StartsWith("0x"));
     EXPECT_GT(out_body.str().size(), std::size_t{2});
+}
+
+TEST(tooling_t8n, mismatched_tx_hash_throws)
+{
+    // TX_JSON's tx with a deliberately wrong "hash" field. t8n() must detect
+    // the mismatch against the recomputed hash and throw std::logic_error.
+    static constexpr auto TX_WITH_BAD_HASH = R"([{
+        "to": null,
+        "input": "0x60015ff3",
+        "gas": "0x186a0",
+        "nonce": "0x0",
+        "value": "0x0",
+        "gasPrice": "0x32",
+        "chainId": "0x1",
+        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "v": "0x1b",
+        "r": "0x468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665ae",
+        "s": "0x5cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc",
+        "hash": "0xdeadbeef00000000000000000000000000000000000000000000000000000000"
+    }])";
+
+    std::istringstream env{ENV_JSON};
+    std::istringstream alloc{ALLOC_JSON};
+    std::istringstream txs{TX_WITH_BAD_HASH};
+
+    tooling::T8NArgs args;
+    args.rev = EVMC_SHANGHAI;
+    args.chain_id = 1;
+    args.alloc = &alloc;
+    args.env = &env;
+    args.txs = &txs;
+
+    EXPECT_THROW(tooling::t8n(args), std::logic_error);
 }

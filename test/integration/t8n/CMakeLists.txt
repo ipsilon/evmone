@@ -254,5 +254,46 @@ set_tests_properties(
 )
 
 
+add_test(NAME ${PREFIX}/version COMMAND evmone-t8n --version)
+set_tests_properties(
+    ${PREFIX}/version PROPERTIES PASS_REGULAR_EXPRESSION "evmone-t8n")
+
+add_test(NAME ${PREFIX}/bad_fork COMMAND evmone-t8n --state.fork NoSuchRev)
+set_tests_properties(
+    ${PREFIX}/bad_fork PROPERTIES PASS_REGULAR_EXPRESSION "unknown revision")
+
+
+# Exercises both --output.body (RLP-encoded transactions) and
+# --state.reward -1 (pre-state-only mode that emits just the state root).
+set(TEST_CASE prague_pre_state_only)
+
+add_test(
+    NAME ${PREFIX}/${TEST_CASE}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/prague_empty_requests
+    COMMAND
+    evmone-t8n
+    --state.fork Prague
+    --state.reward -1
+    --state.chainid 1
+    --input.alloc alloc.json
+    --input.txs txs.json
+    --input.env env.json
+    --output.basedir ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}
+    --output.result out.json
+    --output.body body.rlp
+)
+set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
+
+add_test(
+    NAME ${PREFIX}/${TEST_CASE}/body.rlp
+    COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}/body.rlp
+)
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE}/body.rlp PROPERTIES
+    FIXTURES_CLEANUP ${TEST_CASE}
+    PASS_REGULAR_EXPRESSION "^0x[0-9a-f]+"
+)
+
+
 get_directory_property(ALL_TESTS TESTS)
 set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)
