@@ -59,6 +59,16 @@ constexpr Fq2 multiply(const Fq2& a, const Fq2& b)
     return Fq2({a0 * b0 - a1 * b1, a1 * b0 + a0 * b1});
 }
 
+/// Squares an Fq^2 field element.
+constexpr Fq2 sqr(const Fq2& a)
+{
+    const auto& [a0, a1] = a.coeffs;
+
+    // (a0 + a1*u)^2 = (a0+a1)*(a0-a1) + 2a0a1*u.
+    const auto a0a1 = a0 * a1;
+    return Fq2({(a0 + a1) * (a0 - a1), a0a1 + a0a1});
+}
+
 /// Multiplies two Fq^6 field elements
 constexpr Fq6 multiply(const Fq6& a, const Fq6& b)
 {

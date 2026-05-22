@@ -68,8 +68,14 @@ struct ExtFieldElem
         return ExtFieldElem(ret);
     }
 
-    friend constexpr ExtFieldElem operator*(const ExtFieldElem& e1, const ExtFieldElem& e2) noexcept
+    [[gnu::always_inline]] friend constexpr ExtFieldElem operator*(
+        const ExtFieldElem& e1, const ExtFieldElem& e2) noexcept
     {
+        if constexpr (requires { sqr(e1); })  // Use sqr() if available.
+        {
+            if (&e1 == &e2)
+                return sqr(e1);
+        }
         return multiply(e1, e2);
     }
 
