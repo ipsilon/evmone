@@ -5,7 +5,7 @@
 add_executable(evmone-precompiles-bench)
 target_compile_features(evmone-precompiles-bench PRIVATE cxx_std_20)
 target_include_directories(evmone-precompiles-bench PRIVATE ..)
-target_link_libraries(evmone-precompiles-bench PRIVATE evmone::state benchmark::benchmark)
+target_link_libraries(evmone-precompiles-bench PRIVATE evmone::state benchmark::benchmark intx::intx)
 target_sources(
     evmone-precompiles-bench PRIVATE
     precompiles_bench.cpp
