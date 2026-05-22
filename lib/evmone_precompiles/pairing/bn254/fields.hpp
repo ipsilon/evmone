@@ -54,21 +54,16 @@ using Fq12 = ecc::ExtFieldElem<Fq12Config>;
 /// Multiplies two Fq^2 field elements
 constexpr Fq2 multiply(const Fq2& a, const Fq2& b)
 {
-    return Fq2({
-        a.coeffs[0] * b.coeffs[0] - a.coeffs[1] * b.coeffs[1],
-        a.coeffs[1] * b.coeffs[0] + a.coeffs[0] * b.coeffs[1],
-    });
+    const auto& [a0, a1] = a.coeffs;
+    const auto& [b0, b1] = b.coeffs;
+    return Fq2({a0 * b0 - a1 * b1, a1 * b0 + a0 * b1});
 }
 
 /// Multiplies two Fq^6 field elements
 constexpr Fq6 multiply(const Fq6& a, const Fq6& b)
 {
-    const auto& a0 = a.coeffs[0];
-    const auto& a1 = a.coeffs[1];
-    const auto& a2 = a.coeffs[2];
-    const auto& b0 = b.coeffs[0];
-    const auto& b1 = b.coeffs[1];
-    const auto& b2 = b.coeffs[2];
+    const auto& [a0, a1, a2] = a.coeffs;
+    const auto& [b0, b1, b2] = b.coeffs;
 
     const Fq2& ksi = Fq6Config::ksi;
 
@@ -86,10 +81,8 @@ constexpr Fq6 multiply(const Fq6& a, const Fq6& b)
 /// Multiplies two Fq^12 field elements
 constexpr Fq12 multiply(const Fq12& a, const Fq12& b)
 {
-    const auto& a0 = a.coeffs[0];
-    const auto& a1 = a.coeffs[1];
-    const auto& b0 = b.coeffs[0];
-    const auto& b1 = b.coeffs[1];
+    const auto& [a0, a1] = a.coeffs;
+    const auto& [b0, b1] = b.coeffs;
 
     const auto t0 = a0 * b0;
     const auto t1 = a1 * b1;
@@ -105,8 +98,8 @@ constexpr Fq12 multiply(const Fq12& a, const Fq12& b)
 /// Inverses the Fq^2 field element
 inline Fq2 inverse(const Fq2& f)
 {
-    const auto& a0 = f.coeffs[0];
-    const auto& a1 = f.coeffs[1];
+    const auto& [a0, a1] = f.coeffs;
+
     auto t0 = a0 * a0;
     auto t1 = a1 * a1;
 
@@ -122,9 +115,7 @@ inline Fq2 inverse(const Fq2& f)
 /// Inverses the Fq^6 field element
 inline Fq6 inverse(const Fq6& f)
 {
-    const auto& a0 = f.coeffs[0];
-    const auto& a1 = f.coeffs[1];
-    const auto& a2 = f.coeffs[2];
+    const auto& [a0, a1, a2] = f.coeffs;
 
     const Fq2& ksi = Fq6Config::ksi;
 
@@ -149,8 +140,7 @@ inline Fq6 inverse(const Fq6& f)
 /// Inverses the Fq^12 field element
 inline Fq12 inverse(const Fq12& f)
 {
-    const auto& a0 = f.coeffs[0];
-    const auto& a1 = f.coeffs[1];
+    const auto& [a0, a1] = f.coeffs;
 
     auto t0 = a0 * a0;
     auto t1 = a1 * a1;
