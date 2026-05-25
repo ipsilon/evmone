@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "kzg.hpp"
+#include "kzg_setup_g2_1_lines.hpp"
 #include <blst.h>
 #include <algorithm>
 #include <optional>
@@ -18,22 +19,6 @@ constexpr blst_p1_affine G1_GENERATOR_NEGATIVE{
         0xedce6ecc21dbf440, 0x120177419e0bfb75},
     {0xff526c2af318883a, 0x92899ce4383b0270, 0x89d7738d9fa9d055, 0x12caf35ba344c12a,
         0x3cff1b76964b5317, 0x0e44d2ede9774430}};
-
-/// The point from the G2 series, index 1 of the Ethereum KZG trusted setup,
-/// i.e. [s]₂ where s is the trusted setup's secret.
-/// Affine coordinates in Montgomery form.
-/// The original value in compressed form (y-parity bit and Fp2 x coordinate)
-/// is the ["g2_monomial"][1] of the JSON object found at
-/// https://github.com/ethereum/consensus-specs/blob/dev/presets/mainnet/trusted_setups/trusted_setup_4096.json#L8200
-constexpr blst_p2_affine KZG_SETUP_G2_1{
-    {{{0x6120a2099b0379f9, 0xa2df815cb8210e4e, 0xcb57be5577bd3d4f, 0x62da0ea89a0c93f8,
-          0x02e0ee16968e150d, 0x171f09aea833acd5},
-        {0x11a3670749dfd455, 0x04991d7b3abffadc, 0x85446a8e14437f41, 0x27174e7b4e76e3f2,
-            0x7bfa6dd397f60a20, 0x02fcc329ac07080f}}},
-    {{{0xaa130838793b2317, 0xe236dd220f891637, 0x6502782925760980, 0xd05c25f60557ec89,
-          0x6095767a44064474, 0x185693917080d405},
-        {0x549f9e175b03dc0a, 0x32c0c95a77106cfe, 0x64a74eae5705d080, 0x53deeaf56659ed9e,
-            0x09a1d368508afb93, 0x12cf3a4525b5e9bd}}}};
 
 /// Load and validate an element from the group order field.
 std::optional<blst_scalar> validate_scalar(std::span<const std::byte, 32> b) noexcept
@@ -68,15 +53,14 @@ blst_p1_affine add_or_double(const blst_p1_affine& p, const blst_p1& q) noexcept
     return ra;
 }
 
-bool pairings_verify(
-    const blst_p1_affine& a1, const blst_p1_affine& b1, const blst_p2_affine& b2) noexcept
+bool pairings_verify(const blst_p1_affine& a1, const blst_p1_affine& b1) noexcept
 {
     blst_fp12 left;
     // Uses precomputed Miller loop lines for the G2 generator.
     blst_aggregated_in_g1(&left, &a1);
-    // TODO: Precompute Miller loop lines for KZG_SETUP_G2_1 ([s]₂).
+    // Uses precomputed Miller loop lines for KZG_SETUP_G2_1 ([s]₂).
     blst_fp12 right;
-    blst_miller_loop(&right, &b2, &b1);
+    blst_miller_loop_lines(&right, kzg_setup_g2_1_lines(), &b1);
     return blst_fp12_finalverify(&left, &right);
 }
 }  // namespace
@@ -127,6 +111,6 @@ bool kzg_verify_proof(const std::byte versioned_hash[VERSIONED_HASH_SIZE], const
     const auto lsh_g1 = add_or_double(*C, z_pi_minus_y_g1);
 
     // e(C + [z]π - [y]₁, [1]₂) =? e(π, [s]₂)
-    return pairings_verify(lsh_g1, *Pi, KZG_SETUP_G2_1);
+    return pairings_verify(lsh_g1, *Pi);
 }
 }  // namespace evmone::crypto

@@ -39,4 +39,6 @@ target_sources(
     sha256.cpp
     kzg.hpp
     kzg.cpp
+    kzg_setup_g2_1_lines.hpp
+    kzg_setup_g2_1_lines.cpp
 )
