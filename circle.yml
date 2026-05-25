@@ -359,18 +359,19 @@ jobs:
             echo 'export PATH=$PATH:"/c/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin"' >> $BASH_ENV
       - run:
           name: 'Configure'
-          shell: powershell
           command: |
             $ErrorActionPreference = "Stop"
             & 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64
             which cmake
+            false
             cmake -S . -B ~/build -G Ninja -DCMAKE_INSTALL_PREFIX=C:\install -DEVMONE_TESTING=ON
       - run:
           name: 'Build'
-          shell: powershell
           command: |
             $ErrorActionPreference = "Stop"
+            $PSNativeCommandUseErrorActionPreference = $true
             & 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64
+            false
             cmake --build ~/build
       - test
       - package
