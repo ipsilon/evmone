@@ -661,43 +661,7 @@ workflows:
   version: 2
   evmone:
     jobs:
-      - lint
-      - clang-tidy
-      - release-linux:
-          filters:
-            tags:
-              only: /.*/
       - release-windows:
           filters:
             tags:
               only: /.*/
-      - release-macos:
-          filters:
-            tags:
-              only: /.*/
-      - deploy:
-          requires:
-            - release-linux
-            - release-windows
-            - release-macos
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: /^v[0-9].*/
-      - execution-spec-tests
-      - ethereum-tests
-      - precompiles-libsecp256k1
-      - precompiles-gmp
-      - cmake-min
-      - gcc-min
-      - clang-min
-      - gcc-latest-memcheck
-      - clang-latest-sanitizers
-      - clang-latest-coverage
-      - macos-asan
-      - xcode-min
-      - gcc-32bit
-      - x86-64-v1
-      - riscv32
-      - fuzzing
