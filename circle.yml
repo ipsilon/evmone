@@ -364,6 +364,7 @@ jobs:
           command: |
             $ErrorActionPreference = "Stop"
             $PSNativeCommandUseErrorActionPreference = $true
+            trap { Write-Host $_; exit 1 }
             $PSVersionTable.PSVersion
             & 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64
             which cmake
