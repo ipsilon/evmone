@@ -345,9 +345,7 @@ jobs:
       - package
 
   release-windows:
-    executor:
-      name: win/server-2022
-      shell: pwsh.exe
+    executor: win/server-2022
     environment:
       CMAKE_BUILD_TYPE: Release
       CMAKE_BUILD_PARALLEL_LEVEL: 4
@@ -367,8 +365,7 @@ jobs:
             $PSVersionTable.PSVersion
             & 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64
             which cmake
-            false
-            cmake -S . -B ~/build -G Ninja -DCMAKE_INSTALL_PREFIX=C:\install -DEVMONE_TESTING=ON
+            cmake -S . -B ~/build -G NinjaXXXX -DCMAKE_INSTALL_PREFIX=C:\install -DEVMONE_TESTING=ON
       - run:
           name: 'Build'
           command: |
