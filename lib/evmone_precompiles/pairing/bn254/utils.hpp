@@ -403,11 +403,11 @@ constexpr ecc::JacPoint<Fq2> lin_func_and_dbl(
     const auto V = x0 * H_squared;
 
     const auto X3 = R_squared - H_cubed - (V + V);
-    const auto Y3 = R * (x0 * H_squared - X3) - y0 * H_cubed;
+    const auto Y3 = R * (V - X3) - y0 * H_cubed;
     const auto Z3 = H * z0;
 
-    t[0] = (z0 * z0_squared * x0 - U2 * z0_cubed);
-    t[1] = (S2 * z0_squared - y0 * z0_squared);
+    t[0] = z0_cubed * x0 - U2 * z0_cubed;
+    t[1] = S2 * z0_squared - y0 * z0_squared;
     t[2] = y0 * U2 - x0 * S2;
 
     return ecc::JacPoint<Fq2>{X3, Y3, Z3};
@@ -432,8 +432,8 @@ constexpr void lin_func(
     const auto U2 = x1 * z0_squared;
     const auto S2 = y1 * z0_cubed;
 
-    t[0] = (z0 * z0_squared * x0 - U2 * z0_cubed);
-    t[1] = (S2 * z0_squared - y0 * z0_squared);
+    t[0] = z0_cubed * x0 - U2 * z0_cubed;
+    t[1] = S2 * z0_squared - y0 * z0_squared;
     t[2] = y0 * U2 - x0 * S2;
 }
 
