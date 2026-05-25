@@ -345,7 +345,9 @@ jobs:
       - package
 
   release-windows:
-    executor: win/server-2022
+    executor:
+      name: win/server-2022
+      shell: pwsh.exe
     environment:
       CMAKE_BUILD_TYPE: Release
       CMAKE_BUILD_PARALLEL_LEVEL: 4
