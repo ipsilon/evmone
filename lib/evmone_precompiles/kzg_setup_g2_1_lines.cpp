@@ -2,17 +2,39 @@
 // Copyright 2026 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 //
-// Precomputed Miller-loop lines for KZG_SETUP_G2_1 ([s]₂ from the Ethereum
-// mainnet trusted setup). 68 × Fp⁶ in blst-native Montgomery form, ready
-// for blst_miller_loop_lines. Regenerate via /tmp/gen_lines.cpp if the
-// trusted-setup point ever changes.
+// Constant data for the KZG point-evaluation precompile:
+//   - KZG_SETUP_G2_1: the [s]₂ point from the Ethereum mainnet trusted
+//     setup (see the citation on the constant).
+//   - The 68 × Fp⁶ Miller-loop lines for that point, in blst-native
+//     Montgomery form, ready for blst_miller_loop_lines.
+//
+// To regenerate the line table: call blst_precompute_lines() on
+// KZG_SETUP_G2_1 and serialize the resulting blst_fp6[68] as hex-limb
+// literals. The kzg.precomputed_lines_match_blst_precompute test pins the
+// table against fresh blst_precompute_lines output, so a stale regen fails
+// the suite.
 
 #include "kzg_setup_g2_1_lines.hpp"
+#include <cstring>
 
 namespace evmone::crypto
 {
 namespace
 {
+
+/// The point [s]₂ at index 1 of the G2 series of the Ethereum mainnet KZG
+/// trusted setup. Affine coordinates in Montgomery form. The compressed
+/// source (y-parity bit and Fp² x coordinate) is g2_monomial[1] at:
+/// https://github.com/ethereum/consensus-specs/blob/master/presets/mainnet/trusted_setups/trusted_setup_4096.json#L8200
+constexpr blst_p2_affine KZG_SETUP_G2_1{
+    {{{0x6120a2099b0379f9, 0xa2df815cb8210e4e, 0xcb57be5577bd3d4f, 0x62da0ea89a0c93f8,
+          0x02e0ee16968e150d, 0x171f09aea833acd5},
+        {0x11a3670749dfd455, 0x04991d7b3abffadc, 0x85446a8e14437f41, 0x27174e7b4e76e3f2,
+            0x7bfa6dd397f60a20, 0x02fcc329ac07080f}}},
+    {{{0xaa130838793b2317, 0xe236dd220f891637, 0x6502782925760980, 0xd05c25f60557ec89,
+          0x6095767a44064474, 0x185693917080d405},
+        {0x549f9e175b03dc0a, 0x32c0c95a77106cfe, 0x64a74eae5705d080, 0x53deeaf56659ed9e,
+            0x09a1d368508afb93, 0x12cf3a4525b5e9bd}}}};
 
 constexpr blst_fp6 LINES[68]{
     blst_fp6{{
@@ -770,6 +792,13 @@ constexpr blst_fp6 LINES[68]{
 const blst_fp6 (&kzg_setup_g2_1_lines() noexcept)[68]
 {
     return LINES;
+}
+
+bool verify_kzg_setup_g2_1_lines() noexcept
+{
+    blst_fp6 expected[68];
+    blst_precompute_lines(expected, &KZG_SETUP_G2_1);
+    return std::memcmp(expected, LINES, sizeof(LINES)) == 0;
 }
 
 }  // namespace evmone::crypto

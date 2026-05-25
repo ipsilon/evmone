@@ -4,6 +4,7 @@
 
 #include <evmc/evmc.hpp>
 #include <evmone_precompiles/kzg.hpp>
+#include <evmone_precompiles/kzg_setup_g2_1_lines.hpp>
 #include <evmone_precompiles/sha256.hpp>
 #include <gtest/gtest.h>
 #include <intx/intx.hpp>
@@ -42,6 +43,12 @@ TEST(kzg, verify_proof_zero)
     const auto hash = versioned_hash(POINT_AT_INFINITY);
     const auto r = kzg_verify_proof(hash.data(), z, ZERO32, POINT_AT_INFINITY, POINT_AT_INFINITY);
     EXPECT_TRUE(r);
+}
+
+TEST(kzg, precomputed_lines_match_blst_precompute)
+{
+    // Pins the baked-in line table against fresh blst_precompute_lines output.
+    EXPECT_TRUE(verify_kzg_setup_g2_1_lines());
 }
 
 TEST(kzg, verify_proof_constant)
