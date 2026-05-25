@@ -345,7 +345,9 @@ jobs:
       - package
 
   release-windows:
-    executor: win/server-2022
+    executor:
+      name: win/server-2022
+      shell: pwsh.exe
     environment:
       CMAKE_BUILD_TYPE: Release
       CMAKE_BUILD_PARALLEL_LEVEL: 4
@@ -361,6 +363,8 @@ jobs:
           name: 'Configure'
           command: |
             $ErrorActionPreference = "Stop"
+            $PSNativeCommandUseErrorActionPreference = $true
+            $PSVersionTable.PSVersion
             & 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64
             which cmake
             false
