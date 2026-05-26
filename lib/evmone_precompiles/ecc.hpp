@@ -141,8 +141,11 @@ struct AffinePoint
     AffinePoint() = default;
     constexpr AffinePoint(const FE& x_, const FE& y_) noexcept : x{x_}, y{y_} {}
 
-    /// Create the point from literal values.
-    consteval AffinePoint(const Curve::uint_type& x_value, const Curve::uint_type& y_value) noexcept
+    /// Create the point from literal values. Only available when Curve defines uint_type.
+    template <typename C = Curve>
+        requires requires { typename C::uint_type; }
+    consteval AffinePoint(
+        const typename C::uint_type& x_value, const typename C::uint_type& y_value) noexcept
       : x{x_value}, y{y_value}
     {}
 
@@ -152,6 +155,8 @@ struct AffinePoint
     {
         return p == AffinePoint{};
     }
+
+    friend constexpr AffinePoint operator-(const AffinePoint& p) noexcept { return {p.x, -p.y}; }
 
     static constexpr std::optional<AffinePoint> from_bytes(
         std::span<const uint8_t, sizeof(FE) * 2> b) noexcept
@@ -185,11 +190,6 @@ struct ProjPoint
     constexpr explicit ProjPoint(const AffinePoint<Curve>& p) noexcept
       : x{p.x}, y{p.y}, z{FE::one()}
     {}
-
-    /// Constructs a projective point from the legacy untyped Point<T> form.
-    /// Prefer the AffinePoint<Curve> constructor for new code; this exists
-    /// to bridge call sites that haven't migrated yet.
-    static constexpr ProjPoint from(const Point<FE>& p) noexcept { return {p.x, p.y, FE::one()}; }
 
     friend constexpr bool operator==(const ProjPoint& p, zero_t) noexcept { return p.z == 0; }
 

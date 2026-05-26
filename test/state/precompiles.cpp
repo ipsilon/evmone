@@ -546,21 +546,22 @@ ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8
     if (input_size % PAIR_SIZE != 0)
         return {EVMC_PRECOMPILE_FAILURE, 0};
 
-    std::vector<std::pair<evmmax::bn254::Point, evmmax::bn254::ExtPoint>> pairs;
+    std::vector<std::pair<evmmax::bn254::AffinePoint, evmmax::bn254::ExtPoint>> pairs;
     pairs.reserve(input_size / PAIR_SIZE);  // TODO: may throw std::bad_alloc.
     for (auto input_ptr = input; input_ptr != input + input_size; input_ptr += PAIR_SIZE)
     {
-        const evmmax::bn254::Point p{
-            intx::be::unsafe::load<intx::uint256>(input_ptr),
-            intx::be::unsafe::load<intx::uint256>(input_ptr + 32),
-        };
+        const auto p =
+            evmmax::bn254::AffinePoint::from_bytes(std::span<const uint8_t, 64>{input_ptr, 64});
+        if (!p.has_value()) [[unlikely]]
+            return {EVMC_PRECOMPILE_FAILURE, 0};
+
         const evmmax::bn254::ExtPoint q{
             {intx::be::unsafe::load<intx::uint256>(input_ptr + 96),
                 intx::be::unsafe::load<intx::uint256>(input_ptr + 64)},
             {intx::be::unsafe::load<intx::uint256>(input_ptr + 160),
                 intx::be::unsafe::load<intx::uint256>(input_ptr + 128)},
         };
-        pairs.emplace_back(p, q);
+        pairs.emplace_back(*p, q);
     }
 
     const auto res = evmmax::bn254::pairing_check(pairs);

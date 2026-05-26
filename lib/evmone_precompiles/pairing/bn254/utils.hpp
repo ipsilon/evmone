@@ -73,36 +73,13 @@ constexpr bool is_field_element(const uint256& v)
     return v < Curve::FIELD_PRIME;
 }
 
-/// Verifies that affine point is on the curve (not twisted)
-constexpr bool is_on_curve(const ecc::Point<Fq>& p) noexcept
-{
-    // TODO(C++23): make static
-    constexpr auto B = Fq(3);
-
-    const auto x3 = p.x * p.x * p.x;
-    const auto y2 = p.y * p.y;
-    return y2 == x3 + B;
-}
-
 /// Verifies that affine point over Fq^2 field is on the twisted curve.
-constexpr bool is_on_twisted_curve(const evmmax::ecc::Point<Fq2>& p)
+constexpr bool is_on_twisted_curve(const evmmax::ecc::AffinePoint<E2>& p)
 {
     const auto x3 = p.x * p.x * p.x;
     const auto y2 = p.y * p.y;
 
     return y2 == x3 + Fq6Config::_3_ksi_inv;
-}
-
-/// Verifies that affine point over the base field is infinity.
-constexpr bool is_infinity(const evmmax::ecc::Point<Fq>& p)
-{
-    return p.x == 0 && p.y == 0;
-}
-
-/// Verifies that affine point over the Fq^2 extended field is infinity.
-constexpr bool g2_is_infinity(const evmmax::ecc::Point<Fq2>& p)
-{
-    return p.x == Fq2::zero() && p.y == Fq2::zero();
 }
 
 // Frobenius endomorphism related functions are implemented based on
@@ -143,7 +120,7 @@ constexpr ecc::ProjPoint<E2> endomorphism(const ecc::ProjPoint<E2>& p) noexcept
 /// over Fq^2 extended field.
 /// This specialisation computes Frobenius and Frobenius^3
 template <int P>
-constexpr ecc::Point<Fq2> endomorphism(const ecc::Point<Fq2>& p) noexcept
+constexpr ecc::AffinePoint<E2> endomorphism(const ecc::AffinePoint<E2>& p) noexcept
     requires(P == 1 || P == 3)
 {
     return {
@@ -156,7 +133,7 @@ constexpr ecc::Point<Fq2> endomorphism(const ecc::Point<Fq2>& p) noexcept
 /// over Fq^2 extended field.
 /// This specialisation computes Frobenius^2
 template <int P>
-constexpr ecc::Point<Fq2> endomorphism(const ecc::Point<Fq2>& p) noexcept
+constexpr ecc::AffinePoint<E2> endomorphism(const ecc::AffinePoint<E2>& p) noexcept
     requires(P == 2)
 {
     return {
@@ -323,9 +300,9 @@ constexpr ecc::ProjPoint<E2> mul_by_X(const ecc::ProjPoint<E2>& a) noexcept
 
 /// Checks that point `p_aff` is in proper subgroup of points from twisted curve over Fq2 field.
 /// For more details see https://eprint.iacr.org/2022/348.pdf Example 1 from 3.1.2 Examples
-constexpr bool g2_subgroup_check(const ecc::Point<Fq2>& p_aff)
+constexpr bool g2_subgroup_check(const ecc::AffinePoint<E2>& p_aff)
 {
-    const auto p = ecc::ProjPoint<E2>::from(p_aff);
+    const auto p = ecc::ProjPoint<E2>{p_aff};
 
     const auto px = mul_by_X(p);
     const auto px1 = add(px, p);
@@ -379,7 +356,7 @@ constexpr ecc::ProjPoint<E2> lin_func_and_dbl(
 /// points on the curve (not twisted curve) evaluated at point P. Formula is simplified for P1.z
 /// == 1. For more details see https://notes.ethereum.org/@ipsilon/Hkn2a2qk0
 [[nodiscard]] constexpr ecc::ProjPoint<E2> lin_func_and_add(
-    const ecc::ProjPoint<E2>& P0, const ecc::Point<Fq2>& P1, std::array<Fq2, 3>& t) noexcept
+    const ecc::ProjPoint<E2>& P0, const ecc::AffinePoint<E2>& P1, std::array<Fq2, 3>& t) noexcept
 {
     const auto& x0 = P0.x;
     const auto& y0 = P0.y;
@@ -417,7 +394,7 @@ constexpr ecc::ProjPoint<E2> lin_func_and_dbl(
 /// points on the curve (not twisted curve) evaluated at point P. Formula is simplified for P1.z
 /// == 1. For more details see https://notes.ethereum.org/@ipsilon/Hkn2a2qk0
 constexpr void lin_func(
-    const ecc::ProjPoint<E2>& P0, const ecc::Point<Fq2>& P1, std::array<Fq2, 3>& t) noexcept
+    const ecc::ProjPoint<E2>& P0, const ecc::AffinePoint<E2>& P1, std::array<Fq2, 3>& t) noexcept
 {
     const auto& x0 = P0.x;
     const auto& y0 = P0.y;

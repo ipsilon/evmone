@@ -54,9 +54,9 @@ struct Curve
 
 using AffinePoint = ecc::AffinePoint<Curve>;
 
-using Point = ecc::Point<uint256>;
 /// Note that real part of G2 value goes first and imaginary part is the second. i.e (a + b*i)
 /// The pairing check precompile EVM ABI presumes that imaginary part goes first.
+/// TODO: Migrate G2 input handling to AffinePoint<E2> for symmetry with G1.
 using ExtPoint = ecc::Point<std::pair<uint256, uint256>>;
 
 /// Validates that point is from the bn254 curve group
@@ -75,6 +75,6 @@ AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept;
 ///               followed by a point from twisted curve G2 group over extension field Fq^2.
 /// @return       `true` when  ∏e(vG2[i], vG1[i]) == 1 for i in [0, n] else `false`.
 ///               std::nullopt on error.
-std::optional<bool> pairing_check(std::span<const std::pair<Point, ExtPoint>> pairs) noexcept;
+std::optional<bool> pairing_check(std::span<const std::pair<AffinePoint, ExtPoint>> pairs) noexcept;
 
 }  // namespace evmmax::bn254

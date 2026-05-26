@@ -11,14 +11,14 @@ using namespace intx;
 
 TEST(evmmax, bn254_pairing)
 {
-    const auto P1 = Point{
+    const auto P1 = AffinePoint{
         0x1c76476f4def4bb94541d57ebba1193381ffa7aa76ada664dd31c16024c43f59_u256,
         0x3034dd2920f673e204fee2811c678745fc819b55d3e9d294e45c9b03a76aef41_u256,
     };
     // -P1:
-    const auto nP1 = Point{P1.x, Curve::FIELD_PRIME - P1.y};
+    const auto nP1 = -P1;
     // P1 * 17:
-    const auto P1_17 = Point{
+    const auto P1_17 = AffinePoint{
         0x22980b2e458ec77e258b19ca3a7b46181f63c6536307acae03eea236f6919eeb_u256,
         0x4eab993e2ba2cca2b08c216645e3fbcf80ae67515b2c49806c17b90c9d3cad3_u256,
     };
@@ -61,7 +61,7 @@ TEST(evmmax, bn254_pairing)
 
     {
         // p1*q1 - (-p1*q1) = 0?
-        const std::vector<std::pair<Point, ExtPoint>> pairs{
+        const std::vector<std::pair<AffinePoint, ExtPoint>> pairs{
             {P1, Q1},
             {nP1, Q1},
         };
@@ -70,7 +70,7 @@ TEST(evmmax, bn254_pairing)
 
     {
         // p1*q1 - (p1*-q1) = 0?
-        const std::vector<std::pair<Point, ExtPoint>> pairs{
+        const std::vector<std::pair<AffinePoint, ExtPoint>> pairs{
             {P1, Q1},
             {P1, nQ1},
         };
@@ -79,7 +79,7 @@ TEST(evmmax, bn254_pairing)
 
     {
         // p1*17*q1 - (p1*-q1*16) = 0?
-        const std::vector<std::pair<Point, ExtPoint>> pairs{
+        const std::vector<std::pair<AffinePoint, ExtPoint>> pairs{
             {P1_17, Q1},
             {P1, nQ1_16},
         };
@@ -88,7 +88,7 @@ TEST(evmmax, bn254_pairing)
 
     {
         // p1*17 * q1 - (p1 * -q1*17) = 0?
-        const std::vector<std::pair<Point, ExtPoint>> pairs{
+        const std::vector<std::pair<AffinePoint, ExtPoint>> pairs{
             {P1_17, Q1},
             {P1, nQ1_17},
         };
@@ -103,7 +103,7 @@ TEST(evmmax, bn254_pairing)
 
 TEST(evmmax, bn254_pairing_invalid_input)
 {
-    const std::vector<std::pair<Point, ExtPoint>> valid_input{{
+    const std::vector<std::pair<AffinePoint, ExtPoint>> valid_input{{
         {
             0x22980b2e458ec77e258b19ca3a7b46181f63c6536307acae03eea236f6919eeb_u256,
             0x4eab993e2ba2cca2b08c216645e3fbcf80ae67515b2c49806c17b90c9d3cad3_u256,
@@ -125,13 +125,6 @@ TEST(evmmax, bn254_pairing_invalid_input)
     {
         // Coordinate not a field element
         auto input = valid_input;
-        input[0].first.x = Curve::FIELD_PRIME;
-        EXPECT_EQ(pairing_check(input), std::nullopt);
-    }
-
-    {
-        // Coordinate not a field element
-        auto input = valid_input;
         input[0].second.x.second = Curve::FIELD_PRIME;
         EXPECT_EQ(pairing_check(input), std::nullopt);
     }
@@ -139,7 +132,7 @@ TEST(evmmax, bn254_pairing_invalid_input)
     {
         // Point P (G1) not on curve
         auto input = valid_input;
-        input[0].first.x += 1;
+        input[0].first.x += Curve::Fp{1};
         EXPECT_EQ(pairing_check(input), std::nullopt);
     }
 
@@ -173,7 +166,7 @@ TEST(evmmax, bn254_pairing_invalid_input)
 TEST(evmmax_bn254, evm_codes_example)
 {
     // Pair 1
-    const auto p1 = Point{
+    const auto p1 = AffinePoint{
         0x2cf44499d5d27bb186308b7af7af02ac5bc9eeb6a3d147c186b21fb1b76e18da_u256,
         0x2c0f001f52110ccfe69108924926e45f0b0c868df0e7bde1fe16d3242dc715f6_u256,
     };
@@ -189,7 +182,7 @@ TEST(evmmax_bn254, evm_codes_example)
     };
 
     // Pair 2
-    const auto p2 = Point{
+    const auto p2 = AffinePoint{
         0x0000000000000000000000000000000000000000000000000000000000000001_u256,
         0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd45_u256,
     };
@@ -204,7 +197,7 @@ TEST(evmmax_bn254, evm_codes_example)
         },
     };
 
-    const std::vector<std::pair<Point, ExtPoint>> pairs = {{p1, q1}, {p2, q2}};
+    const std::vector<std::pair<AffinePoint, ExtPoint>> pairs = {{p1, q1}, {p2, q2}};
     const auto result = pairing_check(pairs);
 
     ASSERT_TRUE(result.has_value()) << "Pairing check should return a value.";
@@ -214,7 +207,7 @@ TEST(evmmax_bn254, evm_codes_example)
 TEST(evmmax_bn254, evm_codes_example_changed_order)
 {
     // Pair 1
-    const auto p1 = Point{
+    const auto p1 = AffinePoint{
         0x2cf44499d5d27bb186308b7af7af02ac5bc9eeb6a3d147c186b21fb1b76e18da_u256,
         0x2c0f001f52110ccfe69108924926e45f0b0c868df0e7bde1fe16d3242dc715f6_u256,
     };
@@ -230,7 +223,7 @@ TEST(evmmax_bn254, evm_codes_example_changed_order)
     };
 
     // Pair 2
-    const auto p2 = Point{
+    const auto p2 = AffinePoint{
         0x0000000000000000000000000000000000000000000000000000000000000001_u256,
         0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd45_u256,
     };
@@ -245,7 +238,7 @@ TEST(evmmax_bn254, evm_codes_example_changed_order)
         },
     };
 
-    const std::vector<std::pair<Point, ExtPoint>> pairs = {{p1, q1}, {p2, q2}};
+    const std::vector<std::pair<AffinePoint, ExtPoint>> pairs = {{p1, q1}, {p2, q2}};
     const auto result = pairing_check(pairs);
 
     ASSERT_TRUE(!result.has_value())
