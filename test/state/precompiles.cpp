@@ -555,11 +555,21 @@ ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8
         if (!p.has_value()) [[unlikely]]
             return {EVMC_PRECOMPILE_FAILURE, 0};
 
+        // G2 EVM ABI order: x.imag, x.real, y.imag, y.real (each 32 bytes).
+        // Fq2 coefficient order is (real, imaginary), so swap.
+        const auto qx_real =
+            evmmax::bn254::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 96, 32});
+        const auto qx_imag =
+            evmmax::bn254::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 64, 32});
+        const auto qy_real =
+            evmmax::bn254::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 160, 32});
+        const auto qy_imag =
+            evmmax::bn254::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 128, 32});
+        if (!qx_real || !qx_imag || !qy_real || !qy_imag) [[unlikely]]
+            return {EVMC_PRECOMPILE_FAILURE, 0};
         const evmmax::bn254::ExtPoint q{
-            {intx::be::unsafe::load<intx::uint256>(input_ptr + 96),
-                intx::be::unsafe::load<intx::uint256>(input_ptr + 64)},
-            {intx::be::unsafe::load<intx::uint256>(input_ptr + 160),
-                intx::be::unsafe::load<intx::uint256>(input_ptr + 128)},
+            evmmax::bn254::Fq2({*qx_real, *qx_imag}),
+            evmmax::bn254::Fq2({*qy_real, *qy_imag}),
         };
         pairs.emplace_back(*p, q);
     }

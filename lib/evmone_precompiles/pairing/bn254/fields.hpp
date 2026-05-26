@@ -10,19 +10,9 @@
 namespace evmmax::bn254
 {
 using namespace intx;
-using Fq = Curve::Fp;
 
 // Extension fields implemented based on https://hackmd.io/@jpw/bn254#Field-extension-towers
-
-/// Specifies Fq^2 extension field for bn254 curve. Base field extended with irreducible `u^2 + 1`
-/// polynomial over the base field. `u` is the Fq^2 element.
-struct Fq2Config
-{
-    using BaseFieldT = Fq;
-    using ValueT = Fq;
-    static constexpr auto DEGREE = 2;
-};
-using Fq2 = ecc::ExtFieldElem<Fq2Config>;
+// Fq, Fq2Config, Fq2, and E2 live in bn254.hpp to be reachable from the precompile boundary.
 
 /// Specifies Fq^6 extension field for bn254 curve. Fq^2 field extended with irreducible
 /// `v^3 - (9 + u)` polynomial over the Fq^2 field. `v` is the Fq^6 field element.
@@ -50,13 +40,6 @@ struct Fq12Config
     static constexpr uint8_t DEGREE = 2;
 };
 using Fq12 = ecc::ExtFieldElem<Fq12Config>;
-
-/// The BN254 twisted curve E₂: y² = x³ + b/ξ over Fq².
-struct E2
-{
-    using Fp = Fq2;
-    static constexpr auto A = 0;
-};
 
 /// Multiplies two Fq^2 field elements
 constexpr Fq2 multiply(const Fq2& a, const Fq2& b)

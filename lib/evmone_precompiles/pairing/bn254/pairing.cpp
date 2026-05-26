@@ -136,28 +136,19 @@ std::optional<bool> pairing_check(std::span<const std::pair<AffinePoint, ExtPoin
 
     for (const auto& [p, q] : pairs)
     {
-        if (!is_field_element(q.x.first) || !is_field_element(q.x.second) ||
-            !is_field_element(q.y.first) || !is_field_element(q.y.second))
-        {
-            return std::nullopt;
-        }
-
         if (!validate(p))
             return std::nullopt;
 
-        const auto Q_aff = ecc::AffinePoint<E2>{
-            Fq2({Fq(q.x.first), Fq(q.x.second)}), Fq2({Fq(q.y.first), Fq(q.y.second)})};
+        const bool g2_is_inf = q == 0;
 
-        const bool g2_is_inf = Q_aff == 0;
-
-        // Verify that Q in on curve and in proper subgroup. This subgroup is much smaller than
-        // group containing all the points from twisted curve over Fq2 field.
-        if (!g2_is_inf && (!is_on_twisted_curve(Q_aff) || !g2_subgroup_check(Q_aff)))
+        // Verify Q is on the twisted curve and in the proper subgroup. The subgroup is much
+        // smaller than the group of all points on the twisted curve over Fq².
+        if (!g2_is_inf && (!is_on_twisted_curve(q) || !g2_subgroup_check(q)))
             return std::nullopt;
 
-        // If any of the points is infinity it means that miller_loop returns 1. so we can skip it.
+        // If either point is infinity, miller_loop returns 1, so skip it.
         if (p != 0 && !g2_is_inf)
-            f = f * miller_loop(Q_aff, p);
+            f = f * miller_loop(q, p);
     }
 
     // final exp is calculated on accumulated value
