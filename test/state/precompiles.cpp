@@ -550,28 +550,21 @@ ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8
     pairs.reserve(input_size / PAIR_SIZE);  // TODO: may throw std::bad_alloc.
     for (auto input_ptr = input; input_ptr != input + input_size; input_ptr += PAIR_SIZE)
     {
-        const auto p =
-            evmmax::bn254::AffinePoint::from_bytes(std::span<const uint8_t, 64>{input_ptr, 64});
+        namespace bn = evmmax::bn254;
+        auto p = bn::AffinePoint::from_bytes(std::span<const uint8_t, 64>{input_ptr, 64});
         if (!p.has_value()) [[unlikely]]
             return {EVMC_PRECOMPILE_FAILURE, 0};
 
-        // G2 EVM ABI order: x.imag, x.real, y.imag, y.real (each 32 bytes).
-        // Fq2 coefficient order is (real, imaginary), so swap.
-        const auto qx_real =
-            evmmax::bn254::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 96, 32});
-        const auto qx_imag =
-            evmmax::bn254::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 64, 32});
-        const auto qy_real =
-            evmmax::bn254::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 160, 32});
-        const auto qy_imag =
-            evmmax::bn254::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 128, 32});
+        // G2 EVM ABI feeds the imaginary coefficient before the real one for each Fq²,
+        // so swap the offsets when reading into (real, imaginary) order.
+        const auto qx_real = bn::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 96, 32});
+        const auto qx_imag = bn::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 64, 32});
+        const auto qy_real = bn::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 160, 32});
+        const auto qy_imag = bn::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 128, 32});
         if (!qx_real || !qx_imag || !qy_real || !qy_imag) [[unlikely]]
             return {EVMC_PRECOMPILE_FAILURE, 0};
-        const evmmax::bn254::ExtPoint q{
-            evmmax::bn254::Fq2({*qx_real, *qx_imag}),
-            evmmax::bn254::Fq2({*qy_real, *qy_imag}),
-        };
-        pairs.emplace_back(*p, q);
+        bn::ExtPoint q{bn::Fq2({*qx_real, *qx_imag}), bn::Fq2({*qy_real, *qy_imag})};
+        pairs.emplace_back(std::move(*p), std::move(q));
     }
 
     const auto res = evmmax::bn254::pairing_check(pairs);

@@ -141,8 +141,8 @@ std::optional<bool> pairing_check(std::span<const std::pair<AffinePoint, ExtPoin
 
         const bool g2_is_inf = q == 0;
 
-        // Verify Q is on the twisted curve and in the proper subgroup. The subgroup is much
-        // smaller than the group of all points on the twisted curve over Fq².
+        // G2 must be on the twisted curve and in the small subgroup (Q is part of the full
+        // twisted-curve group otherwise, which would still satisfy is_on_twisted_curve alone).
         if (!g2_is_inf && (!is_on_twisted_curve(q) || !g2_subgroup_check(q)))
             return std::nullopt;
 

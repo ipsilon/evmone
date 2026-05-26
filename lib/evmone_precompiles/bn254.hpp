@@ -57,19 +57,18 @@ using Fq = Curve::Fp;
 
 using AffinePoint = ecc::AffinePoint<Curve>;
 
-/// Specifies Fq² extension field for bn254 curve. Base field extended with irreducible `u² + 1`
-/// polynomial over the base field. `u` is the Fq² element.
+/// Fq² extension field config: base field extended by the irreducible `u² + 1`.
+/// Stays in this namespace so ADL finds multiply()/inverse() (defined in pairing/bn254/fields.hpp).
 struct Fq2Config
 {
     using BaseFieldT = Fq;
     using ValueT = Fq;
     static constexpr auto DEGREE = 2;
 };
+/// Fq² element with coefficients in (real, imaginary) order.
 using Fq2 = ecc::ExtFieldElem<Fq2Config>;
 
 /// The BN254 twisted curve E₂: y² = x³ + b/ξ over Fq². G2 lives here.
-/// Note: coefficient order is (real, imaginary). The pairing-check EVM ABI feeds
-/// the imaginary part first, so the boundary swaps before constructing Fq2 values.
 struct E2
 {
     using Fp = Fq2;
