@@ -368,9 +368,20 @@ constexpr ecc::JacPoint<Fq2> lin_func_and_dbl(
     const auto Yp = M * (S - Xp) - (_4y_4 + _4y_4);
     const auto Zp = N * N - y_squared - z_squared;  // 2yz = (y+z)^2 - y^2 - z^2
 
-    t[0] = Zp * z_squared;
-    t[1] = M * z_squared;
-    t[2] = R - M * x;
+    // Beuchat 2010 Algorithm 26 line eval, literal form. Beuchat uses +y_P
+    // for the line; our code passes -P.y at the DBL call site, so t[0]
+    // is negated to compensate.
+    //   t[0] = -4·(Z_T·z²) = -4·y·z³   (Beuchat tmp0 = 2·Z_T·Z²_Q = 4yz³)
+    //   t[1] = -2·(M·z²)   = -6·x²·z²  (Beuchat tmp3 = -2·tmp4·Z²_Q)
+    //   t[2] =  2·(M·x − R) = 6·x³ − 4·y²  (Beuchat tmp6)
+    // Ratio Beuchat / ipsilon (per coefficient) = uniform -2, an F_p
+    // factor absorbed by final exponentiation.
+    const auto Zp_z2 = Zp * z_squared;
+    const auto M_z2 = M * z_squared;
+    const auto Mx_R = M * x - R;
+    t[0] = -(Zp_z2 + Zp_z2);
+    t[1] = -(M_z2 + M_z2);
+    t[2] = Mx_R + Mx_R;
 
     return ecc::JacPoint<Fq2>{Xp, Yp, Zp};
 }
@@ -406,11 +417,29 @@ constexpr ecc::JacPoint<Fq2> lin_func_and_dbl(
     const auto Y3 = R * (V - X3) - y0 * H_cubed;
     const auto Z3 = H * z0;
 
-    t[0] = -H * z0_cubed;   // = x0·z0³ − U2·z0³
-    t[1] = R * z0_squared;  // = S2·z0² − y0·z0²
-    t[2] = y0 * U2 - x0 * S2;
+    // Beuchat 2010 Algorithm 27 line eval, literal form. Code's ADD call
+    // site uses +P.y, matching Beuchat's convention (no sign flip).
+    //   t[0] = +4·Z3   (Beuchat a0[0] = 2·Z_T·y_P, Z_T = 2·z0·H = 2·Z3)
+    //   t[1] = -4·R    (Beuchat a1[0] = 2·t6·x_P, t6_after_neg = -2·R)
+    //   t[2] = 4·(R·x1 - y1·Z3)
+    // T_out RESCALED to (4·X3, 8·Y3, 2·Z3) — Beuchat's λ=2 Jacobian.
+    // Required for self-consistent scaling across Miller-loop iterations.
+    const auto _2Z3 = Z3 + Z3;
+    const auto _2R = R + R;
+    const auto Rx1 = R * x1;
+    const auto y1_Z3 = y1 * Z3;
+    const auto t2_pre = Rx1 - y1_Z3;
+    const auto _2t2_pre = t2_pre + t2_pre;
+    t[0] = _2Z3 + _2Z3;
+    t[1] = -(_2R + _2R);
+    t[2] = _2t2_pre + _2t2_pre;
 
-    return ecc::JacPoint<Fq2>{X3, Y3, Z3};
+    const auto _2X3 = X3 + X3;
+    const auto _4X3 = _2X3 + _2X3;
+    const auto _2Y3 = Y3 + Y3;
+    const auto _4Y3 = _2Y3 + _2Y3;
+    const auto _8Y3 = _4Y3 + _4Y3;
+    return ecc::JacPoint<Fq2>{_4X3, _8Y3, _2Z3};
 }
 
 /// Computes points P0 and P1 addition for twisted curve + line defined by untwisted P1 and P2
@@ -431,10 +460,20 @@ constexpr void lin_func(
 
     const auto U2 = x1 * z0_squared;
     const auto S2 = y1 * z0_cubed;
+    const auto H = U2 - x0;
+    const auto R = S2 - y0;
+    const auto Z3 = z0 * H;
 
-    t[0] = (x0 - U2) * z0_cubed;    // = x0·z0³ − U2·z0³
-    t[1] = (S2 - y0) * z0_squared;  // = S2·z0² − y0·z0²
-    t[2] = y0 * U2 - x0 * S2;
+    // Beuchat 2010 Algorithm 27 line eval (no-T-update variant).
+    const auto _2Z3 = Z3 + Z3;
+    const auto _2R = R + R;
+    const auto Rx1 = R * x1;
+    const auto y1_Z3 = y1 * Z3;
+    const auto t2_pre = Rx1 - y1_Z3;
+    const auto _2t2_pre = t2_pre + t2_pre;
+    t[0] = _2Z3 + _2Z3;
+    t[1] = -(_2R + _2R);
+    t[2] = _2t2_pre + _2t2_pre;
 }
 
 /// Computes f^2 for f in Fq12. For more ref https://eprint.iacr.org/2010/354.pdf Algorithm 22
