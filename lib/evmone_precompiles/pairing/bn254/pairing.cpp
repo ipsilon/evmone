@@ -11,7 +11,7 @@ namespace evmmax::bn254
 namespace
 {
 /// Multiplies `fr` (Fq12) values by sparse `v` (Fq12) value of the form
-/// [[t[0] * y, 0, 0],[t[1] * x, t[0], 0]] where `v` coefficients are from Fq2
+/// [[t[0] * y, 0, 0],[t[1] * x, t[2], 0]] where `v` coefficients are from Fq2
 constexpr void multiply_by_lin_func_value(
     Fq12& fr, std::array<Fq2, 3> t, const Fq& x, const Fq& y) noexcept
 {
