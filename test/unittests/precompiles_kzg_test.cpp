@@ -4,7 +4,7 @@
 
 #include <evmc/evmc.hpp>
 #include <evmone_precompiles/kzg.hpp>
-#include <evmone_precompiles/kzg_setup_g2_1_lines.hpp>
+#include <evmone_precompiles/kzg_precomputed_lines.hpp>
 #include <evmone_precompiles/sha256.hpp>
 #include <gtest/gtest.h>
 #include <intx/intx.hpp>
@@ -43,6 +43,14 @@ TEST(kzg, verify_proof_zero)
     const auto hash = versioned_hash(POINT_AT_INFINITY);
     const auto r = kzg_verify_proof(hash.data(), z, ZERO32, POINT_AT_INFINITY, POINT_AT_INFINITY);
     EXPECT_TRUE(r);
+}
+
+TEST(kzg, verify_g2_gen_lines)
+{
+    blst_fp6 expected[68];
+    blst_precompute_lines(expected, blst_p2_affine_generator());
+    const auto precomputed = g2_gen_lines();
+    EXPECT_TRUE(std::memcmp(precomputed, expected, sizeof(expected)) == 0);
 }
 
 TEST(kzg, verify_kzg_setup_g2_1_lines)

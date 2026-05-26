@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "kzg.hpp"
-#include "kzg_setup_g2_1_lines.hpp"
+#include "kzg_precomputed_lines.hpp"
 #include <blst.h>
 #include <algorithm>
 #include <optional>
@@ -55,10 +55,9 @@ blst_p1_affine add_or_double(const blst_p1_affine& p, const blst_p1& q) noexcept
 
 bool pairings_verify(const blst_p1_affine& a1, const blst_p1_affine& b1) noexcept
 {
+    // Uses precomputed Miller loop lines for the G2 generator [1]₂.
     blst_fp12 left;
-    // Runs the Miller loop against the G2 generator (no precomputed lines).
-    // TODO: Precompute lines for G2_GEN and use blst_miller_loop_lines() like the [s]₂ side.
-    blst_aggregated_in_g1(&left, &a1);
+    blst_miller_loop_lines(&left, g2_gen_lines(), &a1);
     // Uses precomputed Miller loop lines for KZG_SETUP_G2_1 ([s]₂).
     blst_fp12 right;
     blst_miller_loop_lines(&right, kzg_setup_g2_1_lines(), &b1);
