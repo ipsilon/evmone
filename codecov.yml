@@ -23,7 +23,6 @@ component_management:
         - test/eofparse/**
         - test/eoftest/**
         - test/statetest/**
-        - test/t8n/**
         - test/utils/**
     - component_id: tests
       name: tests

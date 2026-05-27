@@ -2,7 +2,7 @@
 # Copyright 2024 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-# Integration tests for evmone-t8n.
+# Integration tests for the `evmone t8n` subcommand.
 
 set(PREFIX ${PREFIX}/t8n)
 
@@ -12,7 +12,7 @@ add_test(
     NAME ${PREFIX}/${TEST_CASE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/base_fee
     COMMAND
-    evmone-t8n
+    evmone-cli t8n
     --state.fork London
     --state.reward 0
     --state.chainid 1
@@ -46,7 +46,7 @@ add_test(
     NAME ${PREFIX}/${TEST_CASE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/base_fee
     COMMAND
-    evmone-t8n
+    evmone-cli t8n
     --state.fork Berlin
     --state.reward 0
     --state.chainid 1
@@ -76,7 +76,7 @@ add_test(
     NAME ${PREFIX}/${TEST_CASE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_CASE}
     COMMAND
-    evmone-t8n
+    evmone-cli t8n
     --state.fork Cancun
     --state.reward 0
     --state.chainid 1
@@ -86,7 +86,6 @@ add_test(
     --output.basedir ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}
     --output.result out.json
     --output.alloc outAlloc.json
-    --output.errorlog error.json
     --opcode.count opcodes.json
 )
 set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
@@ -157,7 +156,7 @@ add_test(
     NAME ${PREFIX}/${TEST_CASE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_CASE}
     COMMAND
-    evmone-t8n
+    evmone-cli t8n
     --state.fork Prague
     --state.reward 0
     --state.chainid 1
@@ -192,7 +191,7 @@ add_test(
     NAME ${PREFIX}/${TEST_CASE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_CASE}
     COMMAND
-    evmone-t8n
+    evmone-cli t8n
     --state.fork Osaka
     --state.reward 0
     --state.chainid 1
@@ -226,7 +225,7 @@ add_test(
     NAME ${PREFIX}/${TEST_CASE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cancun_create_tx
     COMMAND
-    evmone-t8n
+    evmone-cli t8n
     --state.fork Cancun
     --state.reward 0
     --state.chainid 1
@@ -254,13 +253,25 @@ set_tests_properties(
 )
 
 
-add_test(NAME ${PREFIX}/version COMMAND evmone-t8n --version)
+add_test(NAME ${PREFIX}/version COMMAND evmone-cli --version)
 set_tests_properties(
-    ${PREFIX}/version PROPERTIES PASS_REGULAR_EXPRESSION "evmone-t8n")
+    ${PREFIX}/version PROPERTIES PASS_REGULAR_EXPRESSION "evmone")
 
-add_test(NAME ${PREFIX}/bad_fork COMMAND evmone-t8n --state.fork NoSuchRev)
+add_test(NAME ${PREFIX}/bad_fork COMMAND evmone-cli t8n --state.fork NoSuchRev)
 set_tests_properties(
     ${PREFIX}/bad_fork PROPERTIES PASS_REGULAR_EXPRESSION "unknown revision")
+
+
+# Check if chainid max value is accepted.
+add_test(
+    NAME ${PREFIX}/chainid_hex_max
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/base_fee
+    COMMAND
+    evmone-cli t8n
+    --state.fork Paris
+    --state.chainid 0xffffffffffffffff
+    --input.env env.json
+)
 
 
 # Exercises both --output.body (RLP-encoded transactions) and
@@ -271,7 +282,7 @@ add_test(
     NAME ${PREFIX}/${TEST_CASE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/prague_empty_requests
     COMMAND
-    evmone-t8n
+    evmone-cli t8n
     --state.fork Prague
     --state.reward -1
     --state.chainid 1
