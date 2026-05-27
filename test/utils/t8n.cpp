@@ -119,8 +119,19 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
             }
         }
 
+        // PoS forks have no mining reward; fill always passes `--state.reward=0`
+        // for Paris+ because `fork.get_reward()` returns 0. Translate that to
+        // nullopt to mirror evmone-blockchaintest's `mining_reward(rev)` — passing
+        // `optional{0}` would otherwise let `state::finalize` touch the coinbase
+        // with a +0 delta and leak it into the BAL (EIP-7928 spec: coinbase must
+        // not appear in an empty block's BAL).
+        const auto reward_for_finalize =
+            (rev >= EVMC_PARIS && args.block_reward.value_or(0) == 0) ?
+                std::optional<uint64_t>{} :
+                args.block_reward;
+
         auto res = apply_block(state, vm, block, block_hashes, txs, rev, blob_gas_limit,
-            {.block_reward = args.block_reward,
+            {.block_reward = reward_for_finalize,
                 .skip_system_calls = args.pre_state_only,
                 .open_trace = args.open_trace});
 
@@ -153,9 +164,37 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
                 j_receipt["blockHash"] = hex0x(bytes32{});
                 j_receipt["contractAddress"] = hex0x(address{});
                 j_receipt["logsBloom"] = hex0x(receipt.logs_bloom_filter);
-                j_receipt["logs"] = JSON::array();  // FIXME: Add to_json<state:Log>
-                j_receipt["root"] = "";
-                j_receipt["status"] = "0x1";
+                // Real receipt logs as JSON. The fill framework rebuilds the
+                // receipts trie from this list; the previous empty placeholder
+                // broke roots for any tx emitting logs.
+                auto& j_logs = j_receipt["logs"] = JSON::array();
+                for (const auto& log : receipt.logs)
+                {
+                    JSON j_log;
+                    j_log["address"] = hex0x(log.addr);
+                    auto& j_topics = j_log["topics"] = JSON::array();
+                    for (const auto& t : log.topics)
+                        j_topics.push_back(hex0x(t));
+                    j_log["data"] = hex0x(bytes_view{log.data.data(), log.data.size()});
+                    j_logs.push_back(std::move(j_log));
+                }
+                // Pre-Byzantium receipts encode `post_state` instead of EIP-658
+                // `status`. The framework only includes the field that's non-empty
+                // in the JSON, so emit exactly one.
+                if (receipt.post_state.has_value())
+                {
+                    j_receipt["root"] = hex0x(receipt.post_state.value());
+                    j_receipt["status"] = "";
+                }
+                else
+                {
+                    j_receipt["root"] = "";
+                    // Real EIP-658 status. The previous hard-coded "0x1" made
+                    // OOG'd / reverted txs appear successful in the JSON while the
+                    // t8n's own `receiptsRoot` was built from `receipt.status`,
+                    // producing a guaranteed mismatch.
+                    j_receipt["status"] = hex0x(uint64_t{receipt.status == EVMC_SUCCESS});
+                }
                 j_receipt["transactionIndex"] = hex0x(i);
                 transactions.emplace_back(std::move(txs[i]));
             }
@@ -168,15 +207,31 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
             requests = std::move(res.requests);
 
         receipts = std::move(res.receipts);
-        // Block gas used reported as the cumulative transaction gas (refunds excluded),
-        // preserving the prior t8n output.
-        gas_used = receipts.empty() ? 0 : receipts.back().cumulative_gas_used;
+        // EIP-8037/7778: header gasUsed = max(sum_regular, sum_state) for Amsterdam+
+        // (`res.gas_used` carries that block-level value). Pre-Amsterdam, preserve the
+        // legacy cumulative transaction gas (refunds excluded).
+        gas_used = (rev >= EVMC_AMSTERDAM) ?
+                       res.gas_used :
+                       (receipts.empty() ? 0 : receipts.back().cumulative_gas_used);
         bloom = res.bloom;
         blob_gas_left = res.blob_gas_left;
         post_state = std::move(res.block_state);
 
         j_result["logsHash"] = hex0x(logs_hash(txs_logs));
         j_result["stateRoot"] = hex0x(state::mpt_hash(post_state));
+
+        if (!args.pre_state_only && rev >= EVMC_AMSTERDAM)
+        {
+            // EIP-7928: emit RLP-encoded BlockAccessList plus its hash. The test
+            // framework recomputes the hash from `blockAccessList` and cross-checks
+            // it against `blockAccessListHash` (copied into the fixture header).
+            j_result["blockAccessList"] = hex0x(res.block_access_list.rlp_encode());
+            j_result["blockAccessListHash"] = hex0x(res.block_access_list_hash);
+            // EIP-7928 consensus rule: `bal_items <= block_gas_limit / 2000`. Signal
+            // the block as invalid for fill so it can match the expected exception.
+            if (res.block_access_list_gas_limit_exceeded)
+                j_result["blockException"] = "block access list exceeds gas limit";
+        }
     }
     else
         post_state = state;
