@@ -156,7 +156,8 @@ TEST(state_tx, validate_eof_create_transaction)
     for (int r = EVMC_CANCUN; r <= EVMC_MAX_REVISION; ++r)
     {
         const auto rev = static_cast<evmc_revision>(r);
-        const auto res = validate_transaction(state, block, tx, rev, block.gas_limit, 0);
+        const auto res = validate_transaction(
+            state, block, tx, rev, block.gas_limit, 0, block.gas_limit);
         EXPECT_FALSE(holds_alternative<std::error_code>(res));
     }
 }
