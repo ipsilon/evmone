@@ -70,7 +70,7 @@ class InstructionCounter : public Tracer
 {
     std::stack<bytes_view> m_codes;
     std::array<unsigned, 256> m_counters{};
-    std::string_view m_out_file_path;
+    std::string m_out_file_path;
 
     void on_execution_start(
         evmc_revision /*rev*/, const evmc_message& /*msg*/, bytes_view code) noexcept override
@@ -94,7 +94,7 @@ public:
 
     ~InstructionCounter() noexcept override
     {
-        std::ofstream out{std::string{m_out_file_path}};
+        std::ofstream out{m_out_file_path};
         out << "{\n";
         bool first = true;
         for (size_t i = 0; i < std::size(m_counters); ++i)
