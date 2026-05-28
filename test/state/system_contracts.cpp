@@ -6,6 +6,7 @@
 #include "errors.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
+#include <evmone/constants.hpp>
 
 namespace evmone::state
 {
@@ -64,13 +65,31 @@ static_assert(std::ranges::is_sorted(REQUESTS_SYSTEM_CONTRACTS, by_rev),
     "system contract entries must be ordered by revision");
 
 
+/// Cap on the number of SSTOREs a system contract may need to fund out of its
+/// state-gas budget under EIP-8037. The bal-720 `system_contract_reaches_gas_limit`
+/// tests deliberately replace the canonical contract with one sized exactly to
+/// `30M + SYSTEM_MAX_SSTORES_PER_CALL × STORAGE_SET_STATE_GAS`, so this constant
+/// is observable.
+constexpr int64_t SYSTEM_MAX_SSTORES_PER_CALL = 16;
+
 evmc::Result execute_system_call(State& state, const BlockInfo& block,
     const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm, const address& addr,
     bytes_view code, bytes_view input)
 {
+    // EIP-8037: bump the 30M regular-gas budget by enough state-gas headroom
+    // to cover up to `SYSTEM_MAX_SSTORES_PER_CALL` zero→non-zero SSTOREs, so
+    // that the new state-gas component cannot OOG a system call. Implemented
+    // as a single regular-gas pool (no separate state reservoir) — current
+    // Amsterdam system contracts each perform ≤2 SSTOREs and don't observe
+    // the split, and the test framework's `system_call_gas_limit()` returns
+    // the same sum (30M + 16 × 97920 = 31'566'720).
+    const auto system_call_gas =
+        (rev >= EVMC_AMSTERDAM) ?
+            int64_t{30'000'000} + SYSTEM_MAX_SSTORES_PER_CALL * STORAGE_SET_STATE_GAS :
+            int64_t{30'000'000};
     const evmc_message msg{
         .kind = EVMC_CALL,
-        .gas = 30'000'000,
+        .gas = system_call_gas,
         .recipient = addr,
         .sender = SYSTEM_ADDRESS,
         .input_data = input.data(),
@@ -98,10 +117,19 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
         if (code.empty())
             continue;
 
+        // EIP-7928: ensure the executed system contract's address is observed
+        // by the BAL tracker even if the contract body makes no state access.
+        (void)state_view.get_account(addr);
+
+        // Snapshot before the system call so that an exceptional halt (e.g. OOG
+        // with huge block_gas_limit under EIP-8037's dynamic CPSB) doesn't leave
+        // partial state changes visible to subsequent system calls or user txs.
+        const auto checkpoint = state.checkpoint();
         const auto input32 = get_input(block, block_hashes);
         const auto res =
             execute_system_call(state, block, block_hashes, rev, vm, addr, code, input32);
-        assert(res.status_code == EVMC_SUCCESS);
+        if (res.status_code != EVMC_SUCCESS)
+            state.rollback(checkpoint);
     }
     // TODO: Should we return empty diff if no system contracts?
     return state.build_diff(rev);
@@ -121,6 +149,10 @@ std::variant<RequestsResult, std::error_code> system_call_block_end(const StateV
         const auto code = state_view.get_account_code(addr);
         if (code.empty())
             return make_error_code(SYSTEM_CONTRACT_EMPTY);
+
+        // EIP-7928: ensure the executed system contract's address is observed
+        // by the BAL tracker even if the contract body makes no state access.
+        (void)state_view.get_account(addr);
 
         const auto res = execute_system_call(state, block, block_hashes, rev, vm, addr, code, {});
         if (res.status_code != EVMC_SUCCESS)
