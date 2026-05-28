@@ -4,6 +4,7 @@
 
 #include <evmc/evmc.hpp>
 #include <evmc/hex.hpp>
+#include <evmone/evmone.h>
 #include <evmone/version.h>
 #include <intx/intx.hpp>
 #include <test/utils/t8n.hpp>
@@ -114,7 +115,8 @@ int main(int argc, const char* argv[])
         args.out_alloc = bind_stream(out_alloc, output_path(output_alloc_file));
         args.out_body = bind_stream(out_body, output_path(output_body_file));
 
-        tooling::t8n(args);
+        evmc::VM vm{evmc_create_evmone()};
+        tooling::t8n(vm, args);
     }
     catch (const std::exception& e)
     {

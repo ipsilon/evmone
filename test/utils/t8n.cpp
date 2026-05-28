@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "t8n.hpp"
-#include <evmone/evmone.h>
 #include <nlohmann/json.hpp>
 #include <test/state/ethash_difficulty.hpp>
 #include <test/state/requests.hpp>
@@ -46,10 +45,9 @@ public:
 };
 }  // namespace
 
-void t8n(const T8NArgs& args)
+void t8n(evmc::VM& vm, const T8NArgs& args)
 {
     const auto rev = args.rev;
-    evmc::VM vm{evmc_create_evmone()};
 
     const auto blob_params =
         (args.blob_params != nullptr) ?
@@ -111,7 +109,7 @@ void t8n(const T8NArgs& args)
 
         const bool trace_enabled = static_cast<bool>(args.open_trace);
         if (trace_enabled)
-            vm.set_option("trace", "1");
+            vm.set_option("trace", "1");  // This actually appends new tracer each set_option().
         if (!args.opcode_count_file.empty())
             vm.set_option("opcode.count", args.opcode_count_file.c_str());
 

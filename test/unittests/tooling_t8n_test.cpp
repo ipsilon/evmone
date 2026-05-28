@@ -2,6 +2,7 @@
 // Copyright 2026 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include <evmone/evmone.h>
 #include <gmock/gmock.h>
 #include <test/utils/t8n.hpp>
 #include <sstream>
@@ -56,13 +57,18 @@ constexpr auto TX_JSON = R"([{
 TEST(tooling_t8n, no_inputs_no_outputs)
 {
     // Smoke: t8n() with everything left at defaults must not throw or crash.
+    evmc::VM vm{evmc_create_evmone()};
+
     tooling::T8NArgs args;
     args.rev = EVMC_OSAKA;
-    tooling::t8n(args);
+
+    tooling::t8n(vm, args);
 }
 
 TEST(tooling_t8n, result_written_to_out_streams)
 {
+    evmc::VM vm{evmc_create_evmone()};
+
     tooling::T8NArgs args;
     args.rev = EVMC_OSAKA;
     std::ostringstream out_result;
@@ -70,7 +76,7 @@ TEST(tooling_t8n, result_written_to_out_streams)
     args.out_result = &out_result;
     args.out_alloc = &out_alloc;
 
-    tooling::t8n(args);
+    tooling::t8n(vm, args);
 
     EXPECT_THAT(out_result.str(), HasSubstr("\"gasUsed\""));
     EXPECT_THAT(out_result.str(), HasSubstr("\"txRoot\""));
@@ -81,6 +87,8 @@ TEST(tooling_t8n, result_written_to_out_streams)
 
 TEST(tooling_t8n, open_trace_called_per_tx)
 {
+    evmc::VM vm{evmc_create_evmone()};
+
     std::istringstream env{ENV_JSON};
     std::istringstream alloc{ALLOC_JSON};
     std::istringstream txs{TX_JSON};
@@ -102,7 +110,7 @@ TEST(tooling_t8n, open_trace_called_per_tx)
         return trace_buf;
     };
 
-    tooling::t8n(args);
+    tooling::t8n(vm, args);
 
     ASSERT_EQ(trace_calls.size(), 1U);
     EXPECT_EQ(trace_calls[0].first, 0U);
@@ -113,6 +121,8 @@ TEST(tooling_t8n, open_trace_called_per_tx)
 
 TEST(tooling_t8n, out_body_is_hex_rlp_of_transactions)
 {
+    evmc::VM vm{evmc_create_evmone()};
+
     std::istringstream env{ENV_JSON};
     std::istringstream alloc{ALLOC_JSON};
     std::istringstream txs{TX_JSON};
@@ -130,7 +140,7 @@ TEST(tooling_t8n, out_body_is_hex_rlp_of_transactions)
     args.out_alloc = &out_alloc;
     args.out_body = &out_body;
 
-    tooling::t8n(args);
+    tooling::t8n(vm, args);
 
     // RLP-encoded list of one legacy transaction, hex-prefixed.
     EXPECT_THAT(out_body.str(), StartsWith("0x"));
@@ -139,6 +149,8 @@ TEST(tooling_t8n, out_body_is_hex_rlp_of_transactions)
 
 TEST(tooling_t8n, pre_byzantium_sets_receipt_post_state)
 {
+    evmc::VM vm{evmc_create_evmone()};
+
     // Pre-Byzantium receipts include the post-state root via receipt.post_state.
     // The TX_JSON fixture uses PUSH0 in its init code, so the inner CREATE fails
     // at Homestead, but the outer tx still produces a TransactionReceipt that
@@ -156,7 +168,7 @@ TEST(tooling_t8n, pre_byzantium_sets_receipt_post_state)
     args.txs = &txs;
     args.out_result = &out_result;
 
-    tooling::t8n(args);
+    tooling::t8n(vm, args);
 
     // The "receipts" array is initialized empty on every txs-present run; the
     // distinguishing signal that a receipt was actually produced (i.e., the
@@ -166,6 +178,8 @@ TEST(tooling_t8n, pre_byzantium_sets_receipt_post_state)
 
 TEST(tooling_t8n, mismatched_tx_hash_throws)
 {
+    evmc::VM vm{evmc_create_evmone()};
+
     // TX_JSON's tx with a deliberately wrong "hash" field. t8n() must detect
     // the mismatch against the recomputed hash and throw std::logic_error.
     static constexpr auto TX_WITH_BAD_HASH = R"([{
@@ -194,5 +208,5 @@ TEST(tooling_t8n, mismatched_tx_hash_throws)
     args.env = &env;
     args.txs = &txs;
 
-    EXPECT_THROW(tooling::t8n(args), std::logic_error);
+    EXPECT_THROW(tooling::t8n(vm, args), std::logic_error);
 }

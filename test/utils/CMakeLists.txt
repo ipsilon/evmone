@@ -7,7 +7,7 @@ add_library(evmone::testutils ALIAS evmone.testutils)
 target_link_libraries(
     evmone.testutils
     PUBLIC evmone::state evmc::evmc_cpp nlohmann_json::nlohmann_json
-    PRIVATE evmone evmc::mocked_host
+    PRIVATE evmc::mocked_host
 )
 
 target_sources(

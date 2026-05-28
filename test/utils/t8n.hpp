@@ -46,7 +46,7 @@ struct T8NArgs
 /// post-state as some JSON outputs. The specifics of the JSON formats and options are dictated
 /// by execution specs, see https://steel.ethereum.foundation/docs/execution-specs.
 ///
-/// The VM is constructed internally because this is a one-off command,
-/// and it needs to modify the VM's config.
-void t8n(const T8NArgs& args);
+/// @param vm    The VM instance. The command may modify/overwrite its config (depends on args).
+/// @param args  The command arguments.
+void t8n(evmc::VM& vm, const T8NArgs& args);
 }  // namespace evmone::tooling
