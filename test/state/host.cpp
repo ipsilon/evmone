@@ -8,6 +8,16 @@
 
 namespace evmone::state
 {
+namespace
+{
+/// EIP-8037: set the state-gas fields on a returned Result.
+void set_state_gas(evmc::Result& r, int64_t left, int64_t used) noexcept
+{
+    r.raw().state_gas_left = left;
+    r.raw().state_gas_used = used;
+}
+}  // namespace
+
 bool Host::account_exists(const address& addr) const noexcept
 {
     const auto* const acc = m_state.find(addr);
@@ -26,7 +36,8 @@ evmc_storage_status Host::set_storage(
     // and EIP-2200 specification https://eips.ethereum.org/EIPS/eip-2200.
 
     auto& storage_slot = m_state.get_storage(addr, key);
-    const auto& [current, original, _] = storage_slot;
+    const auto& current = storage_slot.current;
+    const auto& original = storage_slot.original;
 
     const auto dirty = original != current;
     const auto restored = original == value;
@@ -61,9 +72,7 @@ evmc_storage_status Host::set_storage(
             status = EVMC_STORAGE_MODIFIED_RESTORED;  // X → Y → X
     }
 
-    // In Berlin this is handled in access_storage().
-    if (m_rev < EVMC_BERLIN)
-        m_state.journal_storage_change(addr, key, storage_slot);
+    m_state.journal_storage_change(addr, key, storage_slot);
     storage_slot.current = value;  // Update current value.
     return status;
 }
@@ -264,7 +273,19 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (!new_acc_exists)
         new_acc = &m_state.insert(msg.recipient);
     else if (is_create_collision(*new_acc))
-        return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
+    {
+        auto r = evmc::Result{EVMC_FAILURE};
+        // Preserve reservoir so the parent (or transition() at depth 0)
+        // can refund any unused state gas, including the EIP-7702
+        // delegation refund that was added to msg.state_gas at tx start.
+        r.raw().state_gas_left = msg.state_gas;
+        if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
+        {
+            // Mark depth-0 collision with sentinel for block formula.
+            r.raw().state_gas_used = STATE_GAS_USED_DEPTH0_COLLISION;
+        }
+        return r;
+    }
     m_state.journal_create(msg.recipient, new_acc_exists);
 
     assert(new_acc != nullptr);
@@ -286,6 +307,10 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     auto create_msg = msg;
     create_msg.input_data = nullptr;
     create_msg.input_size = 0;
+
+    // EIP-8037: Depth-0 CREATE state gas (NEW_ACCOUNT*CPSB) is now in the intrinsic cost.
+    // Opcode-level CREATE (depth > 0) is charged in create_impl.
+
     const bytes_view initcode{msg.input_data, msg.input_size};
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
@@ -300,20 +325,50 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     const bytes_view code{result.output_data, result.output_size};
 
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > MAX_CODE_SIZE)
-        return evmc::Result{EVMC_FAILURE};
+    {
+        auto r = evmc::Result{EVMC_FAILURE};
+        set_state_gas(r, result.state_gas_left, result.state_gas_used);
+        return r;
+    }
 
     // Reject new contract code starting with the 0xEF byte (EIP-3541).
     if (m_rev >= EVMC_LONDON && code.starts_with(0xEF))
-        return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+    {
+        auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+        set_state_gas(r, result.state_gas_left, result.state_gas_used);
+        return r;
+    }
 
     // Code deployment cost.
-    const auto cost = std::ssize(code) * 200;
-    gas_left -= cost;
-    if (gas_left < 0)
+    auto state_gas_left = result.state_gas_left;
+    auto total_state_gas_used = result.state_gas_used;
+    if (m_rev >= EVMC_AMSTERDAM)
     {
-        return (m_rev == EVMC_FRONTIER) ?
-                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient} :
-                   evmc::Result{EVMC_FAILURE};
+        // EIP-8037: split code deposit into regular and state components.
+        const auto regular_cost = 6 * ((std::ssize(code) + 31) / 32);
+        const auto state_cost = std::ssize(code) * COST_PER_STATE_BYTE;
+        gas_left -= regular_cost;
+        if (gas_left < 0 || !charge_state_gas(gas_left, state_gas_left, total_state_gas_used,
+                                state_cost))
+        {
+            auto r = evmc::Result{EVMC_FAILURE};
+            set_state_gas(r, state_gas_left, total_state_gas_used);
+            return r;
+        }
+    }
+    else
+    {
+        const auto cost = std::ssize(code) * 200;
+        gas_left -= cost;
+        if (gas_left < 0)
+        {
+            if (m_rev == EVMC_FRONTIER)
+                return evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund,
+                    msg.recipient};
+            auto r = evmc::Result{EVMC_FAILURE};
+            set_state_gas(r, state_gas_left, total_state_gas_used);
+            return r;
+        }
     }
 
     if (!code.empty())
@@ -323,7 +378,9 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         new_acc->code_changed = true;
     }
 
-    return evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
+    auto r = evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
+    set_state_gas(r, state_gas_left, total_state_gas_used);
+    return r;
 }
 
 evmc::Result Host::execute_message(const evmc_message& msg) noexcept
@@ -362,12 +419,25 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
 
     // Calls to precompile address via EIP-7702 delegation execute empty code instead of precompile.
     if ((msg.flags & EVMC_DELEGATED) == 0 && is_precompile(m_rev, msg.code_address))
-        return call_precompile(m_rev, msg);
+    {
+        auto r = call_precompile(m_rev, msg);
+        // EIP-8037: precompiles don't consume state gas, pass through the
+        // full reservoir. Assert no precompile leaks state-gas usage.
+        assert(r.raw().state_gas_used == 0);
+        r.raw().state_gas_left = msg.state_gas;
+        return r;
+    }
 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
     const auto code = m_state.get_code(msg.code_address);
     if (code.empty())
-        return evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
+    {
+        auto r = evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
+        // EIP-8037: empty-code call consumes no state gas; reservoir passes through.
+        assert(r.raw().state_gas_used == 0);
+        r.raw().state_gas_left = msg.state_gas;
+        return r;
+    }
 
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
@@ -376,7 +446,13 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
 {
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
-        return evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+    {
+        auto r = evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+        // EIP-8037: no execution happened; state-gas reservoir passes through untouched.
+        assert(r.raw().state_gas_used == 0);
+        r.raw().state_gas_left = orig_msg.state_gas;
+        return r;
+    }
 
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();

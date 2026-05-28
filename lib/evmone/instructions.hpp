@@ -4,6 +4,7 @@
 #pragma once
 
 #include "baseline.hpp"
+#include "constants.hpp"
 #include "execution_state.hpp"
 #include "instructions_traits.hpp"
 #include "instructions_xmacro.hpp"
@@ -112,6 +113,36 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
 {
     constexpr auto WordCopyCost = 3;
     return num_words(size_in_bytes) * WordCopyCost;
+}
+
+
+/// Charge state gas (EIP-8037) against an ExecutionState. Thin wrapper
+/// over the scalar form in constants.hpp.
+inline bool charge_state_gas(int64_t& gas_left, ExecutionState& state, int64_t cost) noexcept
+{
+    return charge_state_gas(gas_left, state.state_gas_left, state.state_gas_used, cost);
+}
+
+/// EIP-8037: propagate a child frame's state-gas back to the parent.
+/// Success: take the leftover reservoir, accumulate consumed state gas.
+/// Amsterdam error: return reservoir + consumed (so the ancestor-revert
+/// path can refund correctly — see PR #2823).
+/// Pre-Amsterdam: only the reservoir matters (no state-gas semantics).
+inline void accumulate_child_state_gas(ExecutionState& state, const evmc_result& result) noexcept
+{
+    if (result.status_code == EVMC_SUCCESS)
+    {
+        state.state_gas_left = result.state_gas_left;
+        state.state_gas_used += result.state_gas_used;
+    }
+    else if (state.rev >= EVMC_AMSTERDAM)
+    {
+        state.state_gas_left = result.state_gas_left + result.state_gas_used;
+    }
+    else
+    {
+        state.state_gas_left = result.state_gas_left;
+    }
 }
 
 /// Grows EVM memory and checks its cost.
@@ -1081,8 +1112,17 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
             // sending value to a non-existing account.
             if (!state.host.account_exists(beneficiary))
             {
-                if ((gas_left -= 25000) < 0)
-                    return {EVMC_OUT_OF_GAS, gas_left};
+                if (state.rev >= EVMC_AMSTERDAM)
+                {
+                    // EIP-8037: charge state gas instead of regular gas.
+                    if (!charge_state_gas(gas_left, state, NEW_ACCOUNT_STATE_GAS))
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
+                else
+                {
+                    if ((gas_left -= 25000) < 0)
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
             }
         }
     }

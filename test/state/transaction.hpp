@@ -88,6 +88,12 @@ struct TransactionProperties
     /// The amount of gas provided to the EVM for the transaction execution.
     int64_t execution_gas_limit = 0;
 
+    /// EIP-8037: The state gas portion of the intrinsic cost.
+    int64_t intrinsic_state_gas = 0;
+
+    /// The regular portion of the intrinsic cost.
+    int64_t intrinsic_regular_gas = 0;
+
     /// The minimal amount of gas the transaction must use.
     int64_t min_gas_cost = 0;
 };
@@ -116,12 +122,19 @@ struct TransactionReceipt
     /// Amount of gas used by this transaction (after refund, with the min gas applied).
     int64_t gas_used = 0;
 
-    /// Amount of gas refund applied to gas_used (capped by the min gas cost of EIP-7623).
-    /// Effectively, the difference between "block" and "user" gas.
+    /// Refund applied to `gas_used` (raw consumed minus what the sender paid,
+    /// capped by EIP-7623 `min_gas_cost`). Pre-Amsterdam: always 0. Amsterdam:
+    /// the regular-gas refund amount (4800 for an SSTORE clear, etc.).
     int64_t gas_refund = 0;
 
     /// Amount of gas used by this and previous transactions in the block.
     int64_t cumulative_gas_used = 0;
+
+    /// EIP-8037: 2D per-tx block-gas components. The runner aggregates as
+    /// `block.gas_used = max(sum_regular, sum_state)` per EIP-7778.
+    int64_t regular_block_gas = 0;    ///< Regular gas component.
+    int64_t state_block_gas = 0;      ///< State gas component.
+
     std::vector<Log> logs;
     BloomFilter logs_bloom_filter;
     StateDiff state_diff;

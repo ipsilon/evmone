@@ -42,6 +42,7 @@ constexpr auto storage_cost_spec = []() noexcept {
     tbl[EVMC_PRAGUE] = tbl[EVMC_LONDON];
     tbl[EVMC_OSAKA] = tbl[EVMC_LONDON];
     tbl[EVMC_AMSTERDAM] = tbl[EVMC_LONDON];
+    tbl[EVMC_AMSTERDAM].set = 2900;  // EIP-8037: regular component only (was 20000).
     tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_LONDON];
     return tbl;
 }();
@@ -136,8 +137,29 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 
     const auto [gas_cost_warm, gas_refund] = sstore_costs[state.rev][status];
     const auto gas_cost = gas_cost_warm + gas_cost_cold;
+
+    // EIP-8037: charge regular gas FIRST, then state gas.
+    // This order prevents state gas spill from inflating state_gas_used on regular OOG.
     if ((gas_left -= gas_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
+
+    if (state.rev >= EVMC_AMSTERDAM)
+    {
+        if (status == EVMC_STORAGE_ADDED)
+        {
+            if (!charge_state_gas(gas_left, state, STORAGE_SET_STATE_GAS))
+                return {EVMC_OUT_OF_GAS, gas_left};
+        }
+        else if (status == EVMC_STORAGE_ADDED_DELETED)
+        {
+            // EIP-8037 (bal-devnet-7, PR #2823): Refund state gas directly to
+            // the reservoir for set-then-clear (0 -> Y -> 0). No extra phantom-
+            // tracking: an ancestor revert returns `state_gas_used + state_gas_left`
+            // naturally, and the matching SSTORE charge is itself rolled back.
+            state.state_gas_left += STORAGE_SET_STATE_GAS;
+            state.state_gas_used -= STORAGE_SET_STATE_GAS;
+        }
+    }
     state.gas_refund += gas_refund;
     return {EVMC_SUCCESS, gas_left};
 }
