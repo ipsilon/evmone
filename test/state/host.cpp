@@ -279,12 +279,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         // Preserve reservoir so the parent (or transition() at depth 0)
         // can refund any unused state gas, including the EIP-7702
         // delegation refund that was added to msg.state_gas at tx start.
+        // state_gas_used stays 0 (no execution happened).
         r.raw().state_gas_left = msg.state_gas;
-        if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
-        {
-            // Mark depth-0 collision with sentinel for block formula.
-            r.raw().state_gas_used = STATE_GAS_USED_DEPTH0_COLLISION;
-        }
         return r;
     }
     m_state.journal_create(msg.recipient, new_acc_exists);
