@@ -302,6 +302,10 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > MAX_CODE_SIZE)
         return evmc::Result{EVMC_FAILURE};
 
+    // Reject new contract code starting with the 0xEF byte (EIP-3541).
+    if (m_rev >= EVMC_LONDON && code.starts_with(0xEF))
+        return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+
     // Code deployment cost.
     const auto cost = std::ssize(code) * 200;
     gas_left -= cost;
@@ -314,10 +318,6 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     if (!code.empty())
     {
-        // EIP-3541: Reject new contract code starting with the 0xEF byte.
-        if (m_rev >= EVMC_LONDON && code[0] == 0xEF)
-            return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
-
         new_acc->code_hash = keccak256(code);
         new_acc->code = code;
         new_acc->code_changed = true;
