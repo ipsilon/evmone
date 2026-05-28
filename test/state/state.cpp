@@ -741,10 +741,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 
     // EIP-8037: On top-level failure (revert or exceptional halt), refund all state gas
     // consumed by EVM execution back to the reservoir, since nothing was created.
-    // The `> 0` guard excludes the STATE_GAS_USED_DEPTH0_COLLISION sentinel,
-    // for which Host::create already preserved state_gas_left.
-    if (rev >= EVMC_AMSTERDAM && result.status_code != EVMC_SUCCESS &&
-        result.state_gas_used > 0)
+    if (rev >= EVMC_AMSTERDAM && result.status_code != EVMC_SUCCESS)
     {
         result.raw().state_gas_left += result.state_gas_used;
         result.raw().state_gas_used = 0;
@@ -787,7 +784,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         // reverts (EIP-8037: spilled charges whose refunds were dropped at the
         // revert boundary don't represent state growth and must not inflate the
         // regular component).
-        const auto exec_state_gas = std::max(int64_t{0}, result.state_gas_used);
+        assert(result.state_gas_used >= 0);
+        const auto exec_state_gas = result.state_gas_used;
         const auto intrinsic_state = tx_props.intrinsic_state_gas;
         // EIP-8037 (bal-devnet-7, PR #2816 / #2823): the EIP-7702 auth
         // refund and the tx-level CREATE-failure refund are subtracted
