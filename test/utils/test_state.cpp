@@ -75,8 +75,11 @@ bytes32 TestBlockHashes::get_block_hash(int64_t block_number) const noexcept
     const state::Transaction& tx, evmc_revision rev, evmc::VM& vm, int64_t block_gas_left,
     int64_t blob_gas_left)
 {
-    const auto tx_props_or_error =
-        state::validate_transaction(state, block, tx, rev, block_gas_left, blob_gas_left);
+    // For TestState single-tx usage (unit tests / statetests), the state-gas
+    // budget mirrors the regular budget — both start at block.gas_limit and
+    // are consumed in lockstep when only one tx is being validated.
+    const auto tx_props_or_error = state::validate_transaction(
+        state, block, tx, rev, block_gas_left, blob_gas_left, block_gas_left);
     if (const auto err = get_if<std::error_code>(&tx_props_or_error))
         return *err;
 

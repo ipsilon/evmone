@@ -476,7 +476,7 @@ void State::rollback(size_t checkpoint)
 /// @return  Execution gas limit or transaction validation error.
 std::variant<TransactionProperties, std::error_code> validate_transaction(
     const StateView& state_view, const BlockInfo& block, const Transaction& tx, evmc_revision rev,
-    int64_t block_gas_left, int64_t blob_gas_left) noexcept
+    int64_t block_gas_left, int64_t blob_gas_left, int64_t state_block_gas_left) noexcept
 {
     switch (tx.type)  // Validate "special" transaction types.
     {
@@ -593,13 +593,29 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     // regular_gas_budget = TX_MAX_GAS_LIMIT - intrinsic_regular_gas
     // stays non-negative. EELS reference: ethereum/forks/amsterdam/transactions.py
     // around the line raising on `max(intrinsic.regular, intrinsic.calldata_floor)`.
+    // EELS raises InsufficientTransactionGasError, mapped to INTRINSIC_GAS_TOO_LOW
+    // (the tx can't pay its own intrinsic within the reservoir bound), not the
+    // Osaka-era GAS_LIMIT_EXCEEDS_MAXIMUM.
     if (rev >= EVMC_AMSTERDAM && std::max(intrinsic_cost, min_cost) > MAX_TX_GAS_LIMIT)
-        return make_error_code(MAX_GAS_LIMIT_EXCEEDED);
+        return make_error_code(INTRINSIC_GAS_TOO_LOW);
 
     // EIP-8037: total intrinsic includes both regular and state components.
     const auto total_intrinsic = intrinsic_cost + intrinsic_state;
     if (tx.gas_limit < std::max(total_intrinsic, min_cost))
         return make_error_code(INTRINSIC_GAS_TOO_LOW);
+
+    // EIP-8037 §"Transaction validation" rule 2: per-dimension worst-case
+    // inclusion check. The spec uses bare `tx.gas` (no intrinsic subtraction).
+    // EELS amsterdam/fork.py:561-583 currently subtracts intrinsic.state /
+    // intrinsic.regular; ethereum/execution-specs#2892 aligns it back with
+    // the EIP literal. This implementation follows the EIP text directly.
+    if (rev >= EVMC_AMSTERDAM)
+    {
+        if (std::min<int64_t>(MAX_TX_GAS_LIMIT, tx.gas_limit) > block_gas_left)
+            return make_error_code(GAS_LIMIT_REACHED);
+        if (tx.gas_limit > state_block_gas_left)
+            return make_error_code(GAS_LIMIT_REACHED);
+    }
 
     const auto execution_gas_limit = tx.gas_limit - total_intrinsic;
     return TransactionProperties{execution_gas_limit, intrinsic_state, intrinsic_cost, min_cost};
