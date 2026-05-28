@@ -149,8 +149,8 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
                 if (trace_enabled)
                     trace_guard.emplace(std::clog, args.open_trace(i, computed_tx_hash).rdbuf());
 
-                auto res = transition(
-                    state, block, block_hashes, tx, rev, vm, block_gas_left, blob_gas_left);
+                auto res = transition(state, block, block_hashes, tx, rev, vm, block_gas_left,
+                    blob_gas_left, block_gas_left);
 
                 if (holds_alternative<std::error_code>(res))
                 {
