@@ -36,8 +36,7 @@ evmc_storage_status Host::set_storage(
     // and EIP-2200 specification https://eips.ethereum.org/EIPS/eip-2200.
 
     auto& storage_slot = m_state.get_storage(addr, key);
-    const auto& current = storage_slot.current;
-    const auto& original = storage_slot.original;
+    const auto& [current, original, _] = storage_slot;
 
     const auto dirty = original != current;
     const auto restored = original == value;
@@ -72,7 +71,9 @@ evmc_storage_status Host::set_storage(
             status = EVMC_STORAGE_MODIFIED_RESTORED;  // X → Y → X
     }
 
-    m_state.journal_storage_change(addr, key, storage_slot);
+    // In Berlin this is handled in access_storage().
+    if (m_rev < EVMC_BERLIN)
+        m_state.journal_storage_change(addr, key, storage_slot);
     storage_slot.current = value;  // Update current value.
     return status;
 }
