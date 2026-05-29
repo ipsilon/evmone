@@ -41,22 +41,27 @@ struct TransitionResult
 
 namespace
 {
+/// Transition the state with a block of transactions.
+///
+/// This assumes block-level validity, but transaction may be invalid.
+///
+/// @param blob_gas_limit  The per-block blob-gas budget set by the protocol maximum.
 TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::BlockInfo& block,
     const state::BlockHashes& block_hashes, const std::vector<state::Transaction>& txs,
-    evmc_revision rev, std::optional<int64_t> block_reward)
+    evmc_revision rev, int64_t blob_gas_limit, std::optional<int64_t> block_reward)
 {
     TestState block_state(state);
     system_call_block_start(block_state, block, block_hashes, rev, vm);
 
     std::vector<state::Log> txs_logs;
     int64_t block_gas_left = block.gas_limit;
-    auto blob_gas_left = static_cast<int64_t>(block.blob_gas_used.value_or(0));
 
     std::vector<RejectedTransaction> rejected_txs;
     std::vector<state::TransactionReceipt> receipts;
 
     int64_t cumulative_gas_used = 0;
     int64_t block_gas_used = 0;
+    auto blob_gas_left = blob_gas_limit;
 
     for (size_t i = 0; i < txs.size(); ++i)
     {
@@ -200,10 +205,6 @@ bool validate_block(evmc_revision rev, state::BlobParams blob_params, const Test
                 parent_header->excess_blob_gas.value_or(0), parent_header->base_fee_per_gas,
                 parent_blob_base_fee))
             return false;
-
-        // Ensure the total blob gas spent is at most equal to the limit
-        if (*test_block.block_info.blob_gas_used > state::max_blob_gas_per_block(blob_params))
-            return false;
     }
     else
     {
@@ -308,6 +309,8 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
 
             const auto rev = rev_schedule.get_revision(bi.timestamp);
             const auto blob_params = get_blob_params(c.network, c.blob_schedule, bi.timestamp);
+            const auto blob_gas_limit =
+                static_cast<int64_t>(state::max_blob_gas_per_block(blob_params));
 
             SCOPED_TRACE(std::string{evmc::to_string(rev)} + '/' + std::to_string(case_index) +
                          '/' + c.name + '/' + std::to_string(test_block.block_info.number));
@@ -323,7 +326,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 const auto& pre_state = parent_data_it->second.post_state;
 
                 auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions,
-                    rev, mining_reward(rev));
+                    rev, blob_gas_limit, mining_reward(rev));
 
                 ASSERT_TRUE(res.requests.has_value());
 
@@ -346,7 +349,8 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
 
                 EXPECT_TRUE(res.rejected.empty())
                     << "Invalid transaction in block expected to be valid";
-                EXPECT_TRUE(res.blob_gas_left == 0)
+                EXPECT_EQ(blob_gas_limit - res.blob_gas_left,
+                    static_cast<int64_t>(bi.blob_gas_used.value_or(0)))
                     << "Transactions used more or less blob gas than expected in block header";
 
                 EXPECT_EQ(state::mpt_hash(inserted_it->second.post_state),
@@ -381,12 +385,13 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 const auto& pre_state = parent_data_it->second.post_state;
 
                 const auto res = apply_block(pre_state, vm, bi, block_hashes,
-                    test_block.transactions, rev, mining_reward(rev));
+                    test_block.transactions, rev, blob_gas_limit, mining_reward(rev));
                 if (!res.requests.has_value())
                     continue;
                 if (!res.rejected.empty())
                     continue;
-                if (res.blob_gas_left != 0)
+                if (blob_gas_limit - res.blob_gas_left !=
+                    static_cast<int64_t>(bi.blob_gas_used.value_or(0)))
                     continue;
 
                 if (state::mpt_hash(res.block_state) != test_block.expected_block_header.state_root)
