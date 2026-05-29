@@ -51,7 +51,7 @@ struct TestBlock
     std::vector<state::Transaction> transactions;
     size_t rlp_size = 0;
     bool withdrawals_parse_success = true;
-    bool valid = true;
+    std::string expected_exception;  ///< Empty for valid blocks.
 
     BlockHeader expected_block_header;
 };

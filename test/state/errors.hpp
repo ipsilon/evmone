@@ -32,6 +32,16 @@ enum ErrorCode : int  // NOLINT(*-use-enum-class)
     EMPTY_AUTHORIZATION_LIST,
     MAX_GAS_LIMIT_EXCEEDED,
     UNKNOWN_ERROR,
+
+    // Block-level validation.
+    INCORRECT_BLOCK_FORMAT,
+    INVALID_GASLIMIT,
+    INVALID_BASEFEE_PER_GAS,
+    INCORRECT_EXCESS_BLOB_GAS,
+    RLP_BLOCK_LIMIT_EXCEEDED,
+    INVALID_BLOCK_TIMESTAMP_OLDER_THAN_PARENT,
+    INVALID_BLOCK_PARENT,
+    INVALID_BLOCK_NUMBER,
 };
 
 /// Obtains a reference to the static error category object for evmone errors.
@@ -87,6 +97,22 @@ inline const std::error_category& evmone_category() noexcept
                 return "max gas limit exceeded";
             case UNKNOWN_ERROR:
                 return "Unknown error";
+            case INCORRECT_BLOCK_FORMAT:
+                return "BlockException.INCORRECT_BLOCK_FORMAT";
+            case INVALID_GASLIMIT:
+                return "BlockException.INVALID_GASLIMIT";
+            case INVALID_BASEFEE_PER_GAS:
+                return "BlockException.INVALID_BASEFEE_PER_GAS";
+            case INCORRECT_EXCESS_BLOB_GAS:
+                return "BlockException.INCORRECT_EXCESS_BLOB_GAS";
+            case RLP_BLOCK_LIMIT_EXCEEDED:
+                return "BlockException.RLP_BLOCK_LIMIT_EXCEEDED";
+            case INVALID_BLOCK_TIMESTAMP_OLDER_THAN_PARENT:
+                return "BlockException.INVALID_BLOCK_TIMESTAMP_OLDER_THAN_PARENT";
+            case INVALID_BLOCK_PARENT:
+                return "BlockException.INVALID_BLOCK_PARENT";
+            case INVALID_BLOCK_NUMBER:
+                return "BlockException.INVALID_BLOCK_NUMBER";
             default:
                 assert(false);
                 return "Wrong error code";

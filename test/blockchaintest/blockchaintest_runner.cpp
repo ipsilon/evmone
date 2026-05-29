@@ -4,6 +4,7 @@
 
 #include "blockchaintest_runner.hpp"
 #include <gtest/gtest.h>
+#include <test/state/errors.hpp>
 #include <test/state/ethash_difficulty.hpp>
 #include <test/state/requests.hpp>
 #include <test/utils/mpt_hash.hpp>
@@ -125,67 +126,69 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         bloom, blob_gas_left, std::move(block_state)};
 }
 
-bool validate_block(evmc_revision rev, state::BlobParams blob_params, const TestBlock& test_block,
-    const BlockHeader* parent_header, bool parent_has_ommers) noexcept
+/// Validates block-level validity unrelated to individual transactions.
+///
+/// Returns an empty error_code if the block is valid, otherwise the specific validation error.
+std::error_code validate_block(evmc_revision rev, state::BlobParams blob_params,
+    const TestBlock& test_block, const BlockHeader* parent_header, bool parent_has_ommers) noexcept
 {
-    // NOTE: includes only block validity unrelated to individual txs. See `apply_block`.
+    using namespace state;
 
-    // Fail if parent header was not found.
+    // Fail if parent header was not found: the block references a parent that is neither the
+    // genesis nor any previously-accepted block (an unknown or rejected parent).
     if (parent_header == nullptr)
-        return false;
+        return make_error_code(INVALID_BLOCK_PARENT);
 
     if (test_block.block_info.number != parent_header->block_number + 1)
-        return false;
+        return make_error_code(INVALID_BLOCK_NUMBER);
 
     if (test_block.block_info.gas_used > test_block.block_info.gas_limit)
-        return false;
+        return make_error_code(INCORRECT_BLOCK_FORMAT);
 
     // Some tests have gas limit at INT64_MAX, so we cast to uint64_t to avoid overflow.
     const auto parent_header_gas_limit_u64 = static_cast<uint64_t>(parent_header->gas_limit);
     const auto test_block_gas_limit_u64 = static_cast<uint64_t>(test_block.block_info.gas_limit);
     if (test_block_gas_limit_u64 >=
         parent_header_gas_limit_u64 + parent_header_gas_limit_u64 / 1024)
-        return false;
+        return make_error_code(INVALID_GASLIMIT);
     if (test_block_gas_limit_u64 <=
         parent_header_gas_limit_u64 - parent_header_gas_limit_u64 / 1024)
-        return false;
+        return make_error_code(INVALID_GASLIMIT);
 
     // Block gas limit minimum from Yellow Paper.
     if (test_block.block_info.gas_limit < 5000)
-        return false;
+        return make_error_code(INVALID_GASLIMIT);
 
     // FIXME: Some tests have timestamp not fitting into int64_t, type has to be uint64_t.
     if (static_cast<uint64_t>(test_block.block_info.timestamp) <=
         static_cast<uint64_t>(parent_header->timestamp))
-        return false;
+        return make_error_code(INVALID_BLOCK_TIMESTAMP_OLDER_THAN_PARENT);
 
-    if (test_block.block_info.difficulty != state::calculate_difficulty(parent_header->difficulty,
-                                                parent_has_ommers, parent_header->timestamp,
-                                                test_block.block_info.timestamp,
-                                                test_block.block_info.number, rev))
-        return false;
+    if (test_block.block_info.difficulty !=
+        calculate_difficulty(parent_header->difficulty, parent_has_ommers, parent_header->timestamp,
+            test_block.block_info.timestamp, test_block.block_info.number, rev))
+        return make_error_code(INCORRECT_BLOCK_FORMAT);
 
     if (rev >= EVMC_PARIS && !test_block.block_info.ommers.empty())
-        return false;
-
+        return make_error_code(INCORRECT_BLOCK_FORMAT);
 
     for (const auto& ommer : test_block.block_info.ommers)
     {
         // Check that ommer block number difference with current block is within allowed range.
         // https://github.com/ethereum/execution-specs/blob/ee73be5c4d83a2e3c358bd14990878002e52ba9e/src/ethereum/gray_glacier/fork.py#L623
         if (ommer.delta < 1 || ommer.delta > 6)
-            return false;
+            return make_error_code(INCORRECT_BLOCK_FORMAT);
     }
 
     if (test_block.block_info.extra_data.size() > 32)
-        return false;
+        return make_error_code(INCORRECT_BLOCK_FORMAT);
 
     if (rev >= EVMC_LONDON)
     {
-        const auto calculated_base_fee = state::calc_base_fee(
+        const auto calculated_base_fee = calc_base_fee(
             parent_header->gas_limit, parent_header->gas_used, parent_header->base_fee_per_gas);
         if (test_block.block_info.base_fee != calculated_base_fee)
-            return false;
+            return make_error_code(INVALID_BASEFEE_PER_GAS);
     }
 
     if (rev >= EVMC_CANCUN)
@@ -193,34 +196,34 @@ bool validate_block(evmc_revision rev, state::BlobParams blob_params, const Test
         // `excess_blob_gas` and `blob_gas_used` mandatory after Cancun and invalid before.
         if (!test_block.block_info.excess_blob_gas.has_value() ||
             !test_block.block_info.blob_gas_used.has_value())
-            return false;
+            return make_error_code(INCORRECT_BLOCK_FORMAT);
 
         // Check that the excess blob gas was updated correctly.
         // According to EIP-7918 current blocks params (`rev`) should be used for parent base fee
         // calculation.
         const auto parent_blob_base_fee =
-            state::compute_blob_gas_price(blob_params, parent_header->excess_blob_gas.value_or(0));
+            compute_blob_gas_price(blob_params, parent_header->excess_blob_gas.value_or(0));
         if (*test_block.block_info.excess_blob_gas !=
-            state::calc_excess_blob_gas(rev, blob_params, parent_header->blob_gas_used.value_or(0),
+            calc_excess_blob_gas(rev, blob_params, parent_header->blob_gas_used.value_or(0),
                 parent_header->excess_blob_gas.value_or(0), parent_header->base_fee_per_gas,
                 parent_blob_base_fee))
-            return false;
+            return make_error_code(INCORRECT_EXCESS_BLOB_GAS);
     }
     else
     {
         if (test_block.block_info.excess_blob_gas.has_value() ||
             test_block.block_info.blob_gas_used.has_value())
-            return false;
+            return make_error_code(INCORRECT_BLOCK_FORMAT);
     }
 
     // Block is invalid if some of the withdrawal fields failed to be parsed.
     if (!test_block.withdrawals_parse_success)
-        return false;
+        return make_error_code(INCORRECT_BLOCK_FORMAT);
 
     if (rev >= EVMC_OSAKA && test_block.rlp_size > MAX_RLP_BLOCK_SIZE)
-        return false;
+        return make_error_code(RLP_BLOCK_LIMIT_EXCEEDED);
 
-    return true;
+    return {};
 }
 
 std::optional<int64_t> mining_reward(evmc_revision rev) noexcept
@@ -315,11 +318,13 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
             SCOPED_TRACE(std::string{evmc::to_string(rev)} + '/' + std::to_string(case_index) +
                          '/' + c.name + '/' + std::to_string(test_block.block_info.number));
 
-            if (test_block.valid)
+            const auto block_error =
+                validate_block(rev, blob_params, test_block, parent_header, parent_has_ommers);
+
+            if (test_block.expected_exception.empty())
             {
-                ASSERT_TRUE(
-                    validate_block(rev, blob_params, test_block, parent_header, parent_has_ommers))
-                    << "Expected block to be valid (validate_block)";
+                ASSERT_FALSE(block_error)
+                    << "Expected block to be valid (validate_block): " << block_error.message();
 
                 // Block being valid guarantees its parent was found.
                 assert(parent_data_it != block_data.end());
@@ -377,8 +382,19 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
             }
             else
             {
-                if (!validate_block(rev, blob_params, test_block, parent_header, parent_has_ommers))
+                if (block_error)
+                {
+                    // Block correctly rejected at validation; verify the reason matches the
+                    // fixture's expected exception. The error message is the `BlockException`
+                    // constant; `expected_exception` may list `|`-separated alternatives, so a
+                    // substring search suffices as long as no constant name is a substring of
+                    // another (true for the constants evmone produces).
+                    EXPECT_NE(test_block.expected_exception.find(block_error.message()),
+                        std::string::npos)
+                        << "Block invalidity reason mismatch: got " << block_error.message()
+                        << ", expected " << test_block.expected_exception;
                     continue;
+                }
 
                 // Block being valid guarantees its parent was found.
                 assert(parent_data_it != block_data.end());

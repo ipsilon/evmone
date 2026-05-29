@@ -5,6 +5,7 @@
 #include "blockchaintest.hpp"
 #include "statetest.hpp"
 #include "utils.hpp"
+#include <test/state/errors.hpp>
 
 namespace evmone::test
 {
@@ -136,6 +137,34 @@ static TestBlock load_test_block(
 
 namespace
 {
+/// Maps a legacy "expectException" value to modern EEST-style exception name.
+std::string map_legacy_block_exception(std::string_view expected_exception)
+{
+    using enum state::ErrorCode;
+    using Entry = std::pair<std::string_view, state::ErrorCode>;
+
+    static constexpr Entry LEGACY_MAP[]{
+        // ethereum/tests (EEST-format):
+        {"BlockException.IMPORT_IMPOSSIBLE_UNCLES_OVER_PARIS", INCORRECT_BLOCK_FORMAT},
+        {"BlockException.GAS_USED_OVERFLOW", INCORRECT_BLOCK_FORMAT},
+        {"BlockException.RLP_STRUCTURES_ENCODING|BlockException.RLP_INVALID_FIELD_OVERFLOW_64",
+            INCORRECT_BLOCK_FORMAT},
+        // ethereum/legacytests (pre-EEST):
+        {"PostParisUncleHashIsNotEmpty", INCORRECT_BLOCK_FORMAT},
+        {"3675PreParis1559BlockRejected", INCORRECT_BLOCK_FORMAT},
+        {"InvalidNumber", INCORRECT_BLOCK_FORMAT},
+        {"InvalidTimestampOlderParent", INVALID_BLOCK_TIMESTAMP_OLDER_THAN_PARENT},
+        {"TooMuchGasUsed", INCORRECT_BLOCK_FORMAT},
+        {"UncleParentIsNotAncestor", INCORRECT_BLOCK_FORMAT},
+        {"InvalidGasLimit2", INVALID_GASLIMIT},
+        {"1559BlockImportImpossible_BaseFeeWrong", INVALID_BASEFEE_PER_GAS},
+    };
+
+    const auto it = std::ranges::find(LEGACY_MAP, expected_exception, &Entry::first);
+    return (it != std::end(LEGACY_MAP)) ? state::make_error_code(it->second).message() :
+                                          std::string{expected_exception};
+}
+
 BlockchainTest load_blockchain_test_case(const std::string& name, const json::json& j)
 {
     using namespace state;
@@ -165,7 +194,7 @@ BlockchainTest load_blockchain_test_case(const std::string& name, const json::js
                     "tests with invalidly rlp-encoded blocks are not supported");
 
             auto test_block = load_test_block(el.at("rlp_decoded"), bt.network, bt.blob_schedule);
-            test_block.valid = false;
+            test_block.expected_exception = map_legacy_block_exception(it->get<std::string>());
             test_block.rlp_size = from_json<bytes>(el.at("rlp")).size();
             bt.test_blocks.emplace_back(test_block);
         }
