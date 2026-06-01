@@ -7,24 +7,25 @@ executors:
   lint:
     docker:
       - image: chfast/cpp-build-env:25-lint
-    resource_class: small
+    resource_class: small.gen2
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-gcc-latest:
     docker:
       - image: chfast/cpp-build-env:25-gcc-15
+    resource_class: medium.gen2
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
   linux-gcc-multilib:
     docker:
       - image: chfast/cpp-build-env:25-gcc-15-multilib
-    resource_class: small
+    resource_class: small.gen2
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-clang-xlarge:
     docker:
       - image: chfast/cpp-build-env:25-clang-21
-    resource_class: xlarge
+    resource_class: xlarge.gen2
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 8
   linux-clang-selfhosted:
@@ -36,24 +37,25 @@ executors:
   linux-gcc-min:
     docker:
       - image: ethereum/cpp-build-env:17-gcc-11
-    resource_class: small
+    resource_class: small.gen2
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-clang-latest:
     docker:
       - image: chfast/cpp-build-env:25-clang-21
+    resource_class: medium.gen2
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
   linux-clang-min:
     docker:
       - image: ethereum/cpp-build-env:21-clang-17
-    resource_class: small
+    resource_class: small.gen2
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-base:
     docker:
       - image: cimg/base:edge-22.04
-    resource_class: medium
+    resource_class: medium.gen2
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   macos:
