@@ -149,6 +149,15 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
         // EIP-8037: the state-gas account-creation charge must come AFTER the
         // regular cost commit (EIP §"regular gas applied first").
+        //
+        // NOTE: unlike `create_impl`, this NEW_ACCOUNT charge is deliberately
+        // NOT refilled on the light-failure returns below or on child
+        // revert/halt. This matches the EELS Amsterdam reference (which has no
+        // `credit_state_gas_refund` on any CALL* path), so the EEST fillers
+        // generated from it pass. It does diverge from EIP-8037 §"Gas
+        // accounting for new accounts", whose prose groups `CALL*` with
+        // `CREATE`/`CREATE2` for the revert/halt refill. Tracked as a known
+        // reference/spec gap; align CALL* with CREATE once EELS does.
         if (needs_new_account_state_gas &&
             !charge_state_gas(gas_left, state, NEW_ACCOUNT_STATE_GAS))
             return {EVMC_OUT_OF_GAS, gas_left};
