@@ -221,7 +221,15 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     //   Success: accumulate child's `state_gas_used`, take its leftover reservoir.
     //   Error: return `state_gas_used + state_gas_left` to the parent's reservoir
     //          (any spill from `gas_left` is reclassified back to state gas).
-    accumulate_child_state_gas(state, result.raw());
+    if (result.status_code == EVMC_SUCCESS)
+    {
+        state.state_gas_left = result.state_gas_left;
+        state.state_gas_used += result.state_gas_used;
+    }
+    else
+    {
+        state.state_gas_left = result.state_gas_left + result.state_gas_used;
+    }
     return {EVMC_SUCCESS, gas_left};
 }
 
@@ -340,7 +348,16 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     //   Success: accumulate `state_gas_used`, take leftover reservoir.
     //   Error: return `state_gas_used + state_gas_left` and refund the
     //          NEW_ACCOUNT pre-charge (no account created).
-    accumulate_child_state_gas(state, result.raw());
+    if (result.status_code == EVMC_SUCCESS)
+    {
+        state.state_gas_left = result.state_gas_left;
+        state.state_gas_used += result.state_gas_used;
+    }
+    else
+    {
+        state.state_gas_left =
+            result.state_gas_left + result.state_gas_used;
+    }
     if (result.status_code != EVMC_SUCCESS && state.rev >= EVMC_AMSTERDAM)
         refund_create_state_gas();
 

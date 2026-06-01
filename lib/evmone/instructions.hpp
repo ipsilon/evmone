@@ -123,28 +123,6 @@ inline bool charge_state_gas(int64_t& gas_left, ExecutionState& state, int64_t c
     return charge_state_gas(gas_left, state.state_gas_left, state.state_gas_used, cost);
 }
 
-/// EIP-8037: propagate a child frame's state-gas back to the parent.
-/// Success: take the leftover reservoir, accumulate consumed state gas.
-/// Amsterdam error: return reservoir + consumed (so the ancestor-revert
-/// path can refund correctly — see PR #2823).
-/// Pre-Amsterdam: only the reservoir matters (no state-gas semantics).
-inline void accumulate_child_state_gas(ExecutionState& state, const evmc_result& result) noexcept
-{
-    if (result.status_code == EVMC_SUCCESS)
-    {
-        state.state_gas_left = result.state_gas_left;
-        state.state_gas_used += result.state_gas_used;
-    }
-    else if (state.rev >= EVMC_AMSTERDAM)
-    {
-        state.state_gas_left = result.state_gas_left + result.state_gas_used;
-    }
-    else
-    {
-        state.state_gas_left = result.state_gas_left;
-    }
-}
-
 /// Grows EVM memory and checks its cost.
 ///
 /// This function should not be inlined because this may affect other inlining decisions:
