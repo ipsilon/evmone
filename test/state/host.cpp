@@ -37,7 +37,8 @@ evmc_storage_status Host::set_storage(
     // and EIP-2200 specification https://eips.ethereum.org/EIPS/eip-2200.
 
     auto& storage_slot = m_state.get_storage(addr, key);
-    const auto& [current, original, _] = storage_slot;
+    const auto& current = storage_slot.current;
+    const auto& original = storage_slot.original;
 
     const auto dirty = original != current;
     const auto restored = original == value;
@@ -296,8 +297,12 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         // Preserve reservoir so the parent (or transition() at depth 0)
         // can refund any unused state gas, including the EIP-7702
         // delegation refund that was added to msg.state_gas at tx start.
-        // state_gas_used stays 0 (no execution happened).
         r.raw().state_gas_left = msg.state_gas;
+        if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
+        {
+            // Mark depth-0 collision with sentinel for block formula.
+            r.raw().state_gas_used = STATE_GAS_USED_DEPTH0_COLLISION;
+        }
         return r;
     }
     m_state.journal_create(msg.recipient, new_acc_exists);
@@ -342,20 +347,21 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     const bytes_view code{result.output_data, result.output_size};
 
+    // EIP-3541: Reject new contract code starting with the 0xEF byte.
+    // Must be checked before code deposit gas to avoid charging for rejected code.
+    if (!code.empty() && m_rev >= EVMC_LONDON && code[0] == 0xEF)
+    {
+        auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+        set_state_gas(r, result.state_gas_left, result.state_gas_used);
+        return r;
+    }
+
     // EIP-7954: Amsterdam increases max code size.
     // Checked before code deposit gas (per geth) to avoid inflating state gas.
     const auto max_code_size = m_rev >= EVMC_AMSTERDAM ? MAX_CODE_SIZE_AMSTERDAM : MAX_CODE_SIZE;
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > static_cast<size_t>(max_code_size))
     {
         auto r = evmc::Result{EVMC_FAILURE};
-        set_state_gas(r, result.state_gas_left, result.state_gas_used);
-        return r;
-    }
-
-    // Reject new contract code starting with the 0xEF byte (EIP-3541).
-    if (m_rev >= EVMC_LONDON && code.starts_with(0xEF))
-    {
-        auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
         set_state_gas(r, result.state_gas_left, result.state_gas_used);
         return r;
     }
@@ -488,7 +494,10 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
     if (result.status_code != EVMC_SUCCESS)
     {
         static constexpr auto addr_03 = 0x03_address;
-        auto* const acc_03 = m_state.find(addr_03);
+        // Check only the in-tx modified set — a cold fetch would surface the
+        // address to access hooks (e.g. EIP-7928 BAL trackers) even though the
+        // probe is purely an implementation detail of the revert logic.
+        auto* const acc_03 = m_state.find_modified(addr_03);
         const auto is_03_touched = acc_03 != nullptr && acc_03->erase_if_empty;
 
         // Revert.
@@ -497,8 +506,11 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
         m_destructed.resize(destructed_checkpoint);
 
         // The 0x03 quirk: the touch on this address is never reverted.
+        // Use the access-list insertion path so the re-touch doesn't surface
+        // the address to BAL trackers (EIP-7928) — the probe is evmone-internal
+        // and does not represent a genuine state access.
         if (is_03_touched && m_rev >= EVMC_SPURIOUS_DRAGON)
-            m_state.touch(addr_03);
+            m_state.get_or_insert_for_access(addr_03).erase_if_empty = true;
     }
     return result;
 }
@@ -545,9 +557,14 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
-    auto& acc = m_state.get_or_insert(addr, {.erase_if_empty = true});
+    if (is_precompile(m_rev, addr))
+        return EVMC_ACCESS_WARM;
 
-    if (acc.access_status == EVMC_ACCESS_WARM || is_precompile(m_rev, addr))
+    // Use the "for access" insertion variant: lazy placeholder without a
+    // StateView fetch (keeps trackers from observing accesses that may end up
+    // reverted, per EIP-7928 BAL semantics).
+    auto& acc = m_state.get_or_insert_for_access(addr);
+    if (acc.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;
 
     m_state.journal_access_account(addr);
