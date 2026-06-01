@@ -343,7 +343,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     // refund this frame's own NEW_ACCOUNT pre-charge, since no account was created.
     state.state_gas_left = result.state_gas_left;
     state.state_gas_used += result.state_gas_used;
-    if (result.status_code != EVMC_SUCCESS && state.rev >= EVMC_AMSTERDAM)
+    if (result.status_code != EVMC_SUCCESS)
         refund_create_state_gas();
 
     state.return_data.assign(result.output_data, result.output_size);

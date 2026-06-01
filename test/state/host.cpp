@@ -522,7 +522,8 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
         // Depth 0 is excluded: the top-level frame is reconciled by `transition`,
         // which must still see the negative depth-0 CREATE-collision sentinel
         // that `Host::create` sets (the sentinel never appears at depth >= 1).
-        if (m_rev >= EVMC_AMSTERDAM && orig_msg.depth != 0)
+        // No revision gate: pre-Amsterdam both fields are 0, so this is a no-op.
+        if (orig_msg.depth != 0)
         {
             result.raw().state_gas_left += result.state_gas_used;
             result.raw().state_gas_used = 0;

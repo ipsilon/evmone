@@ -143,6 +143,11 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     if ((gas_left -= gas_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
+    // TODO(EIP-8037): investigate dissolving this gate like the state-gas folds.
+    // Unlike the CALL/CREATE/SELFDESTRUCT NEW_ACCOUNT charges (which dispatch to a
+    // regular cost pre-Amsterdam), this block is purely additive, so if the state
+    // cost were rev-scaled to 0 pre-Amsterdam (e.g. via COST_PER_STATE_BYTE/cpsb)
+    // the charge and refund would be no-ops and this `rev >= AMSTERDAM` could go.
     if (state.rev >= EVMC_AMSTERDAM)
     {
         if (status == EVMC_STORAGE_ADDED)
