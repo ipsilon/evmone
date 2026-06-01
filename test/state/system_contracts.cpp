@@ -125,10 +125,19 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
         if (code.empty())
             continue;
 
+        // EIP-7928: ensure the executed system contract's address is observed
+        // by the BAL tracker even if the contract body makes no state access.
+        (void)state_view.get_account(addr);
+
+        // Snapshot before the system call so that an exceptional halt (e.g. OOG
+        // with huge block_gas_limit under EIP-8037's dynamic CPSB) doesn't leave
+        // partial state changes visible to subsequent system calls or user txs.
+        const auto checkpoint = state.checkpoint();
         const auto input32 = get_input(block, block_hashes);
         const auto res =
             execute_system_call(state, block, block_hashes, rev, vm, addr, code, input32);
-        assert(res.status_code == EVMC_SUCCESS);
+        if (res.status_code != EVMC_SUCCESS)
+            state.rollback(checkpoint);
     }
     // TODO: Should we return empty diff if no system contracts?
     return state.build_diff(rev);
@@ -148,6 +157,10 @@ std::variant<RequestsResult, std::error_code> system_call_block_end(const StateV
         const auto code = state_view.get_account_code(addr);
         if (code.empty())
             return make_error_code(SYSTEM_CONTRACT_EMPTY);
+
+        // EIP-7928: ensure the executed system contract's address is observed
+        // by the BAL tracker even if the contract body makes no state access.
+        (void)state_view.get_account(addr);
 
         const auto res = execute_system_call(state, block, block_hashes, rev, vm, addr, code, {});
         if (res.status_code != EVMC_SUCCESS)

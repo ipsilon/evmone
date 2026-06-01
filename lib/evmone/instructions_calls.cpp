@@ -36,6 +36,13 @@ inline std::variant<evmc::address, Result> get_target_address(
     if ((gas_left -= delegate_account_access_cost) < 0)
         return Result{EVMC_OUT_OF_GAS, gas_left};
 
+    // EIP-7928: once the access cost is committed (no OOG), the delegate
+    // address must appear in the block access list even if the CALL itself
+    // light-fails (e.g. insufficient funds) without doing any other state
+    // touch on it. Force the lazy-load now so the BAL StateView decorator
+    // observes the read.
+    (void)state.host.account_exists(*delegate_addr);
+
     return *delegate_addr;
 }
 }  // namespace
@@ -82,17 +89,21 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     stack.push(0);  // Assume failure.
     state.return_data.clear();
 
+    // EIP-7702/EIP-7928: in a static context, a value-transferring CALL must
+    // fail before touching the target's code (which the delegation lookup does
+    // via copy_code), otherwise the target would be wrongly recorded in the
+    // block access list.
+    if constexpr (Op == OP_CALL)
+    {
+        if (value != 0 && state.in_static_mode())
+            return {EVMC_STATIC_MODE_VIOLATION, gas_left};
+    }
+
     if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
     {
         if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
-
-    const auto target_addr_or_result = get_target_address(dst, gas_left, state);
-    if (const auto* result = std::get_if<Result>(&target_addr_or_result))
-        return *result;
-
-    const auto& code_addr = std::get<evmc::address>(target_addr_or_result);
 
     if (!check_memory(gas_left, state.memory, input_offset_u256, input_size_u256))
         return {EVMC_OUT_OF_GAS, gas_left};
@@ -104,6 +115,24 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     const auto input_size = static_cast<size_t>(input_size_u256);
     const auto output_offset = static_cast<size_t>(output_offset_u256);
     const auto output_size = static_cast<size_t>(output_size_u256);
+
+    // EIP-7928: charge the value-transfer intrinsic before any stateful lookup
+    // so an OOG here does not leak the target to the BAL tracker via delegation
+    // resolution or account-existence checks.
+    if constexpr (HAS_VALUE_ARG)
+    {
+        if (has_value)
+        {
+            if ((gas_left -= CALL_VALUE_COST) < 0)
+                return {EVMC_OUT_OF_GAS, gas_left};
+        }
+    }
+
+    const auto target_addr_or_result = get_target_address(dst, gas_left, state);
+    if (const auto* result = std::get_if<Result>(&target_addr_or_result))
+        return *result;
+
+    const auto& code_addr = std::get<evmc::address>(target_addr_or_result);
 
     evmc_message msg{.kind = to_call_kind(Op)};
     msg.flags = (Op == OP_STATICCALL) ? uint32_t{EVMC_STATIC} : state.msg->flags;
@@ -137,13 +166,12 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     if constexpr (HAS_VALUE_ARG)
     {
-        auto cost = has_value ? CALL_VALUE_COST : 0;
+        // The value-transfer cost itself is charged early (above) for EIP-7928 ordering;
+        // here we only add the pre-Amsterdam regular account-creation cost.
+        int64_t cost = 0;
 
         if constexpr (Op == OP_CALL)
         {
-            if (has_value && state.in_static_mode())
-                return {EVMC_STATIC_MODE_VIOLATION, gas_left};
-
             if ((has_value || state.rev < EVMC_SPURIOUS_DRAGON) && !state.host.account_exists(dst))
             {
                 if (state.rev >= EVMC_AMSTERDAM)
@@ -153,7 +181,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
             }
         }
 
-        if ((gas_left -= cost) < 0)
+        if (cost != 0 && (gas_left -= cost) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
 
         // EIP-8037: the state-gas account-creation charge must come AFTER the regular
