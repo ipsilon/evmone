@@ -49,7 +49,7 @@ namespace
 /// @param blob_gas_limit  The per-block blob-gas budget set by the protocol maximum.
 TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::BlockInfo& block,
     const state::BlockHashes& block_hashes, const std::vector<state::Transaction>& txs,
-    evmc_revision rev, int64_t blob_gas_limit, std::optional<int64_t> block_reward)
+    evmc_revision rev, int64_t blob_gas_limit, std::optional<uint64_t> block_reward)
 {
     TestState block_state(state);
     system_call_block_start(block_state, block, block_hashes, rev, vm);
@@ -226,7 +226,7 @@ std::error_code validate_block(evmc_revision rev, state::BlobParams blob_params,
     return {};
 }
 
-std::optional<int64_t> mining_reward(evmc_revision rev) noexcept
+std::optional<uint64_t> mining_reward(evmc_revision rev) noexcept
 {
     if (rev < EVMC_BYZANTIUM)
         return 5'000000000'000000000;
