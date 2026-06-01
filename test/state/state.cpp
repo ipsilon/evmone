@@ -880,10 +880,10 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 
     // EIP-8037: On top-level failure (revert or exceptional halt), refund all state
     // gas consumed by EVM execution back to the reservoir, since nothing was created.
-    // Nested frames are folded at the `Host::call` revert boundary, but depth 0 is
-    // reconciled here so the `> 0` guard can exclude the STATE_GAS_USED_DEPTH0_COLLISION
-    // sentinel, for which Host::create already preserved state_gas_left. The `> 0`
-    // guard also excludes pre-Amsterdam (always 0), so no revision gate is needed.
+    // Nested frames are folded at the `Host::call` revert boundary; depth 0 (which
+    // that fold skips) is reconciled here. The `> 0` guard makes this a no-op when
+    // nothing was charged — including pre-Amsterdam (always 0) and CREATE address
+    // collisions (reservoir preserved, used 0) — so no revision gate is needed.
     if (result.status_code != EVMC_SUCCESS && result.state_gas_used > 0)
     {
         result.raw().state_gas_left += result.state_gas_used;

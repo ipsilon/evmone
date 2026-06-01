@@ -12,14 +12,6 @@ namespace evmone::state
 {
 using evmc::uint256be;
 
-/// EIP-8037: Sentinel set by `Host::create` on a depth-0 CREATE address
-/// collision to flag the burned regular gas to the block-level formula
-/// (so the tx is counted in `regular_block_gas`, not `state_block_gas`).
-/// Consumers in `transition()` filter on `state_gas_used > 0` and clamp
-/// negatives, so the negative value never leaks into accounting; the
-/// constant exists to document the contract.
-constexpr int64_t STATE_GAS_USED_DEPTH0_COLLISION = -1;
-
 /// Computes the address of to-be-created contract with the CREATE scheme.
 ///
 /// Computes the new account address for the contract creation context of the CREATE instruction

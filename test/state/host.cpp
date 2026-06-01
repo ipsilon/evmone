@@ -293,16 +293,14 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         new_acc = &m_state.insert(msg.recipient);
     else if (is_create_collision(*new_acc))
     {
+        // Address collision: nothing runs and all regular gas is burned
+        // (gas_left stays 0). No state gas was charged, so state_gas_used stays
+        // 0 (default) and the full reservoir is returned — including the
+        // EIP-7702 delegation refund added to msg.state_gas at tx start. The
+        // depth-0 case needs no special marker: transition()'s generic block-gas
+        // formula counts the burned gas as regular (state component nets to ~0).
         auto r = evmc::Result{EVMC_FAILURE};
-        // Preserve reservoir so the parent (or transition() at depth 0)
-        // can refund any unused state gas, including the EIP-7702
-        // delegation refund that was added to msg.state_gas at tx start.
         r.raw().state_gas_left = msg.state_gas;
-        if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
-        {
-            // Mark depth-0 collision with sentinel for block formula.
-            r.raw().state_gas_used = STATE_GAS_USED_DEPTH0_COLLISION;
-        }
         return r;
     }
     m_state.journal_create(msg.recipient, new_acc_exists);
