@@ -42,6 +42,11 @@ enum ErrorCode : int  // NOLINT(*-use-enum-class)
     INVALID_BLOCK_TIMESTAMP_OLDER_THAN_PARENT,
     INVALID_BLOCK_PARENT,
     INVALID_BLOCK_NUMBER,
+
+    // Block requests collection (EIP-7685).
+    INVALID_DEPOSIT_EVENT_LAYOUT,
+    SYSTEM_CONTRACT_EMPTY,
+    SYSTEM_CONTRACT_CALL_FAILED,
 };
 
 /// Obtains a reference to the static error category object for evmone errors.
@@ -113,6 +118,12 @@ inline const std::error_category& evmone_category() noexcept
                 return "BlockException.INVALID_BLOCK_PARENT";
             case INVALID_BLOCK_NUMBER:
                 return "BlockException.INVALID_BLOCK_NUMBER";
+            case INVALID_DEPOSIT_EVENT_LAYOUT:
+                return "BlockException.INVALID_DEPOSIT_EVENT_LAYOUT";
+            case SYSTEM_CONTRACT_EMPTY:
+                return "BlockException.SYSTEM_CONTRACT_EMPTY";
+            case SYSTEM_CONTRACT_CALL_FAILED:
+                return "BlockException.SYSTEM_CONTRACT_CALL_FAILED";
             default:
                 assert(false);
                 return "Wrong error code";

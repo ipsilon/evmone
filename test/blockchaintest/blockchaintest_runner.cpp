@@ -33,7 +33,8 @@ struct TransitionResult
 {
     std::vector<state::TransactionReceipt> receipts;
     std::vector<RejectedTransaction> rejected;
-    std::optional<std::vector<state::Requests>> requests;
+    std::vector<state::Requests> requests;
+    std::error_code requests_error;
     int64_t gas_used;
     state::BloomFilter bloom;
     int64_t blob_gas_left;
@@ -99,31 +100,32 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         }
     }
 
-    auto requests = [&]() -> std::optional<std::vector<state::Requests>> {
-        std::vector<state::Requests> collected;
-
-        if (rev >= EVMC_PRAGUE)
-        {
-            auto opt_deposits = collect_deposit_requests(receipts);
-            if (!opt_deposits.has_value())
-                return std::nullopt;
-            collected.emplace_back(std::move(*opt_deposits));
-        }
-
-        auto requests_result = system_call_block_end(block_state, block, block_hashes, rev, vm);
-        if (!requests_result.has_value())
-            return std::nullopt;
-        std::ranges::move(*requests_result, std::back_inserter(collected));
-
-        return collected;
-    }();
+    std::vector<state::Requests> requests;
+    std::error_code requests_error;
+    if (rev >= EVMC_PRAGUE)
+    {
+        auto opt_deposits = collect_deposit_requests(receipts);
+        if (opt_deposits.has_value())
+            requests.emplace_back(std::move(*opt_deposits));
+        else
+            requests_error = make_error_code(state::INVALID_DEPOSIT_EVENT_LAYOUT);
+    }
+    if (!requests_error)
+    {
+        auto block_end = system_call_block_end(block_state, block, block_hashes, rev, vm);
+        if (const auto* ec = std::get_if<std::error_code>(&block_end))
+            requests_error = *ec;
+        else
+            std::ranges::move(
+                std::get<std::vector<state::Requests>>(block_end), std::back_inserter(requests));
+    }
 
     finalize(block_state, rev, block.coinbase, block_reward, block.ommers, block.withdrawals);
 
     const auto bloom = compute_bloom_filter(receipts);
 
-    return {std::move(receipts), std::move(rejected_txs), std::move(requests), block_gas_used,
-        bloom, blob_gas_left, std::move(block_state)};
+    return {std::move(receipts), std::move(rejected_txs), std::move(requests), requests_error,
+        block_gas_used, bloom, blob_gas_left, std::move(block_state)};
 }
 
 /// Validates block-level validity unrelated to individual transactions.
@@ -333,7 +335,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions,
                     rev, blob_gas_limit, mining_reward(rev));
 
-                ASSERT_TRUE(res.requests.has_value());
+                ASSERT_FALSE(res.requests_error);
 
                 block_hashes[test_block.expected_block_header.block_number] =
                     test_block.expected_block_header.hash;
@@ -373,7 +375,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                     state::mpt_hash(res.receipts), test_block.expected_block_header.receipts_root);
                 if (rev >= EVMC_PRAGUE)
                 {
-                    EXPECT_EQ(calculate_requests_hash(*res.requests),
+                    EXPECT_EQ(calculate_requests_hash(res.requests),
                         test_block.expected_block_header.requests_hash);
                 }
                 EXPECT_EQ(res.gas_used, test_block.expected_block_header.gas_used);
@@ -402,10 +404,29 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
 
                 const auto res = apply_block(pre_state, vm, bi, block_hashes,
                     test_block.transactions, rev, blob_gas_limit, mining_reward(rev));
-                if (!res.requests.has_value())
-                    continue;
                 if (!res.rejected.empty())
+                {
+                    // Check if EEST expects transaction-level exception (ignore "legacy" names).
+                    if (test_block.expected_exception.find("Exception.") != std::string::npos)
+                    {
+                        EXPECT_TRUE(
+                            test_block.expected_exception.starts_with("TransactionException."))
+                            << "Transaction-level invalidity mismatch: got "
+                            << res.rejected.front().message << ", expected "
+                            << test_block.expected_exception;
+                    }
                     continue;
+                }
+                if (res.requests_error)
+                {
+                    // Requests collection failure; verify the reason matches (same
+                    // `BlockException.*` substring match as the block validation errors above).
+                    EXPECT_NE(test_block.expected_exception.find(res.requests_error.message()),
+                        std::string::npos)
+                        << "Block invalidity reason mismatch: got " << res.requests_error.message()
+                        << ", expected " << test_block.expected_exception;
+                    continue;
+                }
                 if (blob_gas_limit - res.blob_gas_left !=
                     static_cast<int64_t>(bi.blob_gas_used.value_or(0)))
                     continue;
@@ -421,7 +442,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                     continue;
                 if (state::mpt_hash(res.receipts) != test_block.expected_block_header.receipts_root)
                     continue;
-                if (rev >= EVMC_PRAGUE && calculate_requests_hash(*res.requests) !=
+                if (rev >= EVMC_PRAGUE && calculate_requests_hash(res.requests) !=
                                               test_block.expected_block_header.requests_hash)
                     continue;
                 if (res.gas_used != test_block.expected_block_header.gas_used)

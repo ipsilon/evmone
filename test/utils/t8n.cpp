@@ -4,6 +4,7 @@
 
 #include "t8n.hpp"
 #include <nlohmann/json.hpp>
+#include <test/state/errors.hpp>
 #include <test/state/ethash_difficulty.hpp>
 #include <test/state/requests.hpp>
 #include <test/utils/mpt_hash.hpp>
@@ -200,13 +201,15 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
                 requests.emplace_back(std::move(*deposits_result));
             else
                 // Report invalid block in the JSON result when deposit collection fails.
-                j_result["blockException"] = "invalid deposit event layout";
+                j_result["blockException"] =
+                    make_error_code(state::INVALID_DEPOSIT_EVENT_LAYOUT).message();
             auto requests_result = system_call_block_end(state, block, block_hashes, rev, vm);
-            if (requests_result.has_value())
-                std::ranges::move(*requests_result, std::back_inserter(requests));
+            if (auto* r = std::get_if<std::vector<state::Requests>>(&requests_result))
+                std::ranges::move(*r, std::back_inserter(requests));
             else
-                // Report invalid block in the JSON result when requests fail.
-                j_result["blockException"] = "system contract empty or failed";
+                // Report invalid block in the JSON result with the specific requests failure
+                // (empty system contract vs. failed system call).
+                j_result["blockException"] = std::get<std::error_code>(requests_result).message();
         }
 
         finalize(state, rev, block.coinbase, args.block_reward, block.ommers, block.withdrawals);

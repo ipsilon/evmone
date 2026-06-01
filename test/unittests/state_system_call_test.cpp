@@ -81,8 +81,8 @@ TEST_F(state_system_call, withdrawal)
     state[CONSOLIDATION_REQUEST_ADDRESS].code = bytecode{OP_STOP};
 
     const auto r = system_call_block_end(state, block, block_hashes, EVMC_PRAGUE, vm);
-    ASSERT_TRUE(r.has_value());
-    const auto& requests = *r;
+    ASSERT_TRUE(std::holds_alternative<std::vector<Requests>>(r));
+    const auto& requests = std::get<std::vector<Requests>>(r);
 
     EXPECT_FALSE(state.contains(SYSTEM_ADDRESS));
     const auto& c = state.at(WITHDRAWAL_REQUEST_ADDRESS);
@@ -109,8 +109,8 @@ TEST_F(state_system_call, consolidation)
     state[WITHDRAWAL_REQUEST_ADDRESS].code = bytecode{OP_STOP};
 
     const auto r = system_call_block_end(state, block, block_hashes, EVMC_PRAGUE, vm);
-    ASSERT_TRUE(r.has_value());
-    const auto& requests = *r;
+    ASSERT_TRUE(std::holds_alternative<std::vector<Requests>>(r));
+    const auto& requests = std::get<std::vector<Requests>>(r);
 
     EXPECT_FALSE(state.contains(SYSTEM_ADDRESS));
     const auto& c = state.at(CONSOLIDATION_REQUEST_ADDRESS);

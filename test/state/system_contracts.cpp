@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "system_contracts.hpp"
+#include "errors.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
 
@@ -106,7 +107,7 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
     return state.build_diff(rev);
 }
 
-std::optional<RequestsResult> system_call_block_end(const StateView& state_view,
+std::variant<RequestsResult, std::error_code> system_call_block_end(const StateView& state_view,
     const BlockInfo& block, const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm)
 {
     State state{state_view};
@@ -119,11 +120,11 @@ std::optional<RequestsResult> system_call_block_end(const StateView& state_view,
         // Fail if the target account doesn't exist. This is by EIP-7002 and EIP-7251 spec.
         const auto code = state_view.get_account_code(addr);
         if (code.empty())
-            return std::nullopt;
+            return make_error_code(SYSTEM_CONTRACT_EMPTY);
 
         const auto res = execute_system_call(state, block, block_hashes, rev, vm, addr, code, {});
         if (res.status_code != EVMC_SUCCESS)
-            return std::nullopt;
+            return make_error_code(SYSTEM_CONTRACT_CALL_FAILED);
         requests.emplace_back(request_type, bytes_view{res.output_data, res.output_size});
     }
     return RequestsResult{state.build_diff(rev), requests};

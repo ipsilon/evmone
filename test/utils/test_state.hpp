@@ -84,7 +84,8 @@ void system_call_block_start(TestState& state, const state::BlockInfo& block,
     const state::BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm);
 
 /// Wrapping of state::system_call_block_end() which operates on TestState.
-std::optional<std::vector<state::Requests>> system_call_block_end(TestState& state,
+/// Returns the collected requests, or the error code if the collection failed.
+std::variant<std::vector<state::Requests>, std::error_code> system_call_block_end(TestState& state,
     const state::BlockInfo& block, const state::BlockHashes& block_hashes, evmc_revision rev,
     evmc::VM& vm);
 }  // namespace test
