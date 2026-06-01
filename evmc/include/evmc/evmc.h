@@ -486,13 +486,19 @@ struct evmc_result
      * The amount of state gas left after execution (EIP-8037).
      *
      * Returned to the caller so it can restore its own state_gas tracking.
+     * On non-success of a nested call the frame's state gas is refunded here,
+     * so this includes the state_gas_used reported below.
      */
     int64_t state_gas_left;
 
     /**
-     * The total state gas consumed during execution (EIP-8037).
+     * The net state gas consumed during execution (EIP-8037).
      *
      * Accumulated across all frames (EVM charge_state_gas + Host-level charges).
+     * May be negative when a storage-clear credit exceeds in-frame charges.
+     * On non-success of a nested call the frame's state changes are rolled back,
+     * so the consumed state gas is folded into state_gas_left and reported as 0;
+     * the caller can then accumulate it unconditionally regardless of status.
      * Used for block gas accounting: block_gas = max(regular, state).
      */
     int64_t state_gas_used;

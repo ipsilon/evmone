@@ -217,19 +217,12 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     const auto gas_used = msg.gas - result.gas_left;
     gas_left -= gas_used;
     state.gas_refund += result.gas_refund;
-    // EIP-8037 (bal-devnet-7, PR #2823): handle child state gas.
-    //   Success: accumulate child's `state_gas_used`, take its leftover reservoir.
-    //   Error: return `state_gas_used + state_gas_left` to the parent's reservoir
-    //          (any spill from `gas_left` is reclassified back to state gas).
-    if (result.status_code == EVMC_SUCCESS)
-    {
-        state.state_gas_left = result.state_gas_left;
-        state.state_gas_used += result.state_gas_used;
-    }
-    else
-    {
-        state.state_gas_left = result.state_gas_left + result.state_gas_used;
-    }
+    // EIP-8037: take the child's leftover reservoir and accumulate its state gas
+    // used. A reverted child already had its used folded back into the reservoir
+    // (and zeroed) at the `Host::call` revert boundary, so success and failure
+    // are handled the same way here.
+    state.state_gas_left = result.state_gas_left;
+    state.state_gas_used += result.state_gas_used;
     return {EVMC_SUCCESS, gas_left};
 }
 
@@ -344,20 +337,12 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     const auto result = state.host.call(msg);
     gas_left -= msg.gas - result.gas_left;
     state.gas_refund += result.gas_refund;
-    // EIP-8037 (bal-devnet-7, PR #2823): handle child state gas.
-    //   Success: accumulate `state_gas_used`, take leftover reservoir.
-    //   Error: return `state_gas_used + state_gas_left` and refund the
-    //          NEW_ACCOUNT pre-charge (no account created).
-    if (result.status_code == EVMC_SUCCESS)
-    {
-        state.state_gas_left = result.state_gas_left;
-        state.state_gas_used += result.state_gas_used;
-    }
-    else
-    {
-        state.state_gas_left =
-            result.state_gas_left + result.state_gas_used;
-    }
+    // EIP-8037: take the child's leftover reservoir and accumulate its state gas
+    // used (uniform across status — a reverted child already had its used folded
+    // into the reservoir at the `Host::call` revert boundary). On failure also
+    // refund this frame's own NEW_ACCOUNT pre-charge, since no account was created.
+    state.state_gas_left = result.state_gas_left;
+    state.state_gas_used += result.state_gas_used;
     if (result.status_code != EVMC_SUCCESS && state.rev >= EVMC_AMSTERDAM)
         refund_create_state_gas();
 
