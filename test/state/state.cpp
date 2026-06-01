@@ -872,23 +872,14 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     }
 
     auto result = host.call(message);
+    // EIP-8037: on failure the frame's state gas was already refunded to the
+    // reservoir (used folded in, zeroed) at the `Host::call` revert boundary —
+    // the top-level frame the same as any nested one.
 
     // EIP-8037: tx-level state-gas refund on failure. Track refunds applied
     // here separately so block-level accounting can subtract them from
     // `tx_state_gas` (mirrors the auth `delegation_refund` plumbing).
     int64_t tx_state_refund = 0;
-
-    // EIP-8037: On top-level failure (revert or exceptional halt), refund all state
-    // gas consumed by EVM execution back to the reservoir, since nothing was created.
-    // Nested frames are folded at the `Host::call` revert boundary; depth 0 (which
-    // that fold skips) is reconciled here. The `> 0` guard makes this a no-op when
-    // nothing was charged — including pre-Amsterdam (always 0) and CREATE address
-    // collisions (reservoir preserved, used 0) — so no revision gate is needed.
-    if (result.status_code != EVMC_SUCCESS && result.state_gas_used > 0)
-    {
-        result.raw().state_gas_left += result.state_gas_used;
-        result.raw().state_gas_used = 0;
-    }
 
     // EIP-8037 (bal-devnet-7, PR #2823): on tx-level CREATE failure
     // (revert/halt/collision) refund the intrinsic NEW_ACCOUNT * CPSB

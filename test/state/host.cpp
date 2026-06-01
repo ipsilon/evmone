@@ -511,21 +511,18 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
             m_state.get_or_insert_for_access(addr_03).erase_if_empty = true;
 
         // EIP-8037: the frame's state changes were just rolled back, so the
-        // state gas it consumed is refunded to the reservoir and the net used
-        // is zeroed. Doing it here — at the revert boundary — lets call_impl and
-        // create_impl accumulate a child's state gas the same way regardless of
-        // status. The net used may be NEGATIVE (a descendant's storage-clear
-        // credit can exceed this frame's charges), so the fold is unconditional;
-        // skipping a negative would leak that credit into the parent's reservoir.
-        // Depth 0 is excluded: the top-level frame is reconciled by `transition`,
-        // which must still see the negative depth-0 CREATE-collision sentinel
-        // that `Host::create` sets (the sentinel never appears at depth >= 1).
-        // No revision gate: pre-Amsterdam both fields are 0, so this is a no-op.
-        if (orig_msg.depth != 0)
-        {
-            result.raw().state_gas_left += result.state_gas_used;
-            result.raw().state_gas_used = 0;
-        }
+        // state gas it consumed is refunded to the reservoir and the net used is
+        // zeroed. Done here at the single revert boundary for every frame —
+        // nested and top-level alike — so callers (call_impl, create_impl,
+        // transition) accumulate a frame's state gas the same way regardless of
+        // status. The fold is unconditional: the net used may be NEGATIVE when a
+        // descendant's storage-clear credit exceeds this frame's own charges, and
+        // skipping that would leak the credit into the parent's reservoir. (A
+        // top-level frame never goes negative, so this matches its former `> 0`
+        // reconciliation.) Pre-Amsterdam and CREATE-collision frames carry 0
+        // here, so the fold is a no-op for them.
+        result.raw().state_gas_left += result.state_gas_used;
+        result.raw().state_gas_used = 0;
     }
     return result;
 }
