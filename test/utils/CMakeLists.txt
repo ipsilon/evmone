@@ -16,6 +16,8 @@ target_sources(
     stdx/utility.hpp
     blob_schedule.hpp
     blob_schedule.cpp
+    block_transition.hpp
+    block_transition.cpp
     blockchaintest.hpp
     blockchaintest_loader.cpp
     bytecode.hpp

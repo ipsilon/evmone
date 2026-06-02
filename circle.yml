@@ -421,14 +421,14 @@ jobs:
           filter: "-for_amsterdam/*:for_bpo2toamsterdamattime15k/*"
       - collect_coverage_clang:
           flags: eest-develop
-          ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests|utils)
+          ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
           binaries: evmone-statetest evmone-blockchaintest
       - run_execution_spec_tests:
           release: v5.4.0
           fixtures_suffix: develop
       - collect_coverage_clang:
           flags: eest-stable
-          ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests|utils)
+          ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
           binaries: evmone-statetest evmone-blockchaintest
 
   ethereum-tests:

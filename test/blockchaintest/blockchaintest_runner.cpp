@@ -7,6 +7,7 @@
 #include <test/state/errors.hpp>
 #include <test/state/ethash_difficulty.hpp>
 #include <test/state/requests.hpp>
+#include <test/utils/block_transition.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
@@ -22,112 +23,8 @@ constexpr size_t SAFETY_MARGIN = 2 * 1024 * 1024;
 /// The maximum EL block size when RLP encoded (EIP-7934).
 constexpr size_t MAX_RLP_BLOCK_SIZE = MAX_BLOCK_SIZE - SAFETY_MARGIN;
 
-struct RejectedTransaction
-{
-    hash256 hash;
-    size_t index;
-    std::string message;
-};
-
-struct TransitionResult
-{
-    std::vector<state::TransactionReceipt> receipts;
-    std::vector<RejectedTransaction> rejected;
-    std::vector<state::Requests> requests;
-    std::error_code requests_error;
-    int64_t gas_used;
-    state::BloomFilter bloom;
-    int64_t blob_gas_left;
-    TestState block_state;
-};
-
 namespace
 {
-/// Transition the state with a block of transactions.
-///
-/// This assumes block-level validity, but transaction may be invalid.
-///
-/// @param blob_gas_limit  The per-block blob-gas budget set by the protocol maximum.
-TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::BlockInfo& block,
-    const state::BlockHashes& block_hashes, const std::vector<state::Transaction>& txs,
-    evmc_revision rev, int64_t blob_gas_limit, std::optional<uint64_t> block_reward)
-{
-    TestState block_state(state);
-    system_call_block_start(block_state, block, block_hashes, rev, vm);
-
-    std::vector<state::Log> txs_logs;
-    int64_t block_gas_left = block.gas_limit;
-
-    std::vector<RejectedTransaction> rejected_txs;
-    std::vector<state::TransactionReceipt> receipts;
-
-    int64_t cumulative_gas_used = 0;
-    int64_t block_gas_used = 0;
-    auto blob_gas_left = blob_gas_limit;
-
-    for (size_t i = 0; i < txs.size(); ++i)
-    {
-        const auto& tx = txs[i];
-
-        const auto computed_tx_hash = keccak256(rlp::encode(tx));
-        auto res = test::transition(
-            block_state, block, block_hashes, tx, rev, vm, block_gas_left, blob_gas_left);
-
-        if (holds_alternative<std::error_code>(res))
-        {
-            const auto ec = std::get<std::error_code>(res);
-            rejected_txs.push_back({computed_tx_hash, i, ec.message()});
-        }
-        else
-        {
-            auto& receipt = get<state::TransactionReceipt>(res);
-
-            const auto& tx_logs = receipt.logs;
-
-            txs_logs.insert(txs_logs.end(), tx_logs.begin(), tx_logs.end());
-            cumulative_gas_used += receipt.gas_used;
-            receipt.cumulative_gas_used = cumulative_gas_used;
-            if (rev < EVMC_BYZANTIUM)
-                receipt.post_state = state::mpt_hash(block_state);
-
-            // Block gas accounting, refunds excluded (EIP-7778).
-            const auto block_tx_gas =
-                (rev >= EVMC_AMSTERDAM) ? receipt.gas_used + receipt.gas_refund : receipt.gas_used;
-            block_gas_used += block_tx_gas;
-            block_gas_left -= block_tx_gas;
-            blob_gas_left -= static_cast<int64_t>(tx.blob_gas_used());
-            receipts.emplace_back(std::move(receipt));
-        }
-    }
-
-    std::vector<state::Requests> requests;
-    std::error_code requests_error;
-    if (rev >= EVMC_PRAGUE)
-    {
-        auto opt_deposits = collect_deposit_requests(receipts);
-        if (opt_deposits.has_value())
-            requests.emplace_back(std::move(*opt_deposits));
-        else
-            requests_error = make_error_code(state::INVALID_DEPOSIT_EVENT_LAYOUT);
-    }
-    if (!requests_error)
-    {
-        auto block_end = system_call_block_end(block_state, block, block_hashes, rev, vm);
-        if (const auto* ec = std::get_if<std::error_code>(&block_end))
-            requests_error = *ec;
-        else
-            std::ranges::move(
-                std::get<std::vector<state::Requests>>(block_end), std::back_inserter(requests));
-    }
-
-    finalize(block_state, rev, block.coinbase, block_reward, block.ommers, block.withdrawals);
-
-    const auto bloom = compute_bloom_filter(receipts);
-
-    return {std::move(receipts), std::move(rejected_txs), std::move(requests), requests_error,
-        block_gas_used, bloom, blob_gas_left, std::move(block_state)};
-}
-
 /// Validates block-level validity unrelated to individual transactions.
 ///
 /// Returns an empty error_code if the block is valid, otherwise the specific validation error.
@@ -333,7 +230,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 const auto& pre_state = parent_data_it->second.post_state;
 
                 auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions,
-                    rev, blob_gas_limit, mining_reward(rev));
+                    rev, blob_gas_limit, {.block_reward = mining_reward(rev)});
 
                 ASSERT_FALSE(res.requests_error);
 
@@ -402,8 +299,9 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 assert(parent_data_it != block_data.end());
                 const auto& pre_state = parent_data_it->second.post_state;
 
-                const auto res = apply_block(pre_state, vm, bi, block_hashes,
-                    test_block.transactions, rev, blob_gas_limit, mining_reward(rev));
+                const auto res =
+                    apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
+                        blob_gas_limit, {.block_reward = mining_reward(rev)});
                 if (!res.rejected.empty())
                 {
                     // Check if EEST expects transaction-level exception (ignore "legacy" names).
