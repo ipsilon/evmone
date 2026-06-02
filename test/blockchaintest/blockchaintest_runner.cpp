@@ -305,10 +305,13 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 if (!res.rejected.empty())
                 {
                     // Check if EEST expects transaction-level exception (ignore "legacy" names).
+                    // `expected_exception` may list `|`-separated alternatives (and a tx-level
+                    // alternative can appear after a block-level one), so search for a
+                    // `TransactionException.` anywhere rather than only at the start.
                     if (test_block.expected_exception.find("Exception.") != std::string::npos)
                     {
-                        EXPECT_TRUE(
-                            test_block.expected_exception.starts_with("TransactionException."))
+                        EXPECT_NE(test_block.expected_exception.find("TransactionException."),
+                            std::string::npos)
                             << "Transaction-level invalidity mismatch: got "
                             << res.rejected.front().message << ", expected "
                             << test_block.expected_exception;
