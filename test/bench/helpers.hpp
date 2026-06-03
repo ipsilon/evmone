@@ -145,10 +145,12 @@ inline void bench_execute(benchmark::State& state, evmc::VM& vm, bytes_view code
 }
 
 
-constexpr auto bench_advanced_execute = bench_execute<advanced::AdvancedExecutionState,
+// TODO(C++23): use constexpr.
+inline auto bench_advanced_execute = bench_execute<advanced::AdvancedExecutionState,
     advanced::AdvancedCodeAnalysis, advanced_execute, advanced_analyse>;
 
-constexpr auto bench_baseline_execute =
+// TODO(C++23): use constexpr.
+inline auto bench_baseline_execute =
     bench_execute<ExecutionState, baseline::CodeAnalysis, baseline_execute, baseline_analyse>;
 
 inline void bench_evmc_execute(benchmark::State& state, evmc::VM& vm, bytes_view code,
