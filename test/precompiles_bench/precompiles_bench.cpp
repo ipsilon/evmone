@@ -317,7 +317,18 @@ void modexp(benchmark::State& state)
         ->Args({128 * 8, 8, 256})                 \
         ->Args({128 * 8, 8, 2048})                \
         ->Args({128 * 8, 4096, 2048})             \
-        ->Args({128 * 8, 8190, 2048})
+        ->Args({128 * 8, 8190, 2048})             \
+        /* Small-exponent + large odd-modulus: Montgomery setup is not amortized. */ \
+        /* Matches erigon/go-ethereum "nagydani" cases where Go math/big wins. */    \
+        ->Args({8 * 8, 0, 17})   /* nagydani-1-pow0x10001 (64B) */  \
+        ->Args({16 * 8, 0, 2})   /* nagydani-2-square (128B) */     \
+        ->Args({16 * 8, 0, 17})  /* nagydani-2-pow0x10001 (128B) */ \
+        ->Args({32 * 8, 0, 2})   /* nagydani-3-square (256B) */     \
+        ->Args({32 * 8, 0, 17})  /* nagydani-3-pow0x10001 (256B) */ \
+        ->Args({33 * 8, 0, 2})   /* mod-264-exp-2 (264B odd) */     \
+        ->Args({48 * 8, 64, 2})  /* guido-even (~384B even, CRT path) */ \
+        ->Args({128 * 8, 0, 2})  /* mod-1024-exp-2 (1024B) */       \
+        ->Args({128 * 8, 0, 17}) /* nagydani-5-pow0x10001 (1024B) */
 BENCHMARK(modexp<expmod_execute_evmone>) MODEXP_ARGS;
 #ifdef EVMONE_PRECOMPILES_GMP
 BENCHMARK(modexp<expmod_execute_gmp>) MODEXP_ARGS;
