@@ -55,6 +55,7 @@ target_sources(
     state_bloom_filter_test.cpp
     state_deposit_requests_test.cpp
     state_difficulty_test.cpp
+    state_gas_test.cpp
     state_mpt_hash_test.cpp
     state_mpt_test.cpp
     state_new_account_address_test.cpp
