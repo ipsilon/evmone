@@ -22,7 +22,10 @@ struct StateGas
     /// caller's regular `gas_left`. Atomic: returns false without mutating any field when
     /// neither pool can cover the cost. `gas_left` is passed in because it belongs to the
     /// regular-gas dimension, not the state-gas pair.
-    bool charge(int64_t& gas_left, int64_t cost) noexcept
+    ///
+    /// The spill is one-way: a later refill() restores only the reservoir, so any amount
+    /// that spilled into `gas_left` here stays charged to the regular-gas dimension.
+    [[nodiscard]] bool charge(int64_t& gas_left, int64_t cost) noexcept
     {
         if (cost <= 0)
             return true;
@@ -44,7 +47,8 @@ struct StateGas
     }
 
     /// Refills `cost` back to the reservoir, undoing one charge's reservoir bookkeeping
-    /// (EIP: state-gas "refilled back to the reservoir"). The inverse of charge().
+    /// (EIP: state-gas "refilled back to the reservoir"). Restores only the reservoir: if
+    /// the matching charge() spilled into `gas_left`, that spilled amount is not reclaimed.
     void refill(int64_t cost) noexcept
     {
         reservoir += cost;

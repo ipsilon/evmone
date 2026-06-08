@@ -889,6 +889,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     if (rev >= EVMC_AMSTERDAM && !tx.to.has_value() &&
         result.status_code != EVMC_SUCCESS)
     {
+        // Reservoir-only on purpose: NOT state_gas.refill(), which would also
+        // decrement `used` and double-count against `tx_state_refund` below.
         result.raw().state_gas_left += NEW_ACCOUNT_STATE_GAS;
         tx_state_refund += NEW_ACCOUNT_STATE_GAS;
     }

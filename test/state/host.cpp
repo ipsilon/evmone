@@ -366,7 +366,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     }
 
     // Code deployment cost.
-    StateGas state_gas{result.state_gas_left, result.state_gas_used};
+    StateGas state_gas{.reservoir = result.state_gas_left, .used = result.state_gas_used};
     if (m_rev >= EVMC_AMSTERDAM)
     {
         // EIP-8037: split code deposit into regular and state components.
@@ -520,7 +520,7 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
         // top-level frame never goes negative, so this matches its former `> 0`
         // reconciliation.) Pre-Amsterdam and CREATE-collision frames carry 0
         // here, so the fold is a no-op for them.
-        StateGas sg{result.state_gas_left, result.state_gas_used};
+        StateGas sg{.reservoir = result.state_gas_left, .used = result.state_gas_used};
         sg.refill_used();
         set_state_gas(result, sg.reservoir, sg.used);
     }
