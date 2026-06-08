@@ -163,7 +163,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
                 if (state.rev >= EVMC_AMSTERDAM)
                 {
                     // EIP-8037: charge state gas instead of regular ACCOUNT_CREATION_COST.
-                    if (!charge_state_gas(gas_left, state, NEW_ACCOUNT_STATE_GAS))
+                    if (!state.state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
                         return {EVMC_OUT_OF_GAS, gas_left};
                 }
                 else if ((gas_left -= ACCOUNT_CREATION_COST) < 0)
@@ -205,7 +205,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
 
     // EIP-8037: pass state gas to child execution.
-    msg.state_gas = state.state_gas_left;
+    msg.state_gas = state.state_gas.reservoir;
 
     const auto result = state.host.call(msg);
     state.return_data.assign(result.output_data, result.output_size);
@@ -221,8 +221,8 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     // used. A reverted child already had its used folded back into the reservoir
     // (and zeroed) at the `Host::call` revert boundary, so success and failure
     // are handled the same way here.
-    state.state_gas_left = result.state_gas_left;
-    state.state_gas_used += result.state_gas_used;
+    state.state_gas.reservoir = result.state_gas_left;
+    state.state_gas.used += result.state_gas_used;
     return {EVMC_SUCCESS, gas_left};
 }
 
@@ -278,40 +278,37 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     if (state.rev >= EVMC_AMSTERDAM)
     {
         create_state_gas_charged = NEW_ACCOUNT_STATE_GAS;
-        if (!charge_state_gas(gas_left, state, create_state_gas_charged))
+        if (!state.state_gas.charge(gas_left, create_state_gas_charged))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
-    // EIP-8037 (bal-devnet-7, PR #2823): refund the NEW_ACCOUNT*CPSB state-gas
+    // EIP-8037 (bal-devnet-7, PR #2823): refill the NEW_ACCOUNT*CPSB state-gas
     // charge when no account is actually created (light failure before child
     // frame entry, or child frame REVERT/HALT). No phantom tracking needed:
-    // the ancestor-revert path simply returns `state_gas_used + state_gas_left`.
+    // the ancestor-revert path simply returns `used + reservoir`.
     //
-    // NOTE: this restores only the state-gas reservoir. If `charge_state_gas`
+    // NOTE: this restores only the state-gas reservoir. If the state-gas charge
     // spilled into `gas_left` (reservoir was insufficient), the regular-side
     // deficit is NOT reclaimed — by design, regular spill stays charged at
     // the frame level. The reclassified state-gas amount returns to the
     // reservoir, and tx-level accounting balances via `total_consumed` at
     // end of `transition()`, but the caller's `gas_left` budget remains
     // permanently reduced for the rest of this frame.
-    const auto refund_create_state_gas = [&]() noexcept {
+    const auto refill_create_state_gas = [&]() noexcept {
         if (create_state_gas_charged != 0)
-        {
-            state.state_gas_left += create_state_gas_charged;
-            state.state_gas_used -= create_state_gas_charged;
-        }
+            state.state_gas.refill(create_state_gas_charged);
     };
 
     if (state.msg->depth >= 1024)
     {
-        refund_create_state_gas();
+        refill_create_state_gas();
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
     }
 
     if (endowment != 0 &&
         intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < endowment)
     {
-        refund_create_state_gas();
+        refill_create_state_gas();
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
     }
 
@@ -332,7 +329,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     msg.value = intx::be::store<evmc::uint256be>(endowment);
 
     // EIP-8037: pass state gas to child execution.
-    msg.state_gas = state.state_gas_left;
+    msg.state_gas = state.state_gas.reservoir;
 
     const auto result = state.host.call(msg);
     gas_left -= msg.gas - result.gas_left;
@@ -340,11 +337,11 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     // EIP-8037: take the child's leftover reservoir and accumulate its state gas
     // used (uniform across status — a reverted child already had its used folded
     // into the reservoir at the `Host::call` revert boundary). On failure also
-    // refund this frame's own NEW_ACCOUNT pre-charge, since no account was created.
-    state.state_gas_left = result.state_gas_left;
-    state.state_gas_used += result.state_gas_used;
+    // refill this frame's own NEW_ACCOUNT pre-charge, since no account was created.
+    state.state_gas.reservoir = result.state_gas_left;
+    state.state_gas.used += result.state_gas_used;
     if (result.status_code != EVMC_SUCCESS)
-        refund_create_state_gas();
+        refill_create_state_gas();
 
     state.return_data.assign(result.output_data, result.output_size);
     if (result.status_code == EVMC_SUCCESS)

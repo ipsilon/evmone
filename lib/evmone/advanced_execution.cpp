@@ -13,7 +13,7 @@ evmc_result execute(AdvancedExecutionState& state, const AdvancedCodeAnalysis& a
     state.analysis.advanced = &analysis;  // Allow accessing the analysis by instructions.
 
     // EIP-8037: initialize state gas from message.
-    state.state_gas_left = state.msg->state_gas;
+    state.state_gas.reservoir = state.msg->state_gas;
 
     const auto* instr = state.analysis.advanced->instrs.data();  // Get the first instruction.
     while (instr != nullptr)
@@ -28,8 +28,8 @@ evmc_result execute(AdvancedExecutionState& state, const AdvancedCodeAnalysis& a
         state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size);
 
     // EIP-8037: always return remaining reservoir (even on OOG).
-    result.state_gas_left = std::max(int64_t{0}, state.state_gas_left);
-    result.state_gas_used = state.state_gas_used;
+    result.state_gas_left = std::max(int64_t{0}, state.state_gas.reservoir);
+    result.state_gas_used = state.state_gas.used;
 
     return result;
 }

@@ -273,7 +273,7 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
     state.reset(msg, rev, host, ctx, code);
 
     // EIP-8037: initialize state gas from message.
-    state.state_gas_left = msg.state_gas;
+    state.state_gas.reservoir = msg.state_gas;
 
     state.analysis.baseline = &analysis;  // Assign code analysis for instruction implementations.
 
@@ -303,8 +303,8 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
         state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size);
 
     // EIP-8037: always return remaining reservoir (even on OOG).
-    result.state_gas_left = std::max(int64_t{0}, state.state_gas_left);
-    result.state_gas_used = state.state_gas_used;
+    result.state_gas_left = std::max(int64_t{0}, state.state_gas.reservoir);
+    result.state_gas_used = state.state_gas.used;
 
     if (INTX_UNLIKELY(tracer != nullptr))
         tracer->notify_execution_end(result);

@@ -116,13 +116,6 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
 }
 
 
-/// Charge state gas (EIP-8037) against an ExecutionState. Thin wrapper
-/// over the scalar form in constants.hpp.
-inline bool charge_state_gas(int64_t& gas_left, ExecutionState& state, int64_t cost) noexcept
-{
-    return charge_state_gas(gas_left, state.state_gas_left, state.state_gas_used, cost);
-}
-
 /// Grows EVM memory and checks its cost.
 ///
 /// This function should not be inlined because this may affect other inlining decisions:
@@ -1100,7 +1093,7 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
                 if (state.rev >= EVMC_AMSTERDAM)
                 {
                     // EIP-8037: charge state gas instead of regular gas.
-                    if (!charge_state_gas(gas_left, state, NEW_ACCOUNT_STATE_GAS))
+                    if (!state.state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
                         return {EVMC_OUT_OF_GAS, gas_left};
                 }
                 else

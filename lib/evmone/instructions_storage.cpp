@@ -152,17 +152,16 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     {
         if (status == EVMC_STORAGE_ADDED)
         {
-            if (!charge_state_gas(gas_left, state, STORAGE_SET_STATE_GAS))
+            if (!state.state_gas.charge(gas_left, STORAGE_SET_STATE_GAS))
                 return {EVMC_OUT_OF_GAS, gas_left};
         }
         else if (status == EVMC_STORAGE_ADDED_DELETED)
         {
-            // EIP-8037 (bal-devnet-7, PR #2823): Refund state gas directly to
+            // EIP-8037 (bal-devnet-7, PR #2823): Refill state gas directly to
             // the reservoir for set-then-clear (0 -> Y -> 0). No extra phantom-
-            // tracking: an ancestor revert returns `state_gas_used + state_gas_left`
+            // tracking: an ancestor revert returns `used + reservoir`
             // naturally, and the matching SSTORE charge is itself rolled back.
-            state.state_gas_left += STORAGE_SET_STATE_GAS;
-            state.state_gas_used -= STORAGE_SET_STATE_GAS;
+            state.state_gas.refill(STORAGE_SET_STATE_GAS);
         }
     }
     state.gas_refund += gas_refund;

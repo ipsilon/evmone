@@ -6,6 +6,7 @@
 #include "precompiles.hpp"
 #include "system_contracts.hpp"
 #include <evmone/constants.hpp>
+#include <evmone/state_gas.hpp>
 
 namespace evmone::state
 {
@@ -365,19 +366,17 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     }
 
     // Code deployment cost.
-    auto state_gas_left = result.state_gas_left;
-    auto total_state_gas_used = result.state_gas_used;
+    StateGas state_gas{result.state_gas_left, result.state_gas_used};
     if (m_rev >= EVMC_AMSTERDAM)
     {
         // EIP-8037: split code deposit into regular and state components.
         const auto regular_cost = 6 * ((std::ssize(code) + 31) / 32);
         const auto state_cost = std::ssize(code) * COST_PER_STATE_BYTE;
         gas_left -= regular_cost;
-        if (gas_left < 0 || !charge_state_gas(gas_left, state_gas_left, total_state_gas_used,
-                                state_cost))
+        if (gas_left < 0 || !state_gas.charge(gas_left, state_cost))
         {
             auto r = evmc::Result{EVMC_FAILURE};
-            set_state_gas(r, state_gas_left, total_state_gas_used);
+            set_state_gas(r, state_gas.reservoir, state_gas.used);
             return r;
         }
     }
@@ -391,7 +390,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
                 return evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund,
                     msg.recipient};
             auto r = evmc::Result{EVMC_FAILURE};
-            set_state_gas(r, state_gas_left, total_state_gas_used);
+            set_state_gas(r, state_gas.reservoir, state_gas.used);
             return r;
         }
     }
@@ -404,7 +403,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     }
 
     auto r = evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
-    set_state_gas(r, state_gas_left, total_state_gas_used);
+    set_state_gas(r, state_gas.reservoir, state_gas.used);
     return r;
 }
 
@@ -511,7 +510,7 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
             m_state.get_or_insert_for_access(addr_03).erase_if_empty = true;
 
         // EIP-8037: the frame's state changes were just rolled back, so the
-        // state gas it consumed is refunded to the reservoir and the net used is
+        // state gas it consumed is refilled to the reservoir and the net used is
         // zeroed. Done here at the single revert boundary for every frame —
         // nested and top-level alike — so callers (call_impl, create_impl,
         // transition) accumulate a frame's state gas the same way regardless of
@@ -521,8 +520,9 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
         // top-level frame never goes negative, so this matches its former `> 0`
         // reconciliation.) Pre-Amsterdam and CREATE-collision frames carry 0
         // here, so the fold is a no-op for them.
-        result.raw().state_gas_left += result.state_gas_used;
-        result.raw().state_gas_used = 0;
+        StateGas sg{result.state_gas_left, result.state_gas_used};
+        sg.refill_used();
+        set_state_gas(result, sg.reservoir, sg.used);
     }
     return result;
 }
