@@ -494,7 +494,7 @@ struct evmc_result
     /**
      * The net state gas consumed during execution (EIP-8037).
      *
-     * Accumulated across all frames (EVM charge_state_gas + Host-level charges).
+     * Accumulated across all frames (EVM state-gas charges + Host-level charges).
      * May be negative when a storage-clear credit exceeds in-frame charges.
      * On non-success of a nested call the frame's state changes are rolled back,
      * so the consumed state gas is folded into state_gas_left and reported as 0;

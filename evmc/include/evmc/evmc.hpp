@@ -419,6 +419,13 @@ public:
     /// Access the result object as a const referenced to ::evmc_result.
     const evmc_result& raw() const noexcept { return *this; }
 
+    /// Sets the EIP-8037 state-gas fields (remaining reservoir and net used) together.
+    void state_gas(int64_t reservoir, int64_t used) noexcept
+    {
+        state_gas_left = reservoir;
+        state_gas_used = used;
+    }
+
     /// Releases the ownership and returns the raw copy of evmc_result.
     ///
     /// This method drops the ownership of the result

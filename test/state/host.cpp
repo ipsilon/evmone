@@ -10,16 +10,6 @@
 
 namespace evmone::state
 {
-namespace
-{
-/// EIP-8037: set the state-gas fields on a returned Result.
-void set_state_gas(evmc::Result& r, int64_t left, int64_t used) noexcept
-{
-    r.raw().state_gas_left = left;
-    r.raw().state_gas_used = used;
-}
-}  // namespace
-
 bool Host::account_exists(const address& addr) const noexcept
 {
     const auto* const acc = m_state.find(addr);
@@ -351,7 +341,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (!code.empty() && m_rev >= EVMC_LONDON && code[0] == 0xEF)
     {
         auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
-        set_state_gas(r, result.state_gas_left, result.state_gas_used);
+        r.state_gas(result.state_gas_left, result.state_gas_used);
         return r;
     }
 
@@ -361,7 +351,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > static_cast<size_t>(max_code_size))
     {
         auto r = evmc::Result{EVMC_FAILURE};
-        set_state_gas(r, result.state_gas_left, result.state_gas_used);
+        r.state_gas(result.state_gas_left, result.state_gas_used);
         return r;
     }
 
@@ -376,7 +366,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         if (gas_left < 0 || !state_gas.charge(gas_left, state_cost))
         {
             auto r = evmc::Result{EVMC_FAILURE};
-            set_state_gas(r, state_gas.reservoir, state_gas.used);
+            r.state_gas(state_gas.reservoir, state_gas.used);
             return r;
         }
     }
@@ -390,7 +380,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
                 return evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund,
                     msg.recipient};
             auto r = evmc::Result{EVMC_FAILURE};
-            set_state_gas(r, state_gas.reservoir, state_gas.used);
+            r.state_gas(state_gas.reservoir, state_gas.used);
             return r;
         }
     }
@@ -403,7 +393,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     }
 
     auto r = evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
-    set_state_gas(r, state_gas.reservoir, state_gas.used);
+    r.state_gas(state_gas.reservoir, state_gas.used);
     return r;
 }
 
@@ -522,7 +512,7 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
         // here, so the fold is a no-op for them.
         StateGas sg{.reservoir = result.state_gas_left, .used = result.state_gas_used};
         sg.refill_used();
-        set_state_gas(result, sg.reservoir, sg.used);
+        result.state_gas(sg.reservoir, sg.used);
     }
     return result;
 }
