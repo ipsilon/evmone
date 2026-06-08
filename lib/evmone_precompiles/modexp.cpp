@@ -195,7 +195,7 @@ void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uin
     assert(d.back() != 0);
     assert(u.back() != 0);
     assert(r.size() >= d.size());
-    assert(u.size() > d.size());  // Because used only for to-Montgomery conversion.
+    assert(u.size() >= d.size());  // Knuth Algorithm D requires dividend at least as wide.
     assert(scratch.size() >= 2 * u.size() + 2);
 
     // Layout: un[u.size()+1] | dn[d.size()] | q[u.size()+1-d.size()]
@@ -227,7 +227,9 @@ void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uin
     }
 
     // Shrink off the extra top word if it is not significant for the normalized numerator.
-    if (un.back() == 0 && un[un.size() - 2] < dn.back())
+    // Keep at least one more word than the divisor (required by Algorithm D), which matters
+    // when u.size() == d.size() (a reduced product exactly as wide as the modulus).
+    if (un.size() - 1 > dn.size() && un.back() == 0 && un[un.size() - 2] < dn.back())
         un = un.first(un.size() - 1);
 
     const auto denormalize = [&r, shift](std::span<const uint64_t> x) noexcept {
@@ -519,6 +521,60 @@ void modinv_pow2(
     }
 }
 
+/// Conditions for using the plain (non-Montgomery) exponentiation path for the odd part.
+/// The plain path skips the Montgomery setup (a base->Montgomery division plus a convert-back
+/// multiply) but reduces by division every step, so it wins only when that setup is not amortized
+/// (a tiny exponent) AND the modulus is large enough that the O(n^2) setup dominates the constant
+/// overhead of division-based reduction. Outside this regime Montgomery is equal or better, so it
+/// is preferred. Tuned empirically against a non-degenerate base; see modexp benchmarks.
+constexpr size_t SMALL_EXP_BIT_WIDTH = 2;     ///< Squares/cubes (exponent <= 3).
+constexpr size_t MIN_PLAIN_ODD_WORDS = 8;     ///< Odd part >= 512 bits.
+
+/// Computes result[] = base[]^exp % mod[] via plain square-and-multiply with division reduction.
+/// No Montgomery setup, so it wins for small exponents; works for any modulus parity.
+/// Scratch space required: 3*n + 2*max(base.size(), 2*n) + 2 words, where n = mod.size().
+void modexp_plain(std::span<uint64_t> result, std::span<const uint64_t> base, Exponent exp,
+    std::span<const uint64_t> mod, std::span<uint64_t> scratch) noexcept
+{
+    const auto n = mod.size();
+    assert(!mod.empty() && mod.back() != 0);    // mod must be trimmed.
+    assert(!base.empty() && base.back() != 0);  // base must be trimmed.
+    assert(result.size() == n);
+    assert(exp.bit_width() != 0);
+
+    // Layout: base_red[n] | prod[2n] | rem_scratch[rest]
+    const auto base_red = scratch.subspan(0, n);
+    const auto prod = scratch.subspan(n, 2 * n);
+    const auto rem_scratch = scratch.subspan(3 * n);
+
+    // Reduces a value u modulo mod into the n-word out, leaving out in [0, mod).
+    const auto reduce = [&](std::span<uint64_t> out, std::span<const uint64_t> u) noexcept {
+        const auto p = trim(u);
+        if (p.size() < n || (p.size() == n && less(p, mod)))  // p < mod: no division needed.
+        {
+            const auto [_, pad] = std::ranges::copy(p, out.begin());
+            std::ranges::fill(std::span{pad, out.end()}, uint64_t{0});
+        }
+        else
+            rem(out, p, mod, rem_scratch);
+    };
+
+    reduce(base_red, base);  // base_red = base % mod.
+
+    // result = base_red handles the always-set most-significant exponent bit.
+    std::ranges::copy(base_red, result.begin());
+    for (auto i = exp.bit_width() - 1; i != 0; --i)
+    {
+        mul(prod, result, result);  // Square.
+        reduce(result, prod);
+        if (exp[i - 1])
+        {
+            mul(prod, result, base_red);  // Multiply.
+            reduce(result, prod);
+        }
+    }
+}
+
 }  // namespace
 
 void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_bytes,
@@ -577,8 +633,18 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
         // Combining results via CRT is needed when both parts are non-trivial.
         const auto need_crt = !pow2_is_trivial && !odd_is_trivial;
 
+        // Use plain square-and-multiply for the odd part only where it is a clear win: a tiny
+        // exponent (Montgomery setup not amortized) over a large-enough odd part. The power-of-two
+        // part keeps its own division-free path regardless.
+        const auto odd_use_plain =
+            exp.bit_width() <= SMALL_EXP_BIT_WIDTH && odd_size >= MIN_PLAIN_ODD_WORDS;
+
         // Allocate operation scratch (dead after each call, reused sequentially).
-        const size_t odd_scratch = !odd_is_trivial ? 4 * odd_size + 3 * base.size() + 2 : 0;
+        const size_t odd_scratch =
+            !odd_is_trivial ? (odd_use_plain ?
+                                      3 * odd_size + 2 * std::max(base.size(), 2 * odd_size) + 2 :
+                                      4 * odd_size + 3 * base.size() + 2) :
+                              0;
         const size_t pow2_scratch = !pow2_is_trivial ? pow2_size : 0;
         const size_t inv_scratch = need_crt ? 2 * pow2_size : 0;
         const size_t op_scratch_size = std::max({odd_scratch, pow2_scratch, inv_scratch});
@@ -591,7 +657,12 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
         const auto result_pow2 = result.first(pow2_size);
 
         if (!odd_is_trivial) [[likely]]
-            modexp_odd(result_odd, base, exp, mod_odd, op_scratch);
+        {
+            if (odd_use_plain)
+                modexp_plain(result_odd, base, exp, mod_odd, op_scratch);
+            else
+                modexp_odd(result_odd, base, exp, mod_odd, op_scratch);
+        }
 
         if (!pow2_is_trivial)
             modexp_pow2(result_pow2, base, exp, mod_tz, op_scratch);
