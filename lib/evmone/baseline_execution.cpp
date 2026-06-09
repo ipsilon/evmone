@@ -303,6 +303,10 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
         state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size);
 
     // EIP-8037: always return remaining reservoir (even on OOG).
+    // Invariant: reservoir + used == initial reservoir + regular gas spilled into
+    // state-gas charges; the spill S is non-negative, so the sum never drops below
+    // the reservoir the frame was given (msg.state_gas).
+    assert(state.state_gas.reservoir + state.state_gas.used >= state.msg->state_gas);
     result.state_gas_left = std::max(int64_t{0}, state.state_gas.reservoir);
     result.state_gas_used = state.state_gas.used;
 

@@ -513,6 +513,9 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
         StateGas sg{.reservoir = result.state_gas_left, .used = result.state_gas_used};
         sg.refill_used();
         result.state_gas(sg.reservoir, sg.used);
+        // EIP-8037 invariant: the fold preserves reservoir + used, which stays at
+        // least the reservoir the frame was given (surplus = spilled regular gas, >= 0).
+        assert(result.state_gas_left + result.state_gas_used >= orig_msg.state_gas);
     }
     return result;
 }

@@ -221,6 +221,10 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     // used. A reverted child already had its used folded back into the reservoir
     // (and zeroed) at the `Host::call` revert boundary, so success and failure
     // are handled the same way here.
+    // EIP-8037 invariant: a child returns at least the reservoir it was given; the
+    // surplus is exactly the regular gas it spilled into state-gas charges (S >= 0):
+    //   S = result.state_gas_left + result.state_gas_used - msg.state_gas.
+    assert(result.state_gas_left + result.state_gas_used >= msg.state_gas);
     state.state_gas.reservoir = result.state_gas_left;
     state.state_gas.used += result.state_gas_used;
     return {EVMC_SUCCESS, gas_left};
@@ -338,6 +342,10 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     // used (uniform across status — a reverted child already had its used folded
     // into the reservoir at the `Host::call` revert boundary). On failure also
     // refill this frame's own NEW_ACCOUNT pre-charge, since no account was created.
+    // EIP-8037 invariant: a child returns at least the reservoir it was given; the
+    // surplus is exactly the regular gas it spilled into state-gas charges (S >= 0):
+    //   S = result.state_gas_left + result.state_gas_used - msg.state_gas.
+    assert(result.state_gas_left + result.state_gas_used >= msg.state_gas);
     state.state_gas.reservoir = result.state_gas_left;
     state.state_gas.used += result.state_gas_used;
     if (result.status_code != EVMC_SUCCESS)
