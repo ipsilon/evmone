@@ -41,7 +41,7 @@ namespace
 /// @return  Status code with information which check has failed
 ///          or EVMC_SUCCESS if everything is fine.
 template <Opcode Op>
-inline evmc_status_code check_requirements(const CostTable& cost_table, int64_t& gas_left,
+inline evmc_status_code check_requirements(const CostTable& cost_table, Gas& gas_left,
     const uint256* stack_top, const uint256* stack_bottom) noexcept
 {
     static_assert(
@@ -100,14 +100,14 @@ struct Position
 /// Helpers for invoking instruction implementations of different signatures.
 /// @{
 [[release_inline]] inline code_iterator invoke(void (*instr_fn)(StackTop) noexcept, Position pos,
-    int64_t& /*gas*/, ExecutionState& /*state*/) noexcept
+    Gas& /*gas*/, ExecutionState& /*state*/) noexcept
 {
     instr_fn(pos.stack_end);
     return pos.code_it + 1;
 }
 
 [[release_inline]] inline code_iterator invoke(
-    Result (*instr_fn)(StackTop, int64_t, ExecutionState&) noexcept, Position pos, int64_t& gas,
+    Result (*instr_fn)(StackTop, Gas, ExecutionState&) noexcept, Position pos, Gas& gas,
     ExecutionState& state) noexcept
 {
     const auto o = instr_fn(pos.stack_end, gas, state);
@@ -121,7 +121,7 @@ struct Position
 }
 
 [[release_inline]] inline code_iterator invoke(void (*instr_fn)(StackTop, ExecutionState&) noexcept,
-    Position pos, int64_t& /*gas*/, ExecutionState& state) noexcept
+    Position pos, Gas& /*gas*/, ExecutionState& state) noexcept
 {
     instr_fn(pos.stack_end, state);
     return pos.code_it + 1;
@@ -129,13 +129,13 @@ struct Position
 
 [[release_inline]] inline code_iterator invoke(
     code_iterator (*instr_fn)(StackTop, ExecutionState&, code_iterator) noexcept, Position pos,
-    int64_t& /*gas*/, ExecutionState& state) noexcept
+    Gas& /*gas*/, ExecutionState& state) noexcept
 {
     return instr_fn(pos.stack_end, state, pos.code_it);
 }
 
 [[release_inline]] inline code_iterator invoke(
-    TermResult (*instr_fn)(StackTop, int64_t, ExecutionState&) noexcept, Position pos, int64_t& gas,
+    TermResult (*instr_fn)(StackTop, Gas, ExecutionState&) noexcept, Position pos, Gas& gas,
     ExecutionState& state) noexcept
 {
     const auto result = instr_fn(pos.stack_end, gas, state);
@@ -147,7 +147,7 @@ struct Position
 /// A helper to invoke the instruction implementation of the given opcode Op.
 template <Opcode Op>
 [[release_inline]] inline Position invoke(const CostTable& cost_table, const uint256* stack_bottom,
-    Position pos, int64_t& gas, ExecutionState& state) noexcept
+    Position pos, Gas& gas, ExecutionState& state) noexcept
 {
     if (const auto status = check_requirements<Op>(cost_table, gas, pos.stack_end, stack_bottom);
         status != EVMC_SUCCESS)
@@ -162,7 +162,7 @@ template <Opcode Op>
 
 
 template <bool TracingEnabled>
-int64_t dispatch(const CostTable& cost_table, ExecutionState& state, int64_t gas,
+Gas dispatch(const CostTable& cost_table, ExecutionState& state, Gas gas,
     const uint8_t* code, Tracer* tracer = nullptr) noexcept
 {
     const auto stack_bottom = state.stack_space.bottom();
@@ -179,7 +179,7 @@ int64_t dispatch(const CostTable& cost_table, ExecutionState& state, int64_t gas
             if (offset < state.original_code.size())  // Skip STOP from code padding.
             {
                 tracer->notify_instruction_start(
-                    offset, position.stack_end - 1, stack_height, gas, state);
+                    offset, position.stack_end - 1, stack_height, static_cast<int64_t>(gas), state);
             }
         }
 
@@ -214,8 +214,8 @@ int64_t dispatch(const CostTable& cost_table, ExecutionState& state, int64_t gas
 }
 
 #if EVMONE_CGOTO_SUPPORTED
-int64_t dispatch_cgoto(
-    const CostTable& cost_table, ExecutionState& state, int64_t gas, const uint8_t* code) noexcept
+Gas dispatch_cgoto(
+    const CostTable& cost_table, ExecutionState& state, Gas gas, const uint8_t* code) noexcept
 {
 #pragma GCC diagnostic ignored "-Wpedantic"
 
@@ -267,7 +267,7 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
 {
     const auto code = analysis.code();
     const auto code_begin = code.data();
-    auto gas = msg.gas;
+    auto gas = Gas{msg.gas};
 
     auto& state = vm.get_execution_state(static_cast<size_t>(msg.depth));
     state.reset(msg, rev, host, ctx, code);
@@ -292,7 +292,9 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
             gas = dispatch<false>(cost_table, state, gas, code_begin);
     }
 
-    const auto gas_left = (state.status == EVMC_SUCCESS || state.status == EVMC_REVERT) ? gas : 0;
+    const int64_t gas_left =
+        (state.status == EVMC_SUCCESS || state.status == EVMC_REVERT) ? static_cast<int64_t>(gas) :
+                                                                        0;
     const auto gas_refund = (state.status == EVMC_SUCCESS) ? state.gas_refund : 0;
 
     assert(state.output_size != 0 || state.output_offset == 0);

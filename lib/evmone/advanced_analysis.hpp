@@ -35,7 +35,7 @@ static_assert(sizeof(BlockInfo) == 8);
 /// The execution state specialized for the Advanced interpreter.
 struct AdvancedExecutionState : ExecutionState
 {
-    int64_t gas_left = 0;
+    Gas gas_left;
 
     /// Pointer to the stack top.
     StackTop stack = stack_space.bottom();
@@ -75,7 +75,7 @@ struct AdvancedExecutionState : ExecutionState
         bytes_view _code) noexcept
     {
         ExecutionState::reset(message, revision, host_interface, host_ctx, _code);
-        gas_left = message.gas;
+        gas_left = Gas{message.gas};
         stack = stack_space.bottom();
         analysis.advanced = nullptr;  // For consistency with previous behavior.
         current_block_cost = 0;
