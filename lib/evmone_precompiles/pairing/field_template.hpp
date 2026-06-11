@@ -4,6 +4,8 @@
 #pragma once
 
 #include <array>
+#include <concepts>
+#include <type_traits>
 
 namespace evmmax::ecc
 {
@@ -25,6 +27,17 @@ struct ExtFieldElem
     /// Create an element from an array of coefficients.
     /// TODO: This constructor may be optimized to avoid copying the array.
     explicit constexpr ExtFieldElem(const CoeffArrT& cs) noexcept : coeffs{cs} {}
+
+    /// Create an element from literal coefficient values, each converted to ValueT in
+    /// Montgomery form at compile time. Mirrors AffinePoint's literal constructor, so points
+    /// over extension fields can be written with plain integer literals (e.g. Fq2{a, b}).
+    /// Constrained to non-ValueT arguments so it never competes with the array constructor
+    /// (which all ValueT-typed constructions, e.g. Fq2({Fq(a), Fq(b)}), continue to use).
+    template <typename... Ts>
+        requires(sizeof...(Ts) == DEGREE && (std::constructible_from<ValueT, Ts> && ...) &&
+                 (!std::same_as<std::remove_cvref_t<Ts>, ValueT> && ...))
+    consteval ExtFieldElem(const Ts&... cs) noexcept : coeffs{ValueT{cs}...}
+    {}
 
     /// Returns the conjugate of a degree-2 extension field element: (a, b) → (a, -b).
     constexpr ExtFieldElem conjugate() const noexcept

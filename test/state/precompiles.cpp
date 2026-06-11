@@ -551,7 +551,7 @@ ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8
     for (auto input_ptr = input; input_ptr != input + input_size; input_ptr += PAIR_SIZE)
     {
         namespace bn = evmmax::bn254;
-        auto p = bn::AffinePoint::from_bytes(std::span<const uint8_t, 64>{input_ptr, 64});
+        const auto p = bn::AffinePoint::from_bytes(std::span<const uint8_t, 64>{input_ptr, 64});
         if (!p.has_value()) [[unlikely]]
             return {EVMC_PRECOMPILE_FAILURE, 0};
 
@@ -563,8 +563,8 @@ ExecutionResult ecpairing_execute(const uint8_t* input, size_t input_size, uint8
         const auto qy_imag = bn::Fq::from_bytes(std::span<const uint8_t, 32>{input_ptr + 128, 32});
         if (!qx_real || !qx_imag || !qy_real || !qy_imag) [[unlikely]]
             return {EVMC_PRECOMPILE_FAILURE, 0};
-        bn::ExtPoint q{bn::Fq2({*qx_real, *qx_imag}), bn::Fq2({*qy_real, *qy_imag})};
-        pairs.emplace_back(std::move(*p), std::move(q));
+        const bn::ExtPoint q{bn::Fq2({*qx_real, *qx_imag}), bn::Fq2({*qy_real, *qy_imag})};
+        pairs.emplace_back(*p, q);
     }
 
     const auto res = evmmax::bn254::pairing_check(pairs);
