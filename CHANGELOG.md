@@ -5,6 +5,76 @@ Documentation of all notable changes to the **evmone** project.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.22.0] — unreleased
+
+This release starts the implementation of the Amsterdam EVM revision.
+
+### Added
+
+- **Amsterdam EVM revision** with the implementation of the initial set of EIPs.
+  [#1508](https://github.com/ipsilon/evmone/pull/1508)
+  - [EIP-7778]: Block Gas Accounting without Refunds.
+    [#1526](https://github.com/ipsilon/evmone/pull/1526)
+  - [EIP-7843]: SLOTNUM opcode.
+    [#1517](https://github.com/ipsilon/evmone/pull/1517)
+  - [EIP-7976]: Increase Calldata Floor Cost.
+    [#1519](https://github.com/ipsilon/evmone/pull/1519)
+  - [EIP-7981]: Increase Access List Cost.
+    [#1524](https://github.com/ipsilon/evmone/pull/1524)
+  - [EIP-8024]: Backward compatible SWAPN, DUPN, EXCHANGE.
+    [#1429](https://github.com/ipsilon/evmone/pull/1429)
+
+### Changed
+
+- **EVMC ABI version bumped to 13**: the `evmc_tx_context` layout changed
+  (the SLOTNUM addition and the removals listed below) along with other
+  incompatible EVMC API changes.
+  [#1567](https://github.com/ipsilon/evmone/pull/1567)
+- **BN254 pairing (`ecpairing`) optimizations**: line evaluation optimized,
+  dedicated `Fq2` squaring, points migrated to affine/projective representations.
+  [#1539](https://github.com/ipsilon/evmone/pull/1539)
+  [#1541](https://github.com/ipsilon/evmone/pull/1541)
+  [#1542](https://github.com/ipsilon/evmone/pull/1542)
+  [#1545](https://github.com/ipsilon/evmone/pull/1545)
+  [#1546](https://github.com/ipsilon/evmone/pull/1546)
+  [#1547](https://github.com/ipsilon/evmone/pull/1547)
+- **KZG point evaluation precompile optimizations**: joint G1 multi-scalar multiplication,
+  precomputed Miller-loop lines for the trusted setup point and the G2 generator.
+  [#1536](https://github.com/ipsilon/evmone/pull/1536)
+  [#1537](https://github.com/ipsilon/evmone/pull/1537)
+  [#1549](https://github.com/ipsilon/evmone/pull/1549)
+- The t8n tool has been folded into the `evmone` CLI as the `t8n` subcommand.
+  [#1531](https://github.com/ipsilon/evmone/pull/1531)
+  [#1533](https://github.com/ipsilon/evmone/pull/1533)
+  [#1535](https://github.com/ipsilon/evmone/pull/1535)
+  [#1551](https://github.com/ipsilon/evmone/pull/1551)
+- Blockchain test runner now matches expected block- and transaction-level exceptions.
+  [#1556](https://github.com/ipsilon/evmone/pull/1556)
+  [#1560](https://github.com/ipsilon/evmone/pull/1560)
+  [#1561](https://github.com/ipsilon/evmone/pull/1561)
+- Upgraded [blst] to 0.3.16.
+  [#1534](https://github.com/ipsilon/evmone/pull/1534)
+- `modexp` 256-bit Almost Montgomery Multiplication keeps its accumulator in
+  registers by avoiding output/input aliasing (~6% faster on 256-bit benchmarks).
+  [#1477](https://github.com/ipsilon/evmone/pull/1477)
+
+### Removed
+
+- Standalone `evmone-t8n` tool — use the `evmone t8n` subcommand instead.
+  [#1551](https://github.com/ipsilon/evmone/pull/1551)
+- EOF leftovers dropped from the EVMC API: the `EOFCREATE` call kind
+  and the `initcodes` transaction context.
+  [#1514](https://github.com/ipsilon/evmone/pull/1514)
+  [#1515](https://github.com/ipsilon/evmone/pull/1515)
+- The `evmc_result` optional storage.
+  [#1529](https://github.com/ipsilon/evmone/pull/1529)
+
+### Fixed
+
+- The instruction counting tracer (`--opcode.count`) kept a dangling reference
+  to the output path.
+  [#1554](https://github.com/ipsilon/evmone/pull/1554)
+
 ## [0.21.0] — 2026-04-09
 
 This release merges the required contents of the former [EVMC] project
@@ -1247,6 +1317,8 @@ It delivers fully-compatible and high-speed EVM implementation.
 - Exposes [EVMC] 6 ABI.
 - The [intx 0.2.0](https://github.com/chfast/intx/releases/tag/v0.2.0) library is used for 256-bit precision arithmetic. 
 
+[0.22.0]: https://github.com/ipsilon/evmone/compare/v0.21.0...master
+[0.21.0]: https://github.com/ipsilon/evmone/releases/tag/v0.21.0
 [0.20.0]: https://github.com/ethereum/evmone/releases/tag/v0.20.0
 [0.19.0]: https://github.com/ethereum/evmone/releases/tag/v0.19.0
 [0.18.0]: https://github.com/ethereum/evmone/releases/tag/v0.18.0
@@ -1308,6 +1380,8 @@ It delivers fully-compatible and high-speed EVM implementation.
 [EIP-7691]: https://eips.ethereum.org/EIPS/eip-7691
 [EIP-7692]: https://eips.ethereum.org/EIPS/eip-7692
 [EIP-7702]: https://eips.ethereum.org/EIPS/eip-7702
+[EIP-7778]: https://eips.ethereum.org/EIPS/eip-7778
+[EIP-7843]: https://eips.ethereum.org/EIPS/eip-7843
 [EIP-7594]: https://eips.ethereum.org/EIPS/eip-7594
 [EIP-7823]: https://eips.ethereum.org/EIPS/eip-7823
 [EIP-7825]: https://eips.ethereum.org/EIPS/eip-7825
@@ -1318,6 +1392,9 @@ It delivers fully-compatible and high-speed EVM implementation.
 [EIP-7934]: https://eips.ethereum.org/EIPS/eip-7934
 [EIP-7939]: https://eips.ethereum.org/EIPS/eip-7939
 [EIP-7951]: https://eips.ethereum.org/EIPS/eip-7951
+[EIP-7976]: https://eips.ethereum.org/EIPS/eip-7976
+[EIP-7981]: https://eips.ethereum.org/EIPS/eip-7981
+[EIP-8024]: https://eips.ethereum.org/EIPS/eip-8024
 
 [Spurious Dragon]: https://eips.ethereum.org/EIPS/eip-607
 [Petersburg]: https://eips.ethereum.org/EIPS/eip-1716
