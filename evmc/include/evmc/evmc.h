@@ -39,12 +39,13 @@ enum
     /**
      * The EVMC ABI version number of the interface declared in this file.
      *
-     * The EVMC ABI version always equals the major version number of the EVMC project.
+     * The ABI version is incremented on every incompatible change of the EVMC API or ABI
+     * (up to EVMC 12 it equaled the major version number of the standalone EVMC project).
      * The Host SHOULD check if the ABI versions match when dynamically loading VMs.
      *
      * @see @ref versioning
      */
-    EVMC_ABI_VERSION = 12
+    EVMC_ABI_VERSION = 13
 };
 
 
