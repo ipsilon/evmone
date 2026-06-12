@@ -124,11 +124,14 @@ std::error_code validate_block(evmc_revision rev, state::BlobParams blob_params,
         return make_error_code(RLP_BLOCK_LIMIT_EXCEEDED);
 
     // EIP-7928: `blockAccessListHash` header field is mandatory from Amsterdam
-    // onward and forbidden before. A pre-Amsterdam block carrying the field is
-    // an INCORRECT_BLOCK_FORMAT.
+    // onward and forbidden before. A pre-Amsterdam block carrying the field
+    // hashes differently than the canonical header, so EEST classifies it as
+    // INVALID_BLOCK_HASH rather than a BAL error.
     const auto has_bal_hash = test_block.expected_block_header.block_access_list_hash.has_value();
-    if (rev >= EVMC_AMSTERDAM ? !has_bal_hash : has_bal_hash)
-        return make_error_code(INCORRECT_BLOCK_FORMAT);
+    if (rev >= EVMC_AMSTERDAM && !has_bal_hash)
+        return make_error_code(INVALID_BAL_HASH);
+    if (rev < EVMC_AMSTERDAM && has_bal_hash)
+        return make_error_code(INVALID_BLOCK_HASH);
 
     return {};
 }
