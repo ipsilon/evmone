@@ -327,8 +327,8 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     assert(result.state_gas_left + result.state_gas_used >= msg.state_gas);
     state.state_gas.reservoir = result.state_gas_left;
     state.state_gas.used += result.state_gas_used;
-    if (result.status_code != EVMC_SUCCESS)
-        state.state_gas.refill(NEW_ACCOUNT_STATE_GAS);  // REVIEW: Can this fail prev revs?
+    if (state.rev >= EVMC_AMSTERDAM && result.status_code != EVMC_SUCCESS)
+        state.state_gas.refill(NEW_ACCOUNT_STATE_GAS);
 
     state.return_data.assign(result.output_data, result.output_size);
     if (result.status_code == EVMC_SUCCESS)
