@@ -277,22 +277,43 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     if ((gas_left -= init_code_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
+    // EIP-8037: charge state gas for account creation.
+    int64_t create_state_gas_charged = 0;
+    if (state.rev >= EVMC_AMSTERDAM)
+    {
+        create_state_gas_charged = NEW_ACCOUNT_STATE_GAS;
+        if (!state.state_gas.charge(gas_left, create_state_gas_charged))
+            return {EVMC_OUT_OF_GAS, gas_left};
+    }
+
+    // EIP-8037 (bal-devnet-7, PR #2823): refill the NEW_ACCOUNT*CPSB state-gas
+    // charge when no account is actually created (light failure before child
+    // frame entry, or child frame REVERT/HALT). No phantom tracking needed:
+    // the ancestor-revert path simply returns `used + reservoir`.
+    //
+    // NOTE: this restores only the state-gas reservoir. If the state-gas charge
+    // spilled into `gas_left` (reservoir was insufficient), the regular-side
+    // deficit is NOT reclaimed — by design, regular spill stays charged at
+    // the frame level. The reclassified state-gas amount returns to the
+    // reservoir, and tx-level accounting balances via `total_consumed` at
+    // end of `transition()`, but the caller's `gas_left` budget remains
+    // permanently reduced for the rest of this frame.
+    const auto refill_create_state_gas = [&]() noexcept {
+        if (create_state_gas_charged != 0)
+            state.state_gas.refill(create_state_gas_charged);
+    };
+
     if (state.msg->depth >= 1024)
     {
+        refill_create_state_gas();
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
     }
 
     if (endowment != 0 &&
         intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < endowment)
     {
+        refill_create_state_gas();
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
-    }
-
-    // EIP-8037: charge state gas for account creation.
-    if (state.rev >= EVMC_AMSTERDAM)
-    {
-        if (!state.state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
-            return {EVMC_OUT_OF_GAS, gas_left};
     }
 
     evmc_message msg{.kind = to_call_kind(Op)};
@@ -327,8 +348,8 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     assert(result.state_gas_left + result.state_gas_used >= msg.state_gas);
     state.state_gas.reservoir = result.state_gas_left;
     state.state_gas.used += result.state_gas_used;
-    if (state.rev >= EVMC_AMSTERDAM && result.status_code != EVMC_SUCCESS)
-        state.state_gas.refill(NEW_ACCOUNT_STATE_GAS);
+    if (result.status_code != EVMC_SUCCESS)
+        refill_create_state_gas();
 
     state.return_data.assign(result.output_data, result.output_size);
     if (result.status_code == EVMC_SUCCESS)
