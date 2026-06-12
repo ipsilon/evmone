@@ -14,8 +14,8 @@ namespace evmmax::ecc
 template <typename ConfigT>
 struct ExtFieldElem
 {
-    using ValueT = typename ConfigT::ValueT;
-    using Base = typename ConfigT::BaseFieldT;
+    using ValueT = ConfigT::ValueT;
+    using Base = ConfigT::BaseFieldT;
     static constexpr auto DEGREE = ConfigT::DEGREE;
     using CoeffArrT = std::array<ValueT, DEGREE>;
 
@@ -28,11 +28,8 @@ struct ExtFieldElem
     /// TODO: This constructor may be optimized to avoid copying the array.
     explicit constexpr ExtFieldElem(const CoeffArrT& cs) noexcept : coeffs{cs} {}
 
-    /// Create an element from literal coefficient values, each converted to ValueT in
-    /// Montgomery form at compile time. Mirrors AffinePoint's literal constructor, so points
-    /// over extension fields can be written with plain integer literals (e.g. Fq2{a, b}).
-    /// Constrained to non-ValueT arguments so it never competes with the array constructor
-    /// (which all ValueT-typed constructions, e.g. Fq2({Fq(a), Fq(b)}), continue to use).
+    /// Create an element from literal coefficient values, converted to the underlying
+    /// representation at compile-time. Allows defining constants as e.g. Fq2{1, 2}.
     template <typename... Ts>
         requires(sizeof...(Ts) == DEGREE && (std::constructible_from<ValueT, Ts> && ...) &&
                  (!std::same_as<std::remove_cvref_t<Ts>, ValueT> && ...))
