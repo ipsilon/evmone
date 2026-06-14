@@ -35,9 +35,9 @@ class StackSpace
         static constexpr auto limit = 1024;
 
         /// Stack space items are aligned to 256 bits for better packing in cache lines.
-        static constexpr auto alignment = sizeof(uint256);
+        static constexpr auto alignment = 2 * limit * sizeof(uint256);
 
-        alignas(alignment) uint256 items[limit];
+        alignas(alignment) uint256 items[2 * limit];
     };
 
     /// The storage allocated for maximum possible number of items.
@@ -45,6 +45,7 @@ class StackSpace
 
 public:
     static constexpr auto limit = Storage::limit;
+    static constexpr auto alignment = Storage::alignment;
 
     /// Returns the pointer to the "bottom", i.e. below the stack space.
     [[nodiscard]] uint256* bottom() noexcept { return &m_stack_space->items[0]; }
