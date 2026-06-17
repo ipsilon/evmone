@@ -74,6 +74,27 @@ TEST(statetest_loader, tx_create_legacy)
     EXPECT_EQ(tx.v, 1);
 }
 
+TEST(statetest_loader, tx_max_chain_id)
+{
+    // The maximum representable `chainId` (uint64 max = 0xffffffffffffffff) must be
+    // loaded without overflow or truncation.
+    constexpr std::string_view input = R"({
+        "input": "b0b1",
+        "gas": "0x9091",
+        "chainId": "0xffffffffffffffff",
+        "value": "0xe0e1",
+        "sender": "a0a1",
+        "gasPrice": "0x7071",
+        "nonce": "0",
+        "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "v": "1"
+    })";
+
+    const auto tx = test::from_json<state::Transaction>(json::json::parse(input));
+    EXPECT_EQ(tx.chain_id, std::numeric_limits<uint64_t>::max());
+}
+
 TEST(statetest_loader, tx_eip1559)
 {
     constexpr std::string_view input = R"({
