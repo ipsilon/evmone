@@ -456,7 +456,7 @@ state::Transaction from_json<state::Transaction>(const json::json& j)
     o.nonce = from_json<uint64_t>(j.at("nonce"));
     o.r = from_json<intx::uint256>(j.at("r"));
     o.s = from_json<intx::uint256>(j.at("s"));
-    o.v = from_json<uint8_t>(j.at("v"));
+    o.v = from_json<uint64_t>(j.at("v"));
 
     return o;
 }

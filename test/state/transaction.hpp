@@ -78,7 +78,7 @@ struct Transaction
     uint64_t nonce = 0;
     intx::uint256 r;
     intx::uint256 s;
-    uint8_t v = 0;
+    uint64_t v = 0;
     AuthorizationList authorization_list;
 };
 

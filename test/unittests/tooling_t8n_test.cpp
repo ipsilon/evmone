@@ -248,3 +248,42 @@ TEST(tooling_t8n, max_chain_id)
     EXPECT_NO_THROW(tooling::t8n(vm, args));
     EXPECT_THAT(out_result.str(), HasSubstr("\"transactionHash\""));
 }
+
+TEST(tooling_t8n, max_v)
+{
+    evmc::VM vm{evmc_create_evmone()};
+
+    // Legacy EIP-155 `v` is chainId*2 + 35 + parity, exceeding 0xff for chainId > 110.
+    // The maximum `v` (uint64 max = 0xffffffffffffffff) must be parsed and executed without
+    // overflow; regression test for `v` being loaded as `uint8_t`, which threw
+    // `from_json<uint8_t>: value > 0xFF`.
+    static constexpr auto TX_MAX_V = R"([{
+        "to": null,
+        "input": "0x60015ff3",
+        "gas": "0x186a0",
+        "nonce": "0x0",
+        "value": "0x0",
+        "gasPrice": "0x32",
+        "chainId": "0x1",
+        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "v": "0xffffffffffffffff",
+        "r": "0x468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665ae",
+        "s": "0x5cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc"
+    }])";
+
+    std::istringstream env{ENV_JSON};
+    std::istringstream alloc{ALLOC_JSON};
+    std::istringstream txs{TX_MAX_V};
+    std::ostringstream out_result;
+
+    tooling::T8NArgs args;
+    args.rev = EVMC_SHANGHAI;
+    args.chain_id = 1;
+    args.alloc = &alloc;
+    args.env = &env;
+    args.txs = &txs;
+    args.out_result = &out_result;
+
+    EXPECT_NO_THROW(tooling::t8n(vm, args));
+    EXPECT_THAT(out_result.str(), HasSubstr("\"transactionHash\""));
+}

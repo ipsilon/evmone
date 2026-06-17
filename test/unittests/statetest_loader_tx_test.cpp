@@ -95,6 +95,32 @@ TEST(statetest_loader, tx_max_chain_id)
     EXPECT_EQ(tx.chain_id, std::numeric_limits<uint64_t>::max());
 }
 
+TEST(statetest_loader, tx_max_legacy_chain_id)
+{
+    // A legacy EIP-155 transaction encodes the chain ID inside `v` as
+    // v = chain_id*2 + 35 + parity (parity in {0, 1}). Because `v` is loaded as uint64, the
+    // largest chain ID a legacy transaction can carry is the one whose `v` reaches uint64 max:
+    // chain_id = 0x7fffffffffffffee with parity 0 gives v = 0xffffffffffffffff. A larger chain ID
+    // would overflow `v`.
+    constexpr std::string_view input = R"({
+        "input": "b0b1",
+        "gas": "0x9091",
+        "chainId": "0x7fffffffffffffee",
+        "value": "0xe0e1",
+        "sender": "a0a1",
+        "gasPrice": "0x7071",
+        "nonce": "0",
+        "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "v": "0xffffffffffffffff"
+    })";
+
+    const auto tx = test::from_json<state::Transaction>(json::json::parse(input));
+    EXPECT_EQ(tx.chain_id, 0x7fffffffffffffee);
+    EXPECT_EQ(tx.v, std::numeric_limits<uint64_t>::max());
+    EXPECT_EQ(tx.v, tx.chain_id * 2 + 35);  // EIP-155 with y-parity 0.
+}
+
 TEST(statetest_loader, tx_eip1559)
 {
     constexpr std::string_view input = R"({
