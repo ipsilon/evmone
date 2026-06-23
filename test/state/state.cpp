@@ -1027,8 +1027,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto state_refund = auth_refunds.state + tx_state_refund;
         const auto state_gas_used = exec_state_gas + intrinsic_state - state_refund;
         // Refunds cannot exceed what was paid in state gas — so the state
-        // component is non-negative by construction and needs no min_gas_cost
-        // floor (only the regular component is floored, per EELS):
+        // component is non-negative by construction (EIP-7778 floors neither block
+        // component; only the sender's receipt gas_used is floored):
         //   auth_refunds.state <= num_auths * (NEW_ACCOUNT + AUTH_BASE) * CPSB
         //                        <= auth contribution to intrinsic_state
         //   tx_state_refund   <= NEW_ACCOUNT_STATE_GAS
