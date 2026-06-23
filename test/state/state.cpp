@@ -935,6 +935,10 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
             message.code_address = *delegate;
             message.flags |= EVMC_DELEGATED;
             host.access_account(message.code_address);
+            // EIP-7928 / EIP-2780: resolving the top-level delegation reads the target's code, so
+            // the target must appear in the block access list even if the call reverts. Force the
+            // lazy-load now (matches get_target_address for sub-call delegation resolution).
+            (void)state.find(message.code_address);
         }
     }
 
