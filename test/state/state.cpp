@@ -60,75 +60,114 @@ struct TransactionCost
     int64_t min = 0;
 };
 
+/// Compute the Amsterdam transaction intrinsic gas: the EIP-2780 decomposition of the flat base
+/// cost into named primitives, priced by EIP-8037 (state gas) and EIP-8038 (state-access costs).
+TransactionCost compute_tx_intrinsic_cost_amsterdam(const Transaction& tx) noexcept
+{
+    static constexpr int64_t TX_BASE = 12000;          // ECDSA recovery + sender access & write.
+    static constexpr int64_t TX_VALUE_COST = 4244;     // Recipient balance write on a value transfer.
+    static constexpr int64_t TRANSFER_LOG_COST = 1756;  // EIP-7708 transfer log.
+    static constexpr int64_t COLD_ACCOUNT_ACCESS = 3000;
+    static constexpr int64_t COLD_STORAGE_ACCESS = 3000;
+    static constexpr int64_t ACCOUNT_WRITE = 8000;
+    static constexpr int64_t CREATE_ACCESS = ACCOUNT_WRITE + COLD_STORAGE_ACCESS;  // 11000.
+    static constexpr int64_t DATA_TOKEN_STANDARD = 4;
+    static constexpr int64_t DATA_TOKEN_FLOOR = 16;
+    static constexpr int64_t INITCODE_WORD_COST = 2;
+    static constexpr int64_t ACCESS_LIST_ADDRESS_FLOOR_TOKENS = 80;       // 20 bytes × 4.
+    static constexpr int64_t ACCESS_LIST_STORAGE_KEY_FLOOR_TOKENS = 128;  // 32 bytes × 4.
+    // EIP-8038: REGULAR_PER_AUTH_BASE_COST = AUTH_TUPLE_BYTES (101) × DATA_TOKEN_FLOOR (16)
+    //   + PRECOMPILE_ECRECOVER (3000) + COLD_ACCOUNT_ACCESS (3000) + 2 × WARM_ACCESS (100).
+    static constexpr int64_t REGULAR_PER_AUTH_BASE_COST = 101 * 16 + 3000 + 3000 + 2 * 100;  // 7816.
+
+    const auto is_create = !tx.to.has_value();
+    const auto is_self_transfer = tx.to.has_value() && *tx.to == tx.sender;
+    const auto has_value = tx.value != 0;
+
+    const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(EVMC_AMSTERDAM, tx.data));
+    const auto data_cost = num_tokens * DATA_TOKEN_STANDARD;
+
+    // Recipient cost depends on the transaction kind. A self-transfer touches nothing.
+    int64_t recipient_regular = 0;
+    int64_t recipient_state = 0;
+    if (is_create)
+    {
+        recipient_regular = CREATE_ACCESS + INITCODE_WORD_COST * num_words(tx.data.size());
+        recipient_state = NEW_ACCOUNT_STATE_GAS;
+        if (has_value)
+            recipient_regular += TRANSFER_LOG_COST;
+    }
+    else if (!is_self_transfer)
+    {
+        recipient_regular = COLD_ACCOUNT_ACCESS;
+        if (has_value)
+            recipient_regular += TRANSFER_LOG_COST + TX_VALUE_COST;
+    }
+
+    const auto [num_addresses, num_storage_keys] = count_access_list(tx.access_list);
+    const auto access_list_regular = static_cast<int64_t>(
+        num_addresses * COLD_ACCOUNT_ACCESS + num_storage_keys * COLD_STORAGE_ACCESS);
+    const auto access_list_tokens =
+        static_cast<int64_t>(num_addresses * ACCESS_LIST_ADDRESS_FLOOR_TOKENS +
+                             num_storage_keys * ACCESS_LIST_STORAGE_KEY_FLOOR_TOKENS);
+    const auto access_list_cost = access_list_regular + access_list_tokens * DATA_TOKEN_FLOOR;
+
+    const auto num_auth = static_cast<int64_t>(tx.authorization_list.size());
+    const auto auth_regular = num_auth * (ACCOUNT_WRITE + REGULAR_PER_AUTH_BASE_COST);
+    const auto auth_state =
+        num_auth * (STATE_BYTES_PER_NEW_ACCOUNT + STATE_BYTES_PER_AUTH_BASE) * COST_PER_STATE_BYTE;
+
+    const auto intrinsic_regular =
+        TX_BASE + data_cost + recipient_regular + access_list_cost + auth_regular;
+    const auto intrinsic_state = recipient_state + auth_state;
+
+    // Floor cost (EIP-7623 / EIP-7976): every calldata byte plus access-list tokens at the floor
+    // rate. floor_tokens = len(data) × DATA_TOKEN_STANDARD + access_list_tokens.
+    const auto floor_tokens =
+        static_cast<int64_t>(tx.data.size()) * DATA_TOKEN_STANDARD + access_list_tokens;
+    const auto min_cost = floor_tokens * DATA_TOKEN_FLOOR + TX_BASE;
+
+    return {intrinsic_regular, intrinsic_state, min_cost};
+}
+
 /// Compute the transaction intrinsic gas 𝑔₀ (Yellow Paper, 6.2) and minimal gas (floor cost).
 TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& tx) noexcept
 {
-    // EIP-8037: fixed cost per state byte in Amsterdam.
-    const auto cpsb = (rev >= EVMC_AMSTERDAM) ? COST_PER_STATE_BYTE : int64_t{0};
+    if (rev >= EVMC_AMSTERDAM)  // EIP-2780: resource-based intrinsic decomposition.
+        return compute_tx_intrinsic_cost_amsterdam(tx);
+
     static constexpr auto TX_BASE_COST = 21000;
     static constexpr auto TX_CREATE_COST = 32000;
     static constexpr auto ACCESS_LIST_ADDRESS_COST = 2400;
     static constexpr auto ACCESS_LIST_STORAGE_KEY_COST = 1900;
-    static constexpr auto ACCESS_LIST_ADDRESS_BYTES = 20;
-    static constexpr auto ACCESS_LIST_STORAGE_KEY_BYTES = 32;
     static constexpr auto DATA_TOKEN_COST = 4;
     static constexpr auto INITCODE_WORD_COST = 2;
     static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
-    static constexpr auto TOTAL_COST_FLOOR_PER_BYTE = 16 * 4;
 
     const auto is_create = !tx.to.has_value();
-
-    // EIP-8037: Amsterdam splits CREATE cost: regular 9000, state NEW_ACCOUNT*CPSB.
-    const auto tx_create_regular = (rev >= EVMC_AMSTERDAM) ? int64_t{9000} : TX_CREATE_COST;
-    const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? tx_create_regular : 0;
-    const auto create_state_cost =
-        (rev >= EVMC_AMSTERDAM && is_create) ? STATE_BYTES_PER_NEW_ACCOUNT * cpsb : 0;
+    const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
 
     const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(rev, tx.data));
     const auto data_cost = num_tokens * DATA_TOKEN_COST;
 
     const auto [num_addresses, num_storage_keys] = count_access_list(tx.access_list);
-    const auto access_list_num_bytes =
-        static_cast<int64_t>(num_addresses * ACCESS_LIST_ADDRESS_BYTES +
-                             num_storage_keys * ACCESS_LIST_STORAGE_KEY_BYTES);
     const auto access_list_cost = static_cast<int64_t>(
         num_addresses * ACCESS_LIST_ADDRESS_COST + num_storage_keys * ACCESS_LIST_STORAGE_KEY_COST);
 
-    // EIP-8037: Amsterdam splits auth cost: regular 7500, state (NEW_ACCOUNT+AUTH_BASE)*CPSB per
-    // tuple.
-    const auto per_auth_regular =
-        (rev >= EVMC_AMSTERDAM) ? int64_t{7500} : AUTHORIZATION_EMPTY_ACCOUNT_COST;
     const auto auth_list_cost =
-        static_cast<int64_t>(tx.authorization_list.size()) * per_auth_regular;
-    const auto auth_state_cost = (rev >= EVMC_AMSTERDAM) ?
-                                     static_cast<int64_t>(tx.authorization_list.size()) *
-                                         (STATE_BYTES_PER_NEW_ACCOUNT + STATE_BYTES_PER_AUTH_BASE) *
-                                         cpsb :
-                                     int64_t{0};
+        static_cast<int64_t>(tx.authorization_list.size()) * AUTHORIZATION_EMPTY_ACCOUNT_COST;
 
     const auto initcode_cost =
         (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(tx.data.size()) : 0;
 
-    // Charge a flat cost per access-list byte (EIP-7981).
-    const auto access_list_data_cost =
-        (rev >= EVMC_AMSTERDAM) ? access_list_num_bytes * TOTAL_COST_FLOOR_PER_BYTE : 0;
+    const auto intrinsic_cost =
+        TX_BASE_COST + create_cost + data_cost + access_list_cost + auth_list_cost + initcode_cost;
 
-    const auto intrinsic_cost = TX_BASE_COST + create_cost + data_cost + access_list_data_cost +
-                                access_list_cost + auth_list_cost + initcode_cost;
-
-    int64_t data_min_cost = 0;
-    if (rev >= EVMC_AMSTERDAM)  // Unified cost per byte (EIP-7976).
-        data_min_cost = TOTAL_COST_FLOOR_PER_BYTE * static_cast<int64_t>(tx.data.size());
-    else if (rev >= EVMC_PRAGUE)  // Cost per token capturing num of zero-nonzero bytes (EIP-7623).
-        data_min_cost = TOTAL_COST_FLOOR_PER_TOKEN * num_tokens;
-
-    // Compute "floor" cost (EIP-7623).
+    // Compute "floor" cost (EIP-7623): cost per token capturing num of zero/non-zero bytes.
     const auto min_cost =
-        (rev >= EVMC_PRAGUE) ? TX_BASE_COST + data_min_cost + access_list_data_cost : 0;
+        (rev >= EVMC_PRAGUE) ? TX_BASE_COST + TOTAL_COST_FLOOR_PER_TOKEN * num_tokens : 0;
 
-    const auto intrinsic_state_cost = create_state_cost + auth_state_cost;
-
-    return {intrinsic_cost, intrinsic_state_cost, min_cost};
+    return {intrinsic_cost, 0, min_cost};
 }
 
 int64_t process_authorization_list(State& state, uint64_t chain_id,

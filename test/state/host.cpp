@@ -421,10 +421,48 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     return r;
 }
 
-evmc::Result Host::execute_message(const evmc_message& msg) noexcept
+evmc::Result Host::execute_message(const evmc_message& msg_in) noexcept
 {
-    if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
-        return create(msg);
+    if (msg_in.kind == EVMC_CREATE || msg_in.kind == EVMC_CREATE2)
+        return create(msg_in);
+
+    auto msg = msg_in;  // Mutable copy for EIP-2780 top-level gas adjustments.
+
+    // EIP-2780: top-level (depth 0) execution charges, applied after EIP-7702 authorizations and
+    // before the value transfer or any opcode, evaluated against the pre-transfer recipient state.
+    // Charged here, not in the interpreter, because a value transfer to a new account runs no code
+    // and so never enters the VM. An OOG returns failure; the value transfer performed below is
+    // then rolled back at Host::call's revert boundary.
+    // EIP-2780: `msg.state_gas` stays the entry reservoir; `top_level_sg` holds the post-charge
+    // pools (left/spilled) so a consuming path can commit the NEW_ACCOUNT charge on success or
+    // refund it on failure. `used` is always derived as `msg.state_gas - left + spilled`.
+    StateGas top_level_sg{.left = msg.state_gas};
+    if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
+    {
+        const auto* const recipient_acc = m_state.find(msg.recipient);
+        const auto recipient_alive = recipient_acc != nullptr && !recipient_acc->is_empty();
+        if (!evmc::is_zero(msg.value) && !recipient_alive && !is_precompile(m_rev, msg.recipient))
+        {
+            // A new account is materialized by the value transfer: pay NEW_ACCOUNT state gas.
+            if (!top_level_sg.charge(msg.gas, NEW_ACCOUNT_STATE_GAS))
+            {
+                evmc::Result r{EVMC_OUT_OF_GAS, 0};  // Reservoir untouched (atomic charge failure).
+                r.raw().state_gas_left = msg.state_gas;
+                return r;
+            }
+        }
+        else if ((msg.flags & EVMC_DELEGATED) != 0)
+        {
+            // EIP-7702 delegated recipient: resolving the delegation reads the target's code,
+            // charged COLD_ACCOUNT_ACCESS (3000, EIP-8038). The target was warmed during tx setup.
+            if ((msg.gas -= 3000) < 0)
+            {
+                evmc::Result r{EVMC_OUT_OF_GAS, 0};
+                r.raw().state_gas_left = msg.state_gas;
+                return r;
+            }
+        }
+    }
 
     if (msg.kind == EVMC_CALL)
     {
@@ -472,8 +510,10 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     if (code.empty())
     {
         auto r = evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
-        // EIP-8037: empty-code call consumes no state gas; reservoir passes through.
-        r.state_gas_left = msg.state_gas;
+        // EIP-8037: empty-code call consumes no execution state gas. EIP-2780: a depth-0 value
+        // transfer to a new account runs no code but paid its NEW_ACCOUNT state gas above — commit
+        // those pools (a no-op when nothing was charged); the caller derives the net used.
+        set_state_gas(r, top_level_sg.left, top_level_sg.spilled);
         return r;
     }
 
