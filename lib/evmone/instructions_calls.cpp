@@ -8,6 +8,7 @@
 #include <variant>
 
 constexpr int64_t CALL_VALUE_COST = 9000;
+constexpr int64_t CALL_VALUE_COST_AMSTERDAM = 10300;  // EIP-8038: ACCOUNT_WRITE (8000) + CALL_STIPEND (2300).
 constexpr int64_t ACCOUNT_CREATION_COST = 25000;
 
 namespace evmone::instr::core
@@ -30,8 +31,8 @@ inline std::variant<evmc::address, Result> get_target_address(
 
     const auto delegate_account_access_cost =
         (state.host.access_account(*delegate_addr) == EVMC_ACCESS_COLD ?
-                instr::cold_account_access_cost :
-                instr::warm_storage_read_cost);
+                instr::cold_account_access(state.rev) :
+                int64_t{instr::warm_storage_read_cost});
 
     if ((gas_left -= delegate_account_access_cost) < 0)
         return Result{EVMC_OUT_OF_GAS, gas_left};
@@ -101,7 +102,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        if ((gas_left -= instr::additional_cold_account_access_cost(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -123,7 +124,9 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     {
         if (has_value)
         {
-            if ((gas_left -= CALL_VALUE_COST) < 0)
+            const auto call_value_cost =
+                state.rev >= EVMC_AMSTERDAM ? CALL_VALUE_COST_AMSTERDAM : CALL_VALUE_COST;
+            if ((gas_left -= call_value_cost) < 0)
                 return {EVMC_OUT_OF_GAS, gas_left};
         }
     }

@@ -13,18 +13,41 @@ namespace evmone::instr
 /// The special gas cost value marking an EVM instruction as "undefined".
 constexpr int16_t undefined = -1;
 
-/// EIP-2929 constants (https://eips.ethereum.org/EIPS/eip-2929).
+/// EIP-2929 constants (https://eips.ethereum.org/EIPS/eip-2929),
+/// repriced from Amsterdam by EIP-8038 (https://eips.ethereum.org/EIPS/eip-8038).
 /// @{
 inline constexpr auto cold_sload_cost = 2100;
 inline constexpr auto cold_account_access_cost = 2600;
 inline constexpr auto warm_storage_read_cost = 100;
 
-/// Additional cold account access cost.
+/// EIP-8038 repriced state-access costs, applied from Amsterdam.
+inline constexpr auto cold_account_access_cost_amsterdam = 3000;
+inline constexpr auto cold_storage_access_cost_amsterdam = 3000;
+inline constexpr auto account_write_cost_amsterdam = 8000;
+
+/// The full cold-account-access cost for the given revision (EIP-2929 / EIP-8038).
+/// Used where no warm base cost has been pre-charged: SELFDESTRUCT, delegation resolution.
+inline constexpr int64_t cold_account_access(evmc_revision rev) noexcept
+{
+    return rev >= EVMC_AMSTERDAM ? cold_account_access_cost_amsterdam : cold_account_access_cost;
+}
+
+/// Additional cold account access cost over the unconditionally-charged warm cost.
 ///
-/// The warm access cost is unconditionally applied for every account access instruction.
+/// The warm access cost is part of the base cost of every account access instruction.
 /// If the access turns out to be cold, this cost must be applied additionally.
-inline constexpr auto additional_cold_account_access_cost =
-    cold_account_access_cost - warm_storage_read_cost;
+inline constexpr int64_t additional_cold_account_access_cost(evmc_revision rev) noexcept
+{
+    return cold_account_access(rev) - warm_storage_read_cost;
+}
+
+/// Additional cold storage access cost over the unconditionally-charged warm cost
+/// (SLOAD always; SSTORE from Amsterdam). EIP-2929 / EIP-8038.
+inline constexpr int64_t additional_cold_storage_access_cost(evmc_revision rev) noexcept
+{
+    return (rev >= EVMC_AMSTERDAM ? cold_storage_access_cost_amsterdam : cold_sload_cost) -
+           warm_storage_read_cost;
+}
 /// @}
 
 
@@ -181,8 +204,10 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_AMSTERDAM][OP_DUPN] = 3;
     table[EVMC_AMSTERDAM][OP_SWAPN] = 3;
     table[EVMC_AMSTERDAM][OP_EXCHANGE] = 3;
-    table[EVMC_AMSTERDAM][OP_CREATE] = 9000;   // EIP-8037: was 32000, state component separate.
-    table[EVMC_AMSTERDAM][OP_CREATE2] = 9000;  // EIP-8037: was 32000, state component separate.
+    // EIP-8038: CREATE_ACCESS = ACCOUNT_WRITE (8000) + COLD_STORAGE_ACCESS (3000). The new-account
+    // state-creation cost stays in state gas (EIP-8037). Was 9000 (bal-devnet-7), 32000 pre-Amsterdam.
+    table[EVMC_AMSTERDAM][OP_CREATE] = 11000;
+    table[EVMC_AMSTERDAM][OP_CREATE2] = 11000;
 
     table[EVMC_EXPERIMENTAL] = table[EVMC_AMSTERDAM];
 

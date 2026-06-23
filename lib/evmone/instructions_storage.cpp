@@ -41,8 +41,14 @@ constexpr auto storage_cost_spec = []() noexcept {
     tbl[EVMC_CANCUN] = tbl[EVMC_LONDON];
     tbl[EVMC_PRAGUE] = tbl[EVMC_LONDON];
     tbl[EVMC_OSAKA] = tbl[EVMC_LONDON];
+    // EIP-8038: the SSTORE first-time-change cost becomes WARM_ACCESS + STORAGE_WRITE for both
+    // set (0 -> non-zero) and reset (non-zero -> other); the cold surcharge is applied separately.
+    // The 0 -> non-zero state-creation cost stays in state gas (EIP-8037). The clear refund grows
+    // to REFUND_STORAGE_CLEAR. Was set=2900/reset=2900/clear=4800 in bal-devnet-7.
     tbl[EVMC_AMSTERDAM] = tbl[EVMC_LONDON];
-    tbl[EVMC_AMSTERDAM].set = 2900;  // EIP-8037: regular component only (was 20000).
+    tbl[EVMC_AMSTERDAM].set = 10100;    // WARM_ACCESS (100) + STORAGE_WRITE (10000).
+    tbl[EVMC_AMSTERDAM].reset = 10100;  // WARM_ACCESS (100) + STORAGE_WRITE (10000).
+    tbl[EVMC_AMSTERDAM].clear = 12480;  // REFUND_STORAGE_CLEAR = (10000 + 3000) * 4800 / 5000.
     tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_AMSTERDAM];
     return tbl;
 }();
@@ -105,9 +111,9 @@ Result sload(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
         state.host.access_storage(state.msg->recipient, key) == EVMC_ACCESS_COLD)
     {
         // The warm storage access cost is already applied (from the cost table).
-        // Here we need to apply additional cold storage access cost.
-        constexpr auto additional_cold_sload_cost =
-            instr::cold_sload_cost - instr::warm_storage_read_cost;
+        // Here we need to apply additional cold storage access cost (EIP-8038-repriced).
+        const auto additional_cold_sload_cost =
+            instr::additional_cold_storage_access_cost(state.rev);
         if ((gas_left -= additional_cold_sload_cost) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
@@ -128,10 +134,15 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     const auto key = intx::be::store<evmc::bytes32>(stack.pop());
     const auto value = intx::be::store<evmc::bytes32>(stack.pop());
 
+    // EIP-2929 adds the full cold SLOAD cost on top of the warm base; EIP-8038 (Amsterdam)
+    // unifies SSTORE access with SLOAD, so the additional cold cost is COLD_STORAGE_ACCESS - WARM.
+    const auto cold_access_cost = state.rev >= EVMC_AMSTERDAM ?
+                                      instr::additional_cold_storage_access_cost(state.rev) :
+                                      int64_t{instr::cold_sload_cost};
     const auto gas_cost_cold =
         (state.rev >= EVMC_BERLIN &&
             state.host.access_storage(state.msg->recipient, key) == EVMC_ACCESS_COLD) ?
-            instr::cold_sload_cost :
+            cold_access_cost :
             0;
     const auto status = state.host.set_storage(state.msg->recipient, key, value);
 
