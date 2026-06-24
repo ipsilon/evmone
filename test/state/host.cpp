@@ -147,10 +147,13 @@ bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcep
         return false;
     }
 
-    // Transfer may happen multiple times per single account as account's balance
-    // can be increased with a call following previous selfdestruct.
-    beneficiary_acc.balance += balance;
-    acc.balance = 0;  // Zero balance if acc is the beneficiary.
+    if (m_rev < EVMC_AMSTERDAM || beneficiary != addr)
+    {
+        // Transfer may happen multiple times per single account as account's balance
+        // can be increased with a call following previous selfdestruct.
+        beneficiary_acc.balance += balance;
+        acc.balance = 0;  // Zero balance if acc is the beneficiary (before EIP-8246)
+    }
 
     // Mark the destruction if not done already.
     if (!acc.destructed)

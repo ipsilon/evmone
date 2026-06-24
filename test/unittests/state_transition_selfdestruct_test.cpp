@@ -108,7 +108,94 @@ TEST_F(state_transition, selfdestruct_double_revert)
 
 TEST_F(state_transition, selfdestruct_initcode)
 {
+    rev = EVMC_SHANGHAI;
     tx.data = selfdestruct(0xbe_address);
+
+    expect.post[compute_create_address(tx.sender, tx.nonce)].exists = false;
+    expect.post[0xbe_address].exists = false;
+}
+
+TEST_F(state_transition, selfdestruct_initcode_amsterdam)
+{
+    // A same-tx-created account that self-destructs ending with a zero balance must not be in the
+    // final state (EIP-8246). In this test we use initcode.
+    rev = EVMC_AMSTERDAM;
+    tx.data = selfdestruct(0xbe_address);
+
+    expect.post[compute_create_address(tx.sender, tx.nonce)].exists = false;
+    expect.post[0xbe_address].exists = false;
+}
+
+TEST_F(state_transition, selfdestruct_prefunded)
+{
+    // Although burn is removed in EIP-8246, the deletion of a pre-funded account still happens.
+    rev = EVMC_CANCUN;
+    const auto created = compute_create_address(tx.sender, tx.nonce);
+    pre[created] = {.balance = 1};
+    tx.data = selfdestruct(0xbe_address);  // Transfer to distinct beneficiary.
+
+    expect.post[created].exists = false;    // Removed, despite pre-existing in the state.
+    expect.post[0xbe_address].balance = 1;  // Pre-funded balance delivered to the beneficiary.
+}
+
+TEST_F(state_transition, selfdestruct_prefunded_amsterdam)
+{
+    // Although burn is removed in EIP-8246, the deletion of a pre-funded account still happens.
+    rev = EVMC_AMSTERDAM;
+    const auto created = compute_create_address(tx.sender, tx.nonce);
+    pre[created] = {.balance = 1};
+    tx.data = selfdestruct(0xbe_address);  // Transfer to distinct beneficiary.
+
+    expect.post[created].exists = false;    // Removed, despite pre-existing in the state.
+    expect.post[0xbe_address].balance = 1;  // Pre-funded balance delivered to the beneficiary.
+}
+
+TEST_F(state_transition, selfdestruct_prefunded_burn)
+{
+    // Burn pre-funded ETH by self-destruct to self.
+    rev = EVMC_CANCUN;
+    const auto created = compute_create_address(tx.sender, tx.nonce);
+    pre[created] = {.balance = 1};
+    tx.data = selfdestruct(created);
+
+    expect.post[created].exists = false;  // Removed, despite pre-existing in the state.
+}
+
+TEST_F(state_transition, selfdestruct_prefunded_burn_amsterdam)
+{
+    // Burn is removed with EIP-8246, the balance must be preserved.
+    rev = EVMC_AMSTERDAM;
+    const auto created = compute_create_address(tx.sender, tx.nonce);
+    pre[created] = {.balance = 1};
+    tx.data = selfdestruct(created);
+
+    expect.post[created].balance = 1;  // Balance preserved.
+    expect.post[created].nonce = 0;
+    expect.post[created].code = {};
+}
+
+TEST_F(state_transition, selfdestruct_sibling_create_then_destruct_amsterdam)
+{
+    // A contract created in one sub-call and self-destructed in a sibling sub-call of the same
+    // transaction must still be removed (especially its code).
+    rev = EVMC_AMSTERDAM;
+    static constexpr auto F = 0xfac0_address;  // Factory address.
+
+    const auto runtime = selfdestruct(0xbe_address);
+    const auto initcode = mstore(0, push(runtime)) + ret(32 - runtime.size(), runtime.size());
+    const auto created = compute_create_address(F, 1);
+
+    pre[F] = {.nonce = 1,
+        .balance = 1,
+        .code = mstore(0, push(initcode)) +
+                create().input(32 - initcode.size(), initcode.size()).value(1)};
+    pre[To] = {.code = call(F).gas(0xffffff) + call(created).gas(0xffffff)};
+    tx.to = To;
+
+    expect.post[created].exists = false;    // Created and destructed in the same tx -> removed.
+    expect.post[0xbe_address].balance = 1;  // Funds delivered to the beneficiary.
+    expect.post[F] = {.nonce = 2, .balance = 0};  // F created one contract and sent it the balance.
+    expect.post[To] = {};
 }
 
 TEST_F(state_transition, massdestruct_shanghai)
