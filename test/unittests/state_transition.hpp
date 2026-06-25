@@ -66,6 +66,10 @@ protected:
         /// exactly: count, address, data, topics, and order.
         std::optional<std::vector<Log>> logs;
 
+        /// The expected EIP-8037 state-gas component of the receipt (`state_block_gas`),
+        /// e.g. a NEW_ACCOUNT_STATE_GAS charge that survives a light failure.
+        std::optional<int64_t> state_gas;
+
         /// The expected post-execution state.
         std::unordered_map<address, ExpectedAccount> post;
 
