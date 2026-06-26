@@ -4,6 +4,7 @@
 #pragma once
 
 #include "requests.hpp"
+#include "transaction.hpp"
 #include <evmc/evmc.hpp>
 #include <system_error>
 #include <variant>
@@ -56,4 +57,8 @@ struct RequestsResult
 [[nodiscard]] std::variant<RequestsResult, std::error_code> system_call_block_end(
     const StateView& state_view, const BlockInfo& block, const BlockHashes& block_hashes,
     evmc_revision rev, evmc::VM& vm);
+
+/// Emit an ETH transfer log (LOG3) from SYSTEM_ADDRESS for a value transfer (EIP-7708).
+void emit_transfer_log(
+    std::vector<Log>& logs, const address& sender, const address& recipient, const uint256& amount);
 }  // namespace evmone::state

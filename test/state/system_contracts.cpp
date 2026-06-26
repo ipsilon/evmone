@@ -11,6 +11,19 @@ namespace evmone::state
 {
 namespace
 {
+/// EIP-7708: keccak256("Transfer(address,address,uint256)")
+constexpr auto TRANSFER_EVENT_TOPIC =
+    0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef_bytes32;
+
+/// Convert an address to a 32-byte value, left-padded with zeros.
+/// TODO: Deduplicate with to_bytes32 in test/utils/utils.hpp.
+bytes32 to_bytes32(const address& addr) noexcept
+{
+    bytes32 res{};
+    std::copy_n(addr.bytes, sizeof(addr), &res.bytes[sizeof(res) - sizeof(addr)]);
+    return res;
+}
+
 /// Information about a registered "storage" system contract. They are executed at the block start
 /// to store additional information in the State.
 struct StorageSystemContract
@@ -128,5 +141,12 @@ std::variant<RequestsResult, std::error_code> system_call_block_end(const StateV
         requests.emplace_back(request_type, bytes_view{res.output_data, res.output_size});
     }
     return RequestsResult{state.build_diff(rev), requests};
+}
+
+void emit_transfer_log(
+    std::vector<Log>& logs, const address& sender, const address& recipient, const uint256& amount)
+{
+    logs.push_back({SYSTEM_ADDRESS, bytes{intx::be::store<uint256be>(amount)},
+        {TRANSFER_EVENT_TOPIC, to_bytes32(sender), to_bytes32(recipient)}});
 }
 }  // namespace evmone::state

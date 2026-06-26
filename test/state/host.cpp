@@ -4,6 +4,7 @@
 
 #include "host.hpp"
 #include "precompiles.hpp"
+#include "system_contracts.hpp"
 #include <evmone/constants.hpp>
 
 namespace evmone::state
@@ -142,6 +143,9 @@ bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcep
         acc.balance = 0;
         beneficiary_acc.balance += balance;  // Keep balance if acc is the beneficiary.
 
+        if (m_rev >= EVMC_AMSTERDAM && balance != 0 && addr != beneficiary)
+            emit_transfer_log(m_logs, addr, beneficiary, balance);
+
         // Return "selfdestruct not registered".
         // In practice this affects only refunds before Cancun.
         return false;
@@ -154,6 +158,9 @@ bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcep
         beneficiary_acc.balance += balance;
         acc.balance = 0;  // Zero balance if acc is the beneficiary (before EIP-8246)
     }
+
+    if (m_rev >= EVMC_AMSTERDAM && balance != 0 && addr != beneficiary)
+        emit_transfer_log(m_logs, addr, beneficiary, balance);
 
     // Mark the destruction if not done already.
     if (!acc.destructed)
@@ -286,6 +293,10 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     sender_acc.balance -= value;
     new_acc->balance += value;  // The new account may be prefunded.
 
+    // Emit transfer log (EIP-7708), CREATE address is always different from sender.
+    if (m_rev >= EVMC_AMSTERDAM && value != 0)
+        emit_transfer_log(m_logs, msg.sender, msg.recipient, value);
+
     auto create_msg = msg;
     create_msg.input_data = nullptr;
     create_msg.input_size = 0;
@@ -360,6 +371,9 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
             m_state.journal_balance_change(msg.recipient, dst_acc.balance);
             m_state.get(msg.sender).balance -= value;
             dst_acc.balance += value;
+
+            if (m_rev >= EVMC_AMSTERDAM && address{msg.sender} != msg.recipient)
+                emit_transfer_log(m_logs, msg.sender, msg.recipient, value);
         }
     }
 
