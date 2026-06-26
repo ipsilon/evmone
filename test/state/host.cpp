@@ -441,9 +441,11 @@ evmc::Result Host::execute_message(const evmc_message& msg_in) noexcept
     {
         const auto* const recipient_acc = m_state.find(msg.recipient);
         const auto recipient_alive = recipient_acc != nullptr && !recipient_acc->is_empty();
-        if (!evmc::is_zero(msg.value) && !recipient_alive && !is_precompile(m_rev, msg.recipient))
+        if (!evmc::is_zero(msg.value) && !recipient_alive)
         {
             // A new account is materialized by the value transfer: pay NEW_ACCOUNT state gas.
+            // This includes a previously-zero-balance precompile (EIP-2780/EIP-161): funding it
+            // creates a state account just like any other recipient.
             if (!top_level_sg.charge(msg.gas, NEW_ACCOUNT_STATE_GAS))
             {
                 evmc::Result r{EVMC_OUT_OF_GAS, 0};  // Reservoir untouched (atomic charge failure).
@@ -500,8 +502,16 @@ evmc::Result Host::execute_message(const evmc_message& msg_in) noexcept
     if ((msg.flags & EVMC_DELEGATED) == 0 && is_precompile(m_rev, msg.code_address))
     {
         auto r = call_precompile(m_rev, msg);
-        // EIP-8037: precompiles don't consume state gas; pass through the full reservoir.
-        r.state_gas_left = msg.state_gas;
+        // EIP-8037/2780: precompiles consume no execution state gas, but a value transfer funding a
+        // zero-balance precompile paid NEW_ACCOUNT state gas above (top_level_sg). On success the
+        // account persists, so commit the charge (it lands in the block state dimension). On an
+        // exceptional-halt failure nothing persists, so refund it by restoring the entry reservoir,
+        // exactly as a normal frame does on halt — the derived net state used is then 0. Any
+        // spilled portion was taken from msg.gas and is burned with the failed call's gas.
+        if (r.status_code == EVMC_SUCCESS)
+            set_state_gas(r, top_level_sg.left, top_level_sg.spilled);
+        else
+            r.state_gas_left = msg.state_gas;
         return r;
     }
 
