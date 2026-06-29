@@ -153,6 +153,9 @@ commands:
 
   run_execution_spec_tests:
     parameters:
+      repo:
+        type: string
+        default: ethereum/execution-spec-tests
       release:
         type: string
       fixtures_suffix:
@@ -162,6 +165,7 @@ commands:
         default: "*"
     steps:
       - download_execution_spec_tests:
+          repo: <<parameters.repo>>
           release: <<parameters.release>>
           fixtures_suffix: <<parameters.fixtures_suffix>>
       - run:
@@ -418,8 +422,9 @@ jobs:
     steps:
       - build
       - run_execution_spec_tests:
-          release: bal@v5.6.1
-          fixtures_suffix: bal
+          repo: ethereum/execution-specs
+          release: tests-glamsterdam-devnet@v6.1.0
+          fixtures_suffix: glamsterdam-devnet
           filter: "-for_amsterdam/*:for_bpo2toamsterdamattime15k/*"
       - collect_coverage_clang:
           flags: eest-develop
