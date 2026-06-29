@@ -952,12 +952,11 @@ enum evmc_revision
      */
     EVMC_BYZANTIUM = 4,
 
-    /**
-     * The Constantinople revision.
-     *
-     * https://eips.ethereum.org/EIPS/eip-1013
-     */
-    EVMC_CONSTANTINOPLE = 5,
+    // The Constantinople revision has been removed because
+    // doesn't live on Mainnet nor any of public testnets.
+    //
+    // https://eips.ethereum.org/EIPS/eip-1013
+    // EVMC_CONSTANTINOPLE = 5,
 
     /**
      * The Petersburg revision.

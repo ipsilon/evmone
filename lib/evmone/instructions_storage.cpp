@@ -30,7 +30,7 @@ constexpr auto storage_cost_spec = []() noexcept {
         tbl[rev] = {false, 200, 20000, 5000, 15000};
 
     // Net cost schedule.
-    tbl[EVMC_CONSTANTINOPLE] = {true, 200, 20000, 5000, 15000};
+    tbl[EVMC_PETERSBURG] = {true, 200, 20000, 5000, 15000};
     tbl[EVMC_ISTANBUL] = {true, 800, 20000, 5000, 15000};
     tbl[EVMC_BERLIN] = {
         true, instr::warm_storage_read_cost, 20000, 5000 - instr::cold_sload_cost, 15000};

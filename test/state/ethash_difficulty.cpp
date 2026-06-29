@@ -18,7 +18,6 @@ int64_t get_bomb_delay(evmc_revision rev) noexcept
         return 0;
     case EVMC_BYZANTIUM:
         return 3'000'000;
-    case EVMC_CONSTANTINOPLE:
     case EVMC_PETERSBURG:
     case EVMC_ISTANBUL:
         return 5'000'000;
