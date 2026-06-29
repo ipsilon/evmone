@@ -259,7 +259,7 @@ TEST_F(state_transition, massdestruct_cancun)
 
 TEST_F(state_transition, eip7708_transfer_log_selfdestruct_existing)
 {
-    // A pre-existing contract self-destructing to a distinct beneficiary emits a ETH transfer log
+    // A pre-existing contract self-destructing to a distinct beneficiary emits an ETH transfer log
     // for the moved balance (EIP-7708).
     rev = EVMC_AMSTERDAM;
     static constexpr auto Beneficiary = 0xbe_address;
@@ -273,7 +273,7 @@ TEST_F(state_transition, eip7708_transfer_log_selfdestruct_existing)
 
 TEST_F(state_transition, eip7708_transfer_log_create_tx_then_selfdestruct)
 {
-    // A CREATE-transaction endowment emits a ETH trasfer log, then the same-tx-created account
+    // A CREATE-transaction endowment emits an ETH transfer log, then the same-tx-created account
     // self-destructing in its initcode emits a second ETH transfer log (EIP-7708).
     rev = EVMC_AMSTERDAM;
     static constexpr auto Beneficiary = 0xbe_address;

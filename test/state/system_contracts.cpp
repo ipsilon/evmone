@@ -11,10 +11,6 @@ namespace evmone::state
 {
 namespace
 {
-/// The ETH transfer log topic (EIP-7708): keccak256("Transfer(address,address,uint256)")
-constexpr auto TRANSFER_EVENT_TOPIC =
-    0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef_bytes32;
-
 /// Convert an address to a 32-byte value, left-padded with zeros.
 /// TODO: Deduplicate with to_bytes32 in test/utils/utils.hpp.
 bytes32 to_bytes32(const address& addr) noexcept
@@ -146,6 +142,16 @@ std::variant<RequestsResult, std::error_code> system_call_block_end(const StateV
 void emit_transfer_log(
     std::vector<Log>& logs, const address& sender, const address& recipient, const uint256& amount)
 {
+    /// The ETH transfer log topic (EIP-7708): keccak256("Transfer(address,address,uint256)")
+    constexpr auto TRANSFER_EVENT_TOPIC =
+        0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef_bytes32;
+
+    if (amount == 0)  // No log for 0 value transfers.
+        return;
+
+    if (sender == recipient)  // No log for self transfers (balance unchanged).
+        return;
+
     logs.push_back({SYSTEM_ADDRESS, bytes{intx::be::store<uint256be>(amount)},
         {TRANSFER_EVENT_TOPIC, to_bytes32(sender), to_bytes32(recipient)}});
 }
