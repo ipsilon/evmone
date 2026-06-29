@@ -13,9 +13,9 @@ evmc_revision to_rev(std::string_view s)
         return EVMC_FRONTIER;
     if (s == "Homestead")
         return EVMC_HOMESTEAD;
-    if (s == "Tangerine Whistle" || s == "EIP150")
+    if (s == "TangerineWhistle" || s == "EIP150")
         return EVMC_TANGERINE_WHISTLE;
-    if (s == "Spurious Dragon" || s == "EIP158")
+    if (s == "SpuriousDragon" || s == "EIP158")
         return EVMC_SPURIOUS_DRAGON;
     if (s == "Byzantium")
         return EVMC_BYZANTIUM;

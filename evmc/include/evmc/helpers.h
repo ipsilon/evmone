@@ -229,9 +229,9 @@ static inline const char* evmc_revision_to_string(enum evmc_revision rev)
     case EVMC_HOMESTEAD:
         return "Homestead";
     case EVMC_TANGERINE_WHISTLE:
-        return "Tangerine Whistle";
+        return "TangerineWhistle";
     case EVMC_SPURIOUS_DRAGON:
-        return "Spurious Dragon";
+        return "SpuriousDragon";
     case EVMC_BYZANTIUM:
         return "Byzantium";
     case EVMC_CONSTANTINOPLE:
