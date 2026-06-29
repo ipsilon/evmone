@@ -268,3 +268,15 @@ TEST_F(state_transition, invalid_access_list_amsterdam_gas_limit_below_floor)
     tx.gas_limit = 28679;
     expect.tx_error = INTRINSIC_GAS_TOO_LOW;
 }
+
+TEST_F(state_transition, tx_emits_log)
+{
+    // Smoke test for the `expect.logs` mechanism: assert a log with data and a topic from LOG1.
+    static constexpr auto TOPIC = 0xaa_bytes32;
+    tx.to = To;
+    // Store 0xaabbccdd at mem[28..31], then LOG1(offset=28, size=4, TOPIC) over those bytes.
+    pre[To] = {.code = mstore(0, 0xaabbccdd) + push(TOPIC) + push(4) + push(28) + OP_LOG1};
+
+    expect.post[To] = {};  // the contract survives (has code).
+    expect.logs = {Log{To, bytes{0xaa, 0xbb, 0xcc, 0xdd}, {TOPIC}}};
+}

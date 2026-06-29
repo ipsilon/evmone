@@ -88,6 +88,17 @@ void state_transition::TearDown()
         {
             EXPECT_EQ(receipt.gas_refund, *expect.gas_refund);
         }
+        if (expect.logs.has_value())
+        {
+            ASSERT_EQ(receipt.logs.size(), expect.logs->size()) << "unexpected number of logs";
+            for (size_t i = 0; i < expect.logs->size(); ++i)
+            {
+                EXPECT_EQ(receipt.logs[i].addr, (*expect.logs)[i].addr) << "log " << i << " addr";
+                EXPECT_EQ(receipt.logs[i].data, (*expect.logs)[i].data) << "log " << i << " data";
+                EXPECT_EQ(receipt.logs[i].topics, (*expect.logs)[i].topics)
+                    << "log " << i << " topics";
+            }
+        }
         // Update default expectations - valid transaction means coinbase exists unless explicitly
         // requested otherwise
         if (!expect.post.contains(Coinbase))
