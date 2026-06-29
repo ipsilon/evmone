@@ -280,3 +280,15 @@ TEST_F(state_transition, tx_emits_log)
     expect.post[To] = {};  // the contract survives (has code).
     expect.logs = {Log{To, bytes{0xaa, 0xbb, 0xcc, 0xdd}, {TOPIC}}};
 }
+
+TEST_F(state_transition, eip7708_transfer_log_tx_value)
+{
+    // Top level transaction with value emits log (EIP-7708).
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    tx.value = 0x12345;
+    pre[Sender].balance += 0x12345;
+
+    expect.post[To].balance = 0x12345;
+    expect.logs = {transfer_log(Sender, To, 0x12345)};
+}

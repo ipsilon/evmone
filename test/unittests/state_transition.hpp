@@ -103,6 +103,11 @@ protected:
     /// The test runner.
     void TearDown() override;
 
+    /// Build the expected EIP-7708 Transfer log: {SYSTEM_ADDRESS, amount (32-byte big-endian),
+    /// topics = [Transfer event topic, sender, recipient]}.
+    static Log transfer_log(
+        const address& sender, const address& recipient, const intx::uint256& amount);
+
     /// Exports the test in the JSON State Test format to ExportableFixture::export_out.
     void export_state_test(
         const std::variant<TransactionReceipt, std::error_code>& res, const TestState& post);

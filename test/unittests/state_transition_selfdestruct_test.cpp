@@ -256,3 +256,33 @@ TEST_F(state_transition, massdestruct_cancun)
 
     expect.post[SINK].balance = N;
 }
+
+TEST_F(state_transition, eip7708_transfer_log_selfdestruct_existing)
+{
+    // A pre-existing contract self-destructing to a distinct beneficiary emits a ETH transfer log
+    // for the moved balance (EIP-7708).
+    rev = EVMC_AMSTERDAM;
+    static constexpr auto Beneficiary = 0xbe_address;
+    tx.to = To;
+    pre[To] = {.balance = 0x99, .code = selfdestruct(Beneficiary)};
+
+    expect.post[To] = {};  // EIP-6780: survives, balance moved out.
+    expect.post[Beneficiary].balance = 0x99;
+    expect.logs = {transfer_log(To, Beneficiary, 0x99)};
+}
+
+TEST_F(state_transition, eip7708_transfer_log_create_tx_then_selfdestruct)
+{
+    // A CREATE-transaction endowment emits a ETH trasfer log, then the same-tx-created account
+    // self-destructing in its initcode emits a second ETH transfer log (EIP-7708).
+    rev = EVMC_AMSTERDAM;
+    static constexpr auto Beneficiary = 0xbe_address;
+    tx.value = 0x99;
+    tx.data = selfdestruct(Beneficiary);
+    pre[Sender].balance += 0x99;
+    const auto created = compute_create_address(Sender, tx.nonce);
+
+    expect.post[created].exists = false;
+    expect.post[Beneficiary].balance = 0x99;
+    expect.logs = {transfer_log(Sender, created, 0x99), transfer_log(created, Beneficiary, 0x99)};
+}
