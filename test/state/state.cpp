@@ -55,13 +55,16 @@ AccessListCounts count_access_list(const AccessList& access_list) noexcept
 
 struct TransactionCost
 {
-    int64_t intrinsic = 0;
+    int64_t intrinsic = 0;        ///< Regular intrinsic gas.
+    int64_t intrinsic_state = 0;  ///< EIP-8037: State gas component of intrinsic.
     int64_t min = 0;
 };
 
 /// Compute the transaction intrinsic gas 𝑔₀ (Yellow Paper, 6.2) and minimal gas (floor cost).
 TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& tx) noexcept
 {
+    // EIP-8037: fixed cost per state byte in Amsterdam.
+    const auto cpsb = (rev >= EVMC_AMSTERDAM) ? COST_PER_STATE_BYTE : int64_t{0};
     static constexpr auto TX_BASE_COST = 21000;
     static constexpr auto TX_CREATE_COST = 32000;
     static constexpr auto ACCESS_LIST_ADDRESS_COST = 2400;
@@ -75,7 +78,11 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
 
     const auto is_create = !tx.to.has_value();
 
-    const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
+    // EIP-8037: Amsterdam splits CREATE cost: regular 9000, state NEW_ACCOUNT*CPSB.
+    const auto tx_create_regular = (rev >= EVMC_AMSTERDAM) ? int64_t{9000} : TX_CREATE_COST;
+    const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? tx_create_regular : 0;
+    const auto create_state_cost =
+        (rev >= EVMC_AMSTERDAM && is_create) ? STATE_BYTES_PER_NEW_ACCOUNT * cpsb : 0;
 
     const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(rev, tx.data));
     const auto data_cost = num_tokens * DATA_TOKEN_COST;
@@ -87,8 +94,17 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto access_list_cost = static_cast<int64_t>(
         num_addresses * ACCESS_LIST_ADDRESS_COST + num_storage_keys * ACCESS_LIST_STORAGE_KEY_COST);
 
+    // EIP-8037: Amsterdam splits auth cost: regular 7500, state (NEW_ACCOUNT+AUTH_BASE)*CPSB per
+    // tuple.
+    const auto per_auth_regular =
+        (rev >= EVMC_AMSTERDAM) ? int64_t{7500} : AUTHORIZATION_EMPTY_ACCOUNT_COST;
     const auto auth_list_cost =
-        static_cast<int64_t>(tx.authorization_list.size()) * AUTHORIZATION_EMPTY_ACCOUNT_COST;
+        static_cast<int64_t>(tx.authorization_list.size()) * per_auth_regular;
+    const auto auth_state_cost = (rev >= EVMC_AMSTERDAM) ?
+                                     static_cast<int64_t>(tx.authorization_list.size()) *
+                                         (STATE_BYTES_PER_NEW_ACCOUNT + STATE_BYTES_PER_AUTH_BASE) *
+                                         cpsb :
+                                     int64_t{0};
 
     const auto initcode_cost =
         (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(tx.data.size()) : 0;
@@ -110,11 +126,13 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto min_cost =
         (rev >= EVMC_PRAGUE) ? TX_BASE_COST + data_min_cost + access_list_data_cost : 0;
 
-    return {intrinsic_cost, min_cost};
+    const auto intrinsic_state_cost = create_state_cost + auth_state_cost;
+
+    return {intrinsic_cost, intrinsic_state_cost, min_cost};
 }
 
-int64_t process_authorization_list(
-    State& state, uint64_t chain_id, const AuthorizationList& authorization_list)
+int64_t process_authorization_list(State& state, uint64_t chain_id,
+    const AuthorizationList& authorization_list, evmc_revision rev = EVMC_PRAGUE, int64_t cpsb = 0)
 {
     int64_t delegation_refund = 0;
     for (const auto& auth : authorization_list)
@@ -164,11 +182,28 @@ int64_t process_authorization_list(
         // We apply the refund only if the account has existed before.
         // We detect "exists in the trie" by inspecting _empty_ property (EIP-161) because _empty_
         // implies an account doesn't exist in the state (EIP-7523).
-        if (!authority.is_empty())
+        // 7. EIP-7702 / EIP-8037 auth state-gas refunds.
+        //
+        // Pre-Amsterdam: a flat (EMPTY - BASE) regular-gas refund when the
+        // authority already exists in the trie.
+        //
+        // Amsterdam (EIP-8037):
+        //  - NEW_ACCOUNT * CPSB refunded if the authority leaf already
+        //    exists (no new account being created).
+        //  - AUTH_BASE * CPSB refunded if no new delegation-indicator
+        //    bytes are written, which is true when the authority already
+        //    has a (delegation) code slot OR when the auth clears
+        //    delegation (`auth.address == 0`).
+        if (rev >= EVMC_AMSTERDAM)
         {
-            static constexpr auto EXISTING_AUTHORITY_REFUND =
-                AUTHORIZATION_EMPTY_ACCOUNT_COST - AUTHORIZATION_BASE_COST;
-            delegation_refund += EXISTING_AUTHORITY_REFUND;
+            if (!authority.is_empty())
+                delegation_refund += STATE_BYTES_PER_NEW_ACCOUNT * cpsb;
+            if (authority.code_hash != Account::EMPTY_CODE_HASH || is_zero(auth.addr))
+                delegation_refund += STATE_BYTES_PER_AUTH_BASE * cpsb;
+        }
+        else if (!authority.is_empty())
+        {
+            delegation_refund += AUTHORIZATION_EMPTY_ACCOUNT_COST - AUTHORIZATION_BASE_COST;
         }
 
         // As a special case, if address is 0 do not write the designation.
@@ -450,7 +485,7 @@ void State::rollback(size_t checkpoint)
 /// @return  Execution gas limit or transaction validation error.
 std::variant<TransactionProperties, std::error_code> validate_transaction(
     const StateView& state_view, const BlockInfo& block, const Transaction& tx, evmc_revision rev,
-    int64_t block_gas_left, int64_t blob_gas_left) noexcept
+    int64_t block_gas_left, int64_t blob_gas_left, int64_t state_block_gas_left) noexcept
 {
     switch (tx.type)  // Validate "special" transaction types.
     {
@@ -508,11 +543,16 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
 
     assert(tx.max_priority_gas_price <= tx.max_gas_price);
 
-    if (rev >= EVMC_OSAKA && tx.gas_limit > MAX_TX_GAS_LIMIT)
+    if (rev >= EVMC_OSAKA && rev < EVMC_AMSTERDAM && tx.gas_limit > MAX_TX_GAS_LIMIT)
         return make_error_code(MAX_GAS_LIMIT_EXCEEDED);
 
+    // EIP-8037: For Amsterdam, per-tx cumulative gas check is relaxed.
+    // But tx.gas_limit must still not exceed the block's total gas limit.
     if (tx.gas_limit > block_gas_left)
-        return make_error_code(GAS_LIMIT_REACHED);
+    {
+        if (rev < EVMC_AMSTERDAM || tx.gas_limit > block.gas_limit)
+            return make_error_code(GAS_LIMIT_REACHED);
+    }
 
     if (tx.max_gas_price < block.base_fee)
         return make_error_code(FEE_CAP_LESS_THAN_BLOCKS);
@@ -535,7 +575,6 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     if (sender_acc.nonce > tx.nonce)
         return make_error_code(NONCE_TOO_LOW);
 
-    // initcode size is limited by EIP-3860.
     if (rev >= EVMC_SHANGHAI && !tx.to.has_value() && tx.data.size() > MAX_INITCODE_SIZE)
         return make_error_code(INIT_CODE_SIZE_LIMIT_EXCEEDED);
 
@@ -554,12 +593,40 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     if (sender_acc.balance < max_total_fee)
         return make_error_code(INSUFFICIENT_FUNDS);
 
-    const auto [intrinsic_cost, min_cost] = compute_tx_intrinsic_cost(rev, tx);
-    if (tx.gas_limit < std::max(intrinsic_cost, min_cost))
+    const auto [intrinsic_cost, intrinsic_state, min_cost] = compute_tx_intrinsic_cost(rev, tx);
+
+    // EIP-8037 §"Transaction validation" condition 1:
+    //   max(intrinsic_regular_gas, calldata_floor_gas_cost) <= TX_MAX_GAS_LIMIT.
+    // Amsterdam lifts the per-tx cap on tx.gas_limit (above) but keeps this
+    // cap on the regular-gas intrinsic so that the reservoir-model invariant
+    // regular_gas_budget = TX_MAX_GAS_LIMIT - intrinsic_regular_gas
+    // stays non-negative. EELS reference: ethereum/forks/amsterdam/transactions.py
+    // around the line raising on `max(intrinsic.regular, intrinsic.calldata_floor)`.
+    // EELS raises InsufficientTransactionGasError, mapped to INTRINSIC_GAS_TOO_LOW
+    // (the tx can't pay its own intrinsic within the reservoir bound), not the
+    // Osaka-era GAS_LIMIT_EXCEEDS_MAXIMUM.
+    if (rev >= EVMC_AMSTERDAM && std::max(intrinsic_cost, min_cost) > MAX_TX_GAS_LIMIT)
         return make_error_code(INTRINSIC_GAS_TOO_LOW);
 
-    const auto execution_gas_limit = tx.gas_limit - intrinsic_cost;
-    return TransactionProperties{execution_gas_limit, min_cost};
+    // EIP-8037: total intrinsic includes both regular and state components.
+    const auto total_intrinsic = intrinsic_cost + intrinsic_state;
+    if (tx.gas_limit < std::max(total_intrinsic, min_cost))
+        return make_error_code(INTRINSIC_GAS_TOO_LOW);
+
+    // EIP-8037 §"Transaction validation" rule 2: per-dimension worst-case
+    // inclusion check using bare `tx.gas` (no intrinsic subtraction), per the
+    // EIP literal; current EELS amsterdam/fork.py:570-574 matches it (after
+    // ethereum/execution-specs#2892).
+    if (rev >= EVMC_AMSTERDAM)
+    {
+        if (std::min<int64_t>(MAX_TX_GAS_LIMIT, tx.gas_limit) > block_gas_left)
+            return make_error_code(GAS_LIMIT_REACHED);
+        if (tx.gas_limit > state_block_gas_left)
+            return make_error_code(GAS_LIMIT_REACHED);
+    }
+
+    const auto execution_gas_limit = tx.gas_limit - total_intrinsic;
+    return TransactionProperties{execution_gas_limit, intrinsic_state, intrinsic_cost, min_cost};
 }
 
 StateDiff finalize(const StateView& state_view, evmc_revision rev, const address& coinbase,
@@ -599,8 +666,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     assert(sender_acc.nonce < Account::NonceMax);  // Required for valid tx.
     ++sender_acc.nonce;                            // Bump sender nonce.
 
-    const auto delegation_refund =
-        process_authorization_list(state, tx.chain_id, tx.authorization_list);
+    const auto delegation_refund = process_authorization_list(state, tx.chain_id,
+        tx.authorization_list, rev, rev >= EVMC_AMSTERDAM ? COST_PER_STATE_BYTE : int64_t{0});
 
     const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
     assert(tx.max_gas_price >= base_fee);                   // Required for valid tx.
@@ -653,32 +720,174 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         }
     }
 
-    const auto result = host.call(message);
+    // EIP-8037: Always split execution gas into regular + state reservoir.
+    // execution_gas already excludes both regular AND state intrinsic costs.
+    //   regular = min(MAX_TX_GAS_LIMIT - intrinsic_regular, exec_gas)
+    //   reservoir = exec_gas - regular
+    // No further deduction — intrinsic state gas is already consumed from gas_limit.
+    if (rev >= EVMC_AMSTERDAM)
+    {
+        const auto exec_gas = tx_props.execution_gas_limit;
+        const auto regular_cap = std::max(
+            int64_t{0}, static_cast<int64_t>(MAX_TX_GAS_LIMIT) - tx_props.intrinsic_regular_gas);
+        const auto regular_exec = std::min(exec_gas, regular_cap);
+        message.gas = regular_exec;
+        message.state_gas = exec_gas - regular_exec;
+        // EIP-8037: add the delegation refund to the reservoir. This returns the auth
+        // account-creation state gas for existing authorities.
+        message.state_gas += delegation_refund;
+    }
 
-    const auto gas_used_b4_refund = tx.gas_limit - result.gas_left;
+    // EIP-8037: a create tx onto an account that is already alive (e.g. pre-funded
+    // with a balance) writes no new leaf, so its intrinsic NEW_ACCOUNT state gas is refunded on
+    // success too. Capture aliveness before the create runs (find lazily loads the pre-create
+    // state).
+    bool create_target_was_alive = false;
+    if (rev >= EVMC_AMSTERDAM && !tx.to.has_value())
+    {
+        const auto* const acc = state.find(compute_create_address(tx.sender, tx.nonce));
+        create_target_was_alive = acc != nullptr && !acc->is_empty();
+    }
 
-    const auto max_refund_quotient = rev >= EVMC_LONDON ? 5 : 2;
-    const auto refund_limit = gas_used_b4_refund / max_refund_quotient;
-    const auto refund = std::min(delegation_refund + result.gas_refund, refund_limit);
-    auto gas_used = gas_used_b4_refund - refund;
-    assert(gas_used > 0);
+    auto result = host.call(message);
 
-    // The gas used by the transaction must be at least the min_gas_cost (EIP-7623).
-    gas_used = std::max(gas_used, tx_props.min_gas_cost);
+    // EIP-8037: net state gas consumed by EVM execution, derived from the reservoir the top
+    // frame was handed (StateGas::used). Captured before the boundary refunds below mutate
+    // state_gas_left. On any top-level failure the frame already refilled itself (the spill is
+    // returned to gas_left and the reservoir restored), so this is 0 — nothing was created.
+    const auto exec_state_gas =
+        message.state_gas - result.state_gas_left + result.state_gas_spilled;
+    assert(exec_state_gas >= 0);
 
-    // For block gas accounting, compute the gas refund capped by the min gas cost (EIP-7778).
-    const auto block_gas_used = std::max(gas_used_b4_refund, tx_props.min_gas_cost);
-    const auto gas_refund = block_gas_used - gas_used;
+    // EIP-8037: tx-level state-gas refund on failure. Track refunds applied
+    // here separately so block-level accounting can subtract them from
+    // `tx_state_gas` (mirrors the auth `delegation_refund` plumbing).
+    int64_t tx_state_refund = 0;
 
-    sender_acc.balance += tx_max_cost - gas_used * effective_gas_price;
-    state.touch(block.coinbase).balance += gas_used * priority_gas_price;
+    // EIP-8037: refund the intrinsic
+    // NEW_ACCOUNT * CPSB state-gas charge for a tx-level CREATE when no new leaf is
+    // written — the create fails (revert/halt/collision) or its target was already
+    // alive (pre-funded). The refund is added to the reservoir AND tracked in
+    // `tx_state_refund` so block-level state gas excludes it.
+    if (rev >= EVMC_AMSTERDAM && !tx.to.has_value() &&
+        (result.status_code != EVMC_SUCCESS || create_target_was_alive))
+    {
+        result.state_gas_left += NEW_ACCOUNT_STATE_GAS;
+        tx_state_refund += NEW_ACCOUNT_STATE_GAS;
+    }
+
+    // EIP-8037: all SELFDESTRUCT state gas refunds have been removed.
+    // Accounts created and destroyed in
+    // the same tx (EIP-6780) no longer recoup their intrinsic / storage / code
+    // deposit state-gas charges.
+
+    // EIP-8037: actual gas consumed = gas_limit - regular_unspent - reservoir_unspent.
+    // `raw_gas_used` is the pre-refund/pre-floor value used in two places: the
+    // mutable `gas_used` tracker below, and the receipt-side computation later.
+    const auto raw_gas_used = tx.gas_limit - result.gas_left - result.state_gas_left;
+    auto gas_used = raw_gas_used;
+
+    // EIP-7778: Block-level gas components for Amsterdam.
+    int64_t amsterdam_regular_gas = 0;
+    int64_t amsterdam_state_gas = 0;
+
+    if (rev >= EVMC_AMSTERDAM)
+    {
+        const auto total_consumed = gas_used;
+
+        // EIP-7778: block gas_used = max(sum_regular, sum_state) at block level.
+        // State gas = EVM-tracked + intrinsic state gas (CREATE + auth, minus refund).
+        // Regular gas = total consumed - state gas - refunds discarded at ancestor
+        // reverts (EIP-8037: spilled charges whose refunds were dropped at the
+        // revert boundary don't represent state growth and must not inflate the
+        // regular component).
+        const auto intrinsic_state = tx_props.intrinsic_state_gas;
+        // EIP-8037: the EIP-7702 auth refund and the tx-level CREATE-failure
+        // refund are subtracted from the block state component, so block-level 2D accounting
+        // matches per-tx accounting (EELS:
+        // `tx_state_gas = intrinsic_state_gas + exec_state_gas_used - state_refund`).
+        const auto state_refund = delegation_refund + tx_state_refund;
+        const auto state_gas_used = exec_state_gas + intrinsic_state - state_refund;
+        // Refunds cannot exceed what was paid in state gas — so the state
+        // component is non-negative by construction and needs no min_gas_cost
+        // floor (only the regular component is floored, per EELS):
+        //   delegation_refund <= num_auths * AUTH_BASE * CPSB
+        //                        <= auth contribution to intrinsic_state
+        //   tx_state_refund   <= NEW_ACCOUNT_STATE_GAS
+        //                        <= create contribution to intrinsic_state
+        // Together: state_refund <= intrinsic_state, so the subtraction is
+        // bounded by `intrinsic_state` and stays non-negative.
+        assert(state_gas_used >= 0);
+        // EIP-8037: on CREATE address collision the
+        // burned regular gas is now counted in the block regular component.
+        // With the tx-level NEW_ACCOUNT refund subtracting the state portion
+        // from `total_consumed`, the generic formula handles collision too.
+        const auto regular_gas =
+            std::max(int64_t{0}, total_consumed + state_refund - intrinsic_state - exec_state_gas);
+
+        // Store components for block-level aggregation. The block header
+        // formula `max(sum_regular, sum_state)` is computed in the runner
+        // from these per-tx values; no per-tx block_gas is needed.
+        // EIP-7778: the block gas components are NOT floored at the calldata floor —
+        // only the sender's receipt gas_used is; the block aggregates the un-floored
+        // regular component.
+        amsterdam_regular_gas = regular_gas;
+        amsterdam_state_gas = state_gas_used;
+
+        // Refund: based on total consumed (auth gas is included in refund base).
+        const auto refund_limit = total_consumed / 5;
+        const auto refund = std::min(result.gas_refund, refund_limit);
+
+        // Sender pays: total consumed minus gas refund.
+        // Delegation refund is already in the reservoir (returned as state_gas_left),
+        // reducing total_consumed. No separate subtraction needed.
+        const auto sender_total = std::max(total_consumed, tx_props.min_gas_cost);
+        const auto sender_gas_cost = std::max(sender_total - refund, tx_props.min_gas_cost);
+        sender_acc.balance += tx_max_cost - sender_gas_cost * effective_gas_price;
+        state.touch(block.coinbase).balance += sender_gas_cost * priority_gas_price;
+    }
+    else
+    {
+        const auto max_refund_quotient = rev >= EVMC_LONDON ? 5 : 2;
+        const auto refund_limit = gas_used / max_refund_quotient;
+        const auto refund = std::min(delegation_refund + result.gas_refund, refund_limit);
+        gas_used -= refund;
+        assert(gas_used > 0);
+
+        // EIP-7623: The gas used by the transaction must be at least the min_gas_cost.
+        gas_used = std::max(gas_used, tx_props.min_gas_cost);
+
+        sender_acc.balance += tx_max_cost - gas_used * effective_gas_price;
+        state.touch(block.coinbase).balance += gas_used * priority_gas_price;
+    }
 
     // Cumulative gas used is unknown in this scope.
-    TransactionReceipt receipt{tx.type, result.status_code, gas_used, gas_refund, {},
-        host.take_logs(), {}, state.build_diff(rev)};
+    TransactionReceipt receipt{};
+    receipt.type = tx.type;
+    receipt.status = result.status_code;
+    if (rev >= EVMC_AMSTERDAM)
+    {
+        // Receipt gas_used = sender gas cost including calldata floor.
+        const auto regular_refund_limit = raw_gas_used / 5;
+        const auto regular_refund = std::min(result.gas_refund, regular_refund_limit);
+        const auto sender_total = std::max(raw_gas_used, tx_props.min_gas_cost);
+        receipt.gas_used = std::max(sender_total - regular_refund, tx_props.min_gas_cost);
+    }
+    else
+    {
+        receipt.gas_used = gas_used;
+    }
+    receipt.regular_block_gas = amsterdam_regular_gas;
+    receipt.state_block_gas = amsterdam_state_gas;
+    // Per-tx refund amount applied to receipt.gas_used. Pre-Amsterdam:
+    // gas_used == receipt.gas_used so refund == 0. Amsterdam: raw consumed
+    // minus what the sender paid after refund / min_gas_cost floor.
+    receipt.gas_refund = gas_used - receipt.gas_used;
+    receipt.logs = host.take_logs();
 
     // Cannot put it into constructor call because logs are std::moved from host instance.
     receipt.logs_bloom_filter = compute_bloom_filter(receipt.logs);
+    receipt.state_diff = state.build_diff(rev);
 
     return receipt;
 }

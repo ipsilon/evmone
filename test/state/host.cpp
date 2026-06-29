@@ -6,9 +6,21 @@
 #include "precompiles.hpp"
 #include "system_contracts.hpp"
 #include <evmone/constants.hpp>
+#include <evmone/state_gas.hpp>
 
 namespace evmone::state
 {
+namespace
+{
+/// EIP-8037: set the state-gas fields on a returned Result. `used` is not stored;
+/// the caller derives it as `initial - left + spilled`.
+void set_state_gas(evmc::Result& r, int64_t left, int64_t spilled) noexcept
+{
+    r.state_gas_left = left;
+    r.state_gas_spilled = spilled;
+}
+}  // namespace
+
 bool Host::account_exists(const address& addr) const noexcept
 {
     const auto* const acc = m_state.find(addr);
@@ -271,10 +283,22 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     auto* new_acc = m_state.find(msg.recipient);
     const bool new_acc_exists = new_acc != nullptr;
+    // EIP-8037: capture aliveness before the create mutates the account — a CREATE
+    // onto an already-alive account (e.g. pre-funded with a balance) writes no new account leaf,
+    // so on success the NEW_ACCOUNT state gas charged up front is refunded.
+    const bool target_was_alive = new_acc_exists && !new_acc->is_empty();
     if (!new_acc_exists)
         new_acc = &m_state.insert(msg.recipient);
     else if (is_create_collision(*new_acc))
-        return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
+    {
+        auto r = evmc::Result{EVMC_FAILURE};
+        // Preserve reservoir so the parent (or transition() at depth 0) can refund
+        // any unused state gas, including the EIP-7702 delegation refund that was
+        // added to msg.state_gas at tx start. No execution happened, so the derived
+        // state gas used is 0.
+        r.state_gas_left = msg.state_gas;
+        return r;
+    }
     m_state.journal_create(msg.recipient, new_acc_exists);
 
     assert(new_acc != nullptr);
@@ -299,6 +323,10 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     auto create_msg = msg;
     create_msg.input_data = nullptr;
     create_msg.input_size = 0;
+
+    // EIP-8037: Depth-0 CREATE state gas (NEW_ACCOUNT*CPSB) is now in the intrinsic cost.
+    // Opcode-level CREATE (depth > 0) is charged in create_impl.
+
     const bytes_view initcode{msg.input_data, msg.input_size};
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
@@ -313,20 +341,48 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     const bytes_view code{result.output_data, result.output_size};
 
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > MAX_CODE_SIZE)
-        return evmc::Result{EVMC_FAILURE};
+    {
+        auto r = evmc::Result{EVMC_FAILURE};
+        r.state_gas_left = msg.state_gas;  // refill on failure
+        return r;
+    }
 
     // Reject new contract code starting with the 0xEF byte (EIP-3541).
     if (m_rev >= EVMC_LONDON && code.starts_with(0xEF))
-        return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
-
-    // Code deployment cost.
-    const auto cost = std::ssize(code) * 200;
-    gas_left -= cost;
-    if (gas_left < 0)
     {
-        return (m_rev == EVMC_FRONTIER) ?
-                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient} :
-                   evmc::Result{EVMC_FAILURE};
+        auto r = evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+        r.state_gas_left = msg.state_gas;  // refill on failure
+        return r;
+    }
+
+    // Code deployment cost. Continue the init frame's state gas (left + spill).
+    StateGas state_gas{.left = result.state_gas_left, .spilled = result.state_gas_spilled};
+    if (m_rev >= EVMC_AMSTERDAM)
+    {
+        // EIP-8037: split code deposit into regular and state components.
+        const auto regular_cost = 6 * ((std::ssize(code) + 31) / 32);
+        const auto state_cost = std::ssize(code) * COST_PER_STATE_BYTE;
+        gas_left -= regular_cost;
+        if (gas_left < 0 || !state_gas.charge(gas_left, state_cost))
+        {
+            auto r = evmc::Result{EVMC_FAILURE};
+            r.state_gas_left = msg.state_gas;  // refill on failure
+            return r;
+        }
+    }
+    else
+    {
+        const auto cost = std::ssize(code) * 200;
+        gas_left -= cost;
+        if (gas_left < 0)
+        {
+            if (m_rev == EVMC_FRONTIER)
+                return evmc::Result{
+                    EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient};
+            auto r = evmc::Result{EVMC_FAILURE};
+            r.state_gas_left = msg.state_gas;  // refill on failure
+            return r;
+        }
     }
 
     if (!code.empty())
@@ -336,7 +392,18 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         new_acc->code_changed = true;
     }
 
-    return evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
+    auto r = evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
+    set_state_gas(r, state_gas.left, state_gas.spilled);
+
+    // EIP-8037: create succeeded onto an already-alive account — no new leaf was
+    // created and the NEW_ACCOUNT state gas charged up front must be refunded. The matching charge
+    // lives in the creating frame (which also holds its spill), so signal that frame to refund it
+    // in LIFO order rather than crediting this child's reservoir — only the creating frame can
+    // return a spilled portion to its own gas_left. Nested creates only (depth > 0); a top-level
+    // create tx accounts for its intrinsic NEW_ACCOUNT separately.
+    if (m_rev >= EVMC_AMSTERDAM && target_was_alive && msg.depth > 0)
+        r.state_gas_no_new_account = true;
+    return r;
 }
 
 evmc::Result Host::execute_message(const evmc_message& msg) noexcept
@@ -378,12 +445,22 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
 
     // Calls to precompile address via EIP-7702 delegation execute empty code instead of precompile.
     if ((msg.flags & EVMC_DELEGATED) == 0 && is_precompile(m_rev, msg.code_address))
-        return call_precompile(m_rev, msg);
+    {
+        auto r = call_precompile(m_rev, msg);
+        // EIP-8037: precompiles don't consume state gas; pass through the full reservoir.
+        r.state_gas_left = msg.state_gas;
+        return r;
+    }
 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
     const auto code = m_state.get_code(msg.code_address);
     if (code.empty())
-        return evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
+    {
+        auto r = evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
+        // EIP-8037: empty-code call consumes no state gas; reservoir passes through.
+        r.state_gas_left = msg.state_gas;
+        return r;
+    }
 
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
@@ -392,7 +469,12 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
 {
     const auto msg = prepare_message(orig_msg);
     if (!msg.has_value())
-        return evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+    {
+        auto r = evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+        // EIP-8037: no execution happened; state-gas reservoir passes through untouched.
+        r.state_gas_left = orig_msg.state_gas;
+        return r;
+    }
 
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();

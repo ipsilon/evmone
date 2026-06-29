@@ -49,8 +49,14 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
     std::vector<state::TransactionReceipt> receipts;
 
     int64_t block_gas_left = block.gas_limit;
+    // EIP-8037: separate state-gas budget tracker; only consulted by
+    // validate_transaction for Amsterdam+.
+    int64_t state_block_gas_left = block.gas_limit;
     int64_t cumulative_gas_used = 0;
-    int64_t block_gas_used = 0;
+    // EIP-8037: track regular and state gas separately for the block-level
+    // max(sum_regular, sum_state) formula.
+    int64_t sum_regular_gas = 0;
+    int64_t sum_state_gas = 0;
     auto blob_gas_left = blob_gas_limit;
 
     for (size_t i = 0; i < txs.size(); ++i)
@@ -62,8 +68,8 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         if (trace_enabled)
             trace_guard.emplace(std::clog, opts.open_trace(i, computed_tx_hash).rdbuf());
 
-        auto res = transition(
-            block_state, block, block_hashes, tx, rev, vm, block_gas_left, blob_gas_left);
+        auto res = transition(block_state, block, block_hashes, tx, rev, vm, block_gas_left,
+            blob_gas_left, state_block_gas_left);
 
         if (holds_alternative<std::error_code>(res))
         {
@@ -79,11 +85,14 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
             if (rev < EVMC_BYZANTIUM)
                 receipt.post_state = state::mpt_hash(block_state);
 
-            // Block gas accounting, refunds excluded (EIP-7778).
-            const auto block_tx_gas =
-                (rev >= EVMC_AMSTERDAM) ? receipt.gas_used + receipt.gas_refund : receipt.gas_used;
-            block_gas_used += block_tx_gas;
-            block_gas_left -= block_tx_gas;
+            // EIP-8037: accumulate the 2D components for the Amsterdam block-level
+            // max(sum_regular, sum_state) formula. Pre-Amsterdam these components are
+            // 0; the block then tracks the single gas dimension via receipt.gas_used.
+            sum_regular_gas += receipt.regular_block_gas;
+            sum_state_gas += receipt.state_block_gas;
+            block_gas_left -=
+                (rev >= EVMC_AMSTERDAM) ? receipt.regular_block_gas : receipt.gas_used;
+            state_block_gas_left -= receipt.state_block_gas;
             blob_gas_left -= static_cast<int64_t>(tx.blob_gas_used());
             receipts.emplace_back(std::move(receipt));
         }
@@ -115,6 +124,11 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
 
     const auto bloom = compute_bloom_filter(receipts);
 
+    // EIP-8037/7778: block-level 2D gas formula: max(sum_regular, sum_state).
+    // Pre-Amsterdam blocks leave both sums at 0; fall back to cumulative_gas_used.
+    const auto block_gas_used = (sum_regular_gas != 0 || sum_state_gas != 0) ?
+                                    std::max(sum_regular_gas, sum_state_gas) :
+                                    cumulative_gas_used;
     return {std::move(receipts), std::move(rejected_txs), std::move(requests), requests_error,
         block_gas_used, bloom, blob_gas_left, std::move(block_state)};
 }

@@ -6,6 +6,7 @@
 #include "errors.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
+#include <evmone/constants.hpp>
 
 namespace evmone::state
 {
@@ -73,13 +74,30 @@ static_assert(std::ranges::is_sorted(REQUESTS_SYSTEM_CONTRACTS, by_rev),
     "system contract entries must be ordered by revision");
 
 
+/// Cap on the number of SSTOREs a system contract may need to fund out of its
+/// state-gas budget under EIP-8037. The bal-720 `system_contract_reaches_gas_limit`
+/// tests deliberately replace the canonical contract with one sized exactly to
+/// `30M + SYSTEM_MAX_SSTORES_PER_CALL × STORAGE_SET_STATE_GAS`, so this constant
+/// is observable.
+constexpr int64_t SYSTEM_MAX_SSTORES_PER_CALL = 16;
+
 evmc::Result execute_system_call(State& state, const BlockInfo& block,
     const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm, const address& addr,
     bytes_view code, bytes_view input)
 {
+    // EIP-8037: bump the 30M regular-gas budget by enough state-gas headroom
+    // to cover up to `SYSTEM_MAX_SSTORES_PER_CALL` zero→non-zero SSTOREs, so
+    // that the new state-gas component cannot OOG a system call. Implemented
+    // as a single regular-gas pool (no separate state reservoir) — current
+    // Amsterdam system contracts each perform ≤2 SSTOREs and don't observe
+    // the split (30M + 16 × 97920 = 31'566'720).
+    const auto system_call_gas =
+        (rev >= EVMC_AMSTERDAM) ?
+            int64_t{30'000'000} + SYSTEM_MAX_SSTORES_PER_CALL * STORAGE_SET_STATE_GAS :
+            int64_t{30'000'000};
     const evmc_message msg{
         .kind = EVMC_CALL,
-        .gas = 30'000'000,
+        .gas = system_call_gas,
         .recipient = addr,
         .sender = SYSTEM_ADDRESS,
         .input_data = input.data(),

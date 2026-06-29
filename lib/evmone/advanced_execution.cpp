@@ -12,6 +12,9 @@ evmc_result execute(AdvancedExecutionState& state, const AdvancedCodeAnalysis& a
 {
     state.analysis.advanced = &analysis;  // Allow accessing the analysis by instructions.
 
+    // EIP-8037: initialize the state-gas reservoir from the message budget.
+    state.state_gas.left = state.msg->state_gas;
+
     const auto* instr = state.analysis.advanced->instrs.data();  // Get the first instruction.
     while (instr != nullptr)
         instr = instr->fn(instr, state);
