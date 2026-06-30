@@ -28,8 +28,9 @@ void calloc_(size_t size) noexcept
 void os_specific(size_t size) noexcept
 {
 #if defined(__unix__) || defined(__APPLE__)
-    auto m = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS, -1, 0);
-    benchmark::DoNotOptimize(m);
+    auto m = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (m == MAP_FAILED)
+        __builtin_trap();
     munmap(m, size);
 #else
     (void)size;
@@ -51,5 +52,33 @@ void allocate(benchmark::State& state)
 BENCHMARK_TEMPLATE(allocate, malloc_) ARGS;
 BENCHMARK_TEMPLATE(allocate, calloc_) ARGS;
 BENCHMARK_TEMPLATE(allocate, os_specific) ARGS;
+
+
+#if defined(__unix__) || defined(__APPLE__)
+void bench_mprotect(benchmark::State& state)
+{
+    const auto page_size = static_cast<size_t>(getpagesize());
+    const auto size = static_cast<size_t>(state.range(0)) * page_size;
+    const auto idx = static_cast<size_t>(state.range(1));
+
+    auto prot = PROT_READ | PROT_WRITE;
+    const auto m = mmap(nullptr, size, prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (m == MAP_FAILED)
+        state.SkipWithError("mmap failed");
+
+    const auto p = &static_cast<char*>(m)[idx * page_size];
+
+    for (auto _ : state)
+    {
+        prot = (prot == PROT_NONE) ? (PROT_READ | PROT_WRITE) : PROT_NONE;
+        const auto res = mprotect(p, page_size, prot);
+        if (res != 0) [[unlikely]]
+            state.SkipWithError("mprotect failed");
+    }
+
+    munmap(m, size);
+}
+BENCHMARK(bench_mprotect)->Args({1, 0})->Args({8 * 1024, 13 * 9});
+#endif
 
 }  // namespace
