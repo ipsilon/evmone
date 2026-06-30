@@ -535,8 +535,10 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     if (sender_acc.nonce > tx.nonce)
         return make_error_code(NONCE_TOO_LOW);
 
-    // initcode size is limited by EIP-3860.
-    if (rev >= EVMC_SHANGHAI && !tx.to.has_value() && tx.data.size() > MAX_INITCODE_SIZE)
+    // Initcode size is limited by EIP-3860, raised for Amsterdam by EIP-7954.
+    const size_t max_initcode_size =
+        rev >= EVMC_AMSTERDAM ? MAX_INITCODE_SIZE_AMSTERDAM : MAX_INITCODE_SIZE;
+    if (rev >= EVMC_SHANGHAI && !tx.to.has_value() && tx.data.size() > max_initcode_size)
         return make_error_code(INIT_CODE_SIZE_LIMIT_EXCEEDED);
 
     // Compute and check if sender has enough balance for the theoretical maximum transaction cost.

@@ -362,3 +362,30 @@ TEST_F(state_transition, created_code_hash)
     expect.post[created].code = runtime_code;
     expect.post[To].storage[0x00_bytes32] = keccak256(runtime_code);
 }
+
+TEST_F(state_transition, eip7954_create_tx_at_max_code_size)
+{
+    // Amsterdam raises the deployed code size limit from 0x6000 to 0x10000 (EIP-7954).
+    // A create transaction deploying code of exactly the new limit succeeds.
+    rev = EVMC_AMSTERDAM;
+    static constexpr auto code_size = 0x10000;  // MAX_CODE_SIZE_AMSTERDAM.
+    tx.gas_limit = 16'000'000;                  // Covers the ~13.1M code-deposit gas (200/byte).
+    block.gas_limit = tx.gas_limit;
+    pre[Sender].balance = tx.gas_limit * tx.max_gas_price;
+    tx.data = ret(0, code_size);  // Init code returns `code_size` zero bytes as the deployed code.
+
+    const auto create_address = compute_create_address(Sender, pre[Sender].nonce);
+    expect.post[create_address].code = bytes(code_size, 0x00);
+}
+
+TEST_F(state_transition, eip7954_create_tx_above_max_code_size)
+{
+    // Code one byte above the new 0x10000 limit is still rejected on Amsterdam (EIP-7954).
+    rev = EVMC_AMSTERDAM;
+    static constexpr auto code_size = 0x10000 + 1;
+    tx.data = ret(0, code_size);  // Init code returns code one byte over the limit.
+
+    const auto create_address = compute_create_address(Sender, pre[Sender].nonce);
+    expect.status = EVMC_FAILURE;
+    expect.post[create_address].exists = false;
+}
