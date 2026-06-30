@@ -292,12 +292,7 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
             gas = dispatch<false>(cost_table, state, gas, code_begin);
     }
 
-    const auto gas_left = (state.status == EVMC_SUCCESS || state.status == EVMC_REVERT) ? gas : 0;
-    const auto gas_refund = (state.status == EVMC_SUCCESS) ? state.gas_refund : 0;
-
-    assert(state.output_size != 0 || state.output_offset == 0);
-    const auto result = evmc::make_result(state.status, gas_left, gas_refund,
-        state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size);
+    const auto result = make_execution_result(state, gas);
 
     if (INTX_UNLIKELY(tracer != nullptr))
         tracer->notify_execution_end(result);
