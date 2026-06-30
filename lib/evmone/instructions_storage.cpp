@@ -95,7 +95,7 @@ constexpr auto sstore_costs = []() noexcept {
 }();
 }  // namespace
 
-Result sload(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
+Result sload(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
 {
     auto& x = stack.top();
     const auto key = intx::be::store<evmc::bytes32>(x);
@@ -116,7 +116,7 @@ Result sload(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     return {EVMC_SUCCESS, gas_left};
 }
 
-Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
+Result sstore(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
 {
     if (state.in_static_mode())
         return {EVMC_STATIC_MODE_VIOLATION, gas_left};

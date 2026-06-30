@@ -40,7 +40,7 @@ inline evmc_status_code impl(AdvancedExecutionState& state) noexcept
 }
 
 template <Opcode Op,
-    evmc_status_code CoreFn(StackTop, int64_t&, ExecutionState&) noexcept = core::impl<Op>>
+    evmc_status_code CoreFn(StackTop, Gas&, ExecutionState&) noexcept = core::impl<Op>>
 inline evmc_status_code impl(AdvancedExecutionState& state) noexcept
 {
     const auto status = CoreFn(state.stack, state.gas_left, state);
@@ -48,7 +48,7 @@ inline evmc_status_code impl(AdvancedExecutionState& state) noexcept
     return status;
 }
 
-template <Opcode Op, Result CoreFn(StackTop, int64_t, ExecutionState&) noexcept = core::impl<Op>>
+template <Opcode Op, Result CoreFn(StackTop, Gas, ExecutionState&) noexcept = core::impl<Op>>
 inline evmc_status_code impl(AdvancedExecutionState& state) noexcept
 {
     const auto status = CoreFn(state.stack, state.gas_left, state);
@@ -58,7 +58,7 @@ inline evmc_status_code impl(AdvancedExecutionState& state) noexcept
 }
 
 template <Opcode Op,
-    TermResult CoreFn(StackTop, int64_t, ExecutionState&) noexcept = core::impl<Op>>
+    TermResult CoreFn(StackTop, Gas, ExecutionState&) noexcept = core::impl<Op>>
 inline TermResult impl(AdvancedExecutionState& state) noexcept
 {
     // Stack height adjustment may be omitted.
@@ -187,7 +187,7 @@ const Instruction* op_pc(const Instruction* instr, AdvancedExecutionState& state
 const Instruction* op_gas(const Instruction* instr, AdvancedExecutionState& state) noexcept
 {
     const auto correction = state.current_block_cost - instr->arg.number;
-    const auto gas = static_cast<uint64_t>(state.gas_left + correction);
+    const auto gas = static_cast<int64_t>(state.gas_left + correction);
     state.stack.push(gas);
     return ++instr;
 }

@@ -5,6 +5,7 @@
 
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
+#include <compare>
 #include <exception>
 #include <memory>
 #include <string>
@@ -24,6 +25,45 @@ class CodeAnalysis;
 using evmc::bytes;
 using evmc::bytes_view;
 using intx::uint256;
+
+
+/// Strong type wrapper for the EVM gas counter.
+///
+/// Wraps int64_t to prevent accidental mixing of gas with other integers.
+/// Conversions to/from int64_t are explicit, so gas only crosses into the raw
+/// int64_t world (EVMC messages/results, the stack, tracing) at deliberate
+/// static_cast points. The gas-domain arithmetic operators accept raw int64_t
+/// cost operands so instruction implementations are unchanged.
+class Gas
+{
+    int64_t m_value = 0;
+
+public:
+    Gas() = default;
+    explicit constexpr Gas(int64_t value) noexcept : m_value{value} {}
+    explicit constexpr operator int64_t() const noexcept { return m_value; }
+
+    constexpr Gas& operator-=(int64_t cost) noexcept
+    {
+        m_value -= cost;
+        return *this;
+    }
+    constexpr Gas& operator+=(int64_t amount) noexcept
+    {
+        m_value += amount;
+        return *this;
+    }
+
+    friend constexpr Gas operator-(Gas a, Gas b) noexcept { return Gas{a.m_value - b.m_value}; }
+    friend constexpr Gas operator+(Gas a, int64_t b) noexcept { return Gas{a.m_value + b}; }
+    friend constexpr Gas operator/(Gas a, int64_t b) noexcept { return Gas{a.m_value / b}; }
+
+    friend constexpr std::strong_ordering operator<=>(Gas a, int64_t b) noexcept
+    {
+        return a.m_value <=> b;
+    }
+    friend constexpr bool operator==(Gas a, int64_t b) noexcept { return a.m_value == b; }
+};
 
 
 /// Provides memory for EVM stack.
