@@ -5,6 +5,7 @@
 
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
+#include <cassert>
 #include <exception>
 #include <memory>
 #include <string>
@@ -193,4 +194,21 @@ public:
         return m_tx;
     }
 };
+
+/// Builds the execution result for a finished frame from its final @p state and @p gas_left.
+///
+/// Applies the frame-exit rules shared by the baseline and advanced interpreters: an exceptional
+/// halt consumes all gas (only a success or revert keeps it), the gas refund counts only on
+/// success, and the output is the memory range recorded in the state.
+inline evmc_result make_execution_result(ExecutionState& state, int64_t gas_left) noexcept
+{
+    // An exceptional halt consumes all gas; only a success or revert keeps gas_left.
+    if (state.status != EVMC_SUCCESS && state.status != EVMC_REVERT)
+        gas_left = 0;
+    const auto gas_refund = (state.status == EVMC_SUCCESS) ? state.gas_refund : 0;
+
+    assert(state.output_size != 0 || state.output_offset == 0);
+    return evmc::make_result(state.status, gas_left, gas_refund,
+        state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size);
+}
 }  // namespace evmone
