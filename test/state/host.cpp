@@ -218,10 +218,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     const bytes_view initcode{msg.input_data, msg.input_size};
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
-    {
-        result.create_address = msg.recipient;
         return result;
-    }
 
     auto gas_left = result.gas_left;
     assert(gas_left >= 0);
@@ -241,7 +238,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (gas_left < 0)
     {
         return (m_rev == EVMC_FRONTIER) ?
-                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient} :
+                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund} :
                    evmc::Result{EVMC_FAILURE};
     }
 
@@ -252,7 +249,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         new_acc->code_changed = true;
     }
 
-    return evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
+    return evmc::Result{result.status_code, gas_left, result.gas_refund};
 }
 
 evmc::Result Host::execute_message(const evmc_message& msg) noexcept

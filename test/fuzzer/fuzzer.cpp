@@ -80,13 +80,6 @@ public:
         else
             result.gas_left = msg.gas / (gas_left_factor + 3);
 
-        if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
-        {
-            // Use the output to fill the create address.
-            // We still keep the output to check if VM is going to ignore it.
-            std::memcpy(result.create_address.bytes, result.output_data,
-                std::min(sizeof(result.create_address), result.output_size));
-        }
 
         return result;
     }

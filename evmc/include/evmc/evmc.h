@@ -472,15 +472,6 @@ struct evmc_result
      */
     evmc_release_result_fn release;
 
-    /**
-     * The address of the possibly created contract.
-     *
-     * The create address may be provided even though the contract creation has failed
-     * (evmc_result::status_code is not ::EVMC_SUCCESS). This is useful in situations
-     * when the address is observable, e.g. access to it remains warm.
-     * In all other cases the address MUST be null bytes.
-     */
-    evmc_address create_address;
 };
 
 

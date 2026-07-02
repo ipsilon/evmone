@@ -311,7 +311,6 @@ TEST_F(tracing, trace_create_instruction)
     const auto code = push(10) + push(0) + push(0) + OP_CREATE + ret_top();
 
     const auto result_data = "0x60016000526001601ff3"_hex;
-    host.call_result.create_address = 0xbd770416a3345f91e4b34576cb804a576fa48eb1_address;
     host.call_result.output_data = result_data.data();
     host.call_result.output_size = result_data.size();
 
