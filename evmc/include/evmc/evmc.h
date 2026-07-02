@@ -45,7 +45,7 @@ enum
      *
      * @see @ref versioning
      */
-    EVMC_ABI_VERSION = 14
+    EVMC_ABI_VERSION = 15
 };
 
 
@@ -670,6 +670,18 @@ typedef evmc_uint256be (*evmc_get_balance_fn)(struct evmc_host_context* context,
                                               const evmc_address* address);
 
 /**
+ * Get nonce callback function.
+ *
+ * This callback function is used by a VM to query the nonce of the given account in the state.
+ *
+ * @param context  The pointer to the Host execution context.
+ * @param address  The address of the account.
+ * @return         The nonce of the given account or 0 if the account does not exist.
+ */
+typedef uint64_t (*evmc_get_nonce_fn)(struct evmc_host_context* context,
+                                      const evmc_address* address);
+
+/**
  * Get code size callback function.
  *
  * This callback function is used by a VM to get the size of the code stored
@@ -832,6 +844,9 @@ struct evmc_host_interface
 
     /** Get balance callback function. */
     evmc_get_balance_fn get_balance;
+
+    /** Get nonce callback function. */
+    evmc_get_nonce_fn get_nonce;
 
     /** Get code size callback function. */
     evmc_get_code_size_fn get_code_size;
