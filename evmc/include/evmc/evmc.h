@@ -129,6 +129,12 @@ struct evmc_message
      * For ::EVMC_CALLCODE or ::EVMC_DELEGATECALL, this may be different from
      * the evmc_message::code_address.
      *
+     * For ::EVMC_CREATE and ::EVMC_CREATE2 this is the address of the account being created,
+     * computed by the VM before invoking evmc_call_fn() (from the sender and its nonce for
+     * ::EVMC_CREATE, or from the sender, evmc_message::create2_salt and the init code for
+     * ::EVMC_CREATE2). The VM also performs the associated EIP-2681 sender-nonce-overflow check
+     * and EIP-2929 warming of this address; the Host relies on it being set.
+     *
      * Defined as `r` in the Yellow Paper.
      */
     evmc_address recipient;
@@ -168,10 +174,10 @@ struct evmc_message
     evmc_uint256be value;
 
     /**
-     * The optional value used in new contract address construction.
+     * The salt for ::EVMC_CREATE2 address computation (EIP-1014).
      *
-     * Needed only for a Host to calculate created address when kind is ::EVMC_CREATE2.
-     * Ignored in evmc_execute_fn().
+     * Used by the VM to compute evmc_message::recipient for a ::EVMC_CREATE2 message before
+     * invoking evmc_call_fn(). Unused for other message kinds and ignored in evmc_execute_fn().
      */
     evmc_bytes32 create2_salt;
 

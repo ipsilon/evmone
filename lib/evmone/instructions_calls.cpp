@@ -2,8 +2,10 @@
 // Copyright 2019 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "create_address.hpp"
 #include "delegation.hpp"
 #include "instructions.hpp"
+#include <limits>
 #include <variant>
 
 constexpr int64_t CALL_VALUE_COST = 9000;
@@ -230,7 +232,31 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
         intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < endowment)
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
 
+    const auto& sender = state.msg->recipient;
+
+    // EIP-2681: creation fails when the sender's nonce is at its maximum,
+    // without bumping it and without consuming the forwarded gas.
+    const auto sender_nonce = state.host.get_nonce(sender);
+    if (sender_nonce == std::numeric_limits<uint64_t>::max())
+        return {EVMC_SUCCESS, gas_left};  // "Light" failure.
+
+    // Compute the address of the account to be created. The Host bumps the sender's
+    // nonce on create-frame entry, so CREATE uses the pre-bump value read above.
+    const auto salt32 = intx::be::store<evmc::bytes32>(salt);
+    const auto init_code = bytes_view{
+        init_code_size > 0 ? &state.memory[init_code_offset] : nullptr, init_code_size};
+    const auto create_addr = (Op == OP_CREATE) ?
+                                 compute_create_address(sender, sender_nonce) :
+                                 compute_create2_address(sender, salt32, init_code);
+
+    // Per EIP-2929, access to the newly created address is never reverted:
+    // warm it in the creating frame, outside the create's rollback scope.
+    // Gated on Berlin like the other access_account sites (2929 is Berlin onward).
+    if (state.rev >= EVMC_BERLIN)
+        (void)state.host.access_account(create_addr);
+
     evmc_message msg{.kind = to_call_kind(Op)};
+    msg.recipient = create_addr;
     msg.gas = gas_left;
     if (state.rev >= EVMC_TANGERINE_WHISTLE)
         msg.gas = msg.gas - msg.gas / 64;
@@ -241,9 +267,9 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
         msg.input_data = &state.memory[init_code_offset];
         msg.input_size = init_code_size;
     }
-    msg.sender = state.msg->recipient;
+    msg.sender = sender;
     msg.depth = state.msg->depth + 1;
-    msg.create2_salt = intx::be::store<evmc::bytes32>(salt);
+    msg.create2_salt = salt32;
     msg.value = intx::be::store<evmc::uint256be>(endowment);
 
     const auto result = state.host.call(msg);
@@ -252,7 +278,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
 
     state.return_data.assign(result.output_data, result.output_size);
     if (result.status_code == EVMC_SUCCESS)
-        stack.top() = intx::be::load<uint256>(result.create_address);
+        stack.top() = intx::be::load<uint256>(create_addr);
 
     return {EVMC_SUCCESS, gas_left};
 }

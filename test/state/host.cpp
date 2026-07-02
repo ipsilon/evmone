@@ -178,102 +178,12 @@ bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcep
     return false;
 }
 
-address compute_create_address(const address& sender, uint64_t sender_nonce) noexcept
-{
-    static constexpr auto RLP_STR_BASE = 0x80;
-    static constexpr auto RLP_LIST_BASE = 0xc0;
-    static constexpr auto ADDRESS_SIZE = sizeof(sender);
-    static constexpr std::ptrdiff_t MAX_NONCE_SIZE = sizeof(sender_nonce);
-
-    uint8_t buffer[ADDRESS_SIZE + MAX_NONCE_SIZE + 3];  // 3 for RLP prefix bytes.
-    auto p = &buffer[1];                                // Skip RLP list prefix for now.
-    *p++ = RLP_STR_BASE + ADDRESS_SIZE;                 // Set RLP string prefix for address.
-    p = std::copy_n(sender.bytes, ADDRESS_SIZE, p);
-
-    if (sender_nonce < RLP_STR_BASE)  // Short integer encoding including 0 as empty string (0x80).
-    {
-        *p++ = sender_nonce != 0 ? static_cast<uint8_t>(sender_nonce) : RLP_STR_BASE;
-    }
-    else  // Prefixed integer encoding.
-    {
-        // TODO: bit_width returns int after [LWG 3656](https://cplusplus.github.io/LWG/issue3656).
-        // NOLINTNEXTLINE(readability-redundant-casting)
-        const auto num_nonzero_bytes = static_cast<int>((std::bit_width(sender_nonce) + 7) / 8);
-        *p++ = static_cast<uint8_t>(RLP_STR_BASE + num_nonzero_bytes);
-        intx::be::unsafe::store(p, sender_nonce);
-        p = std::shift_left(p, p + MAX_NONCE_SIZE, MAX_NONCE_SIZE - num_nonzero_bytes);
-    }
-
-    const auto total_size = static_cast<size_t>(p - buffer);
-    buffer[0] = static_cast<uint8_t>(RLP_LIST_BASE + (total_size - 1));  // Set the RLP list prefix.
-
-    const auto base_hash = keccak256({buffer, total_size});
-    address addr;
-    std::copy_n(&base_hash.bytes[sizeof(base_hash) - ADDRESS_SIZE], ADDRESS_SIZE, addr.bytes);
-    return addr;
-}
-
-address compute_create2_address(
-    const address& sender, const bytes32& salt, bytes_view init_code) noexcept
-{
-    const auto init_code_hash = keccak256(init_code);
-    uint8_t buffer[1 + sizeof(sender) + sizeof(salt) + sizeof(init_code_hash)];
-    static_assert(std::size(buffer) == 85);
-    auto it = std::begin(buffer);
-    *it++ = 0xff;
-    it = std::copy_n(sender.bytes, sizeof(sender), it);
-    it = std::copy_n(salt.bytes, sizeof(salt), it);
-    std::copy_n(init_code_hash.bytes, sizeof(init_code_hash), it);
-    const auto base_hash = keccak256({buffer, std::size(buffer)});
-    address addr;
-    std::copy_n(&base_hash.bytes[sizeof(base_hash) - sizeof(addr)], sizeof(addr), addr.bytes);
-    return addr;
-}
-
-std::optional<evmc_message> Host::prepare_message(evmc_message msg) noexcept
-{
-    if (msg.depth == 0 || msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
-    {
-        auto& sender_acc = m_state.get(msg.sender);
-
-        // EIP-2681 (already checked for depth 0 during transaction validation).
-        if (sender_acc.nonce == Account::NonceMax)
-            return {};  // Light early exception.
-
-        if (msg.depth != 0)
-        {
-            m_state.journal_bump_nonce(msg.sender);
-            ++sender_acc.nonce;  // Bump sender nonce.
-        }
-
-        if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
-        {
-            // Compute and set the address of the account being created.
-            assert(msg.recipient == address{});
-            assert(msg.code_address == address{});
-            // Nonce was already incremented, but creation calculation needs non-incremented value
-            assert(sender_acc.nonce != 0);
-            const auto creation_sender_nonce = sender_acc.nonce - 1;
-            if (msg.kind == EVMC_CREATE)
-                msg.recipient = compute_create_address(msg.sender, creation_sender_nonce);
-            else
-            {
-                assert(msg.kind == EVMC_CREATE2);
-                msg.recipient = compute_create2_address(
-                    msg.sender, msg.create2_salt, {msg.input_data, msg.input_size});
-            }
-
-            // By EIP-2929, the access to new created address is never reverted.
-            access_account(msg.recipient);
-        }
-    }
-
-    return msg;
-}
-
 evmc::Result Host::create(const evmc_message& msg) noexcept
 {
     assert(msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2);
+    // The VM computes the created account's address (and warms it, EIP-2929) and
+    // performs the EIP-2681 nonce-overflow check before entering the create frame.
+    assert(msg.recipient != address{});
 
     auto* new_acc = m_state.find(msg.recipient);
     const bool new_acc_exists = new_acc != nullptr;
@@ -394,16 +304,25 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
 
-evmc::Result Host::call(const evmc_message& orig_msg) noexcept
+evmc::Result Host::call(const evmc_message& msg) noexcept
 {
-    const auto msg = prepare_message(orig_msg);
-    if (!msg.has_value())
-        return evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+    // Bump the creator's nonce outside the creation's rollback scope: per the
+    // Yellow Paper the increment survives any failure of the creation itself
+    // (collision or initcode failure). The VM checked EIP-2681 and computed the
+    // create address from the pre-bump value; at depth 0 the transaction
+    // processing has already bumped the sender.
+    if (msg.depth != 0 && (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2))
+    {
+        auto& sender_acc = m_state.get(msg.sender);
+        assert(sender_acc.nonce != Account::NonceMax);
+        m_state.journal_bump_nonce(msg.sender);
+        ++sender_acc.nonce;
+    }
 
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();
 
-    auto result = execute_message(*msg);
+    auto result = execute_message(msg);
 
     if (result.status_code != EVMC_SUCCESS)
     {
