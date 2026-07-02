@@ -75,6 +75,12 @@ uint256be Host::get_balance(const address& addr) const noexcept
     return (acc != nullptr) ? intx::be::store<uint256be>(acc->balance) : uint256be{};
 }
 
+uint64_t Host::get_nonce(const address& addr) const noexcept
+{
+    const auto* const acc = m_state.find(addr);
+    return (acc != nullptr) ? acc->nonce : 0;
+}
+
 namespace
 {
 /// Check if an existing account is the "create collision"

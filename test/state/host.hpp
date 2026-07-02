@@ -71,6 +71,8 @@ private:
 
     [[nodiscard]] uint256be get_balance(const address& addr) const noexcept override;
 
+    [[nodiscard]] uint64_t get_nonce(const address& addr) const noexcept override;
+
     [[nodiscard]] size_t get_code_size(const address& addr) const noexcept override;
 
     [[nodiscard]] bytes32 get_code_hash(const address& addr) const noexcept override;

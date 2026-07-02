@@ -454,6 +454,9 @@ public:
     /// @copydoc evmc_host_interface::get_balance
     virtual uint256be get_balance(const address& addr) const noexcept = 0;
 
+    /// @copydoc evmc_host_interface::get_nonce
+    virtual uint64_t get_nonce(const address& addr) const noexcept = 0;
+
     /// @copydoc evmc_host_interface::get_code_size
     virtual size_t get_code_size(const address& addr) const noexcept = 0;
 
@@ -541,6 +544,11 @@ public:
     uint256be get_balance(const address& address) const noexcept final
     {
         return host->get_balance(context, &address);
+    }
+
+    uint64_t get_nonce(const address& address) const noexcept final
+    {
+        return host->get_nonce(context, &address);
     }
 
     size_t get_code_size(const address& address) const noexcept final
@@ -799,6 +807,11 @@ inline evmc_uint256be get_balance(evmc_host_context* h, const evmc_address* addr
     return Host::from_context(h)->get_balance(*addr);
 }
 
+inline uint64_t get_nonce(evmc_host_context* h, const evmc_address* addr) noexcept
+{
+    return Host::from_context(h)->get_nonce(*addr);
+}
+
 inline size_t get_code_size(evmc_host_context* h, const evmc_address* addr) noexcept
 {
     return Host::from_context(h)->get_code_size(*addr);
@@ -886,6 +899,7 @@ inline const evmc_host_interface& Host::get_interface() noexcept
         ::evmc::internal::get_storage,
         ::evmc::internal::set_storage,
         ::evmc::internal::get_balance,
+        ::evmc::internal::get_nonce,
         ::evmc::internal::get_code_size,
         ::evmc::internal::get_code_hash,
         ::evmc::internal::copy_code,
