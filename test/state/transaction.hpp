@@ -19,6 +19,11 @@ constexpr auto MAX_TX_GAS_LIMIT = 0x1000000;  // 2**24
 
 using AccessList = std::vector<std::pair<address, std::vector<bytes32>>>;
 
+/// Decodes an EIP-7702 authorization.
+///
+/// Declared here (not file-local) so the generic rlp::decode(std::vector<T>&) finds it by ADL.
+[[nodiscard]] bool decode(bytes_view& from, Authorization& to) noexcept;
+
 struct Transaction
 {
     /// The type of the transaction.
@@ -68,6 +73,13 @@ struct Transaction
     uint64_t v = 0;
     AuthorizationList authorization_list;
 };
+
+/// Decodes a transaction from its complete serialization @p data.
+///
+/// Handles the legacy RLP list and the EIP-2718 typed envelope (type byte followed by an RLP list).
+/// TODO: Not a strict inverse of rlp::encode: a legacy transaction's wire v is normalized into
+///   (chain_id, y_parity), so re-encoding a decoded legacy tx need not reproduce its bytes.
+[[nodiscard]] std::optional<Transaction> decode_transaction(bytes_view data) noexcept;
 
 /// Transaction properties computed during the validation needed for the execution.
 struct TransactionProperties
