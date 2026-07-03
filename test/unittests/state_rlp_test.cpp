@@ -4,6 +4,8 @@
 
 #include <gmock/gmock.h>
 #include <test/state/hash_utils.hpp>
+#include <test/state/rlp_decode.hpp>
+#include <test/state/transaction.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
@@ -599,4 +601,284 @@ TEST(state_rlp, tx_to_rlp_blob_invalid_to_value)
         "09"                                                                    // sig_r
         "0a"                                                                    // sig_s
     );
+}
+
+TEST(state_rlp, tx_decode_legacy_eip155)
+{
+    // A legacy EIP-155 transaction: v = 2 * chain_id + 35 + parity. For chain 1, parity 0 => v = 37.
+    state::Transaction tx{};
+    tx.type = state::Transaction::Type::legacy;
+    tx.nonce = 7;
+    tx.max_gas_price = 0x0102;
+    tx.gas_limit = 0x5208;
+    tx.to = 0x9232a548dd9e81bac65500b5e0d918f8ba93675c_address;
+    tx.value = 0xabcdef_u256;
+    tx.data = "0xdeadbeef"_hex;
+    tx.r = 0x1111_u256;
+    tx.s = 0x2222_u256;
+    tx.v = 37;  // Raw EIP-155 v; the decoder splits it into y_parity and chain id.
+
+    const auto rlp = rlp::encode(tx);
+    const auto opt = state::decode_transaction(rlp);
+    ASSERT_TRUE(opt.has_value());
+    const auto& d = *opt;
+    EXPECT_EQ(d.type, state::Transaction::Type::legacy);
+    EXPECT_EQ(d.nonce, 7u);
+    EXPECT_EQ(d.max_gas_price, 0x0102_u256);
+    EXPECT_EQ(d.max_priority_gas_price, 0x0102_u256);  // Set to gas price for legacy.
+    EXPECT_EQ(d.gas_limit, 0x5208);
+    ASSERT_TRUE(d.to.has_value());
+    EXPECT_EQ(*d.to, tx.to);
+    EXPECT_EQ(d.value, 0xabcdef_u256);
+    EXPECT_EQ(d.data, tx.data);
+    EXPECT_EQ(d.r, 0x1111_u256);
+    EXPECT_EQ(d.s, 0x2222_u256);
+    EXPECT_EQ(d.v, 0u);         // y_parity extracted from v = 37.
+    EXPECT_EQ(d.chain_id, 1u);  // chain id extracted from v = 37.
+}
+
+TEST(state_rlp, tx_decode_legacy_pre155)
+{
+    // Pre-EIP-155 legacy transactions use v in {27, 28} and carry no chain id.
+    for (const auto [raw_v, parity] : {std::pair{27u, 0u}, std::pair{28u, 1u}})
+    {
+        state::Transaction tx{};
+        tx.type = state::Transaction::Type::legacy;
+        tx.nonce = 0;
+        tx.max_gas_price = 1;
+        tx.gas_limit = 21000;
+        tx.to = std::nullopt;  // CREATE.
+        tx.value = 0;
+        tx.r = 1_u256;
+        tx.s = 2_u256;
+        tx.v = raw_v;
+
+        const auto rlp = rlp::encode(tx);
+        const auto opt = state::decode_transaction(rlp);
+        ASSERT_TRUE(opt.has_value());
+        const auto& d = *opt;
+        EXPECT_FALSE(d.to.has_value());  // Empty "to" => CREATE.
+        EXPECT_EQ(d.v, parity);
+        EXPECT_EQ(d.chain_id, 0u);
+    }
+}
+
+TEST(state_rlp, tx_decode_eip1559_round_trip)
+{
+    state::Transaction tx{};
+    tx.type = state::Transaction::Type::eip1559;
+    tx.chain_id = 1;
+    tx.nonce = 42;
+    tx.max_priority_gas_price = 0x0a;
+    tx.max_gas_price = 0x64;
+    tx.gas_limit = 0x9c40;
+    tx.to = 0x9232a548dd9e81bac65500b5e0d918f8ba93675c_address;
+    tx.value = 0x0de0b6b3a7640000_u256;
+    tx.data = "0x095ea7b3"_hex;
+    tx.access_list = {{0x9232a548dd9e81bac65500b5e0d918f8ba93675c_address,
+        {0x8e947fe742892ee6fffe7cfc013acac35d33a3892c58597344bed88b21eb1d2f_bytes32}}};
+    tx.r = 0x2c_u256;
+    tx.s = 0x41_u256;
+    tx.v = 1;
+
+    const auto rlp = rlp::encode(tx);
+    const auto opt = state::decode_transaction(rlp);
+    ASSERT_TRUE(opt.has_value());
+    const auto& d = *opt;
+    EXPECT_EQ(d.type, state::Transaction::Type::eip1559);
+    EXPECT_EQ(d.chain_id, 1u);
+    EXPECT_EQ(d.nonce, 42u);
+    EXPECT_EQ(d.max_priority_gas_price, 0x0a_u256);
+    EXPECT_EQ(d.max_gas_price, 0x64_u256);
+    EXPECT_EQ(d.gas_limit, 0x9c40);
+    ASSERT_TRUE(d.to.has_value());
+    EXPECT_EQ(*d.to, tx.to);
+    EXPECT_EQ(d.value, tx.value);
+    EXPECT_EQ(d.data, tx.data);
+    ASSERT_EQ(d.access_list.size(), 1u);
+    EXPECT_EQ(d.access_list[0].first, tx.access_list[0].first);
+    ASSERT_EQ(d.access_list[0].second.size(), 1u);
+    EXPECT_EQ(d.access_list[0].second[0], tx.access_list[0].second[0]);
+    EXPECT_EQ(d.r, 0x2c_u256);
+    EXPECT_EQ(d.s, 0x41_u256);
+    EXPECT_EQ(d.v, 1u);
+}
+
+TEST(state_rlp, tx_decode_blob_round_trip)
+{
+    state::Transaction tx{};
+    tx.type = state::Transaction::Type::blob;
+    tx.chain_id = 1;
+    tx.nonce = 5;
+    tx.max_priority_gas_price = 0;
+    tx.max_gas_price = 0x64;
+    tx.gas_limit = 0x7530;
+    tx.to = 0x535b918f3724001fd6fb52fcc6cbc220592990a3_address;
+    tx.value = 7_u256;
+    tx.max_blob_gas_price = 4;
+    tx.blob_hashes = {0x0111111111111111111111111111111111111111111111111111111111111111_bytes32,
+        0x0122222222222222222222222222222222222222222222222222222222222222_bytes32};
+    tx.r = 9_u256;
+    tx.s = 0xa_u256;
+    tx.v = 1;
+
+    const auto rlp = rlp::encode(tx);
+    const auto opt = state::decode_transaction(rlp);
+    ASSERT_TRUE(opt.has_value());
+    const auto& d = *opt;
+    EXPECT_EQ(d.type, state::Transaction::Type::blob);
+    EXPECT_EQ(d.max_blob_gas_price, 4_u256);
+    ASSERT_EQ(d.blob_hashes.size(), 2u);
+    EXPECT_EQ(d.blob_hashes[0], tx.blob_hashes[0]);
+    EXPECT_EQ(d.blob_hashes[1], tx.blob_hashes[1]);
+    EXPECT_EQ(d.v, 1u);
+}
+
+TEST(state_rlp, tx_decode_set_code_auth_y_parity_round_trip)
+{
+    // EIP-7702: y_parity must be < 2**8. Whether it is in {0, 1} is a recovery-time check, so the
+    // decoder accepts any v in [0, 255] and the outer typed-4 transaction remains decodable.
+    state::Transaction tx{};
+    tx.type = state::Transaction::Type::set_code;
+    tx.chain_id = 1;
+    tx.max_gas_price = 7;
+    tx.gas_limit = 0x186a0;
+    tx.to = 0x1111_address;
+    tx.authorization_list = {
+        {.chain_id = 1_u256, .addr = 0x2222_address, .nonce = 0, .r = 0x1234_u256,
+            .s = 0x5678_u256, .v = 2_u256},
+        {.chain_id = 1_u256, .addr = 0x3333_address, .nonce = 7, .r = 0x9abc_u256,
+            .s = 0xdef0_u256, .v = 27_u256},
+        {.chain_id = 1_u256, .addr = 0x4444_address, .nonce = 42, .r = 0xaaaa_u256,
+            .s = 0xbbbb_u256, .v = 0xff_u256},
+    };
+    tx.r = 1_u256;
+    tx.s = 2_u256;
+    tx.v = 0;
+
+    const auto rlp = rlp::encode(tx);
+    const auto opt = state::decode_transaction(rlp);
+    ASSERT_TRUE(opt.has_value());
+    const auto& d = *opt;
+    ASSERT_EQ(d.type, state::Transaction::Type::set_code);
+    ASSERT_EQ(d.authorization_list.size(), 3u);
+    EXPECT_EQ(d.authorization_list[0].v, 2_u256);
+    EXPECT_EQ(d.authorization_list[1].nonce, 7u);
+    EXPECT_EQ(d.authorization_list[1].v, 27_u256);
+    EXPECT_EQ(d.authorization_list[2].addr, 0x4444_address);
+    EXPECT_EQ(d.authorization_list[2].v, 0xff_u256);
+}
+
+TEST(state_rlp, tx_decode_set_code_auth_y_parity_overflow_rejected)
+{
+    // EIP-7702 bounds y_parity to < 2**8; a value of 2**8 fails the whole transaction at decode
+    // time, matching geth (V uint8) and revm/alloy (y_parity: U8).
+    state::Transaction tx{};
+    tx.type = state::Transaction::Type::set_code;
+    tx.chain_id = 1;
+    tx.max_gas_price = 7;
+    tx.gas_limit = 0x186a0;
+    tx.to = 0x1111_address;
+    tx.authorization_list = {{.chain_id = 1_u256, .addr = 0x2222_address, .nonce = 0,
+        .r = 0x1234_u256, .s = 0x5678_u256, .v = 0x100_u256}};
+    tx.r = 1_u256;
+    tx.s = 2_u256;
+    tx.v = 0;
+
+    const auto rlp = rlp::encode(tx);
+    EXPECT_FALSE(state::decode_transaction(rlp).has_value());
+}
+
+TEST(state_rlp, tx_decode_rejects_trailing_data)
+{
+    state::Transaction tx{};
+    tx.type = state::Transaction::Type::legacy;
+    tx.max_gas_price = 1;
+    tx.gas_limit = 21000;
+    tx.value = 0;
+    tx.r = 1_u256;
+    tx.s = 2_u256;
+    tx.v = 27;
+
+    const auto rlp = rlp::encode(tx) + "00"_hex;  // One extra trailing byte.
+    EXPECT_FALSE(state::decode_transaction(rlp).has_value());
+}
+
+TEST(state_rlp, tx_decode_rejects_typed_trailing_data)
+{
+    // The typed envelope must reject trailing bytes just like the legacy one.
+    state::Transaction tx{};
+    tx.type = state::Transaction::Type::eip1559;
+    tx.chain_id = 1;
+    tx.max_gas_price = 0x64;
+    tx.gas_limit = 21000;
+    tx.r = 1_u256;
+    tx.s = 2_u256;
+    tx.v = 0;
+
+    const auto rlp = rlp::encode(tx) + "00"_hex;  // One extra trailing byte after the typed tx.
+    EXPECT_FALSE(state::decode_transaction(rlp).has_value());
+}
+
+TEST(state_rlp, tx_decode_rejects_under_declared_list_length)
+{
+    // A list-length prefix that declares fewer bytes than the fields that follow must be rejected;
+    // the decoder must honor the declared list boundary, not read past it.
+    state::Transaction tx{};
+    tx.type = state::Transaction::Type::legacy;
+    tx.max_gas_price = 1;
+    tx.gas_limit = 21000;
+    tx.value = 0;
+    tx.r = 1_u256;
+    tx.s = 2_u256;
+    tx.v = 27;
+
+    auto rlp = rlp::encode(tx);
+    ASSERT_GE(rlp[0], 0xc0);  // Short RLP list.
+    ASSERT_LT(rlp[0], 0xf8);
+    rlp[0] = static_cast<uint8_t>(rlp[0] - 1);  // Declare one byte less than the payload.
+    EXPECT_FALSE(state::decode_transaction(rlp).has_value());
+}
+
+TEST(state_rlp, tx_decode_rejects_unknown_type)
+{
+    EXPECT_FALSE(state::decode_transaction("0x05c0"_hex).has_value());  // Type 5 (undefined).
+}
+
+// Regression: a long-form length near 2**64 must be rejected. The naive check
+// `payload_length + length_of_length >= input_len` overflows uint64 and would wrongly accept it.
+TEST(state_rlp, decode_header_rejects_long_list_length_overflow)
+{
+    const bytes input(9, uint8_t{0xff});  // 0xff prefix + eight 0xff length bytes => len == 2**64-1.
+    bytes_view v = input;
+    rlp::Header h;
+    EXPECT_FALSE(rlp::decode_header(v, h));
+}
+
+TEST(state_rlp, decode_header_rejects_long_string_length_overflow)
+{
+    bytes input{uint8_t{0xbf}};       // long string with an 8-byte length...
+    input.append(8, uint8_t{0xff});   // ...of 2**64-1.
+    bytes_view v = input;
+    rlp::Header h;
+    EXPECT_FALSE(rlp::decode_header(v, h));
+}
+
+// Regression: canonical long-form length encoding must not have a leading zero byte.
+TEST(state_rlp, decode_header_rejects_noncanonical_length)
+{
+    const bytes input{uint8_t{0xb8}, uint8_t{0x00}};  // long string, length byte == 0.
+    bytes_view v = input;
+    rlp::Header h;
+    EXPECT_FALSE(rlp::decode_header(v, h));
+}
+
+// Regression: the long form is reserved for payloads longer than the short-form maximum (55).
+TEST(state_rlp, decode_header_rejects_noncanonical_long_form_short)
+{
+    bytes input{uint8_t{0xb8}, uint8_t{0x05}};  // long string declaring a 5-byte payload...
+    input.append(5, uint8_t{0x01});             // ...which must use the short form instead.
+    bytes_view v = input;
+    rlp::Header h;
+    EXPECT_FALSE(rlp::decode_header(v, h));
 }

@@ -82,6 +82,15 @@ struct Transaction
     AuthorizationList authorization_list;
 };
 
+/// Decodes a transaction from its complete network serialization @p data.
+///
+/// Handles the legacy RLP list and the EIP-2718 typed envelope (type byte followed by an RLP list).
+/// The name avoids "rlp" because a typed transaction is not a single RLP item. For legacy
+/// transactions the signature v is split into the recovery id (Transaction::v) and the EIP-155
+/// chain id (Transaction::chain_id); pre-155 v in {27, 28} yields chain id 0. Returns std::nullopt
+/// if @p data is malformed or is not exactly one transaction (has trailing bytes).
+[[nodiscard]] std::optional<Transaction> decode_transaction(bytes_view data) noexcept;
+
 /// Transaction properties computed during the validation needed for the execution.
 struct TransactionProperties
 {

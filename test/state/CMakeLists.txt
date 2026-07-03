@@ -28,6 +28,9 @@ target_sources(
     precompiles_internal.hpp
     requests.hpp
     requests.cpp
+    rlp_common.hpp
+    rlp_decode.hpp
+    rlp_decode.cpp
     state.hpp
     state.cpp
     state_diff.hpp
@@ -35,6 +38,7 @@ target_sources(
     system_contracts.hpp
     system_contracts.cpp
     transaction.hpp
+    transaction.cpp
 )
 
 option(EVMONE_PRECOMPILES_LIBSECP256K1 "Enable precompiles implementations using libsecp256k1 library" OFF)
