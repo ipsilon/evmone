@@ -4,6 +4,7 @@
 
 #include <gmock/gmock.h>
 #include <test/state/hash_utils.hpp>
+#include <test/state/transaction.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
