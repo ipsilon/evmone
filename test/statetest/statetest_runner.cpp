@@ -24,7 +24,32 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
             //     continue;
 
             const auto& expected = cases[case_index];
-            const auto tx = test.multi_tx.get(expected.indexes);
+            auto tx = test.multi_tx.get(expected.indexes);
+            if (!expected.txbytes.empty())
+            {
+                // Rely on the signed transaction bytes: decode the real transaction and cross-check
+                // the decoded fields against the JSON template as an early check of the decoder.
+                // Sender recovery and signature validation come in a later change, so keep the
+                // template's sender.
+                auto decoded = state::decode_transaction(expected.txbytes);
+                ASSERT_TRUE(decoded.has_value()) << "failed to decode txbytes";
+                EXPECT_EQ(decoded->type, tx.type);
+                EXPECT_EQ(decoded->nonce, tx.nonce);
+                EXPECT_EQ(decoded->to, tx.to);
+                EXPECT_EQ(decoded->value, tx.value);
+                EXPECT_EQ(decoded->data, tx.data);
+                EXPECT_EQ(decoded->gas_limit, tx.gas_limit);
+                EXPECT_EQ(decoded->max_gas_price, tx.max_gas_price);
+                EXPECT_EQ(decoded->max_priority_gas_price, tx.max_priority_gas_price);
+                // The sender and the EIP-7702 authorization signers are recovered from the
+                // signatures, which a later change adds; the wire carries neither. Until then,
+                // carry them over from the JSON template so execution matches.
+                decoded->sender = tx.sender;
+                ASSERT_EQ(decoded->authorization_list.size(), tx.authorization_list.size());
+                for (size_t i = 0; i < decoded->authorization_list.size(); ++i)
+                    decoded->authorization_list[i].signer = tx.authorization_list[i].signer;
+                tx = std::move(*decoded);
+            }
             auto state = test.pre_state;
             const auto blob_params = get_blob_params(rev, test.blob_schedule);
 

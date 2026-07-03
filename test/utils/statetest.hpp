@@ -51,6 +51,11 @@ struct StateTransitionTest
             hash256 state_hash;
             hash256 logs_hash = EmptyListHash;
             bool exception = false;
+
+            /// The network serialization of the signed transaction for this case. The multi-tx
+            /// template omits the signature, so the runner decodes the real transaction from here.
+            /// Absent (empty) for fixtures that don't provide it.
+            bytes txbytes;
         };
 
         evmc_revision rev;

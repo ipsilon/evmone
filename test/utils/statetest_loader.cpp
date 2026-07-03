@@ -496,6 +496,9 @@ static void from_json(const json::json& j, StateTransitionTest::Case::Expectatio
     o.state_hash = from_json<hash256>(j.at("hash"));
     o.logs_hash = from_json<hash256>(j.at("logs"));
     o.exception = j.contains("expectException");
+    // Optional and sometimes JSON null; treat both as absent.
+    if (const auto it = j.find("txbytes"); it != j.end() && !it->is_null())
+        o.txbytes = from_json<bytes>(*it);
 }
 
 static void from_json(const json::json& j_t, StateTransitionTest& o)
