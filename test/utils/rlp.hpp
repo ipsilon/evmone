@@ -6,6 +6,7 @@
 
 #include <evmc/bytes.hpp>
 #include <intx/intx.hpp>
+#include <test/state/rlp_common.hpp>
 #include <cassert>
 #include <string>
 #include <string_view>
@@ -22,11 +23,10 @@ namespace internal
 template <uint8_t ShortBase, uint8_t LongBase>
 inline bytes encode_length(size_t l)
 {
-    static constexpr uint8_t short_cutoff = 55;
-    static_assert(ShortBase + short_cutoff <= 0xff);
+    static_assert(ShortBase + MAX_SHORT_LEN <= 0xff);
     assert(l <= 0xffffff);
 
-    if (l <= short_cutoff)
+    if (l <= MAX_SHORT_LEN)
         return {static_cast<uint8_t>(ShortBase + l)};
     else if (const auto l0 = static_cast<uint8_t>(l); l <= 0xff)
         return {LongBase + 1, l0};
@@ -38,7 +38,7 @@ inline bytes encode_length(size_t l)
 
 inline bytes wrap_list(const bytes& content)
 {
-    return internal::encode_length<192, 247>(content.size()) + content;
+    return internal::encode_length<SHORT_LIST_OFFSET, LONG_LIST_OFFSET>(content.size()) + content;
 }
 
 template <typename InputIterator>
@@ -59,11 +59,11 @@ inline decltype(rlp_encode(std::declval<T>())) encode(const T& v)
 
 inline bytes encode(bytes_view data)
 {
-    static constexpr uint8_t short_base = 128;
-    if (data.size() == 1 && data[0] < short_base)
+    if (data.size() == 1 && data[0] < SHORT_STRING_OFFSET)
         return {data[0]};
 
-    return internal::encode_length<short_base, 183>(data.size()) += data;  // Op + not available.
+    // Op + not available.
+    return internal::encode_length<SHORT_STRING_OFFSET, LONG_STRING_OFFSET>(data.size()) += data;
 }
 
 inline bytes encode(uint64_t x)
