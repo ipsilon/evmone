@@ -28,6 +28,7 @@ target_sources(
     precompiles_internal.hpp
     requests.hpp
     requests.cpp
+    rlp_common.hpp
     state.hpp
     state.cpp
     state_diff.hpp
