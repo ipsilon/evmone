@@ -148,7 +148,7 @@ inline std::string hex0x(const intx::uint256& v)
 }
 
 /// Encodes bytes as hex with 0x prefix.
-inline std::string hex0x(const bytes_view& v)
+inline std::string hex0x(bytes_view v)
 {
     return "0x" + evmc::hex(v);
 }

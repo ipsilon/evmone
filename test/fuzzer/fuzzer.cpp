@@ -22,7 +22,7 @@ inline std::ostream& operator<<(std::ostream& os, const evmc_bytes32& v)
     return os << hex({v.bytes, sizeof(v.bytes)});
 }
 
-inline std::ostream& operator<<(std::ostream& os, const bytes_view& v)
+inline std::ostream& operator<<(std::ostream& os, bytes_view v)
 {
     return os << hex(v);
 }
