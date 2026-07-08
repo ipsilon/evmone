@@ -185,12 +185,15 @@ int64_t process_authorization_list(
         // 8. Set the code of authority to be 0xef0100 || address. This is a delegation designation.
         else
         {
-            auto new_code = bytes(DELEGATION_MAGIC) + bytes(auth.addr);
+            uint8_t designation[std::size(DELEGATION_MAGIC) + sizeof(auth.addr)];
+            const auto it = std::ranges::copy(DELEGATION_MAGIC, designation).out;
+            std::ranges::copy(auth.addr.bytes, it);
+            const bytes_view new_code{designation, std::size(designation)};
             if (authority.code != new_code)
             {
                 // We are doing this only if the code is different to make the state diff precise.
                 authority.code_changed = true;
-                authority.code = std::move(new_code);
+                authority.code = new_code;
                 authority.code_hash = keccak256(authority.code);
             }
         }
@@ -226,6 +229,7 @@ evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) n
 StateDiff State::build_diff(evmc_revision rev) const
 {
     StateDiff diff;
+    diff.modified_accounts.reserve(m_modified.size());
     for (const auto& [addr, m] : m_modified)
     {
         if (m.destructed)
@@ -333,7 +337,9 @@ StorageValue& State::get_storage(const address& addr, const bytes32& key)
     // TODO: Avoid account lookup by giving the reference to the account's storage to Host.
     auto& acc = get(addr);
     const auto [it, missing] = acc.storage.try_emplace(key);
-    if (missing)
+    // Query the initial state only if the account may have storage there;
+    // otherwise the initial value is guaranteed to be zero (the default).
+    if (missing && acc.has_initial_storage)
     {
         const auto initial_value = m_initial.get_storage(addr, key);
         it->second = {initial_value, initial_value};
@@ -633,6 +639,12 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     for (const auto& [a, storage_keys] : tx.access_list)
     {
         host.access_account(a);
+        if (storage_keys.empty())
+            continue;
+        // The access list may name a precompile together with storage keys. access_account()
+        // doesn't create state entries for precompiles, but warming the storage keys requires
+        // the account to exist in the state.
+        state.get_or_insert(a, {.erase_if_empty = true});
         for (const auto& key : storage_keys)
             state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
     }

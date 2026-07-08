@@ -364,11 +364,13 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
 
             // Transfer value: sender → recipient.
             // The sender's balance is already checked therefore the sender account must exist.
+            // References to accounts are stable, inserting the recipient doesn't affect them.
             const auto value = intx::be::load<intx::uint256>(msg.value);
-            assert(m_state.get(msg.sender).balance >= value);
-            m_state.journal_balance_change(msg.sender, m_state.get(msg.sender).balance);
+            auto& sender_acc = m_state.get(msg.sender);
+            assert(sender_acc.balance >= value);
+            m_state.journal_balance_change(msg.sender, sender_acc.balance);
             m_state.journal_balance_change(msg.recipient, dst_acc.balance);
-            m_state.get(msg.sender).balance -= value;
+            sender_acc.balance -= value;
             dst_acc.balance += value;
 
             if (m_rev >= EVMC_AMSTERDAM)
@@ -402,15 +404,20 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
     if (result.status_code != EVMC_SUCCESS)
     {
         static constexpr auto addr_03 = 0x03_address;
-        auto* const acc_03 = m_state.find(addr_03);
-        const auto is_03_touched = acc_03 != nullptr && acc_03->erase_if_empty;
+        // The 0x03 quirk applies only from Spurious Dragon, don't look the account up earlier.
+        bool is_03_touched = false;
+        if (m_rev >= EVMC_SPURIOUS_DRAGON)
+        {
+            const auto* const acc_03 = m_state.find(addr_03);
+            is_03_touched = acc_03 != nullptr && acc_03->erase_if_empty;
+        }
 
         // Revert.
         m_state.rollback(state_checkpoint);
         m_logs.resize(logs_checkpoint);
 
         // The 0x03 quirk: the touch on this address is never reverted.
-        if (is_03_touched && m_rev >= EVMC_SPURIOUS_DRAGON)
+        if (is_03_touched)
             m_state.touch(addr_03);
     }
     return result;
@@ -458,9 +465,13 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
+    // Precompiles are always warm (EIP-2929); don't create state entries for them.
+    if (is_precompile(m_rev, addr))
+        return EVMC_ACCESS_WARM;
+
     auto& acc = m_state.get_or_insert(addr, {.erase_if_empty = true});
 
-    if (acc.access_status == EVMC_ACCESS_WARM || is_precompile(m_rev, addr))
+    if (acc.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;
 
     m_state.journal_access_account(addr);

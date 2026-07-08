@@ -246,6 +246,16 @@ TEST_F(state_transition, access_list_cost_osaka_unchanged)
     expect.gas_used = 25300;
 }
 
+TEST_F(state_transition, access_list_precompile_with_storage_keys)
+{
+    // An access list may name a precompile together with storage keys (EIP-2930).
+    rev = EVMC_OSAKA;
+    tx.to = To;
+    tx.access_list = {{0x01_address, {0x01_bytes32}}};
+    // intrinsic = 21000 + 2400 + 1900 = 25300
+    expect.gas_used = 25300;
+}
+
 TEST_F(state_transition, access_list_floor_amsterdam)
 {
     // EIP-7981: access-list bytes count toward the floor.
