@@ -5,6 +5,7 @@
 #include "state.hpp"
 #include "../utils/stdx/utility.hpp"
 #include "host.hpp"
+#include "precompiles.hpp"
 #include "state_view.hpp"
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
@@ -630,6 +631,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     for (const auto& [a, storage_keys] : tx.access_list)
     {
         host.access_account(a);
+        if (is_precompile(rev, a))  // Precompile storage is never accessed.
+            continue;
         for (const auto& key : storage_keys)
             state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
     }

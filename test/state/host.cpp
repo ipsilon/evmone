@@ -385,13 +385,21 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
-    auto& acc = m_state.get_or_insert(addr, {.erase_if_empty = true});
+    auto* acc = m_state.find(addr);
 
-    if (acc.access_status == EVMC_ACCESS_WARM || is_precompile(m_rev, addr))
+    if (acc != nullptr && acc->access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;
 
-    m_state.journal_account_flags(addr, acc);
-    acc.access_status = EVMC_ACCESS_WARM;
+    if (is_precompile(m_rev, addr))  // Precompiles are always warm. Don't insert to state.
+        return EVMC_ACCESS_WARM;
+
+    // TODO: On a modified-set miss the account is looked up twice. This can be improved with
+    //   a try_emplace-like API, but the miss happens only in ~39% of the calls on Mainnet.
+    if (acc == nullptr)
+        acc = &m_state.insert(addr, {.erase_if_empty = true});
+
+    m_state.journal_account_flags(addr, *acc);
+    acc->access_status = EVMC_ACCESS_WARM;
     return EVMC_ACCESS_COLD;
 }
 
