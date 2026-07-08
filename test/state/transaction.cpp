@@ -5,6 +5,8 @@
 #include "transaction.hpp"
 #include "rlp_common.hpp"
 #include "rlp_decode.hpp"
+#include "test/utils/stdx/utility.hpp"
+
 #include <algorithm>
 #include <limits>
 
@@ -41,9 +43,7 @@ namespace
 
 [[nodiscard]] bool decode_transaction_body(bytes_view& from, Transaction& to) noexcept
 {
-    // Legacy is a plain RLP list; a typed transaction (EIP-2718) is a type byte then an RLP list.
-    // Fields are decoded from the list payload; `from` is left just past the transaction.
-    if (from.empty())
+    if (from.empty()) [[unlikely]]
         return false;
 
     bytes_view body;
@@ -57,13 +57,14 @@ namespace
     {
         // The type is a single byte in [0x00, 0x7f], not an RLP item; reading it directly rejects
         // a non-canonical RLP-string form such as 0x81 0x02.
-        const uint8_t t = from[0];
+        const auto t = from[0];
         from.remove_prefix(1);
-        if (t > static_cast<uint8_t>(Transaction::Type::legacy) &&
-            t <= static_cast<uint8_t>(Transaction::Type::set_code))
-            to.type = static_cast<Transaction::Type>(t);
-        else
+
+        if (t == stdx::to_underlying(Transaction::Type::legacy) ||
+            t > stdx::to_underlying(Transaction::Type::set_code)) [[unlikely]]
             return false;
+
+        to.type = static_cast<Transaction::Type>(t);
 
         if (!take_list_payload(from, body) || !rlp::decode(body, to.chain_id))
             return false;
@@ -72,9 +73,8 @@ namespace
     if (!rlp::decode(body, to.nonce))
         return false;
 
-    // Dynamic-fee transactions carry the priority fee per gas.
-    if (to.type == Transaction::Type::eip1559 || to.type == Transaction::Type::blob ||
-        to.type == Transaction::Type::set_code)
+    const auto has_priority_gas_price = to.type >= Transaction::Type::eip1559;
+    if (has_priority_gas_price)  // FIXME
     {
         if (!rlp::decode(body, to.max_priority_gas_price))
             return false;
@@ -83,8 +83,7 @@ namespace
     if (!rlp::decode(body, to.max_gas_price))
         return false;
 
-    // Pre-EIP-1559 transactions have a single gas price used as both caps.
-    if (to.type == Transaction::Type::legacy || to.type == Transaction::Type::access_list)
+    if (!has_priority_gas_price)
         to.max_priority_gas_price = to.max_gas_price;
 
     uint64_t gas_limit{};

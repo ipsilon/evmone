@@ -104,8 +104,8 @@ bool decode(bytes_view& from, bytes& to) noexcept
     if (!decode_header(from, h) || h.is_list)
         return false;
 
-    to = from.substr(0, static_cast<size_t>(h.payload_length));
-    from.remove_prefix(static_cast<size_t>(h.payload_length));
+    to = from.substr(0, h.payload_length);
+    from.remove_prefix(h.payload_length);
     return true;
 }
 
