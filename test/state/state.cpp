@@ -272,6 +272,7 @@ StateDiff State::build_diff(evmc_revision rev) const
 
 Account& State::insert(const address& addr, Account account)
 {
+    m_absent.erase(addr);  // The account exists now.
     const auto r = m_modified.insert({addr, std::move(account)});
     assert(r.second);
     return r.first->second;
@@ -279,16 +280,31 @@ Account& State::insert(const address& addr, Account account)
 
 Account* State::find(const address& addr) noexcept
 {
-    // TODO: Avoid double lookup (find+insert) and not cached initial state lookup for non-existent
-    //   accounts. If we want to cache non-existent account we need a proper flag for it.
+    if (m_last_acc != nullptr && addr == m_last_addr)
+        return m_last_acc;
+
+    Account* acc = nullptr;
     if (const auto it = m_modified.find(addr); it != m_modified.end())
-        return &it->second;
-    if (const auto cacc = m_initial.get_account(addr); cacc)
-        return &insert(addr, {.nonce = cacc->nonce,
-                                 .balance = cacc->balance,
-                                 .code_hash = cacc->code_hash,
-                                 .has_initial_storage = cacc->has_storage});
-    return nullptr;
+        acc = &it->second;
+    else if (!m_absent.contains(addr))
+    {
+        if (const auto cacc = m_initial.get_account(addr); cacc)
+            acc = &insert(addr, {.nonce = cacc->nonce,
+                                    .balance = cacc->balance,
+                                    .code_hash = cacc->code_hash,
+                                    .has_initial_storage = cacc->has_storage});
+        else
+            m_absent.insert(addr);  // Cache the negative lookup.
+    }
+
+    if (acc != nullptr)
+    {
+        // References to unordered_map elements are stable so the cached pointer
+        // remains valid until the element is erased (see rollback()).
+        m_last_addr = addr;
+        m_last_acc = acc;
+    }
+    return acc;
 }
 
 Account& State::get(const address& addr) noexcept
@@ -417,6 +433,8 @@ void State::rollback(size_t checkpoint)
                         //       so we need to delete them here explicitly.
                         //       This should be changed by tuning "erasable" flag
                         //       and clear in all revisions.
+                        if (m_last_acc != nullptr && e.addr == m_last_addr)
+                            m_last_acc = nullptr;  // Invalidate the lookup cache.
                         m_modified.erase(e.addr);
                     }
                 }

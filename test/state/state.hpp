@@ -12,6 +12,7 @@
 #include "state_diff.hpp"
 #include "state_view.hpp"
 #include "transaction.hpp"
+#include <unordered_set>
 #include <variant>
 
 namespace evmone::state
@@ -68,6 +69,16 @@ class State
 
     /// The accounts loaded from the initial state and potentially modified.
     std::unordered_map<address, Account> m_modified;
+
+    /// Addresses known to not exist in m_modified nor in the initial state.
+    /// Avoids repeated initial state queries for non-existent accounts.
+    std::unordered_set<address> m_absent;
+
+    /// Single-entry cache of the last successful account lookup.
+    /// Host callbacks look up the same account repeatedly (e.g. SLOAD/SSTORE
+    /// perform two callbacks per instruction, both hitting the same address).
+    address m_last_addr;
+    Account* m_last_acc = nullptr;
 
     /// The state journal: the list of changes made to the state
     /// with information how to revert them.
