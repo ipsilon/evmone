@@ -225,6 +225,7 @@ evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) n
 StateDiff State::build_diff(evmc_revision rev) const
 {
     StateDiff diff;
+    diff.modified_accounts.reserve(m_modified.size());
     for (const auto& [addr, m] : m_modified)
     {
         if (m.destructed)
