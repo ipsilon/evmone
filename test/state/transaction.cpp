@@ -13,33 +13,22 @@ namespace evmone::state
 {
 using intx::uint256;
 
-namespace
-{
-/// Reads an RLP list header, advances @p from past the list, and returns its bounded payload.
-[[nodiscard]] bool take_list_payload(bytes_view& from, bytes_view& payload) noexcept
-{
-    rlp::Header h;
-    if (!rlp::decode_header(from, h) || !h.is_list)
-        return false;
-    payload = from.substr(0, h.payload_length);
-    from.remove_prefix(h.payload_length);
-    return true;
-}
-
-[[nodiscard]] bool decode_authorization(bytes_view& from, Authorization& to) noexcept
+bool decode(bytes_view& from, Authorization& to) noexcept
 {
     bytes_view payload;
-    if (!take_list_payload(from, payload))
+    if (!rlp::take_list_payload(from, payload))
         return false;
 
-    if (!rlp::decode_fields(payload, to.chain_id, to.addr, to.nonce, to.v))
+    if (!rlp::decode_multi(payload, to.chain_id, to.addr, to.nonce, to.v))
         return false;
     // EIP-7702 y_parity is a recovery-time check; accept any v < 2**8 (recovery rejects v > 1).
     if (to.v >= 0x100)
         return false;
-    return rlp::decode_fields(payload, to.r, to.s) && payload.empty();
+    return rlp::decode_multi(payload, to.r, to.s) && payload.empty();
 }
 
+namespace
+{
 [[nodiscard]] bool decode_transaction_body(bytes_view& from, Transaction& to) noexcept
 {
     if (from.empty()) [[unlikely]]
@@ -49,7 +38,7 @@ namespace
     if (from[0] >= rlp::SHORT_LIST_BASE)  // Legacy: the item is an RLP list.
     {
         to.type = Transaction::Type::legacy;
-        if (!take_list_payload(from, body))
+        if (!rlp::take_list_payload(from, body))
             return false;
     }
     else  // Typed (EIP-2718): a raw type byte followed by the RLP list.
@@ -65,7 +54,7 @@ namespace
 
         to.type = static_cast<Transaction::Type>(t);
 
-        if (!take_list_payload(from, body) || !rlp::decode(body, to.chain_id))
+        if (!rlp::take_list_payload(from, body) || !rlp::decode(body, to.chain_id))
             return false;
     }
 
@@ -108,7 +97,7 @@ namespace
         to.to = recipient;
     }
 
-    if (!rlp::decode_fields(body, to.value, to.data))
+    if (!rlp::decode_multi(body, to.value, to.data))
         return false;
 
     if (to.type == Transaction::Type::legacy)
@@ -139,26 +128,19 @@ namespace
             return false;
         if (to.type == Transaction::Type::blob)
         {
-            if (!rlp::decode_fields(body, to.max_blob_gas_price, to.blob_hashes))
+            if (!rlp::decode_multi(body, to.max_blob_gas_price, to.blob_hashes))
                 return false;
         }
         else if (to.type == Transaction::Type::set_code)
         {
-            bytes_view auth_payload;
-            if (!take_list_payload(body, auth_payload))
+            if (!rlp::decode(body, to.authorization_list))
                 return false;
-            while (!auth_payload.empty())
-            {
-                to.authorization_list.emplace_back();
-                if (!decode_authorization(auth_payload, to.authorization_list.back()))
-                    return false;
-            }
         }
         if (!rlp::decode(body, to.v) || to.v > 1)
             return false;
     }
 
-    return rlp::decode_fields(body, to.r, to.s) && body.empty();
+    return rlp::decode_multi(body, to.r, to.s) && body.empty();
 }
 }  // namespace
 

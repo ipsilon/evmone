@@ -32,6 +32,11 @@ struct Authorization
 
 using AuthorizationList = std::vector<Authorization>;
 
+/// Decodes an EIP-7702 authorization tuple [chain_id, address, nonce, y_parity, r, s].
+/// Declared here (not file-local) so the generic rlp::decode(std::vector<T>&) finds it by ADL
+/// and decodes an authorization_list directly.
+[[nodiscard]] bool decode(bytes_view& from, Authorization& to) noexcept;
+
 struct Transaction
 {
     /// The type of the transaction.

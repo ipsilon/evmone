@@ -41,6 +41,17 @@ struct Header
 /// On success the payload fits the advanced input: out.payload_length <= input.size().
 [[nodiscard]] bool decode_header(bytes_view& input, Header& out) noexcept;
 
+/// Reads an RLP list header, advances @p from past the list, and returns its bounded payload.
+[[nodiscard]] inline bool take_list_payload(bytes_view& from, bytes_view& payload) noexcept
+{
+    Header h;
+    if (!decode_header(from, h) || !h.is_list)
+        return false;
+    payload = from.substr(0, h.payload_length);
+    from.remove_prefix(h.payload_length);
+    return true;
+}
+
 /// Decodes a variable-length unsigned integer: any big-endian payload up to sizeof(T) bytes,
 /// with no leading zeros (non-canonical).
 template <UnsignedIntegral T>
@@ -93,11 +104,10 @@ template <typename T1, typename T2>
 template <typename T>
 [[nodiscard]] bool decode(bytes_view& from, std::vector<T>& to) noexcept
 {
-    Header h;
-    if (!decode_header(from, h) || !h.is_list)
+    bytes_view payload_view;
+    if (!take_list_payload(from, payload_view))
         return false;
 
-    auto payload_view = from.substr(0, h.payload_length);
     std::vector<T> elements;  // Assigned to `to` only on success, leaving it intact on failure.
     while (!payload_view.empty())
     {
@@ -107,28 +117,22 @@ template <typename T>
     }
 
     to = std::move(elements);
-    from.remove_prefix(h.payload_length);
     return true;
 }
 
 template <typename T1, typename T2>
 [[nodiscard]] bool decode(bytes_view& from, std::pair<T1, T2>& p) noexcept
 {
-    Header h;
-    if (!decode_header(from, h) || !h.is_list)
+    bytes_view payload_view;
+    if (!take_list_payload(from, payload_view))
         return false;
 
-    auto payload_view = from.substr(0, h.payload_length);
-    if (!decode(payload_view, p.first) || !decode(payload_view, p.second) || !payload_view.empty())
-        return false;
-
-    from.remove_prefix(h.payload_length);
-    return true;
+    return decode(payload_view, p.first) && decode(payload_view, p.second) && payload_view.empty();
 }
 
 /// Decodes a run of fields in order, stopping at the first failure.
 template <typename... Ts>
-[[nodiscard]] inline bool decode_fields(bytes_view& from, Ts&... items) noexcept
+[[nodiscard]] inline bool decode_multi(bytes_view& from, Ts&... items) noexcept
 {
     return (decode(from, items) && ...);
 }
