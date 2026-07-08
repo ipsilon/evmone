@@ -62,9 +62,7 @@ evmc_storage_status Host::set_storage(
             status = EVMC_STORAGE_MODIFIED_RESTORED;  // X → Y → X
     }
 
-    // In Berlin this is handled in access_storage().
-    if (m_rev < EVMC_BERLIN)
-        m_state.journal_storage_change(addr, key, storage_slot);
+    m_state.journal_storage_change(addr, key, storage_slot);
     storage_slot.current = value;  // Update current value.
     return status;
 }
@@ -477,8 +475,11 @@ evmc_access_status Host::access_account(const address& addr) noexcept
 evmc_access_status Host::access_storage(const address& addr, const bytes32& key) noexcept
 {
     auto& storage_slot = m_state.get_storage(addr, key);
+    if (storage_slot.access_status == EVMC_ACCESS_WARM)
+        return EVMC_ACCESS_WARM;  // Nothing changes, skip journaling.
     m_state.journal_storage_change(addr, key, storage_slot);
-    return std::exchange(storage_slot.access_status, EVMC_ACCESS_WARM);
+    storage_slot.access_status = EVMC_ACCESS_WARM;
+    return EVMC_ACCESS_COLD;
 }
 
 
