@@ -185,13 +185,16 @@ int64_t process_authorization_list(
         // 8. Set the code of authority to be 0xef0100 || address. This is a delegation designation.
         else
         {
-            auto new_code = bytes(DELEGATION_MAGIC) + bytes(auth.addr);
-            if (authority.code != new_code)
+            uint8_t designation_buf[std::size(DELEGATION_MAGIC) + sizeof(auth.addr)];
+            const auto it = std::ranges::copy(DELEGATION_MAGIC, std::begin(designation_buf)).out;
+            std::ranges::copy(auth.addr.bytes, it);
+            const bytes_view designation{designation_buf, std::size(designation_buf)};
+            if (authority.code != designation)
             {
                 // We are doing this only if the code is different to make the state diff precise.
                 authority.code_changed = true;
-                authority.code = std::move(new_code);
-                authority.code_hash = keccak256(authority.code);
+                authority.code = designation;
+                authority.code_hash = keccak256(designation);
             }
         }
 
