@@ -922,42 +922,42 @@ enum evmc_revision
      *
      * The one Ethereum launched with.
      */
-    EVMC_FRONTIER = 0,
+    EVMC_FRONTIER,
 
     /**
      * The Homestead revision.
      *
      * https://eips.ethereum.org/EIPS/eip-606
      */
-    EVMC_HOMESTEAD = 1,
+    EVMC_HOMESTEAD,
 
     /**
      * The Tangerine Whistle revision.
      *
      * https://eips.ethereum.org/EIPS/eip-608
      */
-    EVMC_TANGERINE_WHISTLE = 2,
+    EVMC_TANGERINE_WHISTLE,
 
     /**
      * The Spurious Dragon revision.
      *
      * https://eips.ethereum.org/EIPS/eip-607
      */
-    EVMC_SPURIOUS_DRAGON = 3,
+    EVMC_SPURIOUS_DRAGON,
 
     /**
      * The Byzantium revision.
      *
      * https://eips.ethereum.org/EIPS/eip-609
      */
-    EVMC_BYZANTIUM = 4,
+    EVMC_BYZANTIUM,
 
     /**
      * The Constantinople revision.
      *
      * https://eips.ethereum.org/EIPS/eip-1013
      */
-    EVMC_CONSTANTINOPLE = 5,
+    EVMC_CONSTANTINOPLE,
 
     /**
      * The Petersburg revision.
@@ -966,76 +966,76 @@ enum evmc_revision
      *
      * https://eips.ethereum.org/EIPS/eip-1716
      */
-    EVMC_PETERSBURG = 6,
+    EVMC_PETERSBURG,
 
     /**
      * The Istanbul revision.
      *
      * https://eips.ethereum.org/EIPS/eip-1679
      */
-    EVMC_ISTANBUL = 7,
+    EVMC_ISTANBUL,
 
     /**
      * The Berlin revision.
      *
      * https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/berlin.md
      */
-    EVMC_BERLIN = 8,
+    EVMC_BERLIN,
 
     /**
      * The London revision.
      *
      * https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/london.md
      */
-    EVMC_LONDON = 9,
+    EVMC_LONDON,
 
     /**
      * The Paris revision (aka The Merge).
      *
      * https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/paris.md
      */
-    EVMC_PARIS = 10,
+    EVMC_PARIS,
 
     /**
      * The Shanghai revision.
      *
      * https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/shanghai.md
      */
-    EVMC_SHANGHAI = 11,
+    EVMC_SHANGHAI,
 
     /**
      * The Cancun revision.
      *
      * https://github.com/ethereum/execution-specs/blob/master/network-upgrades/mainnet-upgrades/cancun.md
      */
-    EVMC_CANCUN = 12,
+    EVMC_CANCUN,
 
     /**
      * The Prague / Pectra revision.
      *
      * https://eips.ethereum.org/EIPS/eip-7600
      */
-    EVMC_PRAGUE = 13,
+    EVMC_PRAGUE,
 
     /**
      * The Osaka / Fusaka revision.
      *
      * https://eips.ethereum.org/EIPS/eip-7607
      */
-    EVMC_OSAKA = 14,
+    EVMC_OSAKA,
 
     /**
      * The Amsterdam / Glamsterdam revision.
      *
      * https://eips.ethereum.org/EIPS/eip-7773
      */
-    EVMC_AMSTERDAM = 15,
+    EVMC_AMSTERDAM,
 
     /**
      * The unspecified EVM revision used for EVM implementations to expose
      * experimental features.
      */
-    EVMC_EXPERIMENTAL = 16,
+    EVMC_EXPERIMENTAL,
 
     /** The maximum EVM revision supported. */
     EVMC_MAX_REVISION = EVMC_EXPERIMENTAL,

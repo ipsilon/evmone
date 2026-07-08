@@ -11,6 +11,16 @@ if(TARGET evmone-cli)
         ${PREFIX}/run PROPERTIES PASS_REGULAR_EXPRESSION
         "Result:   success\nGas used: 3\n")
 
+    add_test(NAME ${PREFIX}/run_rev COMMAND evmone-cli run --rev TangerineWhistle 00)
+    set_tests_properties(
+        ${PREFIX}/run_rev PROPERTIES PASS_REGULAR_EXPRESSION
+        "Executing on TangerineWhistle")
+
+    add_test(NAME ${PREFIX}/run_bad_rev COMMAND evmone-cli run --rev NoSuchRev 00)
+    set_tests_properties(
+        ${PREFIX}/run_bad_rev PROPERTIES PASS_REGULAR_EXPRESSION
+        "unknown revision: NoSuchRev")
+
     add_test(NAME ${PREFIX}/version COMMAND evmone-cli --version)
     set_tests_properties(
         ${PREFIX}/version PROPERTIES PASS_REGULAR_EXPRESSION "evmone")

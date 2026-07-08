@@ -183,7 +183,11 @@ int main(int argc, const char* const* argv) noexcept
         run_cmd.add_option("--gas", gas, "Execution gas limit")
             ->capture_default_str()
             ->check(CLI::Range(0, 1000000000));
-        run_cmd.add_option("--rev", rev, "EVM revision")->capture_default_str();
+        run_cmd
+            .add_option_function<std::string>(
+                "--rev", [&rev](const std::string& name) { rev = evmone::test::to_rev(name); },
+                "EVM revision name")
+            ->default_str(evmc::to_string(rev));
         run_cmd.add_option("--input", input_arg, "Input bytes")->check(HexOrFile);
         run_cmd.add_flag("--create", create,
             "Create new contract out of the code and then execute this contract with the input");
