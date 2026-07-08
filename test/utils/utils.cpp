@@ -19,8 +19,6 @@ evmc_revision to_rev(std::string_view s)
         return EVMC_SPURIOUS_DRAGON;
     if (s == "Byzantium")
         return EVMC_BYZANTIUM;
-    if (s == "Constantinople")
-        return EVMC_CONSTANTINOPLE;
     if (s == "Petersburg" || s == "ConstantinopleFix")
         return EVMC_PETERSBURG;
     if (s == "Istanbul")

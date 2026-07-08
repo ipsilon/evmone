@@ -449,6 +449,20 @@ jobs:
       - download_execution_tests:
           rev: v17.2
       - run:
+          name: "Drop unsupported Constantinople test cases"
+          working_directory: ~/tests
+          command: |
+            # evmone no longer supports the Constantinople revision (it never
+            # activated on Mainnet and was superseded by Petersburg). Strip the
+            # Constantinople-only cases from the fixtures so the other forks in
+            # each file still run. ConstantinopleFix (== Petersburg) is kept.
+            # Only the directories actually run below are scanned.
+            files=$(grep -rlE '"network"[[:space:]]*:[[:space:]]*"Constantinople"' BlockchainTests/ValidBlocks BlockchainTests/InvalidBlocks LegacyTests/Cancun/BlockchainTests/ValidBlocks LegacyTests/Cancun/BlockchainTests/InvalidBlocks || true)
+            for f in $files; do
+              python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); json.dump({k:v for k,v in d.items() if v.get('network')!='Constantinople'}, open(p,'w'), indent=1)" "$f"
+              echo "filtered $f"
+            done
+      - run:
           name: "Blockchain tests (ValidBlocks)"
           working_directory: ~/build
           command: >

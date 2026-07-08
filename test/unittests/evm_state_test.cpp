@@ -129,7 +129,7 @@ TEST_P(evm, selfbalance)
     // instruction as a result)
     auto code = bytecode{} + push(1) + OP_SELFBALANCE + mstore(0) + ret(32 - 6, 6);
 
-    rev = EVMC_CONSTANTINOPLE;
+    rev = EVMC_PETERSBURG;
     execute(code);
     EXPECT_EQ(result.status_code, EVMC_UNDEFINED_INSTRUCTION);
 
@@ -506,7 +506,7 @@ TEST_P(evm, extcodehash)
     execute(code);
     EXPECT_EQ(result.status_code, EVMC_UNDEFINED_INSTRUCTION);
 
-    rev = EVMC_CONSTANTINOPLE;
+    rev = EVMC_PETERSBURG;
     execute(code);
     EXPECT_EQ(gas_used, 418);
     ASSERT_EQ(result.output_size, 32);

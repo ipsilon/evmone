@@ -129,7 +129,7 @@ std::optional<uint64_t> mining_reward(evmc_revision rev) noexcept
 {
     if (rev < EVMC_BYZANTIUM)
         return 5'000000000'000000000;
-    if (rev < EVMC_CONSTANTINOPLE)
+    if (rev < EVMC_PETERSBURG)
         return 3'000000000'000000000;
     if (rev < EVMC_PARIS)
         return 2'000000000'000000000;

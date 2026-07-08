@@ -234,8 +234,6 @@ static inline const char* evmc_revision_to_string(enum evmc_revision rev)
         return "SpuriousDragon";
     case EVMC_BYZANTIUM:
         return "Byzantium";
-    case EVMC_CONSTANTINOPLE:
-        return "Constantinople";
     case EVMC_PETERSBURG:
         return "Petersburg";
     case EVMC_ISTANBUL:
