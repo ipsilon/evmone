@@ -274,10 +274,11 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
             // Transfer value: sender → recipient.
             // The sender's balance is already checked therefore the sender account must exist.
             const auto value = intx::be::load<intx::uint256>(msg.value);
-            assert(m_state.get(msg.sender).balance >= value);
-            m_state.journal_balance_change(msg.sender, m_state.get(msg.sender).balance);
+            auto& sender_acc = m_state.get(msg.sender);
+            assert(sender_acc.balance >= value);
+            m_state.journal_balance_change(msg.sender, sender_acc.balance);
             m_state.journal_balance_change(msg.recipient, dst_acc.balance);
-            m_state.get(msg.sender).balance -= value;
+            sender_acc.balance -= value;
             dst_acc.balance += value;
 
             if (m_rev >= EVMC_AMSTERDAM)
