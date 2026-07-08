@@ -385,9 +385,13 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
+    // Precompiles are always warm (EIP-2929); don't create state entries for them.
+    if (is_precompile(m_rev, addr))
+        return EVMC_ACCESS_WARM;
+
     auto& acc = m_state.get_or_insert(addr, {.erase_if_empty = true});
 
-    if (acc.access_status == EVMC_ACCESS_WARM || is_precompile(m_rev, addr))
+    if (acc.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;
 
     m_state.journal_account_flags(addr, acc);

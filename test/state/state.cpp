@@ -630,6 +630,12 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     for (const auto& [a, storage_keys] : tx.access_list)
     {
         host.access_account(a);
+        if (storage_keys.empty())
+            continue;
+        // The access list may name a precompile together with storage keys. access_account()
+        // does not create a state entry for a precompile, but warming its storage keys requires
+        // the account to exist in the state.
+        state.get_or_insert(a, {.erase_if_empty = true});
         for (const auto& key : storage_keys)
             state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
     }
