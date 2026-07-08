@@ -7,7 +7,6 @@
 #include "rlp_decode.hpp"
 #include "test/utils/stdx/utility.hpp"
 
-#include <algorithm>
 #include <limits>
 
 namespace evmone::state
@@ -22,8 +21,8 @@ namespace
     rlp::Header h;
     if (!rlp::decode_header(from, h) || !h.is_list)
         return false;
-    payload = from.substr(0, static_cast<size_t>(h.payload_length));
-    from.remove_prefix(static_cast<size_t>(h.payload_length));
+    payload = from.substr(0, h.payload_length);
+    from.remove_prefix(h.payload_length);
     return true;
 }
 
@@ -73,8 +72,10 @@ namespace
     if (!rlp::decode(body, to.nonce))
         return false;
 
+    // EIP-1559 and the later types (blob, set-code) carry a separate priority fee per gas;
+    // earlier types reuse the single gas price for both caps (set below).
     const auto has_priority_gas_price = to.type >= Transaction::Type::eip1559;
-    if (has_priority_gas_price)  // FIXME
+    if (has_priority_gas_price)
     {
         if (!rlp::decode(body, to.max_priority_gas_price))
             return false;
@@ -94,19 +95,18 @@ namespace
 
     // Empty "to" (0x80) is a CREATE transaction; otherwise a 20-byte recipient. The blob and
     // set-code types forbid the CREATE form, but that is enforced later in validate_transaction.
-    bytes to_payload;
-    if (!rlp::decode(body, to_payload))
-        return false;
-    if (to_payload.empty())
-        to.to = std::nullopt;
-    else if (to_payload.size() == sizeof(evmc::address))
+    if (!body.empty() && body[0] == rlp::SHORT_STRING_BASE)  // Empty string.
     {
-        evmc::address to_addr;
-        std::ranges::copy(to_payload, to_addr.bytes);
-        to.to = to_addr;
+        to.to = std::nullopt;
+        body.remove_prefix(1);
     }
     else
-        return false;
+    {
+        evmc::address recipient;
+        if (!rlp::decode(body, recipient))  // Requires exactly 20 bytes.
+            return false;
+        to.to = recipient;
+    }
 
     if (!rlp::decode_fields(body, to.value, to.data))
         return false;

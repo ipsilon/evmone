@@ -31,7 +31,9 @@ template <UnsignedIntegral T>
 
 struct Header
 {
-    uint64_t payload_length = 0;
+    /// The payload length. 32-bit: it never exceeds the input size and a decoded input (a
+    /// transaction or block) is far below 4 GiB, so it always widens to size_t without a cast.
+    uint32_t payload_length = 0;
     bool is_list = false;
 };
 
@@ -39,6 +41,8 @@ struct Header
 /// On success the payload fits the advanced input: out.payload_length <= input.size().
 [[nodiscard]] bool decode_header(bytes_view& input, Header& out) noexcept;
 
+/// Decodes a variable-length unsigned integer: any big-endian payload up to sizeof(T) bytes,
+/// with no leading zeros (non-canonical).
 template <UnsignedIntegral T>
 [[nodiscard]] bool decode(bytes_view& from, T& to) noexcept
 {
@@ -50,19 +54,23 @@ template <UnsignedIntegral T>
     if (h.payload_length > 0 && from[0] == 0)
         return false;
 
-    to = load<T>(from.substr(0, static_cast<size_t>(h.payload_length)));
-    from.remove_prefix(static_cast<size_t>(h.payload_length));
+    to = load<T>(from.substr(0, h.payload_length));
+    from.remove_prefix(h.payload_length);
     return true;
 }
 
+/// Decodes a variable-length byte string of any length.
 [[nodiscard]] bool decode(bytes_view& from, bytes& to) noexcept;
+
+/// Decodes a fixed-width value: the payload must be exactly the type's size (32 bytes for a hash,
+/// 20 for an address). A shorter, longer, or zero-padded encoding is rejected.
 [[nodiscard]] bool decode(bytes_view& from, evmc::bytes32& to) noexcept;
 [[nodiscard]] bool decode(bytes_view& from, evmc::address& to) noexcept;
 
+/// Decodes a fixed-width field into a byte span: the payload must be exactly N bytes.
 template <size_t N>
 [[nodiscard]] bool decode(bytes_view& from, std::span<uint8_t, N> to) noexcept
 {
-    // A fixed-width field (address, hash) must be encoded as exactly N bytes.
     Header h;
     if (!decode_header(from, h) || h.is_list || h.payload_length != to.size())
         return false;
@@ -89,7 +97,7 @@ template <typename T>
     if (!decode_header(from, h) || !h.is_list)
         return false;
 
-    auto payload_view = from.substr(0, static_cast<size_t>(h.payload_length));
+    auto payload_view = from.substr(0, h.payload_length);
     std::vector<T> elements;  // Assigned to `to` only on success, leaving it intact on failure.
     while (!payload_view.empty())
     {
@@ -99,7 +107,7 @@ template <typename T>
     }
 
     to = std::move(elements);
-    from.remove_prefix(static_cast<size_t>(h.payload_length));
+    from.remove_prefix(h.payload_length);
     return true;
 }
 
@@ -110,11 +118,11 @@ template <typename T1, typename T2>
     if (!decode_header(from, h) || !h.is_list)
         return false;
 
-    auto payload_view = from.substr(0, static_cast<size_t>(h.payload_length));
+    auto payload_view = from.substr(0, h.payload_length);
     if (!decode(payload_view, p.first) || !decode(payload_view, p.second) || !payload_view.empty())
         return false;
 
-    from.remove_prefix(static_cast<size_t>(h.payload_length));
+    from.remove_prefix(h.payload_length);
     return true;
 }
 

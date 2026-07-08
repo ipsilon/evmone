@@ -59,7 +59,7 @@ bool decode_header(bytes_view& input, Header& out) noexcept
             return false;
 
         input.remove_prefix(1 + len_of_str_len);
-        out = {str_len, false};
+        out = {static_cast<uint32_t>(str_len), false};  // Fits: str_len < input_len < 4 GiB.
         return true;
     }
     else if (prefix <= LONG_LIST_BASE)  // [0xc0, 0xf7] short list
@@ -93,7 +93,7 @@ bool decode_header(bytes_view& input, Header& out) noexcept
             return false;
 
         input.remove_prefix(1 + len_of_list_len);
-        out = {list_len, true};
+        out = {static_cast<uint32_t>(list_len), true};  // Fits: list_len < input_len < 4 GiB.
         return true;
     }
 }
