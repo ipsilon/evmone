@@ -40,6 +40,14 @@ struct Requests
         /// Consolidation requests.
         /// Introduced by EIP-7251 https://eips.ethereum.org/EIPS/eip-7251.
         consolidation = 2,
+
+        /// Builder deposit requests.
+        /// Introduced by EIP-8282 https://eips.ethereum.org/EIPS/eip-8282.
+        builder_deposit = 3,
+
+        /// Builder exit requests.
+        /// Introduced by EIP-8282 https://eips.ethereum.org/EIPS/eip-8282.
+        builder_exit = 4,
     };
 
     /// Raw encoded data of requests object: first byte is type, the rest is request objects.
