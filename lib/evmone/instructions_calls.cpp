@@ -2,6 +2,7 @@
 // Copyright 2019 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "constants.hpp"
 #include "create_address.hpp"
 #include "delegation.hpp"
 #include "instructions.hpp"
@@ -217,7 +218,10 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     const auto init_code_offset = static_cast<size_t>(init_code_offset_u256);
     const auto init_code_size = static_cast<size_t>(init_code_size_u256);
 
-    if (state.rev >= EVMC_SHANGHAI && init_code_size > 0xC000)
+    // EIP-3860 initcode size limit, raised by EIP-7954 for Amsterdam.
+    const auto max_initcode_size =
+        state.rev >= EVMC_AMSTERDAM ? MAX_INITCODE_SIZE_AMSTERDAM : MAX_INITCODE_SIZE;
+    if (state.rev >= EVMC_SHANGHAI && init_code_size > static_cast<size_t>(max_initcode_size))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);

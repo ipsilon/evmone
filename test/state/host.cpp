@@ -225,12 +225,17 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     const bytes_view code{result.output_data, result.output_size};
 
-    if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > MAX_CODE_SIZE)
-        return evmc::Result{EVMC_FAILURE};
-
-    // Reject new contract code starting with the 0xEF byte (EIP-3541).
+    // EIP-3541: Reject new contract code starting with the 0xEF byte.
+    // Checked before the size check and code deposit gas (per EELS) to avoid
+    // charging for rejected code.
     if (m_rev >= EVMC_LONDON && code.starts_with(0xEF))
         return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+
+    // EIP-7954: Amsterdam increases max code size.
+    // Checked before code deposit gas (per geth).
+    const auto max_code_size = m_rev >= EVMC_AMSTERDAM ? MAX_CODE_SIZE_AMSTERDAM : MAX_CODE_SIZE;
+    if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > static_cast<size_t>(max_code_size))
+        return evmc::Result{EVMC_FAILURE};
 
     // Code deployment cost.
     const auto cost = std::ssize(code) * 200;
