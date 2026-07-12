@@ -938,13 +938,14 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     {
         const auto total_consumed = gas_used;
 
-        // EIP-8037: split the consumed gas into the block's 2D components. All state gas is
-        // captured in `exec_state_gas`; the remainder is the regular component, floored at the
-        // calldata floor like the sender's cost. The block header formula
-        // `max(sum_regular, sum_state)` is computed by the runner from these per-tx values.
+        // EIP-7778 / EIP-8037: split the consumed gas into the block's 2D components. All state
+        // gas is captured in `exec_state_gas`; the remainder is the regular component. The block
+        // header formula `max(sum_regular, sum_state)` is computed by the runner from these
+        // per-tx values. EIP-7778 floors neither block component at the calldata floor — only
+        // the sender's receipt gas_used is floored (EELS adds the un-floored tx_regular_gas to
+        // block_gas_used).
         amsterdam_state_gas = exec_state_gas;
-        amsterdam_regular_gas =
-            std::max(total_consumed - exec_state_gas, tx_props.min_gas_cost);
+        amsterdam_regular_gas = std::max(int64_t{0}, total_consumed - exec_state_gas);
 
         // Refund based on total consumed, capped at 1/5. Sender pays the total minus the refund,
         // floored at the EIP-7623 calldata floor (EELS: max(before_refund - refund, floor)).
