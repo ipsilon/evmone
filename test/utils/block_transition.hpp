@@ -4,6 +4,7 @@
 #pragma once
 
 #include <evmc/evmc.hpp>
+#include <test/state/bal.hpp>
 #include <test/state/bloom_filter.hpp>
 #include <test/state/requests.hpp>
 #include <test/state/transaction.hpp>
@@ -56,6 +57,9 @@ struct TransitionResult
     state::BloomFilter bloom;   ///< Logs bloom over all accepted transactions.
     int64_t blob_gas_left = 0;  ///< Blob gas remaining out of the budget passed in.
     TestState block_state;      ///< State after applying the block.
+    /// Assembled block access list (EIP-7928). Its hash and the gas-limit item
+    /// bound are derived on demand via hash() / exceeds_gas_limit().
+    state::BlockAccessList block_access_list;
 };
 
 /// Applies a block of transactions to a copy of @p state: block-start system call, the

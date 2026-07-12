@@ -14,6 +14,8 @@ target_sources(
     account.hpp
     authorization.hpp
     authorization.cpp
+    bal.hpp
+    bal.cpp
     blob_params.hpp
     block.hpp
     block.cpp
