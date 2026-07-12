@@ -362,3 +362,41 @@ TEST_F(state_transition, created_code_hash)
     expect.post[created].code = runtime_code;
     expect.post[To].storage[0x00_bytes32] = keccak256(runtime_code);
 }
+
+TEST_F(state_transition, create2_rollback_preserves_access_list_slot_warmth)
+{
+    // A failed CREATE2 rolls the created account back to a warm-only
+    // placeholder (EIP-2929: "access to new created address is never
+    // reverted"). Storage slots of that address warmed via the EIP-2930 tx
+    // access list are never journaled, so the rollback must preserve them
+    // too: a second CREATE2 at the same address pays the warm SSTORE price
+    // for a slot the transaction already paid to warm.
+    rev = EVMC_CANCUN;
+
+    // Initcode branches on CALLVALUE: 0 -> REVERT, nonzero -> SSTORE(1, 1)
+    // and deploy empty code. Identical initcode keeps the CREATE2 address
+    // equal across both attempts.
+    const auto revert_path = push(0) + push(0) + OP_REVERT;
+    const auto dest = 4 + revert_path.size();  // CALLVALUE + PUSH1 dest + JUMPI
+    const auto initcode = bytecode{OP_CALLVALUE} + push(dest) + OP_JUMPI + revert_path +
+                          OP_JUMPDEST + sstore(1, 1) + ret(0, 0);
+
+    const auto off = 32 - initcode.size();
+    tx.to = To;
+    pre[To] = {.nonce = 1,
+        .balance = 1,
+        .code = mstore(0, push(initcode)) + create2().input(off, initcode.size()) + OP_POP +
+                create2().value(1).input(off, initcode.size()) + OP_POP};
+
+    const auto created = compute_create2_address(To, {}, initcode);
+    tx.access_list = {{created, {0x01_bytes32}}};
+
+    expect.post[To].nonce = pre[To].nonce + 2;  // both CREATE2 attempts bump the nonce
+    expect.post[created].nonce = 1;
+    expect.post[created].balance = 1;
+    expect.post[created].storage[0x01_bytes32] = 0x01_bytes32;
+    // The SSTORE(1, 1) inside the second initcode must be WARM: 20000 instead
+    // of 22100. Before the JournalCreate rollback fix the pinned value was
+    // 111505 (+2100: the cold sload surcharge re-charged).
+    expect.gas_used = 109405;
+}

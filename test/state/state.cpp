@@ -58,8 +58,8 @@ AccessListCounts count_access_list(const AccessList& access_list) noexcept
 
 struct TransactionCost
 {
-    int64_t intrinsic = 0;
-    int64_t min = 0;
+    int64_t intrinsic = 0;  ///< Regular intrinsic gas.
+    int64_t min = 0;        ///< Minimal (calldata floor) gas.
 };
 
 /// Compute the Amsterdam transaction intrinsic gas: the EIP-2780 decomposition of the flat base
@@ -155,7 +155,6 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
 
     const auto is_create = !tx.to.has_value();
-
     const auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
 
     const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(rev, tx.data));
@@ -171,8 +170,8 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto initcode_cost =
         (is_create && rev >= EVMC_SHANGHAI) ? INITCODE_WORD_COST * num_words(tx.data.size()) : 0;
 
-    const auto intrinsic_cost = TX_BASE_COST + create_cost + data_cost + access_list_cost +
-                                auth_list_cost + initcode_cost;
+    const auto intrinsic_cost =
+        TX_BASE_COST + create_cost + data_cost + access_list_cost + auth_list_cost + initcode_cost;
 
     // Compute "floor" cost (EIP-7623): cost per token capturing num of zero/non-zero bytes.
     const auto min_cost =
@@ -363,6 +362,12 @@ StateDiff State::build_diff(evmc_revision rev) const
     StateDiff diff;
     for (const auto& [addr, m] : m_modified)
     {
+        // Skip placeholders created only for access-list warming. Their data
+        // was either never fetched (loaded==false) or confirmed absent
+        // (exists_in_state==false with no subsequent modifications).
+        if (!m.loaded || !m.exists_in_state)
+            continue;
+
         if (m.destructed)
         {
             if (rev >= EVMC_AMSTERDAM && m.balance != 0)
@@ -407,9 +412,34 @@ StateDiff State::build_diff(evmc_revision rev) const
 
 Account& State::insert(const address& addr, Account account)
 {
-    const auto r = m_modified.insert({addr, std::move(account)});
-    assert(r.second);
-    return r.first->second;
+    auto [it, inserted] = m_modified.try_emplace(addr);
+    if (inserted)
+    {
+        it->second = std::move(account);
+        return it->second;
+    }
+
+    // The entry already exists — it must be a "warm-only" placeholder (either
+    // still unloaded, or loaded and confirmed absent from the StateView).
+    // Overwriting a real loaded account here would silently corrupt state.
+    assert(!it->second.loaded || !it->second.exists_in_state);
+    const auto was_warm = (it->second.access_status == EVMC_ACCESS_WARM);
+    const auto was_touched = it->second.erase_if_empty;
+    // Preserve any storage slots that were warmed via the EIP-2930 access
+    // list (or BAL) before this address was promoted to a real account.
+    // The placeholder's storage entries hold access_status=WARM (with
+    // current=0/original=0/loaded=false placeholders); discarding them
+    // would force a CREATE'd account's subsequent SSTOREs to re-warm cold
+    // slots that the tx already paid for, breaking gas/refund accounting.
+    auto saved_storage = std::move(it->second.storage);
+    it->second = std::move(account);
+    it->second.storage = std::move(saved_storage);
+    if (was_warm)
+        it->second.access_status = EVMC_ACCESS_WARM;
+    it->second.erase_if_empty = it->second.erase_if_empty || was_touched;
+    it->second.loaded = true;
+    it->second.exists_in_state = true;
+    return it->second;
 }
 
 Account* State::find(const address& addr) noexcept
@@ -417,7 +447,25 @@ Account* State::find(const address& addr) noexcept
     // TODO: Avoid double lookup (find+insert) and not cached initial state lookup for non-existent
     //   accounts. If we want to cache non-existent account we need a proper flag for it.
     if (const auto it = m_modified.find(addr); it != m_modified.end())
+    {
+        if (it->second.loaded)
+            return it->second.exists_in_state ? &it->second : nullptr;
+
+        // Access-list placeholder: lazy-load from StateView now.
+        const auto cacc = m_initial.get_account(addr);
+        it->second.loaded = true;
+        if (!cacc)
+        {
+            it->second.exists_in_state = false;
+            return nullptr;  // Account doesn't exist; the entry stays warm-only.
+        }
+        it->second.nonce = cacc->nonce;
+        it->second.balance = cacc->balance;
+        it->second.code_hash = cacc->code_hash;
+        it->second.has_initial_storage = cacc->has_storage;
+        it->second.exists_in_state = true;
         return &it->second;
+    }
     if (const auto cacc = m_initial.get_account(addr); cacc)
         return &insert(addr, {.nonce = cacc->nonce,
                                  .balance = cacc->balance,
@@ -437,7 +485,30 @@ Account& State::get_or_insert(const address& addr, Account account)
 {
     if (const auto acc = find(addr); acc != nullptr)
         return *acc;
+    // find() may return null while a warm-only placeholder is still in m_modified
+    // (for an address not present in the underlying StateView). Our insert()
+    // promotes the placeholder in that case, preserving its warm/touched flags.
     return insert(addr, std::move(account));
+}
+
+Account& State::get_or_insert_for_access(const address& addr)
+{
+    // Single hash-table op: hit returns the existing entry as-is (loaded or
+    // warm-only placeholder); miss default-constructs an Account and we tag
+    // it as an unloaded placeholder so a subsequent `find()` lazy-fetches
+    // the real state.
+    //
+    // `erase_if_empty` is intentionally left at its default `false`.
+    // EIP-2929 access-warming does not constitute an EIP-158 "touch":
+    // if a later `find()` upgrades this placeholder to a real account
+    // (e.g. a CREATE collision on an EIP-7610 storage-only account, or
+    // a SELFDESTRUCT beneficiary access), the loaded account must not
+    // be marked for end-of-tx deletion. Genuine touches (balance
+    // transfer, etc.) record the flag separately via `touch()`.
+    auto [it, inserted] = m_modified.try_emplace(addr);
+    if (inserted)
+        it->second.loaded = false;
+    return it->second;
 }
 
 bytes_view State::get_code(const address& addr)
@@ -466,12 +537,25 @@ Account& State::touch(const address& addr)
 StorageValue& State::get_storage(const address& addr, const bytes32& key)
 {
     // TODO: Avoid account lookup by giving the reference to the account's storage to Host.
-    auto& acc = get(addr);
-    const auto [it, missing] = acc.storage.try_emplace(key);
-    if (missing)
+    // Work on any entry already in m_modified (including access-only placeholders)
+    // without triggering a StateView account fetch; fall back to lazy-load or
+    // create an access-only placeholder if nothing is there.
+    Account* acc = find_modified(addr);
+    if (acc == nullptr)
     {
+        acc = find(addr);
+        if (acc == nullptr)
+            acc = &get_or_insert_for_access(addr);
+    }
+    const auto [it, _] = acc->storage.try_emplace(key);
+    if (!it->second.loaded)
+    {
+        // The slot may have been created by access_storage() without a fetch.
+        // Load the underlying value now; preserve access_status set earlier.
         const auto initial_value = m_initial.get_storage(addr, key);
-        it->second = {initial_value, initial_value};
+        it->second.current = initial_value;
+        it->second.original = initial_value;
+        it->second.loaded = true;
     }
     return it->second;
 }
@@ -485,6 +569,12 @@ void State::journal_storage_change(
     const address& addr, const bytes32& key, const StorageValue& value)
 {
     m_journal.emplace_back(JournalStorageChange{{addr}, key, value.current, value.access_status});
+}
+
+void State::journal_storage_access(
+    const address& addr, const bytes32& key, evmc_access_status prev_status, bool was_fresh)
+{
+    m_journal.emplace_back(JournalStorageAccess{{addr}, key, prev_status, was_fresh});
 }
 
 void State::journal_transient_storage_change(
@@ -521,67 +611,110 @@ void State::journal_access_account(const address& addr)
 
 void State::rollback(size_t checkpoint)
 {
+    // Rollback lookups never go through the StateView: every journal entry is
+    // paired with an in-m_modified account, so find_modified() is safe and
+    // also keeps cold-read hooks quiet.
+    const auto modified_get = [this](const address& addr) -> Account& {
+        auto* const a = find_modified(addr);
+        assert(a != nullptr);
+        return *a;
+    };
     while (m_journal.size() != checkpoint)
     {
         std::visit(
-            [this](const auto& e) {
+            [&](const auto& e) {
                 using T = std::decay_t<decltype(e)>;
                 if constexpr (std::is_same_v<T, JournalNonceBump>)
                 {
-                    get(e.addr).nonce -= 1;
+                    modified_get(e.addr).nonce -= 1;
                 }
                 else if constexpr (std::is_same_v<T, JournalCodeChange>)
                 {
-                    auto& acc = get(e.addr);
+                    auto& acc = modified_get(e.addr);
                     acc.code = e.prev_code;
                     acc.code_hash = e.prev_code_hash;
                     acc.code_changed = e.prev_code_changed;
                 }
                 else if constexpr (std::is_same_v<T, JournalTouched>)
                 {
-                    get(e.addr).erase_if_empty = false;
+                    modified_get(e.addr).erase_if_empty = false;
                 }
                 else if constexpr (std::is_same_v<T, JournalDestruct>)
                 {
-                    get(e.addr).destructed = false;
+                    modified_get(e.addr).destructed = false;
                 }
                 else if constexpr (std::is_same_v<T, JournalAccessAccount>)
                 {
-                    get(e.addr).access_status = EVMC_ACCESS_COLD;
+                    // The entry may have already been erased by a JournalCreate
+                    // rollback (access_account-created placeholder followed by a
+                    // failed CREATE). Skip silently in that case.
+                    if (auto* a = find_modified(e.addr); a != nullptr)
+                        a->access_status = EVMC_ACCESS_COLD;
                 }
                 else if constexpr (std::is_same_v<T, JournalCreate>)
                 {
                     if (e.existed)
                     {
                         // This account is not always "touched". TODO: Why?
-                        auto& a = get(e.addr);
+                        auto& a = modified_get(e.addr);
                         a.nonce = 0;
                         a.code_hash = Account::EMPTY_CODE_HASH;
                         a.code.clear();
                     }
                     else
                     {
-                        // TODO: Before Spurious Dragon we don't clear empty accounts ("erasable")
-                        //       so we need to delete them here explicitly.
-                        //       This should be changed by tuning "erasable" flag
-                        //       and clear in all revisions.
-                        m_modified.erase(e.addr);
+                        // Per EIP-2929, "access to new created address is never
+                        // reverted." The access-list warming happens BEFORE the
+                        // Host::call checkpoint (in prepare_message), so the
+                        // JournalAccessAccount entry survives rollback — but
+                        // erasing the account here would drop the access_status
+                        // record along with it. Instead, reset the entry to a
+                        // warm-only placeholder so a subsequent access to the
+                        // same address from the caller returns WARM (and
+                        // build_diff still treats it as non-existent).
+                        //
+                        // The same applies to storage slots warmed via the tx
+                        // access list (never journaled). The failed frame's own
+                        // slot accesses have already been rolled back (LIFO), so
+                        // entries still warm here were warmed outside the frame
+                        // and must survive as warm-only placeholders, mirroring
+                        // insert()'s placeholder promotion.
+                        auto& a = modified_get(e.addr);
+                        const auto was_warm = (a.access_status == EVMC_ACCESS_WARM);
+                        auto storage = std::move(a.storage);
+                        std::erase_if(storage, [](const auto& kv) {
+                            return kv.second.access_status != EVMC_ACCESS_WARM;
+                        });
+                        a = Account{};
+                        a.loaded = true;
+                        a.exists_in_state = false;
+                        a.storage = std::move(storage);
+                        if (was_warm)
+                            a.access_status = EVMC_ACCESS_WARM;
                     }
                 }
                 else if constexpr (std::is_same_v<T, JournalStorageChange>)
                 {
-                    auto& s = get(e.addr).storage.find(e.key)->second;
+                    auto& s = modified_get(e.addr).storage.find(e.key)->second;
                     s.current = e.prev_value;
                     s.access_status = e.prev_access_status;
                 }
+                else if constexpr (std::is_same_v<T, JournalStorageAccess>)
+                {
+                    auto& storage = modified_get(e.addr).storage;
+                    if (e.was_fresh)
+                        storage.erase(e.key);
+                    else
+                        storage.find(e.key)->second.access_status = e.prev_access_status;
+                }
                 else if constexpr (std::is_same_v<T, JournalTransientStorageChange>)
                 {
-                    auto& s = get(e.addr).transient_storage.find(e.key)->second;
+                    auto& s = modified_get(e.addr).transient_storage.find(e.key)->second;
                     s = e.prev_value;
                 }
                 else if constexpr (std::is_same_v<T, JournalBalanceChange>)
                 {
-                    get(e.addr).balance = e.prev_balance;
+                    modified_get(e.addr).balance = e.prev_balance;
                 }
                 else
                 {
@@ -656,8 +789,6 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
 
     assert(tx.max_priority_gas_price <= tx.max_gas_price);
 
-    // EIP-8037: Amsterdam lifts the per-tx gas-limit cap; the reservoir model instead caps the
-    // regular-gas intrinsic and the per-dimension block inclusion below.
     if (rev >= EVMC_OSAKA && rev < EVMC_AMSTERDAM && tx.gas_limit > MAX_TX_GAS_LIMIT)
         return make_error_code(MAX_GAS_LIMIT_EXCEEDED);
 
@@ -821,7 +952,13 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     {
         host.access_account(a);
         for (const auto& key : storage_keys)
-            state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
+        {
+            // Warm the slot without fetching the value — matches how
+            // access_storage() handles opcode-level warming so that BAL readers
+            // only observe a slot when it's actually read post gas check.
+            auto& acc = state.get_or_insert_for_access(a);
+            acc.storage[key].access_status = EVMC_ACCESS_WARM;
+        }
     }
     // EIP-3651: Warm COINBASE.
     // This may create an empty coinbase account. The account cannot be created unconditionally
@@ -879,10 +1016,11 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
             message.flags |= EVMC_DELEGATED;
             // EIP-8038: reading the delegated code costs WARM_ACCESS if the target is already in the
             // accessed set, else COLD_ACCOUNT_ACCESS. That set is the sender, the recipient, the
-            // coinbase (EIP-3651), access-list entries, and the precompiles (EIP-2929).
+            // coinbase (EIP-3651), access-list entries, and the precompiles (EIP-2929). find_modified
+            // checks the warm set without lazy-loading (a warmed empty coinbase has no state leaf).
             if (amsterdam)
             {
-                const auto* const del = state.find(message.code_address);
+                const auto* const del = state.find_modified(message.code_address);
                 const auto warm = (del != nullptr && del->access_status == EVMC_ACCESS_WARM) ||
                                   is_precompile(rev, message.code_address);
                 if ((message.gas -= warm ? 100 : 3000) < 0)
@@ -892,6 +1030,10 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
             // the rollback and observes the delegate for a frame that never
             // dispatches.
             host.access_account(message.code_address);
+            // EIP-7928 / EIP-2780: resolving the top-level delegation reads the target's code, so it
+            // must appear in the block access list even if the call reverts. Force the lazy-load now
+            // (matches get_target_address for sub-call delegation resolution).
+            (void)state.find(message.code_address);
         }
     }
 
@@ -917,7 +1059,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     // state gas the frame (and its children) drew from the reservoir it was handed. The frame's
     // create/value NEW_ACCOUNT charge is already reflected in the returned reservoir. Zero on an
     // auth halt: the applied delegations were rolled back, so no state grew. Clamped at
-    // 0 defensively.
+    // 0: EIP-7928 BAL coupling refunds can return more reservoir than the frame started with.
     const auto exec_state_gas = top_frame_halted ? int64_t{0} :
         auth.state_charge + std::max<int64_t>(0, message.state_gas - result.state_gas_left +
                                                      result.state_gas_spilled);
@@ -927,7 +1069,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     // gas_refund is derived from it), mutated to the post-refund value pre-Amsterdam.
     auto gas_used = tx.gas_limit - result.gas_left - result.state_gas_left;
 
-    // EIP-8037: Block-level 2D gas components for Amsterdam.
+    // EIP-7778: Block-level gas components for Amsterdam.
     int64_t amsterdam_regular_gas = 0;
     int64_t amsterdam_state_gas = 0;
 
@@ -939,11 +1081,10 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto total_consumed = gas_used;
 
         // EIP-7778 / EIP-8037: split the consumed gas into the block's 2D components. All state
-        // gas is captured in `exec_state_gas`; the remainder is the regular component. The block
-        // header formula `max(sum_regular, sum_state)` is computed by the runner from these
-        // per-tx values. EIP-7778 floors neither block component at the calldata floor — only
-        // the sender's receipt gas_used is floored (EELS adds the un-floored tx_regular_gas to
-        // block_gas_used).
+        // gas (top-frame authorization charges, create/value NEW_ACCOUNT, execution) is captured
+        // in `exec_state_gas`; the intrinsic state gas is zero. The remainder — including any
+        // CREATE-collision burned gas — is the regular component. The block header formula
+        // `max(sum_regular, sum_state)` is computed by the runner from these per-tx values.
         amsterdam_state_gas = exec_state_gas;
         amsterdam_regular_gas = std::max(int64_t{0}, total_consumed - exec_state_gas);
 

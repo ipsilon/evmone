@@ -88,8 +88,8 @@ struct TransactionProperties
     /// The amount of gas provided to the EVM for the transaction execution.
     int64_t execution_gas_limit = 0;
 
-    /// The regular portion of the intrinsic cost (EIP-8037 keeps the state-dependent charges out
-    /// of the intrinsic; they are charged at the top frame).
+    /// The regular portion of the intrinsic cost. (Amsterdam has no intrinsic state gas: all
+    /// state-dependent charges moved to the top frame per EELS #3126.)
     int64_t intrinsic_regular_gas = 0;
 
     /// The minimal amount of gas the transaction must use.
@@ -120,8 +120,9 @@ struct TransactionReceipt
     /// Amount of gas used by this transaction (after refund, with the min gas applied).
     int64_t gas_used = 0;
 
-    /// Amount of gas refund applied to gas_used (capped by the min gas cost of EIP-7623).
-    /// Effectively, the difference between "block" and "user" gas.
+    /// Refund applied to `gas_used` (raw consumed minus what the sender paid,
+    /// capped by EIP-7623 `min_gas_cost`). Pre-Amsterdam: always 0. Amsterdam:
+    /// the regular-gas refund amount (4800 for an SSTORE clear, etc.).
     int64_t gas_refund = 0;
 
     /// Amount of gas used by this and previous transactions in the block.
