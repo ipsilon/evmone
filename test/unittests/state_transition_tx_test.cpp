@@ -167,26 +167,26 @@ TEST_F(state_transition, tx_data_floor_amsterdam_exec_0)
 TEST_F(state_transition, tx_data_floor_amsterdam_exec_below_floor)
 {
     // EIP-7976: standard cost (intrinsic + execution) is 1 below the floor, so the floor wins.
-    // 51 zero bytes: intrinsic 15204 (12000 + 3000 recipient + 204 data), floor 15264; the
-    // 60-gas gap is filled with 59 JUMPDESTs of execution (1 below the floor).
+    // 1 zero byte: intrinsic 15004 (12000 + 3000 recipient + 4 data), floor 15064 (the floor is
+    // anchored on the same 15000 base per EELS #3120); the 60-gas gap is filled with 59 JUMPDESTs.
     rev = EVMC_AMSTERDAM;
     tx.to = To;
-    tx.data = bytes(51, 0x00);
+    tx.data = "00"_hex;
 
     pre[To] = {.code = 59 * OP_JUMPDEST};
-    expect.gas_used = 15264;  // floor
+    expect.gas_used = 15064;  // floor
     expect.post[To].exists = true;
 }
 
 TEST_F(state_transition, tx_data_floor_amsterdam_exec_at_floor)
 {
-    // EIP-7976: standard cost (intrinsic + execution) equals the floor (15264).
+    // EIP-7976: standard cost (intrinsic + execution) equals the floor (15064).
     rev = EVMC_AMSTERDAM;
     tx.to = To;
-    tx.data = bytes(51, 0x00);
+    tx.data = "00"_hex;
 
     pre[To] = {.code = 60 * OP_JUMPDEST};
-    expect.gas_used = 15264;  // floor == standard
+    expect.gas_used = 15064;  // floor == standard
     expect.post[To].exists = true;
 }
 
@@ -195,10 +195,10 @@ TEST_F(state_transition, tx_data_floor_amsterdam_exec_above_floor)
     // EIP-7976: standard cost (intrinsic + execution) is 1 above the floor, so it wins.
     rev = EVMC_AMSTERDAM;
     tx.to = To;
-    tx.data = bytes(51, 0x00);
+    tx.data = "00"_hex;
 
     pre[To] = {.code = 61 * OP_JUMPDEST};
-    expect.gas_used = 15265;  // standard (1 above the floor)
+    expect.gas_used = 15065;  // standard (1 above the floor)
     expect.post[To].exists = true;
 }
 
@@ -253,19 +253,20 @@ TEST_F(state_transition, access_list_floor_amsterdam)
     tx.to = To;
     tx.data = bytes(100, 0x00);
     tx.access_list = {{To, {}}};
-    // intrinsic = 12000 + 100*4 + 3000 recipient + (3000 + 1280 access list) = 19680
-    // floor     = 12000 + 16*(100*4 + 80)                                    = 19680  (equal)
-    expect.gas_used = 19680;
+    // intrinsic = 15000 base (12000 + 3000 recipient) + 100*4 data + (3000 + 1280 access list) = 19680
+    // floor     = 15000 base + 16*(100*4 + 80 access-list tokens)                               = 22680
+    expect.gas_used = 22680;  // floor (anchored on the decomposed base per EELS #3120)
 }
 
 TEST_F(state_transition, invalid_access_list_amsterdam_gas_limit_below_floor)
 {
-    // EIP-2780/7976: the gas limit must cover the floor (19680); one below is rejected.
+    // EIP-2780/7976: the gas limit must cover the floor (22680, above the 19680 intrinsic); one
+    // below is rejected.
     rev = EVMC_AMSTERDAM;
     tx.to = To;
     tx.data = bytes(100, 0x00);
     tx.access_list = {{To, {}}};
-    tx.gas_limit = 19679;
+    tx.gas_limit = 22679;
     expect.tx_error = INTRINSIC_GAS_TOO_LOW;
 }
 

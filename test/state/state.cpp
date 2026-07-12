@@ -96,9 +96,11 @@ TransactionCost compute_tx_intrinsic_cost_amsterdam(const Transaction& tx) noexc
     // Recipient cost depends on the transaction kind. A self-transfer touches nothing. The
     // created account's NEW_ACCOUNT state gas is state-dependent and charged at the top frame.
     int64_t recipient_regular = 0;
+    int64_t init_code_gas = 0;
     if (is_create)
     {
-        recipient_regular = CREATE_ACCESS + INITCODE_WORD_COST * num_words(tx.data.size());
+        recipient_regular = CREATE_ACCESS;
+        init_code_gas = INITCODE_WORD_COST * num_words(tx.data.size());
         if (has_value)
             recipient_regular += TRANSFER_LOG_COST;
     }
@@ -122,14 +124,18 @@ TransactionCost compute_tx_intrinsic_cost_amsterdam(const Transaction& tx) noexc
     const auto num_auth = static_cast<int64_t>(tx.authorization_list.size());
     const auto auth_regular = num_auth * REGULAR_PER_AUTH_BASE_COST;
 
+    // Decomposed regular-gas intrinsic base (EIP-2780), which also anchors the calldata floor so
+    // the floor never undercuts the transaction's own intrinsic base (EELS #3120).
+    const auto base_regular = TX_BASE + recipient_regular;
+
     const auto intrinsic_regular =
-        TX_BASE + data_cost + recipient_regular + access_list_cost + auth_regular;
+        base_regular + init_code_gas + data_cost + access_list_cost + auth_regular;
 
     // Floor cost (EIP-7623 / EIP-7976): every calldata byte plus access-list tokens at the floor
-    // rate. floor_tokens = len(data) × DATA_TOKEN_STANDARD + access-list tokens.
+    // rate, anchored on base_regular. floor_tokens = len(data) × DATA_TOKEN_STANDARD + AL tokens.
     const auto floor_tokens =
         static_cast<int64_t>(tx.data.size()) * DATA_TOKEN_STANDARD + access_list_tokens;
-    const auto min_cost = floor_tokens * DATA_TOKEN_FLOOR + TX_BASE;
+    const auto min_cost = floor_tokens * DATA_TOKEN_FLOOR + base_regular;
 
     return {intrinsic_regular, min_cost};
 }
