@@ -115,8 +115,10 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
             }
         }
 
+        // No block reward from Paris (EIP-3675). A reward of 0 would still touch the coinbase,
+        // which would then be read (EIP-7928).
         auto res = apply_block(state, vm, block, block_hashes, txs, rev, blob_gas_limit,
-            {.block_reward = args.block_reward,
+            {.block_reward = rev < EVMC_PARIS ? args.block_reward : std::nullopt,
                 .skip_system_calls = args.pre_state_only,
                 .open_trace = args.open_trace});
 
@@ -176,6 +178,16 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
 
         j_result["logsHash"] = hex0x(logs_hash(txs_logs));
         j_result["stateRoot"] = hex0x(state::mpt_hash(post_state));
+
+        if (!args.pre_state_only && rev >= EVMC_AMSTERDAM)
+        {
+            j_result["blockAccessList"] = hex0x(res.block_access_list.rlp_encode());
+            j_result["blockAccessListHash"] = hex0x(res.block_access_list.hash());
+            // The requests are processed first, so their failure takes precedence.
+            if (!res.requests_error &&
+                res.block_access_list.exceeds_gas_limit(static_cast<uint64_t>(block.gas_limit)))
+                j_result["blockException"] = "BlockException.BLOCK_ACCESS_LIST_GAS_LIMIT_EXCEEDED";
+        }
     }
     else
         post_state = state;

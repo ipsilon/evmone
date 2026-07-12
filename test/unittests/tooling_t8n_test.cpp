@@ -56,11 +56,12 @@ constexpr auto TX_JSON = R"([{
 }])";
 
 /// Runs t8n over the given pre-state and transactions, and returns the result JSON.
-std::string run_t8n(std::string_view alloc_json, std::string_view txs_json, evmc_revision rev)
+std::string run_t8n(std::string_view alloc_json, std::string_view txs_json, evmc_revision rev,
+    std::string_view env_json = ENV_JSON)
 {
     evmc::VM vm{evmc_create_evmone()};
 
-    std::istringstream env{ENV_JSON};
+    std::istringstream env{std::string{env_json}};
     std::istringstream alloc{std::string{alloc_json}};
     std::istringstream txs{std::string{txs_json}};
     std::ostringstream out_result;
@@ -156,8 +157,8 @@ constexpr auto ALLOC_WITH_BEACON_ROOTS_JSON = R"({
     }
 })";
 
-/// Stubs of both request contracts, each returning nothing. Without their code the block-end
-/// system calls fail the block instead (EIP-7002, EIP-7251).
+/// Stubs of the request contracts, each returning nothing. Without their code the block-end
+/// system calls fail the block instead (EIP-7002, EIP-7251, EIP-8282).
 constexpr auto ALLOC_WITH_REQUEST_STUBS_JSON = R"({
     "0x00000961ef480eb55e80d19ad83579a64c007002": {
         "code": "0x00",
@@ -165,6 +166,16 @@ constexpr auto ALLOC_WITH_REQUEST_STUBS_JSON = R"({
         "balance": "0x00"
     },
     "0x0000bbddc7ce488642fb579f8b00f3a590007251": {
+        "code": "0x00",
+        "nonce": "0x01",
+        "balance": "0x00"
+    },
+    "0x0000bff46984e3725691fa540a8c7589300d8282": {
+        "code": "0x00",
+        "nonce": "0x01",
+        "balance": "0x00"
+    },
+    "0x000064d678505ad48f8ccb093bc65613800e8282": {
         "code": "0x00",
         "nonce": "0x01",
         "balance": "0x00"
@@ -222,6 +233,28 @@ TEST(tooling_t8n, a_block_requesting_nothing_reports_the_empty_requests_hash)
     // sha256 of nothing at all (EIP-7685).
     EXPECT_EQ(result.at("requestsHash"),
         "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+}
+
+TEST(tooling_t8n, block_access_list_over_the_gas_limit_fails_the_block)
+{
+    // A zero gas limit allows no block access list items, but the block-end system calls access
+    // the request contracts (EIP-7928).
+    constexpr auto env = R"({
+        "currentCoinbase": "0x8888f1f195afa192cfee860698584c030f4c9db1",
+        "currentNumber": "0x01",
+        "currentTimestamp": "0x54c99069",
+        "currentGasLimit": "0x0",
+        "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    })";
+    const auto result =
+        json::parse(run_t8n(ALLOC_WITH_REQUEST_STUBS_JSON, "[]", EVMC_AMSTERDAM, env));
+    EXPECT_EQ(result.at("blockException"), "BlockException.BLOCK_ACCESS_LIST_GAS_LIMIT_EXCEEDED");
+
+    // Without the request contracts the block fails on the requests, which are processed first,
+    // although the beacon root write exceeds the limit too.
+    const auto no_requests =
+        json::parse(run_t8n(ALLOC_WITH_BEACON_ROOTS_JSON, "[]", EVMC_AMSTERDAM, env));
+    EXPECT_EQ(no_requests.at("blockException"), "BlockException.SYSTEM_CONTRACT_EMPTY");
 }
 
 TEST(tooling_t8n, no_inputs_no_outputs)
