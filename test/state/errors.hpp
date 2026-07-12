@@ -51,6 +51,8 @@ enum ErrorCode : int  // NOLINT(*-use-enum-class)
     INVALID_BLOCK_TIMESTAMP_OLDER_THAN_PARENT,
     UNKNOWN_PARENT,
     INVALID_BLOCK_NUMBER,
+    INVALID_BLOCK_HASH,
+    INVALID_BAL_HASH,
 
     // Block requests collection (EIP-7685).
     INVALID_DEPOSIT_EVENT_LAYOUT,
@@ -135,6 +137,10 @@ inline const std::error_category& evmone_category() noexcept
                 return "BlockException.UNKNOWN_PARENT";
             case INVALID_BLOCK_NUMBER:
                 return "BlockException.INVALID_BLOCK_NUMBER";
+            case INVALID_BLOCK_HASH:
+                return "BlockException.INVALID_BLOCK_HASH";
+            case INVALID_BAL_HASH:
+                return "BlockException.INVALID_BAL_HASH";
             case INVALID_DEPOSIT_EVENT_LAYOUT:
                 return "BlockException.INVALID_DEPOSIT_EVENT_LAYOUT";
             case SYSTEM_CONTRACT_EMPTY:
