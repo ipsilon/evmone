@@ -4,6 +4,7 @@
 
 #include "blockchaintest_runner.hpp"
 #include <gtest/gtest.h>
+#include <test/state/bal.hpp>
 #include <test/state/errors.hpp>
 #include <test/state/ethash_difficulty.hpp>
 #include <test/state/requests.hpp>
@@ -127,6 +128,16 @@ std::error_code validate_block(evmc_revision rev, state::BlobParams blob_params,
 
     if (rev >= EVMC_OSAKA && test_block.rlp.size() > MAX_RLP_BLOCK_SIZE)
         return make_error_code(RLP_BLOCK_LIMIT_EXCEEDED);
+
+    // EIP-7928: `blockAccessListHash` header field is mandatory from Amsterdam
+    // onward and forbidden before. A pre-Amsterdam block carrying the field
+    // hashes differently than the canonical header, so EEST classifies it as
+    // INVALID_BLOCK_HASH rather than a BAL error.
+    const auto has_bal_hash = test_block.expected_block_header.block_access_list_hash.has_value();
+    if (rev >= EVMC_AMSTERDAM && !has_bal_hash)
+        return make_error_code(INVALID_BAL_HASH);
+    if (rev < EVMC_AMSTERDAM && has_bal_hash)
+        return make_error_code(INVALID_BLOCK_HASH);
 
     return {};
 }
@@ -275,6 +286,12 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                     rev, blob_gas_limit, {.block_reward = mining_reward(rev)});
 
                 ASSERT_FALSE(res.requests_error);
+                if (rev >= EVMC_AMSTERDAM)
+                {
+                    ASSERT_FALSE(res.block_access_list.exceeds_gas_limit(
+                        static_cast<uint64_t>(bi.gas_limit)))
+                        << "BAL item count exceeds block gas limit / 2000";
+                }
 
                 block_hashes[test_block.expected_block_header.block_number] =
                     test_block.expected_block_header.hash;
@@ -323,6 +340,12 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 EXPECT_EQ(res.gas_used, test_block.expected_block_header.gas_used);
                 EXPECT_EQ(
                     bytes_view{res.bloom}, bytes_view{test_block.expected_block_header.logs_bloom});
+                if (rev >= EVMC_AMSTERDAM)
+                {
+                    EXPECT_EQ(res.block_access_list.hash(),
+                        test_block.expected_block_header.block_access_list_hash.value_or(
+                            hash256{}));
+                }
             }
             else
             {
@@ -452,6 +475,26 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 {
                     expect_fixture_names("BlockException.INVALID_LOG_BLOOM");
                     continue;
+                }
+                if (rev >= EVMC_AMSTERDAM)
+                {
+                    if (res.block_access_list.exceeds_gas_limit(
+                            static_cast<uint64_t>(bi.gas_limit)))
+                    {
+                        expect_fixture_names("BlockException.BLOCK_ACCESS_LIST_GAS_LIMIT_EXCEEDED");
+                        continue;
+                    }
+                    if (res.block_access_list.hash() !=
+                        test_block.expected_block_header.block_access_list_hash.value_or(hash256{}))
+                    {
+                        // The BAL is not decoded, only recomputed and compared, so a structurally
+                        // malformed one (out-of-order or duplicate entries) also lands here.
+                        expect_fixture_names(
+                            "BlockException.INVALID_BAL_HASH|"
+                            "BlockException.INVALID_BLOCK_ACCESS_LIST|"
+                            "BlockException.INCORRECT_BLOCK_FORMAT");
+                        continue;
+                    }
                 }
 
                 EXPECT_TRUE(false) << "Expected block to be invalid but resulted valid";

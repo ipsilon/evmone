@@ -39,7 +39,8 @@ evmc_storage_status Host::set_storage(
     // and EIP-2200 specification https://eips.ethereum.org/EIPS/eip-2200.
 
     auto& storage_slot = m_state.get_storage(addr, key);
-    const auto& [current, original, _] = storage_slot;
+    const auto& current = storage_slot.current;
+    const auto& original = storage_slot.original;
 
     const auto dirty = original != current;
     const auto restored = original == value;
@@ -74,6 +75,10 @@ evmc_storage_status Host::set_storage(
             status = EVMC_STORAGE_MODIFIED_RESTORED;  // X → Y → X
     }
 
+    // Journal the value change. From Berlin onward access_storage() journals the
+    // access-status transition separately via JournalStorageAccess so the warm
+    // flag and the slot value can roll back independently (EIP-7928 needs the
+    // warm bit to survive certain reverts that discard the value).
     m_state.journal_storage_change(storage_slot);
     storage_slot.current = value;  // Update current value.
     return status;
@@ -374,7 +379,8 @@ evmc::Result Host::execute_message(const evmc_message& msg_in) noexcept
             // A new account is materialized by the value transfer: pay NEW_ACCOUNT state gas.
             // This includes a previously-zero-balance precompile (EIP-2780/EIP-161): funding it
             // creates a state account just like any other recipient. transition() has pre-checked
-            // that the reservoir plus regular gas cover this, rolling authorizations back otherwise.
+            // that the reservoir plus regular gas cover this, rolling authorizations back
+            // otherwise.
             if (!top_level_sg.charge(msg.gas, NEW_ACCOUNT_STATE_GAS))
                 return out_of_gas_result();  // Reservoir untouched (atomic charge failure).
         }
@@ -472,7 +478,10 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
         bool is_03_touched = false;
         if (m_rev < EVMC_PARIS && m_rev >= EVMC_SPURIOUS_DRAGON) [[unlikely]]
         {
-            const auto* const acc_03 = m_state.find(ADDR_03);
+            // Check only the in-tx modified set — a cold fetch would surface the
+            // address to access hooks (e.g. EIP-7928 BAL trackers) even though the
+            // probe is purely an implementation detail of the revert logic.
+            const auto* const acc_03 = m_state.find_modified(ADDR_03);
             is_03_touched = acc_03 != nullptr && acc_03->erase_if_empty;
         }
 
@@ -480,8 +489,11 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
         m_state.rollback(state_checkpoint);
         m_logs.resize(logs_checkpoint);
 
+        // Use the access-list insertion path so the re-touch doesn't surface
+        // the address to BAL trackers (EIP-7928) — the probe is evmone-internal
+        // and does not represent a genuine state access.
         if (is_03_touched) [[unlikely]]
-            m_state.touch(ADDR_03);
+            m_state.get_or_insert_for_access(ADDR_03).erase_if_empty = true;
     }
     return result;
 }
@@ -528,31 +540,42 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
-    auto* acc = m_state.find(addr);
-
-    if (acc != nullptr && acc->access_status == EVMC_ACCESS_WARM)
-        return EVMC_ACCESS_WARM;
-
     if (is_precompile(m_rev, addr))  // Precompiles are always warm. Don't insert to state.
         return EVMC_ACCESS_WARM;
 
-    // TODO: On a modified-set miss the account is looked up twice. This can be improved with
-    //   a try_emplace-like API, but the miss happens only in ~39% of the calls on Mainnet.
-    if (acc == nullptr)
-        acc = &m_state.insert(addr, {.erase_if_empty = true});
+    // Use the "for access" insertion variant: lazy placeholder without a
+    // StateView fetch (keeps trackers from observing accesses that may end up
+    // reverted, per EIP-7928 BAL semantics).
+    auto& acc = m_state.get_or_insert_for_access(addr);
+    if (acc.access_status == EVMC_ACCESS_WARM)
+        return EVMC_ACCESS_WARM;
 
-    m_state.journal_account_flags(addr, *acc);
-    acc->access_status = EVMC_ACCESS_WARM;
+    m_state.journal_account_flags(addr, acc);
+    acc.access_status = EVMC_ACCESS_WARM;
     return EVMC_ACCESS_COLD;
 }
 
 evmc_access_status Host::access_storage(const address& addr, const bytes32& key) noexcept
 {
-    auto& storage_slot = m_state.get_storage(addr, key);
-    if (storage_slot.access_status == EVMC_ACCESS_WARM)
+    // Warm the slot without fetching its value from the underlying StateView.
+    // Deferring the fetch to State::get_storage() (which runs after the SLOAD
+    // gas check) keeps the cold-read observable only when the read actually
+    // commits, which matches EIP-7928 BAL semantics. The journal only captures
+    // the access-status change — the value itself (current/original) is managed
+    // by subsequent get_storage()/set_storage() calls and their own journaling.
+    //
+    // Invariant: `m_state.get(addr)` asserts the account is already loaded.
+    // SLOAD/SSTORE always operate on `state.msg->recipient`, whose code was
+    // already loaded by execute_message() before the opcode dispatch, so
+    // `find(addr)` is guaranteed to have succeeded. Any future opcode that
+    // calls `access_storage` on a non-recipient address must lazy-load first
+    // (e.g. via `m_state.find(addr)` and the placeholder upgrade path).
+    auto& acc = m_state.get(addr);
+    const auto [it, fresh] = acc.storage.try_emplace(key);
+    if (it->second.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;  // Nothing changes, skip journaling.
-    m_state.journal_storage_change(storage_slot);
-    storage_slot.access_status = EVMC_ACCESS_WARM;
+    it->second.access_status = EVMC_ACCESS_WARM;
+    m_state.journal_storage_access(addr, key, EVMC_ACCESS_COLD, fresh);
     return EVMC_ACCESS_COLD;
 }
 
