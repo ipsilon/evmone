@@ -115,7 +115,7 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
 
         // Skip the call if the target account doesn't exist. This is by EIP-4788 spec.
         // > if no code exists at [address], the call must fail silently.
-        const auto code = state_view.get_account_code(addr);
+        const auto code = state.get_code(addr);
         if (code.empty())
             continue;
 
@@ -142,7 +142,7 @@ std::variant<RequestsResult, std::error_code> system_call_block_end(const StateV
             break;  // Because entries are ordered, there are no other contracts for this revision.
 
         // Fail if the target account doesn't exist. This is by EIP-7002 and EIP-7251 spec.
-        const auto code = state_view.get_account_code(addr);
+        const auto code = state.get_code(addr);
         if (code.empty())
             return make_error_code(SYSTEM_CONTRACT_EMPTY);
 

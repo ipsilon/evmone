@@ -38,6 +38,10 @@ inline std::variant<evmc::address, Result> get_target_address(
     if ((gas_left -= delegate_account_access_cost) < 0)
         return Result{EVMC_OUT_OF_GAS, gas_left};
 
+    // From Amsterdam the delegate is read even if the call then fails on the balance (EIP-7928).
+    if (state.rev >= EVMC_AMSTERDAM)
+        (void)state.host.account_exists(*delegate_addr);
+
     return *delegate_addr;
 }
 

@@ -378,6 +378,8 @@ StateDiff State::build_diff(evmc_revision rev) const
     diff.modified_accounts.reserve(m_modified.size());
     for (const auto& [addr, m] : m_modified)
     {
+        if (!m.loaded)
+            continue;  // Only warmed.
         if (m.nonexistent)
         {
             // A nonexistent account holds no change: anything else would be dropped silently.
@@ -443,12 +445,12 @@ std::pair<Account&, bool> State::get_or_create(const address& addr)
 
 Account& State::get(const address& addr) noexcept
 {
-    const auto [it, inserted] = m_modified.try_emplace(addr);
-    auto& acc = it->second;
-    if (inserted)
+    auto& acc = m_modified[addr];
+    if (!acc.loaded)
     {
         // Load the account from the initial state. A miss is cached as a nonexistent account,
         // so the initial state is queried once per address rather than once per access.
+        acc.loaded = true;
         if (const auto cacc = m_initial.get_account(addr); cacc)
         {
             acc.nonce = cacc->nonce;
@@ -502,14 +504,14 @@ Account& State::touch(const address& addr)
 StorageValue& State::get_storage(const address& addr, const bytes32& key)
 {
     // TODO: Avoid account lookup by giving the reference to the account's storage to Host.
-    auto& acc = get(addr);
-    const auto [it, missing] = acc.storage.try_emplace(key);
-    if (missing)
+    auto& slot = get(addr).storage[key];
+    if (!slot.loaded)
     {
-        const auto initial_value = m_initial.get_storage(addr, key);
-        it->second = {initial_value, initial_value};
+        // Load the value from the initial state. A slot only warmed keeps its access status.
+        slot.current = slot.original = m_initial.get_storage(addr, key);
+        slot.loaded = true;
     }
-    return it->second;
+    return slot;
 }
 
 void State::journal_balance_change(const address& addr, const intx::uint256& prev_balance)
@@ -519,7 +521,13 @@ void State::journal_balance_change(const address& addr, const intx::uint256& pre
 
 void State::journal_storage_change(StorageValue& slot)
 {
-    m_journal.emplace_back(JournalStorageChange{&slot, slot.current, slot.access_status});
+    m_journal.emplace_back(JournalStorageChange{&slot, slot.current});
+}
+
+void State::journal_storage_access(StorageValue& slot)
+{
+    assert(slot.access_status == EVMC_ACCESS_COLD);
+    m_journal.emplace_back(JournalStorageAccess{&slot});
 }
 
 void State::journal_transient_storage_change(bytes32& slot)
@@ -539,8 +547,8 @@ void State::journal_create(const address& addr)
 
 void State::journal_account_flags(const address& addr, const Account& acc)
 {
-    m_journal.emplace_back(JournalAccountFlags{
-        {addr}, acc.access_status, acc.nonexistent, acc.destructed, acc.erase_if_empty});
+    m_journal.emplace_back(JournalAccountFlags{{addr}, acc.access_status, acc.loaded,
+        acc.nonexistent, acc.destructed, acc.erase_if_empty});
 }
 
 namespace
@@ -564,14 +572,15 @@ void State::rollback(size_t checkpoint)
                 using T = std::decay_t<decltype(e)>;
                 if constexpr (std::is_same_v<T, JournalNonceBump>)
                 {
-                    auto& a = get(e.addr);
-                    assert(!a.nonexistent);  // Replayed before the flags entry un-creating it.
+                    auto& a = get_for_access(e.addr);
+                    assert(a.loaded && !a.nonexistent);  // Replayed before the flags entry.
                     a.nonce -= 1;
                 }
                 else if constexpr (std::is_same_v<T, JournalAccountFlags>)
                 {
-                    auto& a = get(e.addr);
+                    auto& a = get_for_access(e.addr);
                     a.access_status = e.access_status;
+                    a.loaded = e.loaded;
                     a.nonexistent = e.nonexistent;
                     a.destructed = e.destructed;
                     a.erase_if_empty = e.erase_if_empty;
@@ -588,14 +597,17 @@ void State::rollback(size_t checkpoint)
                 {
                     // Revert a create over a pre-existing account.
                     // TODO: Why this account is not always "touched"?
-                    auto& a = get(e.addr);
-                    assert(!a.nonexistent);
+                    auto& a = get_for_access(e.addr);
+                    assert(a.loaded && !a.nonexistent);
                     clear_value(a);
                 }
                 else if constexpr (std::is_same_v<T, JournalStorageChange>)
                 {
                     e.slot->current = e.prev_value;
-                    e.slot->access_status = e.prev_access_status;
+                }
+                else if constexpr (std::is_same_v<T, JournalStorageAccess>)
+                {
+                    e.slot->access_status = EVMC_ACCESS_COLD;
                 }
                 else if constexpr (std::is_same_v<T, JournalTransientStorageChange>)
                 {
@@ -603,8 +615,8 @@ void State::rollback(size_t checkpoint)
                 }
                 else if constexpr (std::is_same_v<T, JournalBalanceChange>)
                 {
-                    auto& a = get(e.addr);
-                    assert(!a.nonexistent);  // Replayed before the flags entry un-creating it.
+                    auto& a = get_for_access(e.addr);
+                    assert(a.loaded && !a.nonexistent);  // Replayed before the flags entry.
                     a.balance = e.prev_balance;
                 }
                 else
@@ -826,8 +838,10 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         host.access_account(a);
         if (is_precompile(rev, a))  // Precompile storage is never accessed.
             continue;
+        // Warm the slots without loading them: warming is not a read (EIP-7928).
+        auto& acc = state.get_for_access(a);
         for (const auto& key : storage_keys)
-            state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
+            acc.storage[key].access_status = EVMC_ACCESS_WARM;
     }
     // EIP-3651: Warm COINBASE.
     if (rev >= EVMC_SHANGHAI)
