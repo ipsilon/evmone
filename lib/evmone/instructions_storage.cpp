@@ -41,7 +41,8 @@ constexpr auto storage_cost_spec = []() noexcept {
     tbl[EVMC_PRAGUE] = tbl[EVMC_LONDON];
     tbl[EVMC_OSAKA] = tbl[EVMC_LONDON];
     tbl[EVMC_AMSTERDAM] = tbl[EVMC_LONDON];
-    tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_LONDON];
+    tbl[EVMC_AMSTERDAM].set = 2900;  // EIP-8037: regular component only (was 20000).
+    tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_AMSTERDAM];
     return tbl;
 }();
 
@@ -135,8 +136,24 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 
     const auto [gas_cost_warm, gas_refund] = sstore_costs[state.rev][status];
     const auto gas_cost = gas_cost_warm + gas_cost_cold;
+
+    // EIP-8037: set-then-clear (0 -> Y -> 0) refunds the storage-set state gas in LIFO order,
+    // back to the pools the charge drew from. EELS applies this refill BEFORE the regular-gas
+    // charge, so gas credited back to gas_left (from a prior spill) can fund the charge below.
+    if (state.rev >= EVMC_AMSTERDAM && status == EVMC_STORAGE_ADDED_DELETED)
+        credit_state_gas_refund(gas_left, state, STORAGE_SET_STATE_GAS);
+
+    // EIP-8037: charge regular gas FIRST, then state gas, so a state-gas spill never leaves
+    // committed state growth behind a subsequent regular OOG.
     if ((gas_left -= gas_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
+
+    // EIP-8037: SSTORE 0 -> non-zero allocates a storage slot; charge its state gas.
+    if (state.rev >= EVMC_AMSTERDAM && status == EVMC_STORAGE_ADDED)
+    {
+        if (!charge_state_gas(gas_left, state, STORAGE_SET_STATE_GAS))
+            return {EVMC_OUT_OF_GAS, gas_left};
+    }
     state.gas_refund += gas_refund;
     return {EVMC_SUCCESS, gas_left};
 }

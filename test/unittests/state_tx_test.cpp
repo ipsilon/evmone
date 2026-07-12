@@ -26,17 +26,17 @@ TEST(state_tx, validate_nonce)
     const TestState state{{tx.sender, {.nonce = 1, .balance = 1'000'000}}};
 
     ASSERT_FALSE(holds_alternative<std::error_code>(
-        validate_transaction(state, block, tx, EVMC_BERLIN, block.gas_limit, 0)));
+        validate_transaction(state, block, tx, EVMC_BERLIN, block.gas_limit, 0, 0)));
 
     tx.nonce = 0;
     EXPECT_EQ(std::get<std::error_code>(
-                  validate_transaction(state, block, tx, EVMC_BERLIN, block.gas_limit, 0))
+                  validate_transaction(state, block, tx, EVMC_BERLIN, block.gas_limit, 0, 0))
                   .message(),
         "nonce too low");
 
     tx.nonce = 2;
     EXPECT_EQ(std::get<std::error_code>(
-                  validate_transaction(state, block, tx, EVMC_BERLIN, block.gas_limit, 0))
+                  validate_transaction(state, block, tx, EVMC_BERLIN, block.gas_limit, 0, 0))
                   .message(),
         "nonce too high");
 }
@@ -54,19 +54,19 @@ TEST(state_tx, validate_sender)
     const TestState state{{tx.sender, {}}};
 
     ASSERT_FALSE(holds_alternative<std::error_code>(
-        validate_transaction(state, block, tx, EVMC_BERLIN, block.gas_limit, 0)));
+        validate_transaction(state, block, tx, EVMC_BERLIN, block.gas_limit, 0, 0)));
 
     block.base_fee = 1;
 
     EXPECT_EQ(std::get<std::error_code>(
-                  validate_transaction(state, block, tx, EVMC_LONDON, block.gas_limit, 0))
+                  validate_transaction(state, block, tx, EVMC_LONDON, block.gas_limit, 0, 0))
                   .message(),
         "max fee per gas less than block base fee");
 
     tx.max_gas_price = block.base_fee;
 
     EXPECT_EQ(std::get<std::error_code>(
-                  validate_transaction(state, block, tx, EVMC_LONDON, block.gas_limit, 0))
+                  validate_transaction(state, block, tx, EVMC_LONDON, block.gas_limit, 0, 0))
                   .message(),
         "insufficient funds for gas * price + value");
 }
@@ -91,17 +91,17 @@ TEST(state_tx, validate_blob_tx)
     const auto blob_gas_limit =
         static_cast<int64_t>(max_blob_gas_per_block(get_blob_params(EVMC_CANCUN)));
     EXPECT_EQ(std::get<std::error_code>(validate_transaction(
-                  state, block, tx, EVMC_SHANGHAI, block.gas_limit, blob_gas_limit)),
+                  state, block, tx, EVMC_SHANGHAI, block.gas_limit, blob_gas_limit, 0)),
         make_error_code(ErrorCode::TX_TYPE_NOT_SUPPORTED));
 
     EXPECT_EQ(std::get<std::error_code>(validate_transaction(state, block, tx, EVMC_CANCUN,
-                                            block.gas_limit, blob_gas_limit))
+                                            block.gas_limit, blob_gas_limit, 0))
                   .message(),
         make_error_code(ErrorCode::CREATE_BLOB_TX).message());
 
     tx.to = 0x01_address;
     EXPECT_EQ(std::get<std::error_code>(validate_transaction(
-                  state, block, tx, EVMC_CANCUN, block.gas_limit, blob_gas_limit)),
+                  state, block, tx, EVMC_CANCUN, block.gas_limit, blob_gas_limit, 0)),
         make_error_code(ErrorCode::EMPTY_BLOB_HASHES_LIST));
 
     for (uint8_t i = 0; i < 6; ++i)
@@ -113,7 +113,7 @@ TEST(state_tx, validate_blob_tx)
 
     const auto expect_error = [&](int64_t g) {
         return std::get<std::error_code>(
-            validate_transaction(state, block, tx, EVMC_CANCUN, block.gas_limit, g));
+            validate_transaction(state, block, tx, EVMC_CANCUN, block.gas_limit, g, 0));
     };
 
     EXPECT_EQ(
@@ -129,7 +129,7 @@ TEST(state_tx, validate_blob_tx)
         expect_error(blob_gas_limit - 1), make_error_code(ErrorCode::BLOB_GAS_LIMIT_EXCEEDED));
 
     EXPECT_EQ(std::get<TransactionProperties>(validate_transaction(state, block, tx, EVMC_CANCUN,
-                                                  block.gas_limit, blob_gas_limit))
+                                                  block.gas_limit, blob_gas_limit, 0))
                   .execution_gas_limit,
         39000);
 
@@ -156,7 +156,8 @@ TEST(state_tx, validate_eof_create_transaction)
     for (int r = EVMC_CANCUN; r <= EVMC_MAX_REVISION; ++r)
     {
         const auto rev = static_cast<evmc_revision>(r);
-        const auto res = validate_transaction(state, block, tx, rev, block.gas_limit, 0);
+        const auto res = validate_transaction(
+            state, block, tx, rev, block.gas_limit, 0, block.gas_limit);
         EXPECT_FALSE(holds_alternative<std::error_code>(res));
     }
 }
@@ -178,7 +179,7 @@ TEST(state_tx, validate_tx_data_cost)
     const TestState state{{tx.sender, {.balance = 1'000'000}}};
 
     const auto get_props = [&](evmc_revision rev) {
-        const auto res = validate_transaction(state, block, tx, rev, block.gas_limit, 0);
+        const auto res = validate_transaction(state, block, tx, rev, block.gas_limit, 0, 0);
         EXPECT_TRUE(holds_alternative<TransactionProperties>(res));
         if (holds_alternative<TransactionProperties>(res))
             return get<TransactionProperties>(res);
@@ -231,14 +232,14 @@ TEST(state_tx, max_blob_count)
 
     // Should be valid
     EXPECT_FALSE(holds_alternative<std::error_code>(
-        validate_transaction(state, block, tx, EVMC_CANCUN, block.gas_limit, blob_gas_limit)));
+        validate_transaction(state, block, tx, EVMC_CANCUN, block.gas_limit, blob_gas_limit, 0)));
 
     // Add one more blob to exceed the limit
     tx.blob_hashes.emplace_back(
         0x01000000000000000000000000000000000000000000000000000000000000FF_bytes32);
 
     EXPECT_EQ(std::get<std::error_code>(validate_transaction(
-                  state, block, tx, EVMC_CANCUN, block.gas_limit, blob_gas_limit)),
+                  state, block, tx, EVMC_CANCUN, block.gas_limit, blob_gas_limit, 0)),
         make_error_code(ErrorCode::BLOB_GAS_LIMIT_EXCEEDED));
 }
 
@@ -249,6 +250,6 @@ TEST(state_tx, max_gas_limit_exceeded)
     const TestState state;
 
     EXPECT_EQ(std::get<std::error_code>(
-                  validate_transaction(state, block, tx, EVMC_OSAKA, block.gas_limit, 0)),
+                  validate_transaction(state, block, tx, EVMC_OSAKA, block.gas_limit, 0, 0)),
         make_error_code(ErrorCode::MAX_GAS_LIMIT_EXCEEDED));
 }

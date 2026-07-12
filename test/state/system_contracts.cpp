@@ -6,6 +6,7 @@
 #include "errors.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
+#include <evmone/constants.hpp>
 
 namespace evmone::state
 {
@@ -86,10 +87,23 @@ static_assert(std::ranges::is_sorted(REQUESTS_SYSTEM_CONTRACTS, by_rev),
     "system contract entries must be ordered by revision");
 
 
+/// Cap on the number of SSTOREs a system contract may need to fund out of its
+/// state-gas budget under EIP-8037. The bal-720 `system_contract_reaches_gas_limit`
+/// tests deliberately replace the canonical contract with one sized exactly to
+/// `30M + SYSTEM_MAX_SSTORES_PER_CALL × STORAGE_SET_STATE_GAS`, so this constant
+/// is observable.
+constexpr int64_t SYSTEM_MAX_SSTORES_PER_CALL = 16;
+
 evmc::Result execute_system_call(State& state, const BlockInfo& block,
     const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm, const address& addr,
     bytes_view code, bytes_view input)
 {
+    // EIP-8037: place enough state-gas headroom to cover up to
+    // `SYSTEM_MAX_SSTORES_PER_CALL` zero→non-zero SSTOREs in a separate state
+    // reservoir, so that the new state-gas component cannot OOG a system call.
+    // Per the EIP ("System contracts and system transactions") the reservoir is
+    // separate from the 30M regular gas_left — observable via the GAS opcode,
+    // the 63/64 forwarding base, and a >30M pure regular-gas burn.
     const evmc_message msg{
         .kind = EVMC_CALL,
         .gas = 30'000'000,
@@ -97,6 +111,9 @@ evmc::Result execute_system_call(State& state, const BlockInfo& block,
         .sender = SYSTEM_ADDRESS,
         .input_data = input.data(),
         .input_size = input.size(),
+        .state_gas = (rev >= EVMC_AMSTERDAM) ?
+                         SYSTEM_MAX_SSTORES_PER_CALL * STORAGE_SET_STATE_GAS :
+                         0,
     };
 
     const Transaction empty_tx{};
@@ -120,10 +137,14 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
         if (code.empty())
             continue;
 
+        // Snapshot before the system call so that an exceptional halt doesn't leave
+        // partial state changes visible to subsequent system calls or user txs.
+        const auto checkpoint = state.checkpoint();
         const auto input32 = get_input(block, block_hashes);
         const auto res =
             execute_system_call(state, block, block_hashes, rev, vm, addr, code, input32);
-        assert(res.status_code == EVMC_SUCCESS);
+        if (res.status_code != EVMC_SUCCESS)
+            state.rollback(checkpoint);
     }
     // TODO: Should we return empty diff if no system contracts?
     return state.build_diff(rev);

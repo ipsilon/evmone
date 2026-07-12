@@ -205,6 +205,13 @@ struct evmc_message
      * The length of the code to be executed.
      */
     size_t code_size;
+
+    /**
+     * The amount of state gas available (EIP-8037).
+     *
+     * It draws from a reservoir allocated at transaction level.
+     */
+    int64_t state_gas;
 };
 
 /** The transaction and block data for execution. */
@@ -472,6 +479,22 @@ struct evmc_result
      */
     evmc_release_result_fn release;
 
+    /**
+     * The amount of state gas left after execution (EIP-8037).
+     *
+     * Returned to the caller so it can restore its own state_gas tracking.
+     */
+    int64_t state_gas_left;
+
+    /**
+     * The portion of consumed state gas that spilled into gas_left (EIP-8037).
+     *
+     * Tracked so refunds and frame rollback restore gas in LIFO order: the
+     * spilled portion returns to gas_left, the rest to the reservoir
+     * (state_gas_left). On a successful child this accumulates into the
+     * caller; on revert/halt the frame refills itself before returning.
+     */
+    int64_t state_gas_spilled;
 };
 
 

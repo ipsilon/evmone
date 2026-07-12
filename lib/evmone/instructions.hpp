@@ -4,6 +4,7 @@
 #pragma once
 
 #include "baseline.hpp"
+#include "constants.hpp"
 #include "execution_state.hpp"
 #include "instructions_traits.hpp"
 #include "instructions_xmacro.hpp"
@@ -112,6 +113,30 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
 {
     constexpr auto WordCopyCost = 3;
     return num_words(size_in_bytes) * WordCopyCost;
+}
+
+
+/// Charge state gas (EIP-8037) against the frame's state-gas reservoir/spill.
+inline bool charge_state_gas(int64_t& gas_left, ExecutionState& state, int64_t cost) noexcept
+{
+    return state.state_gas.charge(gas_left, cost);
+}
+
+/// EIP-8037: credit a state-gas refund (LIFO) to the frame.
+inline void credit_state_gas_refund(
+    int64_t& gas_left, ExecutionState& state, int64_t amount) noexcept
+{
+    state.state_gas.refill(gas_left, amount);
+}
+
+/// EIP-8037: thread a child frame's state gas back to the parent — take its leftover reservoir
+/// and accumulate its spill. A failed child already rolled itself back at its boundary (reservoir
+/// restored, spill zeroed), so success and failure are handled identically; the parent's net
+/// `used` is derived from these at its own boundary.
+inline void accumulate_child_state_gas(ExecutionState& state, const evmc::Result& result) noexcept
+{
+    state.state_gas.left = result.state_gas_left;
+    state.state_gas.spilled += result.state_gas_spilled;
 }
 
 /// Grows EVM memory and checks its cost.
@@ -1081,8 +1106,17 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
             // sending value to a non-existing account.
             if (!state.host.account_exists(beneficiary))
             {
-                if ((gas_left -= 25000) < 0)
-                    return {EVMC_OUT_OF_GAS, gas_left};
+                if (state.rev >= EVMC_AMSTERDAM)
+                {
+                    // EIP-8037: charge state gas instead of regular gas.
+                    if (!charge_state_gas(gas_left, state, NEW_ACCOUNT_STATE_GAS))
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
+                else
+                {
+                    if ((gas_left -= 25000) < 0)
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
             }
         }
     }
