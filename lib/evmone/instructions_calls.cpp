@@ -40,6 +40,13 @@ inline std::variant<evmc::address, Result> get_target_address(
     if ((gas_left -= delegate_account_access_cost) < 0)
         return Result{EVMC_OUT_OF_GAS, gas_left};
 
+    // EIP-7928: once the access cost is committed (no OOG), the delegate
+    // address must appear in the block access list even if the CALL itself
+    // light-fails (e.g. insufficient funds) without doing any other state
+    // touch on it. Force the lazy-load now so the BAL StateView decorator
+    // observes the read.
+    (void)state.host.account_exists(*delegate_addr);
+
     return *delegate_addr;
 }
 }  // namespace
@@ -266,10 +273,19 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     if (state.rev >= EVMC_SHANGHAI && init_code_size > max_init_code_size)
         return {EVMC_OUT_OF_GAS, gas_left};
 
+    // EIP-3860/7954: regular init-code word cost. Charged BEFORE the EIP-8037 state-gas
+    // charge (reservoir model): regular gas is committed against gas_left first, so a
+    // state charge that succeeds via spill cannot leave committed state growth behind a
+    // subsequent regular OOG, which would otherwise inflate the block's state component
+    // in max(regular, state).
     const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);
     const auto init_code_cost = num_words(init_code_size) * init_code_word_cost;
     if ((gas_left -= init_code_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
+
+    // EIP-8037 charge-at-access (execution-specs #3116): the NEW_ACCOUNT state gas is not
+    // charged up front. The pre-access light failures below therefore never charge it; the
+    // charge is applied later, conditionally, at the deployment-address access.
 
     if (state.msg->depth >= 1024)
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.

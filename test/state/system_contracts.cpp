@@ -113,6 +113,12 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
         if (rev < since)
             break;  // Because entries are ordered, there are no other contracts for this revision.
 
+        // EIP-7928: the system contract's address is observed by the BAL tracker
+        // even if the contract is absent or its body makes no state access —
+        // EELS process_unchecked_system_transaction reads the account (and so
+        // records it) unconditionally, before probing the code.
+        (void)state_view.get_account(addr);
+
         // Skip the call if the target account doesn't exist. This is by EIP-4788 spec.
         // > if no code exists at [address], the call must fail silently.
         const auto code = state_view.get_account_code(addr);
@@ -142,6 +148,10 @@ std::variant<RequestsResult, std::error_code> system_call_block_end(const StateV
         const auto code = state_view.get_account_code(addr);
         if (code.empty())
             return make_error_code(SYSTEM_CONTRACT_EMPTY);
+
+        // EIP-7928: ensure the executed system contract's address is observed
+        // by the BAL tracker even if the contract body makes no state access.
+        (void)state_view.get_account(addr);
 
         const auto res = execute_system_call(state, block, block_hashes, rev, vm, addr, code, {});
         if (res.status_code != EVMC_SUCCESS)
