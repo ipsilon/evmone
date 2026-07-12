@@ -375,10 +375,13 @@ evmc::Result Host::execute_message(const evmc_message& msg_in) noexcept
         {
             // A new account is materialized by the value transfer: pay NEW_ACCOUNT state gas.
             // This includes a previously-zero-balance precompile (EIP-2780/EIP-161): funding it
-            // creates a state account just like any other recipient.
+            // creates a state account just like any other recipient. transition() has pre-checked
+            // that the reservoir plus regular gas cover this, rolling authorizations back otherwise.
             if (!top_level_sg.charge(msg.gas, NEW_ACCOUNT_STATE_GAS))
                 return out_of_gas_result();  // Reservoir untouched (atomic charge failure).
         }
+        // The EIP-7702 delegated-recipient code-read access is charged at the top frame in
+        // transition() (WARM_ACCESS or COLD_ACCOUNT_ACCESS by the target's warmth).
     }
 
     if (msg.kind == EVMC_CALL)
