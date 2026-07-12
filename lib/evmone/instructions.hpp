@@ -458,7 +458,7 @@ inline Result balance(StackTop stack, int64_t gas_left, ExecutionState& state) n
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        if ((gas_left -= instr::additional_cold_account_access_cost(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -605,7 +605,15 @@ inline Result extcodesize(StackTop stack, int64_t gas_left, ExecutionState& stat
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        if ((gas_left -= instr::additional_cold_account_access_cost(state.rev)) < 0)
+            return {EVMC_OUT_OF_GAS, gas_left};
+    }
+
+    // EIP-8038: EXTCODESIZE performs a second database read (the code size) beyond the
+    // account object, charged an additional WARM_ACCESS.
+    if (state.rev >= EVMC_AMSTERDAM)
+    {
+        if ((gas_left -= instr::warm_storage_read_cost) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -629,7 +637,15 @@ inline Result extcodecopy(StackTop stack, int64_t gas_left, ExecutionState& stat
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        if ((gas_left -= instr::additional_cold_account_access_cost(state.rev)) < 0)
+            return {EVMC_OUT_OF_GAS, gas_left};
+    }
+
+    // EIP-8038: EXTCODECOPY performs a second database read (the code) beyond the account
+    // object, charged an additional WARM_ACCESS regardless of the number of bytes copied.
+    if (state.rev >= EVMC_AMSTERDAM)
+    {
+        if ((gas_left -= instr::warm_storage_read_cost) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -686,7 +702,7 @@ inline Result extcodehash(StackTop stack, int64_t gas_left, ExecutionState& stat
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        if ((gas_left -= instr::additional_cold_account_access_cost(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -1094,7 +1110,7 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(beneficiary) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= instr::cold_account_access_cost) < 0)
+        if ((gas_left -= instr::cold_account_access(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -1108,7 +1124,12 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
             {
                 if (state.rev >= EVMC_AMSTERDAM)
                 {
-                    // EIP-8037: charge state gas instead of regular gas.
+                    // EIP-8038: a positive balance sent to an empty account pays ACCOUNT_WRITE in
+                    // regular gas, charged before the state gas so a regular-gas OOG here does not
+                    // consume state gas.
+                    if ((gas_left -= instr::account_write_cost_amsterdam) < 0)
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                    // EIP-8037: the new account leaf is paid in state gas.
                     if (!charge_state_gas(gas_left, state, NEW_ACCOUNT_STATE_GAS))
                         return {EVMC_OUT_OF_GAS, gas_left};
                 }
