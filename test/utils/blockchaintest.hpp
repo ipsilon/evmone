@@ -41,7 +41,8 @@ struct BlockHeader
     std::optional<uint64_t> blob_gas_used;
     std::optional<uint64_t> excess_blob_gas;
     hash256 requests_hash;
-    std::optional<uint64_t> slot_number;  ///< EIP-7843 — absent before Amsterdam.
+    std::optional<hash256> block_access_list_hash;  ///< EIP-7928 — absent before Amsterdam.
+    std::optional<uint64_t> slot_number;            ///< EIP-7843 — absent before Amsterdam.
 };
 
 struct TestBlock
