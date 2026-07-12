@@ -102,6 +102,10 @@ void state_transition::TearDown()
                     << "log " << i << " topics";
             }
         }
+        if (expect.state_gas.has_value())
+        {
+            EXPECT_EQ(receipt.state_block_gas, *expect.state_gas);
+        }
         // Update default expectations - valid transaction means coinbase exists unless explicitly
         // requested otherwise
         if (!expect.post.contains(Coinbase))
