@@ -194,9 +194,7 @@ address compute_create_address(const address& sender, uint64_t sender_nonce) noe
     }
     else  // Prefixed integer encoding.
     {
-        // TODO: bit_width returns int after [LWG 3656](https://cplusplus.github.io/LWG/issue3656).
-        // NOLINTNEXTLINE(readability-redundant-casting)
-        const auto num_nonzero_bytes = static_cast<int>((std::bit_width(sender_nonce) + 7) / 8);
+        const auto num_nonzero_bytes = (std::bit_width(sender_nonce) + 7) / 8;
         *p++ = static_cast<uint8_t>(RLP_STR_BASE + num_nonzero_bytes);
         intx::be::unsafe::store(p, sender_nonce);
         p = std::shift_left(p, p + MAX_NONCE_SIZE, MAX_NONCE_SIZE - num_nonzero_bytes);
