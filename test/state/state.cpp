@@ -345,16 +345,14 @@ void State::journal_balance_change(const address& addr, const intx::uint256& pre
     m_journal.emplace_back(JournalBalanceChange{{addr}, prev_balance});
 }
 
-void State::journal_storage_change(
-    const address& addr, const bytes32& key, const StorageValue& value)
+void State::journal_storage_change(StorageValue& slot)
 {
-    m_journal.emplace_back(JournalStorageChange{{addr}, key, value.current, value.access_status});
+    m_journal.emplace_back(JournalStorageChange{&slot, slot.current, slot.access_status});
 }
 
-void State::journal_transient_storage_change(
-    const address& addr, const bytes32& key, const bytes32& value)
+void State::journal_transient_storage_change(bytes32& slot)
 {
-    m_journal.emplace_back(JournalTransientStorageChange{{addr}, key, value});
+    m_journal.emplace_back(JournalTransientStorageChange{&slot, slot});
 }
 
 void State::journal_bump_nonce(const address& addr)
@@ -421,14 +419,12 @@ void State::rollback(size_t checkpoint)
                 }
                 else if constexpr (std::is_same_v<T, JournalStorageChange>)
                 {
-                    auto& s = get(e.addr).storage.find(e.key)->second;
-                    s.current = e.prev_value;
-                    s.access_status = e.prev_access_status;
+                    e.slot->current = e.prev_value;
+                    e.slot->access_status = e.prev_access_status;
                 }
                 else if constexpr (std::is_same_v<T, JournalTransientStorageChange>)
                 {
-                    auto& s = get(e.addr).transient_storage.find(e.key)->second;
-                    s = e.prev_value;
+                    *e.slot = e.prev_value;
                 }
                 else if constexpr (std::is_same_v<T, JournalBalanceChange>)
                 {

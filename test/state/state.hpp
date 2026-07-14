@@ -32,16 +32,16 @@ class State
     struct JournalTouched : JournalBase
     {};
 
-    struct JournalStorageChange : JournalBase
+    struct JournalStorageChange
     {
-        bytes32 key;
+        StorageValue* slot = nullptr;  ///< Storage slot in a node-based container (stable refs).
         bytes32 prev_value;
         evmc_access_status prev_access_status;
     };
 
-    struct JournalTransientStorageChange : JournalBase
+    struct JournalTransientStorageChange
     {
-        bytes32 key;
+        bytes32* slot = nullptr;  ///< T-storage slot in a node-based container (stable refs).
         bytes32 prev_value;
     };
 
@@ -113,10 +113,9 @@ public:
 
     void journal_balance_change(const address& addr, const intx::uint256& prev_balance);
 
-    void journal_storage_change(const address& addr, const bytes32& key, const StorageValue& value);
+    void journal_storage_change(StorageValue& slot);
 
-    void journal_transient_storage_change(
-        const address& addr, const bytes32& key, const bytes32& value);
+    void journal_transient_storage_change(bytes32& slot);
 
     void journal_bump_nonce(const address& addr);
 
