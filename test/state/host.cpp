@@ -176,50 +176,10 @@ bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcep
     return false;
 }
 
-std::optional<evmc_message> Host::prepare_message(evmc_message msg) noexcept
-{
-    if (msg.depth == 0 || msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
-    {
-        auto& sender_acc = m_state.get(msg.sender);
-
-        // EIP-2681 (already checked for depth 0 during transaction validation).
-        if (sender_acc.nonce == MAX_NONCE)
-            return {};  // Light early exception.
-
-        if (msg.depth != 0)
-        {
-            m_state.journal_bump_nonce(msg.sender);
-            ++sender_acc.nonce;  // Bump sender nonce.
-        }
-
-        if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
-        {
-            // Compute and set the address of the account being created.
-            assert(msg.recipient == address{});
-            assert(msg.code_address == address{});
-            // Nonce was already incremented, but creation calculation needs non-incremented value
-            assert(sender_acc.nonce != 0);
-            const auto creation_sender_nonce = sender_acc.nonce - 1;
-            if (msg.kind == EVMC_CREATE)
-                msg.recipient = compute_create_address(msg.sender, creation_sender_nonce);
-            else
-            {
-                assert(msg.kind == EVMC_CREATE2);
-                msg.recipient = compute_create2_address(
-                    msg.sender, msg.create2_salt, {msg.input_data, msg.input_size});
-            }
-
-            // By EIP-2929, the access to new created address is never reverted.
-            access_account(msg.recipient);
-        }
-    }
-
-    return msg;
-}
-
 evmc::Result Host::create(const evmc_message& msg) noexcept
 {
     assert(msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2);
+    assert(msg.recipient != address{});  // Must be computed already.
 
     auto* new_acc = m_state.find(msg.recipient);
     const bool new_acc_exists = new_acc != nullptr;
@@ -254,10 +214,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     const bytes_view initcode{msg.input_data, msg.input_size};
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
-    {
-        result.create_address = msg.recipient;
         return result;
-    }
 
     auto gas_left = result.gas_left;
     assert(gas_left >= 0);
@@ -277,7 +234,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (gas_left < 0)
     {
         return (m_rev == EVMC_FRONTIER) ?
-                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund, msg.recipient} :
+                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund} :
                    evmc::Result{EVMC_FAILURE};
     }
 
@@ -288,7 +245,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         new_acc->code_changed = true;
     }
 
-    return evmc::Result{result.status_code, gas_left, result.gas_refund, msg.recipient};
+    return evmc::Result{result.status_code, gas_left, result.gas_refund};
 }
 
 evmc::Result Host::execute_message(const evmc_message& msg) noexcept
@@ -340,16 +297,21 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
 
-evmc::Result Host::call(const evmc_message& orig_msg) noexcept
+evmc::Result Host::call(const evmc_message& msg) noexcept
 {
-    const auto msg = prepare_message(orig_msg);
-    if (!msg.has_value())
-        return evmc::Result{EVMC_FAILURE, orig_msg.gas};  // Light exception.
+    if (msg.depth != 0 && (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2))
+    {
+        // Bump the creator's nonce (already done for depth 0). Not reverted if creation fails.
+        auto& sender_acc = m_state.get(msg.sender);
+        assert(sender_acc.nonce != MAX_NONCE);
+        m_state.journal_bump_nonce(msg.sender);
+        ++sender_acc.nonce;
+    }
 
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();
 
-    auto result = execute_message(*msg);
+    auto result = execute_message(msg);
 
     if (result.status_code != EVMC_SUCCESS)
     {

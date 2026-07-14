@@ -45,7 +45,7 @@ enum
      *
      * @see @ref versioning
      */
-    EVMC_ABI_VERSION = 15
+    EVMC_ABI_VERSION = 16
 };
 
 
@@ -128,6 +128,7 @@ struct evmc_message
      * message value evmc_message::value is going to be transferred.
      * For ::EVMC_CALLCODE or ::EVMC_DELEGATECALL, this may be different from
      * the evmc_message::code_address.
+     * For ::EVMC_CREATE and ::EVMC_CREATE2 this is the address of the account to be created.
      *
      * Defined as `r` in the Yellow Paper.
      */
@@ -166,14 +167,6 @@ struct evmc_message
      * Defined as `v` or `v~` in the Yellow Paper.
      */
     evmc_uint256be value;
-
-    /**
-     * The optional value used in new contract address construction.
-     *
-     * Needed only for a Host to calculate created address when kind is ::EVMC_CREATE2.
-     * Ignored in evmc_execute_fn().
-     */
-    evmc_bytes32 create2_salt;
 
     /**
      * The address of the code to be executed.
@@ -465,16 +458,6 @@ struct evmc_result
      * function to the result itself allows VM composition.
      */
     evmc_release_result_fn release;
-
-    /**
-     * The address of the possibly created contract.
-     *
-     * The create address may be provided even though the contract creation has failed
-     * (evmc_result::status_code is not ::EVMC_SUCCESS). This is useful in situations
-     * when the address is observable, e.g. access to it remains warm.
-     * In all other cases the address MUST be null bytes.
-     */
-    evmc_address create_address;
 };
 
 

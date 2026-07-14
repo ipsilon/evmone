@@ -85,9 +85,10 @@ TEST_P(evm, evmone_block_gas_cost_overflow_create)
 
     execute(gas_max - 1, code);
     EXPECT_STATUS(EVMC_OUT_OF_GAS);
-    if (!host.recorded_calls.empty())  // turbo
+    if (!host.recorded_calls.empty())  // Advanced.
     {
-        EXPECT_EQ(host.recorded_calls.size(), 3);  // baseline
+        // Baseline: The first CREATE pushes its address, the next fails the memory check.
+        EXPECT_EQ(host.recorded_calls.size(), 1);
     }
 }
 

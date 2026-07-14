@@ -14,7 +14,6 @@ inline constexpr size_t initcode_size_limit = 0xc000;
 
 TEST_P(evm, create_initcode_limit)
 {
-    host.call_result.create_address = 0x02_address;
     for (const auto& c : {create().input(0, calldataload(0)) + ret_top(),
              create2().input(0, calldataload(0)) + ret_top()})
     {
@@ -30,7 +29,9 @@ TEST_P(evm, create_initcode_limit)
                 }
                 else
                 {
-                    EXPECT_OUTPUT_INT(2);
+                    EXPECT_STATUS(EVMC_SUCCESS);
+                    ASSERT_EQ(result.output_size, 32);
+                    EXPECT_NE(intx::be::unsafe::load<intx::uint256>(result.output_data), 0);
                 }
             }
         }

@@ -80,14 +80,6 @@ public:
         else
             result.gas_left = msg.gas / (gas_left_factor + 3);
 
-        if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
-        {
-            // Use the output to fill the create address.
-            // We still keep the output to check if VM is going to ignore it.
-            std::memcpy(result.create_address.bytes, result.output_data,
-                std::min(sizeof(result.create_address), result.output_size));
-        }
-
         return result;
     }
 };
@@ -202,7 +194,7 @@ fuzz_input populate_input(const uint8_t* data, size_t data_size) noexcept
     const auto destination_8bits = data[6];
     const auto sender_8bits = data[7];
     const auto value_8bits = data[8];
-    const auto create2_salt_8bits = data[9];
+    // data[9] unused (was the create2_salt, dropped from evmc_message).
 
     const auto tx_gas_price_8bits = data[10];
     const auto tx_origin_8bits = data[11];
@@ -247,9 +239,6 @@ fuzz_input populate_input(const uint8_t* data, size_t data_size) noexcept
     in.msg.input_size = input_size_16bits;
     in.msg.input_data = data;
     in.msg.value = generate_interesting_value(value_8bits);
-
-    // Should be ignored by VMs.
-    in.msg.create2_salt = generate_interesting_value(create2_salt_8bits);
 
     data += in.msg.input_size;
     data_size -= in.msg.input_size;
@@ -359,7 +348,6 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t data_size) noe
                 ASSERT_EQ(bytes_view(m1.input_data, m1.input_size),
                     bytes_view(m2.input_data, m2.input_size));
                 ASSERT_EQ(evmc::uint256be{m1.value}, evmc::uint256be{m2.value});
-                ASSERT_EQ(evmc::bytes32{m1.create2_salt}, evmc::bytes32{m2.create2_salt});
             }
 
             ASSERT(std::equal(ref_host.recorded_logs.begin(), ref_host.recorded_logs.end(),

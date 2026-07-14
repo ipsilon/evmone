@@ -5,6 +5,7 @@
 /// This file contains EVM unit tests that perform any kind of calls.
 
 #include "evm_fixture.hpp"
+#include <evmone/create_address.hpp>
 
 using namespace evmc::literals;
 using namespace evmone::test;
@@ -76,14 +77,13 @@ TEST_P(evm, create)
     auto call_output = bytes{0xa, 0xb, 0xc};
     host.call_result.output_data = call_output.data();
     host.call_result.output_size = call_output.size();
-    host.call_result.create_address = 0xcc010203040506070809010203040506070809ce_address;
     host.call_result.gas_left = 200000;
     execute(300000, sstore(1, create().value(1).input(0, 0x20)));
 
     EXPECT_GAS_USED(EVMC_SUCCESS, 115816);
 
-    EXPECT_EQ(account.storage[0x01_bytes32].current,
-        0x000000000000000000000000cc010203040506070809010203040506070809ce_bytes32);
+    const auto expected_addr = evmone::compute_create_address(msg.recipient, 0);
+    EXPECT_EQ(account.storage[0x01_bytes32].current, to_bytes32(expected_addr));
 
     ASSERT_EQ(host.recorded_calls.size(), 1);
     const auto& call_msg = host.recorded_calls.back();
@@ -91,7 +91,6 @@ TEST_P(evm, create)
     EXPECT_EQ(call_msg.gas, 263801);
     EXPECT_EQ(call_msg.value, 0x01_bytes32);
     EXPECT_EQ(call_msg.input_size, 0x20);
-    EXPECT_EQ(call_msg.create2_salt, 0x00_bytes32);
 }
 
 TEST_P(evm, create_gas)
@@ -118,7 +117,6 @@ TEST_P(evm, create2)
     const bytes call_output{0xa, 0xb, 0xc};
     host.call_result.output_data = call_output.data();
     host.call_result.output_size = call_output.size();
-    host.call_result.create_address = 0xc2010203040506070809010203040506070809ce_address;
     host.call_result.gas_left = 200000;
     execute(300000, sstore(1, create2().value(1).input(0, 0x41).salt(0x5a)));
     EXPECT_GAS_USED(EVMC_SUCCESS, 115817);
@@ -129,10 +127,13 @@ TEST_P(evm, create2)
     EXPECT_EQ(call_msg.gas, 263775);
     EXPECT_EQ(call_msg.value, 0x01_bytes32);
     EXPECT_EQ(call_msg.input_size, 0x41);
-    EXPECT_EQ(call_msg.create2_salt, 0x5a_bytes32);
 
-    EXPECT_EQ(account.storage[0x01_bytes32].current,
-        0x000000000000000000000000c2010203040506070809010203040506070809ce_bytes32);
+    // The VM computes the created address itself: CREATE2 with salt 0x5a over
+    // the 0x41-byte all-zero initcode read from the empty memory.
+    const auto initcode = bytes(0x41, 0);
+    const auto expected_addr =
+        evmone::compute_create2_address(msg.recipient, 0x5a_bytes32, initcode);
+    EXPECT_EQ(account.storage[0x01_bytes32].current, to_bytes32(expected_addr));
 }
 
 TEST_P(evm, create2_salt_cost)
@@ -168,12 +169,13 @@ TEST_P(evm, create_balance_too_low)
 
 TEST_P(evm, create_failure)
 {
-    host.call_result.create_address = 0x00000000000000000000000000000000000000ce_address;
-    const auto create_address =
-        bytes_view{host.call_result.create_address.bytes, sizeof(host.call_result.create_address)};
     rev = EVMC_PETERSBURG;
     for (auto op : {OP_CREATE, OP_CREATE2})
     {
+        const auto computed_addr = op == OP_CREATE ?
+                                       evmone::compute_create_address(msg.recipient, 0) :
+                                       evmone::compute_create2_address(msg.recipient, {}, {});
+        const auto create_address = bytes_view{computed_addr.bytes, sizeof(computed_addr)};
         const auto code = push(0) + (3 * OP_DUP1) + op + ret_top();
 
         host.call_result.status_code = EVMC_SUCCESS;
@@ -797,7 +799,10 @@ TEST_P(evm, call_gas_refund_aggregation_different_calls)
 TEST_P(evm, call_gas_refund_aggregation_same_calls)
 {
     rev = EVMC_LONDON;
-    host.accounts[msg.recipient].set_balance(2);
+    // The first CREATE pushes its address, which the second CREATE then pops as its value argument,
+    // the balance must cover it.
+    host.accounts[msg.recipient].balance =
+        intx::be::store<evmc::uint256be>(intx::uint256{1} << 200);
     host.call_result.status_code = EVMC_SUCCESS;
     host.call_result.gas_refund = 1;
 

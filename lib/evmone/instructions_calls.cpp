@@ -2,6 +2,8 @@
 // Copyright 2019 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "constants.hpp"
+#include "create_address.hpp"
 #include "delegation.hpp"
 #include "instructions.hpp"
 #include <variant>
@@ -204,7 +206,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     const auto endowment = stack.pop();
     const auto init_code_offset_u256 = stack.pop();
     const auto init_code_size_u256 = stack.pop();
-    const auto salt = (Op == OP_CREATE2) ? stack.pop() : uint256{};
+    const auto salt = (Op == OP_CREATE2) ? intx::be::store<bytes32>(stack.pop()) : bytes32{};
 
     stack.push(0);  // Assume failure.
     state.return_data.clear();
@@ -230,20 +232,32 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
         intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < endowment)
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
 
+    const auto& sender = state.msg->recipient;
+    const auto sender_nonce = state.host.get_nonce(sender);  // Pre-bump sender nonce.
+
+    // Creation fails when the sender's nonce is at maximum (EIP-2681).
+    if (sender_nonce == MAX_NONCE)
+        return {EVMC_SUCCESS, gas_left};  // "Light" failure.
+
+    const auto init_code =
+        bytes_view{init_code_size > 0 ? &state.memory[init_code_offset] : nullptr, init_code_size};
+
     evmc_message msg{.kind = to_call_kind(Op)};
+    msg.recipient = (Op == OP_CREATE) ? compute_create_address(sender, sender_nonce) :
+                                        compute_create2_address(sender, salt, init_code);
+
+    // Access to the new address is warmed and never reverted (EIP-2929).
+    if (state.rev >= EVMC_BERLIN)
+        state.host.access_account(msg.recipient);
+
     msg.gas = gas_left;
     if (state.rev >= EVMC_TANGERINE_WHISTLE)
-        msg.gas = msg.gas - msg.gas / 64;
+        msg.gas -= msg.gas / 64;
 
-    if (init_code_size > 0)
-    {
-        // init_code_offset may be garbage if init_code_size == 0.
-        msg.input_data = &state.memory[init_code_offset];
-        msg.input_size = init_code_size;
-    }
-    msg.sender = state.msg->recipient;
+    msg.input_data = init_code.data();
+    msg.input_size = init_code.size();
+    msg.sender = sender;
     msg.depth = state.msg->depth + 1;
-    msg.create2_salt = intx::be::store<evmc::bytes32>(salt);
     msg.value = intx::be::store<evmc::uint256be>(endowment);
 
     const auto result = state.host.call(msg);
@@ -252,7 +266,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
 
     state.return_data.assign(result.output_data, result.output_size);
     if (result.status_code == EVMC_SUCCESS)
-        stack.top() = intx::be::load<uint256>(result.create_address);
+        stack.top() = intx::be::load<uint256>(msg.recipient);
 
     return {EVMC_SUCCESS, gas_left};
 }
