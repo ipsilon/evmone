@@ -51,16 +51,6 @@ static inline const char* evmc_vm_version(struct evmc_vm* vm)
 }
 
 /**
- * Checks if the VM has the given capability.
- *
- * @see evmc_get_capabilities_fn
- */
-static inline bool evmc_vm_has_capability(struct evmc_vm* vm, enum evmc_capabilities capability)
-{
-    return (vm->get_capabilities(vm) & (evmc_capabilities_flagset)capability) != 0;
-}
-
-/**
  * Destroys the VM instance.
  *
  * @see evmc_destroy_fn

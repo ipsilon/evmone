@@ -687,18 +687,6 @@ public:
     /// @copydoc evmc_vm::version
     char const* version() const noexcept { return m_instance->version; }
 
-    /// Checks if the VM has the given capability.
-    bool has_capability(evmc_capabilities capability) const noexcept
-    {
-        return (get_capabilities() & static_cast<evmc_capabilities_flagset>(capability)) != 0;
-    }
-
-    /// @copydoc evmc_vm::get_capabilities
-    evmc_capabilities_flagset get_capabilities() const noexcept
-    {
-        return m_instance->get_capabilities(m_instance);
-    }
-
     /// @copydoc evmc_set_option()
     evmc_set_option_result set_option(const char name[], const char value[]) noexcept
     {
@@ -724,23 +712,6 @@ public:
                    size_t code_size) noexcept
     {
         return execute(Host::get_interface(), host.to_context(), rev, msg, code, code_size);
-    }
-
-    /// Executes code without the Host context.
-    ///
-    /// The same as
-    /// execute(const evmc_host_interface&, evmc_host_context*, evmc_revision,
-    ///         const evmc_message&, const uint8_t*, size_t),
-    /// but without providing the Host context and interface.
-    /// This method is for experimental precompiles support where execution is
-    /// guaranteed not to require any Host access.
-    Result execute(evmc_revision rev,
-                   const evmc_message& msg,
-                   const uint8_t* code,
-                   size_t code_size) noexcept
-    {
-        return Result{
-            m_instance->execute(m_instance, nullptr, nullptr, rev, &msg, code, code_size)};
     }
 
     /// Returns the pointer to C EVMC struct representing the VM.

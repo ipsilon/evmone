@@ -15,13 +15,6 @@ TEST(evmone, info)
     EXPECT_TRUE(vm.is_abi_compatible());
 }
 
-TEST(evmone, capabilities)
-{
-    auto vm = evmc_create_evmone();
-    EXPECT_EQ(vm->get_capabilities(vm), evmc_capabilities_flagset{EVMC_CAPABILITY_EVM1});
-    vm->destroy(vm);
-}
-
 TEST(evmone, set_option_invalid)
 {
     auto vm = evmc_create_evmone();

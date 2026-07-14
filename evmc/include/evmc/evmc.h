@@ -45,7 +45,7 @@ enum
      *
      * @see @ref versioning
      */
-    EVMC_ABI_VERSION = 16
+    EVMC_ABI_VERSION = 17
 };
 
 
@@ -175,9 +175,6 @@ struct evmc_message
      * the evmc_message::recipient.
      * Not required when invoking evmc_execute_fn(), only when invoking evmc_call_fn().
      * Ignored if kind is ::EVMC_CREATE or ::EVMC_CREATE2.
-     *
-     * In case of ::EVMC_CAPABILITY_PRECOMPILES implementation, this fields should be inspected
-     * to identify the requested precompile.
      *
      * Defined as `c` in the Yellow Paper.
      */
@@ -1046,8 +1043,7 @@ enum evmc_revision
  * This function MAY be invoked multiple times for a single VM instance.
  *
  * @param vm         The VM instance. This argument MUST NOT be NULL.
- * @param host       The Host interface. This argument MUST NOT be NULL unless
- *                   the @p vm has the ::EVMC_CAPABILITY_PRECOMPILES capability.
+ * @param host       The Host interface. This argument MUST NOT be NULL.
  * @param context    The opaque pointer to the Host execution context.
  *                   This argument MAY be NULL. The VM MUST pass the same
  *                   pointer to the methods of the @p host interface.
@@ -1065,53 +1061,6 @@ typedef struct evmc_result (*evmc_execute_fn)(struct evmc_vm* vm,
                                               const struct evmc_message* msg,
                                               uint8_t const* code,
                                               size_t code_size);
-
-/**
- * Possible capabilities of a VM.
- */
-enum evmc_capabilities
-{
-    /**
-     * The VM is capable of executing EVM1 bytecode.
-     */
-    EVMC_CAPABILITY_EVM1 = (1u << 0),
-
-    /**
-     * The VM is capable of executing ewasm bytecode.
-     */
-    EVMC_CAPABILITY_EWASM = (1u << 1),
-
-    /**
-     * The VM is capable of executing the precompiled contracts
-     * defined for the range of code addresses.
-     *
-     * The EIP-1352 (https://eips.ethereum.org/EIPS/eip-1352) specifies
-     * the range 0x000...0000 - 0x000...ffff of addresses
-     * reserved for precompiled and system contracts.
-     *
-     * This capability is **experimental** and MAY be removed without notice.
-     */
-    EVMC_CAPABILITY_PRECOMPILES = (1u << 2)
-};
-
-/**
- * Alias for unsigned integer representing a set of bit flags of EVMC capabilities.
- *
- * @see evmc_capabilities
- */
-typedef uint32_t evmc_capabilities_flagset;
-
-/**
- * Return the supported capabilities of the VM instance.
- *
- * This function MAY be invoked multiple times for a single VM instance,
- * and its value MAY be influenced by calls to evmc_vm::set_option.
- *
- * @param vm  The VM instance.
- * @return    The supported capabilities of the VM. @see evmc_capabilities.
- */
-typedef evmc_capabilities_flagset (*evmc_get_capabilities_fn)(struct evmc_vm* vm);
-
 
 /**
  * The VM instance.
@@ -1157,18 +1106,6 @@ struct evmc_vm
      * This is a mandatory method and MUST NOT be set to NULL.
      */
     evmc_execute_fn execute;
-
-    /**
-     * A method returning capabilities supported by the VM instance.
-     *
-     * The value returned MAY change when different options are set via the set_option() method.
-     *
-     * A Client SHOULD only rely on the value returned if it has queried it after
-     * it has called the set_option().
-     *
-     * This is a mandatory method and MUST NOT be set to NULL.
-     */
-    evmc_get_capabilities_fn get_capabilities;
 
     /**
      * Optional pointer to function modifying VM's options.
