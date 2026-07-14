@@ -17,6 +17,8 @@ add_library(evmone
     baseline_instruction_table.cpp
     baseline_instruction_table.hpp
     constants.hpp
+    create_address.cpp
+    create_address.hpp
     delegation.cpp
     delegation.hpp
     instructions.hpp

@@ -2,16 +2,16 @@
 // Copyright 2023 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include <evmone/create_address.hpp>
 #include <gtest/gtest.h>
-#include <test/state/host.hpp>
 #include <test/utils/rlp.hpp>
 
 using namespace evmc;
 using namespace evmc::literals;
 
-TEST(state_new_account_address, create_examples)
+TEST(create_address, create_examples)
 {
-    static constexpr auto addr = evmone::state::compute_create_address;
+    static constexpr auto addr = evmone::compute_create_address;
 
     static constexpr auto S0 = 0x00_address;
     EXPECT_EQ(addr(S0, 0), 0xbd770416a3345f91e4b34576cb804a576fa48eb1_address);
@@ -34,10 +34,10 @@ TEST(state_new_account_address, create_examples)
     EXPECT_EQ(beacon_roots2, 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02_address);
 }
 
-TEST(state_new_account_address, create_nonces)
+TEST(create_address, create_nonces)
 {
     // Explore nonce values from all ranges giving RLP encoding schemes.
-    static constexpr auto addr = evmone::state::compute_create_address;
+    static constexpr auto addr = evmone::compute_create_address;
 
     struct TestCase
     {
@@ -81,7 +81,7 @@ TEST(state_new_account_address, create_nonces)
     }
 }
 
-TEST(state_new_account_address, create_rlp)
+TEST(create_address, create_rlp)
 {
     // Compute the RLP payload for keccak256 hash producing the final CREATE address.
     // This test is to visualize what RLP inputs are reaching the final keccak256 hash.
@@ -118,9 +118,9 @@ TEST(state_new_account_address, create_rlp)
     EXPECT_EQ(rlp(S, 0xffffffffffffffff).length() / 2, 31u);
 }
 
-TEST(state_new_account_address, create2)
+TEST(create_address, create2)
 {
-    static constexpr auto addr = evmone::state::compute_create2_address;
+    static constexpr auto addr = evmone::compute_create2_address;
     static constexpr address SENDERS[] = {
         0x00_address, 0x01_address, 0x8000000000000000000000000000000000000000_address};
     static constexpr auto z0 = 0x00_bytes32;
