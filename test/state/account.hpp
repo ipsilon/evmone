@@ -29,9 +29,6 @@ struct StorageValue
 /// The state account.
 struct Account
 {
-    /// The maximum allowed nonce value.
-    static constexpr auto NonceMax = std::numeric_limits<uint64_t>::max();
-
     /// The keccak256 hash of the empty input. Used to identify empty account's code.
     static constexpr auto EMPTY_CODE_HASH =
         0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470_bytes32;

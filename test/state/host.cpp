@@ -183,7 +183,7 @@ std::optional<evmc_message> Host::prepare_message(evmc_message msg) noexcept
         auto& sender_acc = m_state.get(msg.sender);
 
         // EIP-2681 (already checked for depth 0 during transaction validation).
-        if (sender_acc.nonce == Account::NonceMax)
+        if (sender_acc.nonce == MAX_NONCE)
             return {};  // Light early exception.
 
         if (msg.depth != 0)

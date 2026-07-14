@@ -124,7 +124,7 @@ int64_t process_authorization_list(
             continue;
 
         // 2. Verify the nonce is less than 2**64 - 1.
-        if (auth.nonce == Account::NonceMax)
+        if (auth.nonce == MAX_NONCE)
             continue;
 
         // 3. Verify if the signer has been successfully recovered from the signature.
@@ -526,7 +526,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
         !is_code_delegated(state_view.get_account_code(tx.sender)))
         return make_error_code(SENDER_NOT_EOA);  // Origin must not be a contract (EIP-3607).
 
-    if (sender_acc.nonce == Account::NonceMax)  // Nonce value limit (EIP-2681).
+    if (sender_acc.nonce == MAX_NONCE)  // Nonce value limit (EIP-2681).
         return make_error_code(NONCE_HAS_MAX_VALUE);
 
     if (sender_acc.nonce < tx.nonce)
@@ -596,8 +596,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     State state{state_view};
 
     auto& sender_acc = state.get_or_insert(tx.sender);
-    assert(sender_acc.nonce < Account::NonceMax);  // Required for valid tx.
-    ++sender_acc.nonce;                            // Bump sender nonce.
+    assert(sender_acc.nonce < MAX_NONCE);  // Required for valid tx.
+    ++sender_acc.nonce;                    // Bump sender nonce.
 
     const auto delegation_refund =
         process_authorization_list(state, tx.chain_id, tx.authorization_list);
