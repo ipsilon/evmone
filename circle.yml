@@ -143,45 +143,50 @@ commands:
         default: stable
     steps:
       - run:
+          # Extract into a per-repo subdirectory so multiple fixture sources can
+          # coexist under ~/spec-tests and be distinguished in test names, e.g.
+          # execution-specs/fixtures/state_tests/... vs execution-spec-tests/...
+          # Downloading before the build makes a download failure fail fast.
           name: "Download execution-spec-tests: <<parameters.release>>"
           working_directory: ~/spec-tests
           command: |
-            find . -delete
+            dir=$(basename <<parameters.repo>>)
+            rm -rf "$dir" && mkdir -p "$dir"
             curl -L --retry 3 -C - --output-dir /tmp -O https://github.com/<<parameters.repo>>/releases/download/<<parameters.release>>/fixtures_<<parameters.fixtures_suffix>>.tar.gz
-            tar -xzf /tmp/fixtures_<<parameters.fixtures_suffix>>.tar.gz
-            ls -l
+            tar -xzf /tmp/fixtures_<<parameters.fixtures_suffix>>.tar.gz -C "$dir"
+            ls -l "$dir"
 
-  run_execution_spec_tests:
+  run_spec_tests:
     parameters:
-      repo:
+      report:
+        description: "Identifier for the test run; also names the JUnit report."
         type: string
-        default: ethereum/execution-spec-tests
-      release:
+      label:
+        description: "ctest label(s) to run (test type)."
         type: string
-      fixtures_suffix:
+        default: "state_tests|blockchain_tests"
+      include:
+        description: "ctest -R name regex, e.g. a fixture source '^execution-specs/'."
         type: string
-      filter:
+        default: ""
+      exclude:
+        description: "ctest -E name regex of tests to skip."
         type: string
-        default: "*"
+        default: ""
     steps:
-      - download_execution_spec_tests:
-          repo: <<parameters.repo>>
-          release: <<parameters.release>>
-          fixtures_suffix: <<parameters.fixtures_suffix>>
       - run:
-          name: "Execution spec tests (<<parameters.release>>, state_tests)"
-          # Tests for in-development EVM revision currently passing.
+          name: "Execution spec tests (<<parameters.report>>)"
+          shell: bash
           working_directory: ~/build
-          command: >
-            LLVM_PROFILE_FILE=state_tests.profraw
-            bin/evmone-statetest --gtest_filter='<<parameters.filter>>' ~/spec-tests/fixtures/state_tests
-      - run:
-          name: "Execution spec tests (<<parameters.release>>, blockchain_tests)"
-          # Tests for in-development EVM revision currently passing.
-          working_directory: ~/build
-          command: >
-            LLVM_PROFILE_FILE=blockchain_tests.profraw
-            bin/evmone-blockchaintest --gtest_filter='<<parameters.filter>>' ~/spec-tests/fixtures/blockchain_tests
+          command: |
+            args=(-L '<<parameters.label>>')
+            [ -n "<<parameters.include>>" ] && args+=(-R "<<parameters.include>>")
+            [ -n "<<parameters.exclude>>" ] && args+=(-E "<<parameters.exclude>>")
+            ctest "${args[@]}" --schedule-random --output-on-failure \
+              --parallel $CMAKE_BUILD_PARALLEL_LEVEL \
+              --output-junit ~/test_results/eest-<<parameters.report>>.xml
+      - store_test_results:
+          path: ~/test_results
 
   build:
     description: "Build"
@@ -217,7 +222,13 @@ commands:
             if [ "$TOOLCHAIN" ]; then
               export toolchain_option="-DTOOLCHAIN=$TOOLCHAIN"
             fi
-            cmake ../project $toolchain_option -DCMAKE_INSTALL_PREFIX=~/install -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_COMPILE_WARNING_AS_ERROR=TRUE -DEVMONE_TESTING=ON $CMAKE_OPTIONS
+            # If execution-spec-test fixtures were downloaded (before the build),
+            # register them as individual ctest tests during this single configure.
+            spec_tests_option=""
+            if [ -n "$(ls -A "$HOME/spec-tests" 2>/dev/null)" ]; then
+              spec_tests_option="-DEVMONE_SPEC_TESTS=$HOME/spec-tests"
+            fi
+            cmake ../project $toolchain_option -DCMAKE_INSTALL_PREFIX=~/install -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_COMPILE_WARNING_AS_ERROR=TRUE -DEVMONE_TESTING=ON $spec_tests_option $CMAKE_OPTIONS
       - save_cache:
           name: "Save Hunter cache"
           key: *hunter-cache-key
@@ -237,7 +248,8 @@ commands:
           name: "Test"
           shell: bash
           working_directory: ~/build
-          command: ctest -R ${TESTS_FILTER:-'.*'} --schedule-random --output-on-failure --parallel $CMAKE_BUILD_PARALLEL_LEVEL --output-junit ~/test_results/evmone.xml
+          # Exclude execution-spec tests; those run separately via run_spec_tests.
+          command: ctest -R ${TESTS_FILTER:-'.*'} -LE 'state_tests|blockchain_tests' --schedule-random --output-on-failure --parallel $CMAKE_BUILD_PARALLEL_LEVEL --output-junit ~/test_results/evmone.xml
       - store_test_results:
           path: ~/test_results
 
@@ -420,19 +432,27 @@ jobs:
       CMAKE_GENERATOR: Ninja
       CMAKE_OPTIONS: -DCOVERAGE=1
     steps:
-      - build
-      - run_execution_spec_tests:
+      # Download both fixture sources before the build so a download failure fails
+      # fast and a single configure registers all of them as ctest tests.
+      - download_execution_spec_tests:
           repo: ethereum/execution-specs
           release: tests-glamsterdam-devnet@v6.1.0
           fixtures_suffix: glamsterdam-devnet
-          filter: "-for_amsterdam/*:for_bpo2toamsterdamattime15k/*"
+      - download_execution_spec_tests:
+          release: v5.4.0
+          fixtures_suffix: develop
+      - build
+      - run_spec_tests:
+          report: glamsterdam-devnet
+          include: "^execution-specs/"
+          exclude: "for_amsterdam|for_bpo2toamsterdamattime15k"
       - collect_coverage_clang:
           flags: eest-develop
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
           binaries: evmone-statetest evmone-blockchaintest
-      - run_execution_spec_tests:
-          release: v5.4.0
-          fixtures_suffix: develop
+      - run_spec_tests:
+          report: develop
+          include: "^execution-spec-tests/"
       - collect_coverage_clang:
           flags: eest-stable
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
@@ -489,15 +509,13 @@ jobs:
       BUILD_TYPE: Release
       CMAKE_OPTIONS: -DCOVERAGE=1 -DEVMONE_PRECOMPILES_LIBSECP256K1=1
     steps:
-      - build
       - download_execution_spec_tests:
           release: v5.4.0
           fixtures_suffix: stable
-      - run:
-          name: "Execution spec tests (state_tests)"
-          working_directory: ~/build
-          command: >
-            bin/evmone-statetest ~/spec-tests/fixtures/state_tests
+      - build
+      - run_spec_tests:
+          report: state_tests
+          label: state_tests
       - collect_coverage_clang:
           flags: eest-libsecp256k1
 
@@ -510,15 +528,13 @@ jobs:
       - run:
           name: "Install GMP"
           command: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
-      - build
       - download_execution_spec_tests:
           release: v5.4.0
           fixtures_suffix: stable
-      - run:
-          name: "Execution spec tests (state_tests)"
-          working_directory: ~/build
-          command: >
-            bin/evmone-statetest ~/spec-tests/fixtures/state_tests
+      - build
+      - run_spec_tests:
+          report: state_tests
+          label: state_tests
       - collect_coverage_clang:
           flags: eest-develop-gmp
 
@@ -565,11 +581,13 @@ jobs:
       CMAKE_OPTIONS: -DBUILD_SHARED_LIBS=NO -DASSERTIONS=ON -DSANITIZE=address,undefined,implicit-conversion,local-bounds,nullability
       UBSAN_OPTIONS: halt_on_error=1
     steps:
-      - build
-      - test
-      - run_execution_spec_tests:
+      - download_execution_spec_tests:
           release: v5.4.0
           fixtures_suffix: develop
+      - build
+      - test
+      - run_spec_tests:
+          report: develop
 
   clang-tidy:
     executor: linux-clang-selfhosted
