@@ -45,7 +45,7 @@ enum
      *
      * @see @ref versioning
      */
-    EVMC_ABI_VERSION = 17
+    EVMC_ABI_VERSION = 18
 };
 
 
@@ -750,17 +750,17 @@ typedef void (*evmc_emit_log_fn)(struct evmc_host_context* context,
 /**
  * Access status per EIP-2929: Gas cost increases for state access opcodes.
  */
-enum evmc_access_status
+enum evmc_access_status : bool
 {
     /**
      * The entry hasn't been accessed before – it's the first access.
      */
-    EVMC_ACCESS_COLD = 0,
+    EVMC_ACCESS_COLD,
 
     /**
      * The entry is already in accessed_addresses or accessed_storage_keys.
      */
-    EVMC_ACCESS_WARM = 1
+    EVMC_ACCESS_WARM
 };
 
 /**
