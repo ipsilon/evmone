@@ -41,9 +41,6 @@ struct Account
 
     bytes32 code_hash = EMPTY_CODE_HASH;
 
-    /// If the account has non-empty initial storage (when accessing the cold account).
-    bool has_initial_storage = false;
-
     /// The cached and modified account storage entries.
     std::unordered_map<bytes32, StorageValue> storage;
 
@@ -56,7 +53,14 @@ struct Account
     /// Empty here only means it has not been loaded from the initial storage.
     bytes code;
 
+    // TODO: Consider moving the flags up (to lower offsets) for shorter x86 machine code (disp8).
+
+    /// The account access status (EIP-2929): warm once accessed earlier in the transaction.
+    /// Revertible.
+    evmc_access_status access_status = EVMC_ACCESS_COLD;
+
     /// The account has been destructed and should be erased at the end of a transaction.
+    /// Revertible.
     bool destructed = false;
 
     /// The account should be erased if it is empty at the end of a transaction.
@@ -65,6 +69,8 @@ struct Account
     ///
     /// Yellow Paper uses term "delete" but it is a keyword in C++ while
     /// the term "erase" is used for deleting objects from C++ collections.
+    ///
+    /// Revertible.
     bool erase_if_empty = false;
 
     /// The account has been created in the current transaction.
@@ -73,7 +79,8 @@ struct Account
     // This account's code has been modified.
     bool code_changed = false;
 
-    evmc_access_status access_status = EVMC_ACCESS_COLD;
+    /// If the account has non-empty initial storage (when accessing the cold account).
+    bool has_initial_storage = false;
 
     [[nodiscard]] bool is_empty() const noexcept
     {
