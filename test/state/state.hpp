@@ -32,6 +32,7 @@ class State
     struct JournalAccountFlags : JournalBase
     {
         evmc_access_status access_status;
+        bool nonexistent;
         bool destructed;
         bool erase_if_empty;
     };
@@ -53,9 +54,7 @@ class State
     {};
 
     struct JournalCreate : JournalBase
-    {
-        bool existed;
-    };
+    {};
 
     using JournalEntry = std::variant<JournalBalanceChange, JournalAccountFlags,
         JournalStorageChange, JournalNonceBump, JournalCreate, JournalTransientStorageChange>;
@@ -119,7 +118,7 @@ public:
     /// Journals a create over a pre-existing account; revert resets its nonce and code.
     void journal_create(const address& addr);
 
-    /// Journals a new-account creation; revert erases the account.
+    /// Journals a new-account creation; revert un-creates it (restores "does not exist").
     void journal_new_account(const address& addr);
 
     void journal_account_flags(const address& addr, const Account& acc);

@@ -231,6 +231,8 @@ StateDiff State::build_diff(evmc_revision rev) const
     diff.modified_accounts.reserve(m_modified.size());
     for (const auto& [addr, m] : m_modified)
     {
+        if (m.nonexistent)
+            continue;
         if (m.destructed)
         {
             if (rev >= EVMC_AMSTERDAM && m.balance != 0)
@@ -275,17 +277,22 @@ StateDiff State::build_diff(evmc_revision rev) const
 
 Account& State::insert(const address& addr, Account account)
 {
-    const auto r = m_modified.insert({addr, std::move(account)});
-    assert(r.second);
-    return r.first->second;
+    assert(!account.nonexistent);  // No need to insert nonexistent accounts.
+    const auto [it, inserted] = m_modified.try_emplace(addr, std::move(account));
+    if (!inserted)
+    {
+        assert(it->second.nonexistent);  // Overwrite only nonexistent accounts.
+        it->second = std::move(account);
+    }
+    return it->second;
 }
 
 Account* State::find(const address& addr) noexcept
 {
-    // TODO: Avoid double lookup (find+insert) and not cached initial state lookup for non-existent
-    //   accounts. If we want to cache non-existent account we need a proper flag for it.
+    // TODO: Avoid the double lookup (find+insert). Nonexistent accounts are still re-queried from
+    //   the initial state on every call; they could be cached as nonexistent nodes.
     if (const auto it = m_modified.find(addr); it != m_modified.end())
-        return &it->second;
+        return it->second.nonexistent ? nullptr : &it->second;
     if (const auto cacc = m_initial.get_account(addr); cacc)
         return &insert(addr, {.nonce = cacc->nonce,
                                  .balance = cacc->balance,
@@ -366,18 +373,19 @@ void State::journal_bump_nonce(const address& addr)
 
 void State::journal_create(const address& addr)
 {
-    m_journal.emplace_back(JournalCreate{{addr}, true});
+    m_journal.emplace_back(JournalCreate{{addr}});
 }
 
 void State::journal_new_account(const address& addr)
 {
-    m_journal.emplace_back(JournalCreate{{addr}, false});
+    // Revert restores the account to "nonexistent". The other flags are irrelevant/default.
+    m_journal.emplace_back(JournalAccountFlags{{addr}, EVMC_ACCESS_COLD, true, false, false});
 }
 
 void State::journal_account_flags(const address& addr, const Account& acc)
 {
-    m_journal.emplace_back(
-        JournalAccountFlags{{addr}, acc.access_status, acc.destructed, acc.erase_if_empty});
+    m_journal.emplace_back(JournalAccountFlags{
+        {addr}, acc.access_status, acc.nonexistent, acc.destructed, acc.erase_if_empty});
 }
 
 void State::rollback(size_t checkpoint)
@@ -395,27 +403,20 @@ void State::rollback(size_t checkpoint)
                 {
                     auto& a = get(e.addr);
                     a.access_status = e.access_status;
+                    a.nonexistent = e.nonexistent;
                     a.destructed = e.destructed;
                     a.erase_if_empty = e.erase_if_empty;
+                    // TODO: On restoring nonexistent (un-created create) the node keeps its
+                    //   code/storage/transient buffers until tx end; could clear them here.
                 }
                 else if constexpr (std::is_same_v<T, JournalCreate>)
                 {
-                    if (e.existed)
-                    {
-                        // This account is not always "touched". TODO: Why?
-                        auto& a = get(e.addr);
-                        a.nonce = 0;
-                        a.code_hash = Account::EMPTY_CODE_HASH;
-                        a.code.clear();
-                    }
-                    else
-                    {
-                        // TODO: Before Spurious Dragon we don't clear empty accounts ("erasable")
-                        //       so we need to delete them here explicitly.
-                        //       This should be changed by tuning "erasable" flag
-                        //       and clear in all revisions.
-                        m_modified.erase(e.addr);
-                    }
+                    // Revert a create over a pre-existing account.
+                    // TODO: Why this account is not always "touched"?
+                    auto& a = get(e.addr);
+                    a.nonce = 0;
+                    a.code_hash = Account::EMPTY_CODE_HASH;
+                    a.code.clear();
                 }
                 else if constexpr (std::is_same_v<T, JournalStorageChange>)
                 {

@@ -59,6 +59,10 @@ struct Account
     /// Revertible.
     evmc_access_status access_status = EVMC_ACCESS_COLD;
 
+    /// The account does not exist in the state.
+    /// Revertible, usually false→true.
+    bool nonexistent = false;
+
     /// The account has been destructed and should be erased at the end of a transaction.
     /// Revertible.
     bool destructed = false;
