@@ -29,8 +29,12 @@ class State
         intx::uint256 prev_balance;
     };
 
-    struct JournalTouched : JournalBase
-    {};
+    struct JournalAccountFlags : JournalBase
+    {
+        evmc_access_status access_status;
+        bool destructed;
+        bool erase_if_empty;
+    };
 
     struct JournalStorageChange
     {
@@ -53,15 +57,8 @@ class State
         bool existed;
     };
 
-    struct JournalDestruct : JournalBase
-    {};
-
-    struct JournalAccessAccount : JournalBase
-    {};
-
-    using JournalEntry =
-        std::variant<JournalBalanceChange, JournalTouched, JournalStorageChange, JournalNonceBump,
-            JournalCreate, JournalTransientStorageChange, JournalDestruct, JournalAccessAccount>;
+    using JournalEntry = std::variant<JournalBalanceChange, JournalAccountFlags,
+        JournalStorageChange, JournalNonceBump, JournalCreate, JournalTransientStorageChange>;
 
     /// The read-only view of the initial (cold) state.
     const StateView& m_initial;
@@ -121,9 +118,7 @@ public:
 
     void journal_create(const address& addr, bool existed);
 
-    void journal_destruct(const address& addr);
-
-    void journal_access_account(const address& addr);
+    void journal_account_flags(const address& addr, const Account& acc);
 
     /// @}
 };

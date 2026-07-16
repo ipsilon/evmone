@@ -321,8 +321,8 @@ Account& State::touch(const address& addr)
     auto& acc = get_or_insert(addr, {.erase_if_empty = true});
     if (!acc.erase_if_empty && acc.is_empty())
     {
+        journal_account_flags(addr, acc);
         acc.erase_if_empty = true;
-        m_journal.emplace_back(JournalTouched{addr});
     }
     return acc;
 }
@@ -365,14 +365,10 @@ void State::journal_create(const address& addr, bool existed)
     m_journal.emplace_back(JournalCreate{{addr}, existed});
 }
 
-void State::journal_destruct(const address& addr)
+void State::journal_account_flags(const address& addr, const Account& acc)
 {
-    m_journal.emplace_back(JournalDestruct{addr});
-}
-
-void State::journal_access_account(const address& addr)
-{
-    m_journal.emplace_back(JournalAccessAccount{addr});
+    m_journal.emplace_back(
+        JournalAccountFlags{{addr}, acc.access_status, acc.destructed, acc.erase_if_empty});
 }
 
 void State::rollback(size_t checkpoint)
@@ -386,17 +382,12 @@ void State::rollback(size_t checkpoint)
                 {
                     get(e.addr).nonce -= 1;
                 }
-                else if constexpr (std::is_same_v<T, JournalTouched>)
+                else if constexpr (std::is_same_v<T, JournalAccountFlags>)
                 {
-                    get(e.addr).erase_if_empty = false;
-                }
-                else if constexpr (std::is_same_v<T, JournalDestruct>)
-                {
-                    get(e.addr).destructed = false;
-                }
-                else if constexpr (std::is_same_v<T, JournalAccessAccount>)
-                {
-                    get(e.addr).access_status = EVMC_ACCESS_COLD;
+                    auto& a = get(e.addr);
+                    a.access_status = e.access_status;
+                    a.destructed = e.destructed;
+                    a.erase_if_empty = e.erase_if_empty;
                 }
                 else if constexpr (std::is_same_v<T, JournalCreate>)
                 {
