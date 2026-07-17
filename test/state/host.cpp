@@ -315,17 +315,22 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
 
     if (result.status_code != EVMC_SUCCESS)
     {
-        static constexpr auto addr_03 = 0x03_address;
-        auto* const acc_03 = m_state.find(addr_03);
-        const auto is_03_touched = acc_03 != nullptr && acc_03->erase_if_empty;
+        // The 0x03 (RIPEMD-160) touch quirk: a touch on this address is
+        // never reverted. It only matters when the account is empty, so gate it by rev range.
+        static constexpr auto ADDR_03 = 0x03_address;
+        bool is_03_touched = false;
+        if (m_rev < EVMC_PARIS && m_rev >= EVMC_SPURIOUS_DRAGON) [[unlikely]]
+        {
+            const auto* const acc_03 = m_state.find(ADDR_03);
+            is_03_touched = acc_03 != nullptr && acc_03->erase_if_empty;
+        }
 
         // Revert.
         m_state.rollback(state_checkpoint);
         m_logs.resize(logs_checkpoint);
 
-        // The 0x03 quirk: the touch on this address is never reverted.
-        if (is_03_touched && m_rev >= EVMC_SPURIOUS_DRAGON)
-            m_state.touch(addr_03);
+        if (is_03_touched) [[unlikely]]
+            m_state.touch(ADDR_03);
     }
     return result;
 }

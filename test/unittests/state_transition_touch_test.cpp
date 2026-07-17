@@ -225,3 +225,32 @@ TEST_F(state_transition, touch_revert_selfdestruct_to_nonexistient_tw)
     expect.post[DESTRUCTOR].exists = true;
     expect.post[BENEFICIARY].exists = false;
 }
+
+TEST_F(state_transition, touch_revert_ripemd_frontier)
+{
+    // Before Spurious Dragon the 0x03 quirk is off: the failed call's touch of 0x03 is reverted and
+    // 0x03 does not linger. Guards the >= EVMC_SPURIOUS_DRAGON lower bound.
+    rev = EVMC_FRONTIER;
+    block.base_fee = 0;
+    tx.type = Transaction::Type::legacy;
+    tx.to = To;
+    pre[*tx.to] = {.code = call(0x03_address)};  // gas = 0 -> RIPEMD out-of-gas -> failed call
+
+    expect.post[*tx.to].exists = true;
+    expect.post[0x03_address].exists = false;
+}
+
+TEST_F(state_transition, touch_revert_ripemd_london)
+{
+    // In range the quirk keeps the touch, so a pre-existing empty 0x03 leaf is swept by EIP-161
+    // even though the touching call reverted. Guards that the quirk stays active up to the Merge.
+    rev = EVMC_LONDON;
+    block.base_fee = 0;
+    tx.type = Transaction::Type::legacy;
+    tx.to = To;
+    pre[*tx.to] = {.code = call(0x03_address)};  // gas = 0 -> RIPEMD out-of-gas -> failed call
+    pre[0x03_address] = {};                      // pre-existing empty leaf
+
+    expect.post[*tx.to].exists = true;
+    expect.post[0x03_address].exists = false;  // deleted by the retained touch
+}
