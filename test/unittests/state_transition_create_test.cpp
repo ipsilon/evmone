@@ -258,6 +258,38 @@ TEST_F(state_transition, create_revert)
     expect.post[CREATED].exists = false;
 }
 
+TEST_F(state_transition, create2_prefunded_revert_storage_no_leak)
+{
+    // Prefunded CREATE2 (create-over-existing path): the init writes storage, the create is
+    // reverted, then a second CREATE2 at the same address must read slot 0 back as zero.
+    // TODO: migrate to EEST -- extend test_create2_succeeds_after_reverted_create2 to read storage.
+    static constexpr auto Creator = 0xcc_address;
+    static constexpr auto Reverter = 0xbb_address;
+
+    // Init: copy slot 0 to slot 1 (leak detector), write slot 0, deploy 1-byte runtime.
+    const auto initcode = sstore(1, sload(0)) + sstore(0, 0x99) + ret(0, 1);
+    const auto creator_code =
+        mstore(0, push(initcode)) + create2().input(32 - initcode.size(), initcode.size());
+
+    tx.to = To;
+    // First attempt reverts (via the reverter sub-call), the second deploys directly.
+    pre[To] = {.code = call(Reverter).gas(0xffffff) + call(Creator).gas(0xffffff)};
+    pre[Reverter] = {.code = call(Creator).gas(0xffffff) + revert(0, 0)};
+    pre[Creator] = {.code = creator_code};
+
+    const auto created = compute_create2_address(Creator, {}, initcode);
+    pre[created] = {.balance = 1};  // prefunded -> create-over-existing path
+
+    expect.post[To].exists = true;
+    expect.post[Reverter].exists = true;
+    expect.post[Creator].exists = true;
+    expect.post[created].balance = 1;                           // prefunded balance preserved
+    expect.post[created].nonce = 1;                             // post-SD created contract
+    expect.post[created].code = bytes{0x00};                    // second CREATE2 deployed
+    expect.post[created].storage[0x00_bytes32] = 0x99_bytes32;  // second attempt's own write
+    expect.post[created].storage[0x01_bytes32] = 0x00_bytes32;  // slot 0 read back fresh: no leak
+}
+
 TEST_F(state_transition, create_revert_sd)
 {
     rev = EVMC_SPURIOUS_DRAGON;
