@@ -315,6 +315,32 @@ Account& State::get_or_insert(const address& addr, Account account)
     return insert(addr, std::move(account));
 }
 
+std::pair<Account&, bool> State::probe(const address& addr)
+{
+    const auto [it, inserted] = m_modified.try_emplace(addr);
+    auto& acc = it->second;
+    if (!inserted && acc.nonexistent)
+    {
+        // A nonexistent tombstone (left by reverting a new-account creation) is equivalent
+        // to an absent entry: recreate the account in place, as insert() would.
+        acc = Account{};
+        return {acc, true};
+    }
+    return {acc, inserted};
+}
+
+bool State::load_initial(const address& addr, Account& acc) const
+{
+    const auto cacc = m_initial.get_account(addr);
+    if (!cacc)
+        return false;
+    acc.nonce = cacc->nonce;
+    acc.balance = cacc->balance;
+    acc.code_hash = cacc->code_hash;
+    acc.has_initial_storage = cacc->has_storage;
+    return true;
+}
+
 bytes_view State::get_code(const address& addr)
 {
     auto* a = find(addr);

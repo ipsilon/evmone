@@ -380,31 +380,42 @@ void Host::emit_log(const address& addr, const uint8_t* data, size_t data_size,
     m_logs.push_back({addr, {data, data_size}, {topics, topics + topics_count}});
 }
 
+namespace
+{
+/// True for addresses that may be precompiles: the first 16 bytes are zero.
+/// A single-branch pre-filter for the full is_precompile() range check.
+inline bool maybe_precompile(const address& addr) noexcept
+{
+    uint64_t w0 = 0;
+    uint64_t w1 = 0;
+    std::memcpy(&w0, &addr.bytes[0], sizeof(w0));
+    std::memcpy(&w1, &addr.bytes[8], sizeof(w1));
+    return (w0 | w1) == 0;
+}
+}  // namespace
+
 evmc_access_status Host::access_account(const address& addr) noexcept
 {
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
-    auto* acc = m_state.find(addr);
-
-    if (acc != nullptr && acc->access_status == EVMC_ACCESS_WARM)
+    // Precompiles are always warm (EIP-2929) and are never materialized in the state:
+    // otherwise an absent precompile would be inserted as an empty erasable account and
+    // reported as a deleted_accounts entry in every diff. The pre-filter keeps this check
+    // to a single branch for regular addresses.
+    if (maybe_precompile(addr) && is_precompile(m_rev, addr))
         return EVMC_ACCESS_WARM;
 
-    // Precompiles are always warm (EIP-2929). This is checked only on the cold path so that the
-    // hot already-warm path stays free of the address-range check. A precompile absent from the
-    // initial state is never materialized: without this early return it would be inserted as an
-    // empty erasable account and reported as a deleted_accounts entry in every diff.
-    if (is_precompile(m_rev, addr))
+    const auto [acc, fresh] = m_state.probe(addr);  // Single modified-set lookup.
+
+    if (!fresh && acc.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;
 
-    // TODO: On a modified-set miss the account is looked up twice (find() and then the insert
-    //   in find() itself or below). This can be improved with a single-probe insertion
-    //   (try_emplace), but the miss happens only in ~39% of the calls on mainnet.
-    if (acc == nullptr)
-        acc = &m_state.insert(addr, {.erase_if_empty = true});
+    if (fresh && !m_state.load_initial(addr, acc))
+        acc.erase_if_empty = true;
 
-    m_state.journal_account_flags(addr, *acc);
-    acc->access_status = EVMC_ACCESS_WARM;
+    m_state.journal_account_flags(addr, acc);
+    acc.access_status = EVMC_ACCESS_WARM;
     return EVMC_ACCESS_COLD;
 }
 

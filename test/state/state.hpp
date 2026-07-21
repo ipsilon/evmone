@@ -88,6 +88,16 @@ public:
     /// Gets an existing account or inserts new account.
     Account& get_or_insert(const address& addr, Account account = {});
 
+    /// Single-lookup probe of the modified set: returns the account entry, default-constructing
+    /// a fresh one in place if the address was not present or only a nonexistent tombstone
+    /// remained ("fresh" is true in these cases; the caller must initialize the entry,
+    /// e.g. with load_initial()).
+    std::pair<Account&, bool> probe(const address& addr);
+
+    /// Fills a fresh entry with the account values from the initial state.
+    /// Returns false if the account does not exist in the initial state.
+    bool load_initial(const address& addr, Account& acc) const;
+
     bytes_view get_code(const address& addr);
 
     StorageValue& get_storage(const address& addr, const bytes32& key);
