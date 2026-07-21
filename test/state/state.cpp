@@ -355,7 +355,14 @@ bytes_view State::get_code(const address& addr)
 
 Account& State::touch(const address& addr)
 {
-    auto& acc = get_or_insert(addr, {.erase_if_empty = true});
+    const auto [acc, fresh] = probe(addr);
+    if (fresh && !load_initial(addr, acc))
+    {
+        // Nothing to journal: reverting leaves the entry empty and erasable,
+        // making its end-of-transaction deletion a no-op for the state root.
+        acc.erase_if_empty = true;
+        return acc;
+    }
     if (!acc.erase_if_empty && acc.is_empty())
     {
         journal_account_flags(addr, acc);
