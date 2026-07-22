@@ -385,17 +385,26 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
-    // Precompiles are always warm (EIP-2929); don't create state entries for them.
+    auto* acc = m_state.find(addr);
+
+    if (acc != nullptr && acc->access_status == EVMC_ACCESS_WARM)
+        return EVMC_ACCESS_WARM;
+
+    // Precompiles are always warm (EIP-2929). This is checked only on the cold path so that the
+    // hot already-warm path stays free of the address-range check. A precompile absent from the
+    // initial state is never materialized: without this early return it would be inserted as an
+    // empty erasable account and reported as a deleted_accounts entry in every diff.
     if (is_precompile(m_rev, addr))
         return EVMC_ACCESS_WARM;
 
-    auto& acc = m_state.get_or_insert(addr, {.erase_if_empty = true});
+    // TODO: On a modified-set miss the account is looked up twice (find() and then the insert
+    //   in find() itself or below). This can be improved with a single-probe insertion
+    //   (try_emplace), but the miss happens only in ~39% of the calls on mainnet.
+    if (acc == nullptr)
+        acc = &m_state.insert(addr, {.erase_if_empty = true});
 
-    if (acc.access_status == EVMC_ACCESS_WARM)
-        return EVMC_ACCESS_WARM;
-
-    m_state.journal_account_flags(addr, acc);
-    acc.access_status = EVMC_ACCESS_WARM;
+    m_state.journal_account_flags(addr, *acc);
+    acc->access_status = EVMC_ACCESS_WARM;
     return EVMC_ACCESS_COLD;
 }
 
