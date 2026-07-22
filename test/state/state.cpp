@@ -364,9 +364,14 @@ void State::journal_bump_nonce(const address& addr)
     m_journal.emplace_back(JournalNonceBump{addr});
 }
 
-void State::journal_create(const address& addr, bool existed)
+void State::journal_create(const address& addr)
 {
-    m_journal.emplace_back(JournalCreate{{addr}, existed});
+    m_journal.emplace_back(JournalCreate{{addr}, true});
+}
+
+void State::journal_new_account(const address& addr)
+{
+    m_journal.emplace_back(JournalCreate{{addr}, false});
 }
 
 void State::journal_account_flags(const address& addr, const Account& acc)

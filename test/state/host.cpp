@@ -131,7 +131,7 @@ size_t Host::copy_code(const address& addr, size_t code_offset, uint8_t* buffer_
 bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcept
 {
     if (m_state.find(beneficiary) == nullptr)
-        m_state.journal_create(beneficiary, false);
+        m_state.journal_new_account(beneficiary);
     auto& acc = m_state.get(addr);
     const auto balance = acc.balance;
     auto& beneficiary_acc = m_state.touch(beneficiary);
@@ -183,12 +183,17 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     // TODO: find()+insert() probes m_modified twice for a new recipient.
     auto* new_acc = m_state.find(msg.recipient);
-    const bool new_acc_exists = new_acc != nullptr;
-    if (!new_acc_exists)
+    if (new_acc == nullptr)
+    {
         new_acc = &m_state.insert(msg.recipient);
-    else if (is_create_collision(*new_acc))
-        return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
-    m_state.journal_create(msg.recipient, new_acc_exists);
+        m_state.journal_new_account(msg.recipient);
+    }
+    else
+    {
+        if (is_create_collision(*new_acc))
+            return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
+        m_state.journal_create(msg.recipient);
+    }
 
     assert(new_acc != nullptr);
     assert(new_acc->nonce == 0);
@@ -258,7 +263,7 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     {
         auto* recipient_acc = m_state.find(msg.recipient);
         if (recipient_acc == nullptr)
-            m_state.journal_create(msg.recipient, false);
+            m_state.journal_new_account(msg.recipient);
         // TODO: Both branches will insert new account so better to do it in common path.
 
         if (evmc::is_zero(msg.value))

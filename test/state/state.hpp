@@ -116,7 +116,11 @@ public:
 
     void journal_bump_nonce(const address& addr);
 
-    void journal_create(const address& addr, bool existed);
+    /// Journals a create over a pre-existing account; revert resets its nonce and code.
+    void journal_create(const address& addr);
+
+    /// Journals a new-account creation; revert erases the account.
+    void journal_new_account(const address& addr);
 
     void journal_account_flags(const address& addr, const Account& acc);
 
