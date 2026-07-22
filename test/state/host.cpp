@@ -261,10 +261,9 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
 
     if (msg.kind == EVMC_CALL)
     {
-        auto* recipient_acc = m_state.find(msg.recipient);
-        if (recipient_acc == nullptr)
+        const auto [recipient_acc, existed] = m_state.find_or_create(msg.recipient);
+        if (!existed)
             m_state.journal_new_account(msg.recipient);
-        // TODO: Both branches will insert new account so better to do it in common path.
 
         if (evmc::is_zero(msg.value))
         {
@@ -275,18 +274,15 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
             // We skip touching if we send value, because account cannot end up empty.
             // It will either have value, or code that transfers this value out, or will be
             // selfdestructed anyway.
-            if (recipient_acc == nullptr)
-                recipient_acc = &m_state.insert(msg.recipient);
-
             // Transfer value: sender → recipient.
             // The sender's balance is already checked therefore the sender account must exist.
             const auto value = intx::be::load<intx::uint256>(msg.value);
             auto& sender_acc = m_state.get(msg.sender);
             assert(sender_acc.balance >= value);
             m_state.journal_balance_change(msg.sender, sender_acc.balance);
-            m_state.journal_balance_change(msg.recipient, recipient_acc->balance);
+            m_state.journal_balance_change(msg.recipient, recipient_acc.balance);
             sender_acc.balance -= value;
-            recipient_acc->balance += value;
+            recipient_acc.balance += value;
 
             if (m_rev >= EVMC_AMSTERDAM)
                 emit_transfer_log(m_logs, msg.sender, msg.recipient, value);
@@ -406,12 +402,12 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (maybe_precompile(addr) && is_precompile(m_rev, addr))
         return EVMC_ACCESS_WARM;
 
-    const auto [acc, fresh] = m_state.try_emplace(addr);  // Single modified-set lookup.
+    const auto [acc, existed] = m_state.find_or_create(addr);
 
-    if (!fresh && acc.access_status == EVMC_ACCESS_WARM)
+    if (acc.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;
 
-    if (fresh && !m_state.load_initial(addr, acc))
+    if (!existed)
         acc.erase_if_empty = true;
 
     m_state.journal_account_flags(addr, acc);

@@ -69,6 +69,16 @@ class State
     /// with information how to revert them.
     std::vector<JournalEntry> m_journal;
 
+    /// Single-lookup try_emplace on the modified set (as in std::unordered_map): returns the
+    /// account entry, default-constructing a fresh one in place if the address was not present
+    /// or only a nonexistent tombstone remained ("fresh" is true in these cases; the caller
+    /// must initialize the entry, e.g. with load_initial()). The initial state is not inspected.
+    std::pair<Account&, bool> try_emplace(const address& addr);
+
+    /// Fills a fresh entry with the account values from the initial state.
+    /// Returns false if the account does not exist in the initial state.
+    bool load_initial(const address& addr, Account& acc) const;
+
 public:
     explicit State(const StateView& state_view) noexcept : m_initial{state_view} {}
     State(const State&) = delete;
@@ -85,18 +95,11 @@ public:
     /// Gets the account at the address (the account must exist).
     Account& get(const address& addr) noexcept;
 
-    /// Gets an existing account or inserts new account.
-    Account& get_or_insert(const address& addr, Account account = {});
-
-    /// Single-lookup try_emplace on the modified set (as in std::unordered_map): returns the
-    /// account entry, default-constructing a fresh one in place if the address was not present
-    /// or only a nonexistent tombstone remained ("fresh" is true in these cases; the caller
-    /// must initialize the entry, e.g. with load_initial()). The initial state is not inspected.
-    std::pair<Account&, bool> try_emplace(const address& addr);
-
-    /// Fills a fresh entry with the account values from the initial state.
-    /// Returns false if the account does not exist in the initial state.
-    bool load_initial(const address& addr, Account& acc) const;
+    /// Finds the account (materializing it from the initial state if needed) or creates
+    /// a new default-constructed entry for the address — always a single lookup of the
+    /// modified set. The second element is false when the account existed nowhere:
+    /// the entry is fresh and the caller sets the fields it needs.
+    std::pair<Account&, bool> find_or_create(const address& addr);
 
     bytes_view get_code(const address& addr);
 

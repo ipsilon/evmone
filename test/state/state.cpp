@@ -143,7 +143,9 @@ int64_t process_authorization_list(
 
         // Get or create the authority account.
         // It is still empty at this point until nonce bump following successful authorization.
-        auto& authority = state.get_or_insert(*auth.signer, {.erase_if_empty = true});
+        const auto [authority, authority_existed] = state.find_or_create(*auth.signer);
+        if (!authority_existed)
+            authority.erase_if_empty = true;
 
         // 4. Add authority to accessed_addresses (as defined in EIP-2929.)
         authority.access_status = EVMC_ACCESS_WARM;
@@ -308,11 +310,10 @@ Account& State::get(const address& addr) noexcept
     return *acc;
 }
 
-Account& State::get_or_insert(const address& addr, Account account)
+std::pair<Account&, bool> State::find_or_create(const address& addr)
 {
-    if (const auto acc = find(addr); acc != nullptr)
-        return *acc;
-    return insert(addr, std::move(account));
+    const auto [acc, fresh] = try_emplace(addr);
+    return {acc, !fresh || load_initial(addr, acc)};
 }
 
 std::pair<Account&, bool> State::try_emplace(const address& addr)
@@ -355,8 +356,8 @@ bytes_view State::get_code(const address& addr)
 
 Account& State::touch(const address& addr)
 {
-    const auto [acc, fresh] = try_emplace(addr);
-    if (fresh && !load_initial(addr, acc))
+    const auto [acc, existed] = find_or_create(addr);
+    if (!existed)
     {
         // Nothing to journal: reverting leaves the entry empty and erasable,
         // making its end-of-transaction deletion a no-op for the state root.
@@ -624,7 +625,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 {
     State state{state_view};
 
-    auto& sender_acc = state.get_or_insert(tx.sender);
+    auto& sender_acc = state.find_or_create(tx.sender).first;
     assert(sender_acc.nonce < MAX_NONCE);  // Required for valid tx.
     ++sender_acc.nonce;                    // Bump sender nonce.
 
@@ -668,7 +669,9 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         // The access list may name a precompile together with storage keys. access_account()
         // does not create a state entry for a precompile absent from the initial state,
         // but warming its storage keys requires the account to exist in the state.
-        state.get_or_insert(a, {.erase_if_empty = true});
+        const auto [acc, existed] = state.find_or_create(a);
+        if (!existed)
+            acc.erase_if_empty = true;
         for (const auto& key : storage_keys)
             state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
     }
