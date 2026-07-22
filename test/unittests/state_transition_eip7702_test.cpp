@@ -4,6 +4,7 @@
 
 #include "../utils/bytecode.hpp"
 #include "state_transition.hpp"
+#include <evmone/constants.hpp>
 
 using namespace evmc::literals;
 using namespace evmone::test;
@@ -42,6 +43,31 @@ TEST_F(state_transition, eip7702_set_code_transaction_authority_is_sender)
     expect.post[Sender].code = bytes{0xef, 0x01, 0x00} + hex(delegate);
     expect.post[To].exists = true;
     expect.post[delegate].exists = true;
+}
+
+TEST_F(state_transition, eip7702_set_code_self_authorization_reaching_nonce_max)
+{
+    // Regression (#1496): a set-code tx where the sender self-authorizes must execute normally
+    // even when the authorization bumps the sender nonce to MAX_NONCE (2^64-1) before top-level
+    // execution. Reaching the max nonce during execution is valid; only a *tx* nonce == MAX_NONCE
+    // is invalid per EIP-2681. Previously the depth-0 nonce recheck aborted this as a light failure.
+    rev = EVMC_PRAGUE;
+
+    constexpr auto delegate = 0xde1e_address;
+
+    // Sender starts at 2^64-3: the tx bumps its nonce to 2^64-2, then the self-authorization
+    // (matching nonce 2^64-2) bumps it once more to 2^64-1.
+    pre[Sender].nonce = MAX_NONCE - 2;
+    tx.nonce = MAX_NONCE - 2;
+    tx.to = To;
+    tx.type = Transaction::Type::set_code;
+    tx.authorization_list = {{.addr = delegate, .nonce = MAX_NONCE - 1, .signer = Sender}};
+    pre[To] = {.code = sstore(0, 1)};
+
+    expect.status = EVMC_SUCCESS;
+    expect.post[Sender].nonce = MAX_NONCE;
+    expect.post[Sender].code = bytes{0xef, 0x01, 0x00} + hex(delegate);
+    expect.post[To].storage[0x00_bytes32] = 0x01_bytes32;  // Proves the top-level call executed.
 }
 
 TEST_F(state_transition, eip7702_set_code_transaction_authority_is_to)

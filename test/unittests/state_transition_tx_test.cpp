@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "state_transition.hpp"
+#include <evmone/constants.hpp>
 #include <test/utils/bytecode.hpp>
 
 using namespace evmc::literals;
@@ -267,6 +268,30 @@ TEST_F(state_transition, invalid_access_list_amsterdam_gas_limit_below_floor)
     tx.access_list = {{To, {}}};
     tx.gas_limit = 28679;
     expect.tx_error = INTRINSIC_GAS_TOO_LOW;
+}
+
+TEST_F(state_transition, tx_at_sender_nonce_max_minus_1_call)
+{
+    // Regression: a top-level CALL tx must execute normally when the sender nonce is MAX_NONCE - 1
+    // (2^64-2). Only nonce == MAX_NONCE (2^64-1) is invalid per EIP-2681.
+    tx.to = To;
+    pre[Sender].nonce = MAX_NONCE - 1;
+    tx.nonce = MAX_NONCE - 1;
+
+    expect.status = EVMC_SUCCESS;
+    expect.post.at(Sender).nonce = MAX_NONCE;
+}
+
+TEST_F(state_transition, tx_at_sender_nonce_max_minus_1_create)
+{
+    // Regression: a top-level CREATE tx must execute normally when the sender nonce is
+    // MAX_NONCE - 1 (2^64-2). Only nonce == MAX_NONCE (2^64-1) is invalid per EIP-2681.
+    pre[Sender].nonce = MAX_NONCE - 1;
+    tx.nonce = MAX_NONCE - 1;
+
+    expect.status = EVMC_SUCCESS;
+    expect.post.at(Sender).nonce = MAX_NONCE;
+    expect.post[compute_create_address(Sender, MAX_NONCE - 1)] = {.nonce = 1, .code = bytes{}};
 }
 
 TEST_F(state_transition, tx_emits_log)
