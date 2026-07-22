@@ -17,7 +17,7 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
         validate_state(test.pre_state, rev);
         for (size_t case_index = 0; case_index != cases.size(); ++case_index)
         {
-            SCOPED_TRACE(std::string{evmc::to_string(rev)} + '/' + std::to_string(case_index));
+            // SCOPED_TRACE(std::string{evmc::to_string(rev)} + '/' + std::to_string(case_index));
             // if (rev != EVMC_FRONTIER)
             //     continue;
             // if (case_index != 3)
