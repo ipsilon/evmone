@@ -88,11 +88,11 @@ public:
     /// Gets an existing account or inserts new account.
     Account& get_or_insert(const address& addr, Account account = {});
 
-    /// Single-lookup probe of the modified set: returns the account entry, default-constructing
-    /// a fresh one in place if the address was not present or only a nonexistent tombstone
-    /// remained ("fresh" is true in these cases; the caller must initialize the entry,
-    /// e.g. with load_initial()).
-    std::pair<Account&, bool> probe(const address& addr);
+    /// Single-lookup try_emplace on the modified set (as in std::unordered_map): returns the
+    /// account entry, default-constructing a fresh one in place if the address was not present
+    /// or only a nonexistent tombstone remained ("fresh" is true in these cases; the caller
+    /// must initialize the entry, e.g. with load_initial()). The initial state is not inspected.
+    std::pair<Account&, bool> try_emplace(const address& addr);
 
     /// Fills a fresh entry with the account values from the initial state.
     /// Returns false if the account does not exist in the initial state.

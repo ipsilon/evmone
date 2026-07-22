@@ -315,7 +315,7 @@ Account& State::get_or_insert(const address& addr, Account account)
     return insert(addr, std::move(account));
 }
 
-std::pair<Account&, bool> State::probe(const address& addr)
+std::pair<Account&, bool> State::try_emplace(const address& addr)
 {
     const auto [it, inserted] = m_modified.try_emplace(addr);
     auto& acc = it->second;
@@ -355,7 +355,7 @@ bytes_view State::get_code(const address& addr)
 
 Account& State::touch(const address& addr)
 {
-    const auto [acc, fresh] = probe(addr);
+    const auto [acc, fresh] = try_emplace(addr);
     if (fresh && !load_initial(addr, acc))
     {
         // Nothing to journal: reverting leaves the entry empty and erasable,

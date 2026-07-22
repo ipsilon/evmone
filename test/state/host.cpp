@@ -406,7 +406,7 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (maybe_precompile(addr) && is_precompile(m_rev, addr))
         return EVMC_ACCESS_WARM;
 
-    const auto [acc, fresh] = m_state.probe(addr);  // Single modified-set lookup.
+    const auto [acc, fresh] = m_state.try_emplace(addr);  // Single modified-set lookup.
 
     if (!fresh && acc.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;
