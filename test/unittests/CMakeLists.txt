@@ -59,6 +59,7 @@ target_sources(
     state_mpt_hash_test.cpp
     state_mpt_test.cpp
     state_precompiles_test.cpp
+    state_rlp_decode_test.cpp
     state_rlp_test.cpp
     state_system_call_test.cpp
     state_transition.hpp
