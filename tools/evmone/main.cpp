@@ -55,7 +55,7 @@ struct HexOrFileValidator : CLI::Validator
 struct T8nOptions
 {
     std::string state_fork;
-    uint64_t state_chainid = 0;
+    uint64_t state_chainid = 1;
     std::optional<int64_t> state_reward;
     fs::path alloc_file;
     fs::path env_file;

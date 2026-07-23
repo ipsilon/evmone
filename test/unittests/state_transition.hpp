@@ -93,6 +93,7 @@ protected:
         .max_gas_price = block.base_fee + 1,
         .max_priority_gas_price = block.base_fee + 1,
         .sender = Sender,
+        .chain_id = 1,
         .nonce = 1,
     };
     TestState pre;

@@ -15,7 +15,7 @@ namespace evmone::tooling
 struct T8NArgs
 {
     evmc_revision rev = {};
-    uint64_t chain_id = 0;
+    uint64_t chain_id = 1;
     std::optional<uint64_t> block_reward;
     bool pre_state_only = false;
 

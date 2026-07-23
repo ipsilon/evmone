@@ -50,6 +50,32 @@ TEST_F(state_transition, invalid_tx_non_existing_sender)
     expect.post[Sender].exists = false;
 }
 
+TEST_F(state_transition, invalid_tx_wrong_chain_id)
+{
+    tx.to = To;
+    tx.chain_id = 2;  // Mismatches the block chain id (1).
+    expect.tx_error = INVALID_CHAIN_ID;
+}
+
+TEST_F(state_transition, invalid_tx_wrong_chain_id_legacy)
+{
+    tx.type = Transaction::Type::legacy;
+    tx.to = To;
+    tx.chain_id = 2;  // Mismatches the block chain id (1).
+    expect.tx_error = INVALID_CHAIN_ID;
+}
+
+TEST_F(state_transition, tx_legacy_unprotected_chain_id)
+{
+    rev = EVMC_ISTANBUL;
+    block.base_fee = 0;  // should be 0 before London
+    tx.type = Transaction::Type::legacy;
+    tx.to = To;
+    tx.chain_id = 0;  // Unprotected legacy tx is valid on any chain (pre-EIP-155).
+
+    expect.post.at(Sender).nonce = pre[Sender].nonce + 1;
+}
+
 TEST_F(state_transition, tx_blob_gas_price)
 {
     rev = EVMC_CANCUN;

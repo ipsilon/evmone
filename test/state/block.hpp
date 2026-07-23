@@ -51,6 +51,9 @@ struct BlockInfo
     /// The EIP-1559 base fee, since London.
     uint64_t base_fee = 0;
 
+    /// The chain id transactions must target.
+    uint64_t chain_id = 1;
+
     /// The "blob gas used" parameter from EIP-4844
     std::optional<uint64_t> blob_gas_used;
 

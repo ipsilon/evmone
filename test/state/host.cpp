@@ -360,7 +360,7 @@ evmc_tx_context Host::get_tx_context() const noexcept
         m_block.timestamp,
         m_block.gas_limit,
         m_block.prev_randao,
-        0x01_bytes32,  // Chain ID is expected to be 1.
+        uint256be{m_block.chain_id},
         uint256be{m_block.base_fee},
         intx::be::store<uint256be>(m_block.blob_base_fee.value_or(0)),
         m_tx.blob_hashes.data(),

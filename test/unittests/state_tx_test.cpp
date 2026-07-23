@@ -85,6 +85,7 @@ TEST(state_tx, validate_blob_tx)
         .gas_limit = 60000,
         .max_gas_price = block.base_fee,
         .sender = 0x02_address,
+        .chain_id = 1,
     };
     const TestState state{{tx.sender, {.balance = 1'000'000}}};
 
@@ -216,6 +217,7 @@ TEST(state_tx, max_blob_count)
         .max_blob_gas_price = 1,
         .sender = 0x02_address,
         .to = 0x01_address,
+        .chain_id = 1,
     };
     const TestState state{{tx.sender, {.balance = 1'000'000}}};
     const auto blob_gas_limit =

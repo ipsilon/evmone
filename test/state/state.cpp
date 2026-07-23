@@ -449,6 +449,12 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     const StateView& state_view, const BlockInfo& block, const Transaction& tx, evmc_revision rev,
     int64_t block_gas_left, int64_t blob_gas_left) noexcept
 {
+    // chain_id must match the chain; a legacy tx may use 0 (unspecified, EIP-155).
+    // TODO: chain_id 0 is not "unspecified" for a legacy tx protected for chain 0 (v 35/36);
+    //   telling it apart from an unprotected tx (v 27/28) needs the signature v from txbytes.
+    if (tx.chain_id != block.chain_id && (tx.type != Transaction::Type::legacy || tx.chain_id != 0))
+        return make_error_code(INVALID_CHAIN_ID);
+
     switch (tx.type)  // Validate "special" transaction types.
     {
     case Transaction::Type::blob:

@@ -175,10 +175,13 @@ BlockchainTest load_blockchain_test_case(const std::string& name, const json::js
     bt.pre_state = from_json<TestState>(j.at("pre"));
     bt.network = j.at("network").get<std::string>();
     bt.rev = to_rev_schedule(bt.network);
+    uint64_t chain_id = 1;
     if (const auto config_it = j.find("config"); config_it != j.end())
     {
         if (const auto bs_it = config_it->find("blobSchedule"); bs_it != config_it->end())
             bt.blob_schedule = from_json<BlobSchedule>(*bs_it);
+        if (const auto cid_it = config_it->find("chainid"); cid_it != config_it->end())
+            chain_id = from_json<uint64_t>(*cid_it);
     }
     for (const auto& el : j.at("blocks"))
     {
@@ -205,6 +208,9 @@ BlockchainTest load_blockchain_test_case(const std::string& name, const json::js
             bt.test_blocks.emplace_back(test_block);
         }
     }
+
+    for (auto& tb : bt.test_blocks)
+        tb.block_info.chain_id = chain_id;
 
     bt.expectation.last_block_hash = from_json<hash256>(j.at("lastblockhash"));
 
