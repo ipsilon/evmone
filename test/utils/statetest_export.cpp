@@ -61,6 +61,8 @@ std::string_view to_test_fork_name(evmc_revision rev) noexcept
         return "TR_BLOBVERSION_INVALID";
     case BLOB_GAS_LIMIT_EXCEEDED:
         return "TR_BLOBLIST_OVERSIZE";
+    case INVALID_CHAIN_ID:
+        return "TransactionException.INVALID_CHAINID";
     case UNKNOWN_ERROR:
         return "Unknown error";
     default:
@@ -118,6 +120,7 @@ json::json to_state_test(std::string_view test_name, const state::BlockInfo& blo
         jtx["to"] = hex0x(*tx.to);
     jtx["sender"] = hex0x(tx.sender);
     jtx["secretKey"] = hex0x(SenderSecretKey);
+    jtx["chainId"] = hex0x(tx.chain_id);
     jtx["nonce"] = hex0x(tx.nonce);
     if (tx.type >= Transaction::Type::eip1559)
     {

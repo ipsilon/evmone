@@ -22,6 +22,8 @@ namespace evmone::state
     if (tx.type == Transaction::Type::legacy)
     {
         // rlp [nonce, gas_price, gas_limit, to, value, data, v, r, s];
+        // v is written verbatim. TODO: chain_id 0 is ambiguous — unprotected (v 27/28) vs
+        //   protected for chain 0 (v 35/36) — so v must not be re-derived from chain_id.
         return rlp::encode_tuple(tx.nonce, tx.max_gas_price, static_cast<uint64_t>(tx.gas_limit),
             tx.to.has_value() ? tx.to.value() : bytes_view(), tx.value, tx.data, tx.v, tx.r, tx.s);
     }
