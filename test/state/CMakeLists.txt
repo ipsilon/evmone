@@ -13,6 +13,7 @@ target_sources(
     evmone-state PRIVATE
     account.hpp
     authorization.hpp
+    authorization.cpp
     blob_params.hpp
     block.hpp
     block.cpp

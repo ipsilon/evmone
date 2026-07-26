@@ -24,12 +24,13 @@ struct Authorization
     /// invalidates the authorization, not the transaction.
     uint8_t y_parity = 0;
 
+    // TODO: ecrecover takes byte spans, so bytes32 may be a better type for r and s.
     uint256 r;
     uint256 s;
-
-    /// The signer address. Empty if it cannot be recovered from the signature (y_parity, r, s).
-    std::optional<address> signer;
 };
 
 using AuthorizationList = std::vector<Authorization>;
+
+/// Recovers the authority (the signer) of an authorization, std::nullopt if invalid (EIP-7702).
+[[nodiscard]] std::optional<address> recover_authority(const Authorization& auth) noexcept;
 }  // namespace evmone::state

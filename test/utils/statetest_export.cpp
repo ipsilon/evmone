@@ -168,17 +168,15 @@ json::json to_state_test(std::string_view test_name, const state::BlockInfo& blo
     if (!tx.authorization_list.empty())
     {
         auto& ja = jtx["authorizationList"];
-        for (const auto& [chain_id, addr, nonce, y_parity, r, s, signer] : tx.authorization_list)
+        for (const auto& auth : tx.authorization_list)
         {
             json::json je;
-            je["chainId"] = hex0x(chain_id);
-            je["address"] = hex0x(addr);
-            je["nonce"] = hex0x(nonce);
-            je["v"] = hex0x(y_parity);
-            je["r"] = hex0x(r);
-            je["s"] = hex0x(s);
-            if (signer.has_value())
-                je["signer"] = hex0x(*signer);
+            je["chainId"] = hex0x(auth.chain_id);
+            je["address"] = hex0x(auth.addr);
+            je["nonce"] = hex0x(auth.nonce);
+            je["v"] = hex0x(auth.y_parity);
+            je["r"] = hex0x(auth.r);
+            je["s"] = hex0x(auth.s);
             ja.emplace_back(std::move(je));
         }
     }

@@ -155,8 +155,6 @@ state::AuthorizationList from_json<state::AuthorizationList>(const json::json& j
         authorization.chain_id = from_json<uint256>(a.at("chainId"));
         authorization.addr = from_json<address>(a.at("address"));
         authorization.nonce = from_json<uint64_t>(a.at("nonce"));
-        if (a.contains("signer"))
-            authorization.signer = from_json<address>(a["signer"]);
         authorization.r = from_json<uint256>(a.at("r"));
         authorization.s = from_json<uint256>(a.at("s"));
         authorization.y_parity = from_json<uint8_t>(a.at("v"));
