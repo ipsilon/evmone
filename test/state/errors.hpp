@@ -32,6 +32,7 @@ enum ErrorCode : int  // NOLINT(*-use-enum-class)
     EMPTY_AUTHORIZATION_LIST,
     MAX_GAS_LIMIT_EXCEEDED,
     INVALID_CHAIN_ID,
+    INVALID_ENCODING,
     UNKNOWN_ERROR,
 
     // Block-level validation.
@@ -103,6 +104,8 @@ inline const std::error_category& evmone_category() noexcept
                 return "max gas limit exceeded";
             case INVALID_CHAIN_ID:
                 return "invalid transaction chain id";
+            case INVALID_ENCODING:
+                return "invalid transaction encoding";
             case UNKNOWN_ERROR:
                 return "Unknown error";
             case INCORRECT_BLOCK_FORMAT:

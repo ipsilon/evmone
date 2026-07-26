@@ -51,6 +51,9 @@ struct StateTransitionTest
             hash256 state_hash;
             hash256 logs_hash = EmptyListHash;
             bool exception = false;
+
+            /// The full encoded transaction for this case. Not always available.
+            std::optional<bytes> txbytes;
         };
 
         evmc_revision rev;

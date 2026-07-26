@@ -24,12 +24,24 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
             //     continue;
 
             const auto& expected = cases[case_index];
-            const auto tx = test.multi_tx.get(expected.indexes);
             auto state = test.pre_state;
             const auto blob_params = get_blob_params(rev, test.blob_schedule);
 
-            const auto res = transition(state, block, test.block_hashes, tx, rev, vm,
-                block.gas_limit, static_cast<int64_t>(state::max_blob_gas_per_block(blob_params)));
+            // Decode transaction from txbytes if available.
+            const auto template_tx = test.multi_tx.get(expected.indexes);
+            auto tx = std::optional{template_tx};
+            if (expected.txbytes.has_value())
+            {
+                tx = state::decode_transaction(*expected.txbytes);
+                if (tx.has_value())
+                    tx->sender = template_tx.sender;  // No recovery yet, take sender from JSON.
+            }
+
+            const auto res =
+                tx.has_value() ?
+                    transition(state, block, test.block_hashes, *tx, rev, vm, block.gas_limit,
+                        static_cast<int64_t>(state::max_blob_gas_per_block(blob_params))) :
+                    make_error_code(state::INVALID_ENCODING);
 
             if (holds_alternative<state::TransactionReceipt>(res))
             {
