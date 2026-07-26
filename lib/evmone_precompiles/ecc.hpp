@@ -52,11 +52,21 @@ public:
 
     constexpr uint_type value() const noexcept { return Fp.from_mont(value_); }
 
+    /// The valid range for from_bytes().
+    enum class Range : bool
+    {
+        full,  ///< Valid in [0, ORDER).
+        half,  ///< Valid in [0, ORDER/2].
+    };
+
+    template <Range R = Range::full>
     static constexpr std::optional<FieldElement> from_bytes(
         std::span<const uint8_t, sizeof(uint_type)> b) noexcept
     {
+        constexpr auto LIMIT = R == Range::full ? ORDER : ORDER / 2 + 1;
+
         const auto x = intx::be::load<uint_type>(b);
-        if (x >= ORDER) [[unlikely]]
+        if (x >= LIMIT) [[unlikely]]
             return std::nullopt;
         return FieldElement{x};
     }

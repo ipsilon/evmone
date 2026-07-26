@@ -293,6 +293,12 @@ const TestCase TEST_CASES[]{
     // R == 2G, high s
     {"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff 000000000000000000000000000000000000000000000000000000000000001c c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5 fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd036413b",
         "000000000000000000000000bbb10a3b5835400b63ca00372c16db781220fb0b"},
+    // R == 2G, s == ORDER/2: the highest s a strict (EIP-2) recovery accepts.
+    {"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff 000000000000000000000000000000000000000000000000000000000000001c c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5 7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0",
+        "00000000000000000000000090dd1d3d5a9814647c17016ce932360f61639baa"},
+    // R == 2G, s == ORDER/2 + 1: the lowest s a strict recovery rejects.
+    {"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff 000000000000000000000000000000000000000000000000000000000000001c c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5 7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a1",
+        "00000000000000000000000026944cf58be26228fdf1e153c37e2152a21a7a97"},
     // R == 3G, low s
     {"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff 000000000000000000000000000000000000000000000000000000000000001c f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9 0000000000000000000000000000000000000000000000000000000000000010",
         "000000000000000000000000620833dce54ca9329f13a22c3831b102f15df27c"},
@@ -309,7 +315,7 @@ const TestCase TEST_CASES[]{
 };
 }  // namespace
 
-TEST(evmmax, ecrecovery)
+TEST(evmmax, ecrecovery_malleable)
 {
     for (const auto& [input_hex, expected_output_hex] : TEST_CASES)
     {
@@ -327,6 +333,45 @@ TEST(evmmax, ecrecovery)
         const bool parity = v == 28;
 
         const auto result = ecrecover(hash, r_bytes, s_bytes, parity);
+
+        if (expected_output_hex.empty())
+        {
+            EXPECT_FALSE(result.has_value());
+        }
+        else
+        {
+            ASSERT_TRUE(result.has_value());
+            EXPECT_EQ(std::string(24, '0') + hex(*result), expected_output_hex);
+        }
+    }
+}
+
+TEST(evmmax, ecrecovery_strict)
+{
+    const auto order_half = "7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0"_hex;
+    ASSERT_EQ(order_half.size(), 32);
+
+    for (const auto& [input_hex, malleable_expected_output_hex] : TEST_CASES)
+    {
+        const auto input = from_spaced_hex(input_hex).value();
+        ASSERT_EQ(input.size(), 128);
+
+        const std::span<const uint8_t, 128> input_span{input};
+        const auto hash = input_span.subspan<0, 32>();
+        const auto v_bytes = input_span.subspan<32, 32>();
+        const auto r_bytes = input_span.subspan<64, 32>();
+        const auto s_bytes = input_span.subspan<96, 32>();
+
+        // Both are 32-byte big-endian values, so the byte-wise order is the numeric one.
+        const auto s_high = std::ranges::lexicographical_compare(order_half, s_bytes);
+        const auto expected_output_hex =
+            !s_high ? malleable_expected_output_hex : std::string_view{};
+
+        const auto v = be::unsafe::load<uint256>(v_bytes.data());
+        ASSERT_TRUE(v == 27 || v == 28);
+        const bool parity = v == 28;
+
+        const auto result = ecrecover(hash, r_bytes, s_bytes, parity, RecoveryMode::strict);
 
         if (expected_output_hex.empty())
         {

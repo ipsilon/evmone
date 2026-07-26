@@ -57,12 +57,22 @@ evmc::address to_address(std::span<const uint8_t, 64> pubkey) noexcept;
 /// Convert the secp256k1 point (uncompressed public key) to Ethereum address.
 evmc::address to_address(const AffinePoint& pt) noexcept;
 
-std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> hash,
-    std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes,
-    bool parity) noexcept;
+/// The strictness of the signer recovery from a signature.
+enum class RecoveryMode : bool
+{
+    strict,     ///< Restrict s value range to lower half, prevents signature malleability (EIP-2).
+    malleable,  ///< Full range for s value, signature is malleable.
+};
 
+std::optional<AffinePoint> secp256k1_ecdsa_recover(std::span<const uint8_t, 32> hash,
+    std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes, bool parity,
+    RecoveryMode mode) noexcept;
+
+/// Recovers the address that signed the message @p hash.
+///
+/// TODO: Make strict mode the default.
 std::optional<evmc::address> ecrecover(std::span<const uint8_t, 32> hash,
-    std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes,
-    bool parity) noexcept;
+    std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes, bool parity,
+    RecoveryMode mode = RecoveryMode::malleable) noexcept;
 
 }  // namespace evmmax::secp256k1
