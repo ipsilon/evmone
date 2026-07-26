@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "authorization.hpp"
 #include "blob_params.hpp"
 #include "bloom_filter.hpp"
 #include "state_diff.hpp"
@@ -17,20 +18,6 @@ namespace evmone::state
 constexpr auto MAX_TX_GAS_LIMIT = 0x1000000;  // 2**24
 
 using AccessList = std::vector<std::pair<address, std::vector<bytes32>>>;
-
-struct Authorization
-{
-    intx::uint256 chain_id;
-    address addr;
-    uint64_t nonce = 0;
-    /// Signer is empty if it cannot be ecrecovered from r, s, v.
-    std::optional<address> signer;
-    intx::uint256 r;
-    intx::uint256 s;
-    intx::uint256 v;
-};
-
-using AuthorizationList = std::vector<Authorization>;
 
 struct Transaction
 {

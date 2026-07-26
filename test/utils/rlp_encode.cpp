@@ -98,7 +98,7 @@ namespace evmone::state
 [[nodiscard]] bytes rlp_encode(const Authorization& authorization)
 {
     return rlp::encode_tuple(authorization.chain_id, authorization.addr, authorization.nonce,
-        authorization.v, authorization.r, authorization.s);
+        authorization.y_parity, authorization.r, authorization.s);
 }
 
 [[nodiscard]] bytes rlp_encode(const Withdrawal& withdrawal)

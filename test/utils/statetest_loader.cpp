@@ -159,7 +159,7 @@ state::AuthorizationList from_json<state::AuthorizationList>(const json::json& j
             authorization.signer = from_json<address>(a["signer"]);
         authorization.r = from_json<uint256>(a.at("r"));
         authorization.s = from_json<uint256>(a.at("s"));
-        authorization.v = from_json<uint256>(a.at("v"));
+        authorization.y_parity = from_json<uint8_t>(a.at("v"));
         o.emplace_back(authorization);
     }
     return o;

@@ -131,7 +131,7 @@ int64_t process_authorization_list(
         // 3. Verify if the signer has been successfully recovered from the signature.
         //    authority = ecrecover(...)
         // y_parity must be 0 or 1 for EIP-7702/2930 signatures.
-        if (auth.v > 1)
+        if (auth.y_parity > 1)
             continue;
         // TODO: We actually only do "partial" verification by assuming the signature is valid
         //   when the test has the signer specified.

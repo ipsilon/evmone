@@ -12,6 +12,7 @@ target_include_directories(evmone-state PUBLIC ${PROJECT_SOURCE_DIR})
 target_sources(
     evmone-state PRIVATE
     account.hpp
+    authorization.hpp
     blob_params.hpp
     block.hpp
     block.cpp

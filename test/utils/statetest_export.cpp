@@ -168,7 +168,7 @@ json::json to_state_test(std::string_view test_name, const state::BlockInfo& blo
     if (!tx.authorization_list.empty())
     {
         auto& ja = jtx["authorizationList"];
-        for (const auto& [chain_id, addr, nonce, signer, r, s, y_parity] : tx.authorization_list)
+        for (const auto& [chain_id, addr, nonce, y_parity, r, s, signer] : tx.authorization_list)
         {
             json::json je;
             je["chainId"] = hex0x(chain_id);

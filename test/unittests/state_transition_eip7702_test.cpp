@@ -91,7 +91,7 @@ TEST_F(state_transition, eip7702_set_code_transaction_invalid_y_parity)
     pre[authority] = {.nonce = 1};
     tx.to = To;
     tx.type = Transaction::Type::set_code;
-    tx.authorization_list = {{.addr = delegate, .nonce = 1, .signer = authority, .v = 2}};
+    tx.authorization_list = {{.addr = delegate, .nonce = 1, .y_parity = 2, .signer = authority}};
     pre[To] = {.code = ret(0)};
 
     expect.post[authority].nonce = 1;
