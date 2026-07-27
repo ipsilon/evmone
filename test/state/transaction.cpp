@@ -3,8 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "transaction.hpp"
+// TODO: Move the RLP encoder down into the state library, next to rlp_common.hpp. It lives in
+//   evmone.testutils, which links against evmone::state, so this include points the wrong way.
+//   It works only because the encoder is header-only.
+#include "../utils/rlp.hpp"
 #include "../utils/stdx/utility.hpp"
+#include "hash_utils.hpp"
 #include "rlp_decode.hpp"
+#include <evmone_precompiles/secp256k1.hpp>
 
 namespace evmone::state
 {
@@ -135,5 +141,43 @@ std::optional<Transaction> decode_transaction(bytes_view data) noexcept
     if (!decode_transaction_body(data, tx) || !data.empty())
         return std::nullopt;  // Malformed transaction or trailing data.
     return tx;
+}
+
+std::optional<address> recover_sender(const Transaction& tx, bytes_view txbytes) noexcept
+{
+    // A transaction is signed over its own encoding with the signature left out, so the signed
+    // fields are a slice of txbytes: the payload without the trailing (v, r, s). Slicing them out
+    // avoids a second, signing-only encoder for every transaction type.
+    const auto typed = tx.type != Transaction::Type::legacy;
+    auto payload = txbytes.substr(typed ? 1 : 0);  // Skip the EIP-2718 type byte.
+
+    rlp::Header header;
+    [[maybe_unused]] const auto header_decoded = rlp::decode_header(payload, header);
+    assert(header_decoded);  // tx has been decoded from txbytes, so its list header is valid.
+
+    // The signature fields are canonically encoded, so their sizes locate the slice boundary.
+    const auto signature_size =
+        rlp::encode(tx.v).size() + rlp::encode(tx.r).size() + rlp::encode(tx.s).size();
+    assert(signature_size <= header.payload_length);
+    auto preimage = bytes{payload.substr(0, header.payload_length - signature_size)};
+
+    // Protected legacy transactions sign chain_id by appending (chain_id, 0, 0) (EIP-155).
+    // TODO: Allocate bytes only in this case; use views for typed transactions.
+    const auto legacy_protected = !typed && tx.chain_id_protected();
+    if (legacy_protected)
+    {
+        preimage += rlp::encode(tx.chain_id);
+        preimage += bytes(2, rlp::SHORT_STRING_BASE);  // r = 0, s = 0
+    }
+
+    // The decoder has bounded v: {0, 1} when typed, {27, 28} or >= 35 (EIP-155) when legacy.
+    const auto y_parity = typed ? tx.v != 0 : (tx.v - (legacy_protected ? 35 : 27)) % 2 != 0;
+
+    const auto h = keccak256((typed ? bytes{stdx::to_underlying(tx.type)} : bytes{}) +
+                             rlp::internal::wrap_list(preimage));
+    const auto r_bytes = intx::be::store<bytes32>(tx.r);
+    const auto s_bytes = intx::be::store<bytes32>(tx.s);
+    return evmmax::secp256k1::ecrecover(
+        h.bytes, r_bytes.bytes, s_bytes.bytes, y_parity, evmmax::secp256k1::RecoveryMode::strict);
 }
 }  // namespace evmone::state

@@ -63,6 +63,12 @@ std::string_view to_test_fork_name(evmc_revision rev) noexcept
         return "TR_BLOBLIST_OVERSIZE";
     case INVALID_CHAIN_ID:
         return "TransactionException.INVALID_CHAINID";
+    case INVALID_ENCODING:
+        // EEST names every way an encoding can be malformed separately (RLP_*), so there is no
+        // single constant to export here; the plain message follows UNKNOWN_ERROR below.
+        return "Invalid transaction encoding";
+    case INVALID_SIGNATURE:
+        return "TransactionException.INVALID_SIGNATURE_VRS";
     case UNKNOWN_ERROR:
         return "Unknown error";
     default:
