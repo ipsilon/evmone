@@ -7,6 +7,7 @@
 #include <test/state/errors.hpp>
 #include <test/state/ethash_difficulty.hpp>
 #include <test/state/requests.hpp>
+#include <test/state/rlp_decode.hpp>
 #include <test/utils/block_transition.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
@@ -119,10 +120,41 @@ std::error_code validate_block(evmc_revision rev, state::BlobParams blob_params,
     if (!test_block.withdrawals_parse_success)
         return make_error_code(INCORRECT_BLOCK_FORMAT);
 
-    if (rev >= EVMC_OSAKA && test_block.rlp_size > MAX_RLP_BLOCK_SIZE)
+    if (rev >= EVMC_OSAKA && test_block.rlp.size() > MAX_RLP_BLOCK_SIZE)
         return make_error_code(RLP_BLOCK_LIMIT_EXCEEDED);
 
     return {};
+}
+
+/// Checks the transaction codec against a block's own serialization: every transaction in it must
+/// decode, and encode back to the very same bytes.
+void expect_transactions_round_trip(bytes_view block_rlp)
+{
+    bytes_view body;  // A block is [header, transactions, ...].
+    ASSERT_TRUE(rlp::take_list_payload(block_rlp, body));
+    ASSERT_TRUE(block_rlp.empty()) << "trailing bytes after the block";
+    bytes_view block_header;
+    ASSERT_TRUE(rlp::take_list_payload(body, block_header));  // Skipped over.
+    bytes_view txs;
+    ASSERT_TRUE(rlp::take_list_payload(body, txs));
+
+    while (!txs.empty())
+    {
+        const auto item = txs;
+        rlp::Header h;
+        ASSERT_TRUE(rlp::decode_header(txs, h));  // Advances txs to the item's payload.
+        const auto header_size = item.size() - txs.size();
+        txs.remove_prefix(h.payload_length);
+
+        // A legacy transaction is an RLP list here, a typed one an RLP string wrapping the
+        // EIP-2718 envelope; the envelope alone is the transaction.
+        const auto tx_bytes = h.is_list ? item.substr(0, header_size + h.payload_length) :
+                                          item.substr(header_size, h.payload_length);
+
+        const auto tx = state::decode_transaction(tx_bytes);
+        ASSERT_TRUE(tx.has_value()) << hex(tx_bytes);
+        EXPECT_EQ(rlp::encode(*tx), tx_bytes);
+    }
 }
 
 std::optional<uint64_t> mining_reward(evmc_revision rev) noexcept
@@ -217,6 +249,10 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
 
             SCOPED_TRACE(std::string{evmc::to_string(rev)} + '/' + std::to_string(case_index) +
                          '/' + c.name + '/' + std::to_string(test_block.block_info.number));
+
+            // Invalid blocks are skipped: they may carry transactions that do not even decode.
+            if (test_block.expected_exception.empty())
+                expect_transactions_round_trip(test_block.rlp);
 
             const auto block_error =
                 validate_block(rev, blob_params, test_block, parent_header, parent_has_ommers);

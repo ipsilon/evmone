@@ -198,13 +198,13 @@ BlockchainTest load_blockchain_test_case(const std::string& name, const json::js
 
             auto test_block = load_test_block(el.at("rlp_decoded"), bt.network, bt.blob_schedule);
             test_block.expected_exception = map_legacy_block_exception(it->get<std::string>());
-            test_block.rlp_size = from_json<bytes>(el.at("rlp")).size();
+            test_block.rlp = from_json<bytes>(el.at("rlp"));
             bt.test_blocks.emplace_back(test_block);
         }
         else
         {
             auto test_block = load_test_block(el, bt.network, bt.blob_schedule);
-            test_block.rlp_size = from_json<bytes>(el.at("rlp")).size();
+            test_block.rlp = from_json<bytes>(el.at("rlp"));
             bt.test_blocks.emplace_back(test_block);
         }
     }

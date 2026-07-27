@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
+#include <test/utils/rlp_encode.hpp>
 #include <test/utils/statetest.hpp>
 
 namespace evmone::test
@@ -34,7 +35,12 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
             {
                 tx = state::decode_transaction(*expected.txbytes);
                 if (tx.has_value())
+                {
+                    // Decoding is the inverse of encoding: what decoded must encode back exactly.
+                    EXPECT_EQ(rlp::encode(*tx), *expected.txbytes);
+
                     tx->sender = template_tx.sender;  // No recovery yet, take sender from JSON.
+                }
             }
 
             const auto res =
