@@ -3,9 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "transaction.hpp"
-// TODO: Move the RLP encoder down into the state library, next to rlp_common.hpp. It lives in
-//   evmone.testutils, which links against evmone::state, so this include points the wrong way.
-//   It works only because the encoder is header-only.
+// TODO: The RLP encoder belongs in the state library, see the note in authorization.cpp.
 #include "../utils/rlp.hpp"
 #include "../utils/stdx/utility.hpp"
 #include "hash_utils.hpp"
@@ -145,33 +143,28 @@ std::optional<Transaction> decode_transaction(bytes_view data) noexcept
 
 std::optional<address> recover_sender(const Transaction& tx, bytes_view txbytes) noexcept
 {
-    // A transaction is signed over its own encoding with the signature left out, so the signed
-    // fields are a slice of txbytes: the payload without the trailing (v, r, s). Slicing them out
-    // avoids a second, signing-only encoder for every transaction type.
+    // The signing preimage is the transaction's encoding with the trailing (v, r, s) left out, so
+    // it is sliced out of txbytes instead of maintaining a second, signing-only encoder per type.
     const auto typed = tx.type != Transaction::Type::legacy;
-    auto payload = txbytes.substr(typed ? 1 : 0);  // Skip the EIP-2718 type byte.
+    auto envelope = txbytes.substr(typed ? 1 : 0);  // Skip the EIP-2718 type byte.
+    bytes_view payload;
+    [[maybe_unused]] const auto is_list = rlp::take_list_payload(envelope, payload);
+    assert(is_list);  // tx has been decoded from txbytes, so its list header is valid.
 
-    rlp::Header header;
-    [[maybe_unused]] const auto header_decoded = rlp::decode_header(payload, header);
-    assert(header_decoded);  // tx has been decoded from txbytes, so its list header is valid.
-
-    // The signature fields are canonically encoded, so their sizes locate the slice boundary.
+    // The decoder accepts only canonical integers, so re-encoding (v, r, s) gives their wire sizes.
     const auto signature_size =
         rlp::encode(tx.v).size() + rlp::encode(tx.r).size() + rlp::encode(tx.s).size();
-    assert(signature_size <= header.payload_length);
-    auto preimage = bytes{payload.substr(0, header.payload_length - signature_size)};
+    assert(signature_size <= payload.size());
+    auto preimage = bytes{payload.substr(0, payload.size() - signature_size)};
 
     // Since EIP-155 a legacy signature covers the chain id as well, and then (chain_id, 0, 0)
     // takes the place of the signature in the preimage.
-    const auto legacy_protected = !typed && tx.chain_id_protected();
-    if (legacy_protected)
-    {
-        preimage += rlp::encode(tx.chain_id);
-        preimage += bytes(2, rlp::SHORT_STRING_BASE);  // r = 0, s = 0
-    }
+    if (!typed && tx.chain_id_protected())
+        preimage += rlp::encode(tx.chain_id) + rlp::encode(uint64_t{}) + rlp::encode(uint64_t{});
 
-    // The decoder has bounded v: {0, 1} when typed, {27, 28} or >= 35 (EIP-155) when legacy.
-    const auto y_parity = typed ? tx.v != 0 : (tx.v - (legacy_protected ? 35 : 27)) % 2 != 0;
+    // A legacy v is 27 + y_parity, or 35 + 2 * chain_id + y_parity since EIP-155: both bases are
+    // odd, so an even v means y_parity 1 either way. A typed v is the parity itself.
+    const auto y_parity = typed ? tx.v != 0 : tx.v % 2 == 0;
 
     const auto h = keccak256((typed ? bytes{stdx::to_underlying(tx.type)} : bytes{}) +
                              rlp::internal::wrap_list(preimage));

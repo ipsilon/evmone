@@ -28,13 +28,14 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
             auto state = test.pre_state;
             const auto blob_params = get_blob_params(rev, test.blob_schedule);
 
-            // Decode the transaction from txbytes if available, else take the JSON template.
-            auto tx = std::optional{test.multi_tx.get(expected.indexes)};
-            auto error = state::INVALID_ENCODING;
+            std::optional<state::Transaction> tx;
+            std::error_code error;
             if (expected.txbytes.has_value())
             {
                 tx = state::decode_transaction(*expected.txbytes);
-                if (tx.has_value())
+                if (!tx.has_value())
+                    error = make_error_code(state::INVALID_ENCODING);
+                else
                 {
                     // Decoding is the inverse of encoding: what decoded must encode back exactly.
                     EXPECT_EQ(rlp::encode(*tx), *expected.txbytes);
@@ -44,18 +45,16 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
                     if (sender.has_value())
                         tx->sender = *sender;
                     else
-                    {
-                        tx.reset();
-                        error = state::INVALID_SIGNATURE;
-                    }
+                        error = make_error_code(state::INVALID_SIGNATURE);
                 }
             }
+            else
+                tx = test.multi_tx.get(expected.indexes);
 
             const auto res =
-                tx.has_value() ?
-                    transition(state, block, test.block_hashes, *tx, rev, vm, block.gas_limit,
-                        static_cast<int64_t>(state::max_blob_gas_per_block(blob_params))) :
-                    make_error_code(error);
+                error ? error :
+                        transition(state, block, test.block_hashes, *tx, rev, vm, block.gas_limit,
+                            static_cast<int64_t>(state::max_blob_gas_per_block(blob_params)));
 
             if (holds_alternative<state::TransactionReceipt>(res))
             {
