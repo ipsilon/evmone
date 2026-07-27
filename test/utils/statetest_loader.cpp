@@ -479,6 +479,8 @@ static void from_json(const json::json& j, TestMultiTransaction& o)
 
     for (const auto& j_value : j.at("value"))
         o.values.emplace_back(from_json<intx::uint256>(j_value));
+
+    o.v = load_if_exists<uint64_t>(j, "v");
 }
 
 static void from_json(const json::json& j, TestMultiTransaction::Indexes& o)

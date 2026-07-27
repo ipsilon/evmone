@@ -182,21 +182,15 @@ TEST(state_rlp_decode, tx_round_trip)
 
 TEST(state_rlp_decode, tx_round_trip_legacy)
 {
-    // The legacy encoder writes v verbatim while the decoder splits it into (chain_id, y_parity)
-    // and mirrors the single gas price into max_priority_gas_price; so the decoded form differs
-    // from the input in exactly those fields.
-    // EIP-155: v = 35 + 2 * chain_id + parity. v = 35 is the lowest accepted value, and its chain
-    // id 0 makes it indistinguishable from the pre-EIP-155 v = 27 once decoded.
-    struct LegacyV
+    // A legacy transaction has a single wire gas price, so the decoded form differs from the input
+    // in max_priority_gas_price; v is kept verbatim and the chain id derived from it.
+    // EIP-155: v = 35 + 2 * chain_id + parity, with v = 35 the lowest accepted value; before it,
+    // v is 27 or 28 and the transaction is bound to no chain.
+    for (const auto& [v, chain_id] :
+        {std::pair{27u, uint64_t{0}}, std::pair{28u, uint64_t{0}}, std::pair{35u, uint64_t{0}},
+            std::pair{36u, uint64_t{0}}, std::pair{37u, uint64_t{1}}, std::pair{38u, uint64_t{1}}})
     {
-        unsigned raw_v;
-        unsigned parity;
-        uint64_t chain_id;
-    };
-    for (const auto& [raw_v, parity, chain_id] :
-        {LegacyV{35, 0, 0}, LegacyV{36, 1, 0}, LegacyV{37, 0, 1}, LegacyV{38, 1, 1}})
-    {
-        SCOPED_TRACE(raw_v);
+        SCOPED_TRACE(v);
         const state::Transaction in{
             .type = state::Transaction::Type::legacy,
             .data = "0xdeadbeef"_hex,
@@ -207,29 +201,22 @@ TEST(state_rlp_decode, tx_round_trip_legacy)
             .nonce = 7,
             .r = 0x1111_u256,
             .s = 0x2222_u256,
-            .v = raw_v,
+            .v = v,
         };
 
         auto expected = in;
         expected.max_priority_gas_price = in.max_gas_price;
         expected.chain_id = chain_id;
-        expected.v = parity;
         expect_tx_eq(expected, round_trip(in));
     }
 
-    // Pre-EIP-155: v in {27, 28}, no chain id, CREATE.
-    for (const auto& [raw_v, parity] : {std::pair{27u, 0u}, std::pair{28u, 1u}})
-    {
-        SCOPED_TRACE(raw_v);
-        auto in = MINIMAL_LEGACY_TX;
-        in.v = raw_v;
-
-        auto expected = in;
-        expected.max_priority_gas_price = in.max_gas_price;
-        expected.chain_id = 0;
-        expected.v = parity;
-        expect_tx_eq(expected, round_trip(in));
-    }
+    // The largest chain id a legacy transaction can carry: any larger one has a v above uint64.
+    auto in = MINIMAL_LEGACY_TX;
+    in.v = std::numeric_limits<uint64_t>::max();
+    auto expected = in;
+    expected.max_priority_gas_price = in.max_gas_price;
+    expected.chain_id = (std::numeric_limits<uint64_t>::max() - 35) / 2;
+    expect_tx_eq(expected, round_trip(in));
 }
 
 TEST(state_rlp_decode, tx_set_code_auth_y_parity_overflow_rejected)
@@ -477,9 +464,10 @@ TEST(state_rlp_decode, tx_rejects_invalid_legacy_v)
     EXPECT_FALSE(state::decode_transaction(rlp::encode(tx)).has_value());
 }
 
-TEST(state_rlp_decode, tx_rejects_chain_id_over_uint64)
+TEST(state_rlp_decode, tx_rejects_legacy_v_over_uint64)
 {
-    // Regression: an EIP-155 chain id that does not fit uint64 must be rejected, not truncated.
+    // Regression: a legacy v that does not fit uint64 must be rejected, not truncated. This bounds
+    // the EIP-155 chain id to (2**64 - 36) / 2, the limit the JSON transaction loader also has.
     // Hand-crafted legacy tx with v = 2**65 + 35, i.e. chain id 2**64.
     const auto rlp = "0xd2808080808080890200000000000000230101"_hex;
     EXPECT_FALSE(state::decode_transaction(rlp).has_value());

@@ -55,6 +55,12 @@ struct Transaction
     /// Returns amount of blob gas used by this transaction
     [[nodiscard]] uint64_t blob_gas_used() const { return GAS_PER_BLOB * blob_hashes.size(); }
 
+    /// Whether the transaction specifies expected chain id. Always true for typed transactions.
+    [[nodiscard]] bool chain_id_protected() const noexcept
+    {
+        return type != Type::legacy || v >= 35;
+    }
+
     Type type = Type::legacy;
     bytes data;
     int64_t gas_limit = 0;
@@ -70,6 +76,9 @@ struct Transaction
     uint64_t nonce = 0;
     intx::uint256 r;
     intx::uint256 s;
+
+    /// The verbatim v value of the signature.
+    /// It encodes y_parity and for legacy transactions chain id.
     uint64_t v = 0;
     AuthorizationList authorization_list;
 };
@@ -77,8 +86,6 @@ struct Transaction
 /// Decodes a transaction from its complete serialization @p data.
 ///
 /// Handles the legacy RLP list and the EIP-2718 typed envelope (type byte followed by an RLP list).
-/// TODO: Not a strict inverse of rlp::encode: a legacy transaction's wire v is normalized into
-///   (chain_id, y_parity), so re-encoding a decoded legacy tx need not reproduce its bytes.
 [[nodiscard]] std::optional<Transaction> decode_transaction(bytes_view data) noexcept;
 
 /// Transaction properties computed during the validation needed for the execution.

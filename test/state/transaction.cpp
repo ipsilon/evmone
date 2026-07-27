@@ -8,8 +8,6 @@
 
 namespace evmone::state
 {
-using intx::uint256;
-
 bool decode(bytes_view& from, Authorization& to) noexcept
 {
     bytes_view payload;
@@ -97,34 +95,17 @@ namespace
 
     if (to.type == Transaction::Type::legacy)
     {
-        // Legacy v encodes the recovery id and, since EIP-155, the chain id.
-        // TODO: This normalizes v into (y_parity, chain_id), so Transaction::v holds the parity
-        //   here while loader-produced transactions hold the raw wire v; re-encoding a decoded
-        //   legacy transaction therefore does not reproduce its bytes, and v=35/36 becomes
-        //   indistinguishable from the pre-EIP-155 v=27/28. Fix by distinguishing protected and
-        //   unprotected legacy transaction types (or by keeping the raw v and splitting at
-        //   signer recovery).
-        uint256 v_u256;
-        if (!rlp::decode<uint256>(body, v_u256))
+        // Legacy v carries the recovery id and, since EIP-155, the chain id. It is kept verbatim,
+        // the way rlp_encode() writes it, and the chain id derived alongside. Requiring the whole
+        // v to fit uint64_t bounds the chain id to 2**63 - 18, the same limit the JSON transaction
+        // loader has.
+        if (!rlp::decode(body, to.v))
             return false;
 
-        if (v_u256 == 27 || v_u256 == 28)  // Pre-EIP-155: no chain id.
-        {
-            to.v = (v_u256 == 28) ? 1 : 0;
-            to.chain_id = 0;
-        }
-        else if (v_u256 >= 35)  // EIP-155: v = 35 + 2 * chain_id + y_parity.
-        {
-            to.v = (v_u256 - 35) % 2 == 0 ? 0 : 1;
-            const auto chain_id = (v_u256 - 35 - to.v) / 2;
-            if (chain_id > std::numeric_limits<uint64_t>::max())
-                return false;  // chain id must fit the 64-bit Transaction::chain_id.
-            to.chain_id = static_cast<uint64_t>(chain_id);
-        }
-        else
-        {
-            return false;  // Invalid legacy signature v.
-        }
+        if (to.v >= 35)  // EIP-155: v = 35 + 2 * chain_id + y_parity.
+            to.chain_id = (to.v - 35) / 2;
+        else if (to.v != 27 && to.v != 28)  // Pre-EIP-155: bound to no chain, chain_id unused.
+            return false;
     }
     else
     {

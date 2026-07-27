@@ -122,6 +122,7 @@ json::json to_state_test(std::string_view test_name, const state::BlockInfo& blo
     jtx["secretKey"] = hex0x(SenderSecretKey);
     jtx["chainId"] = hex0x(tx.chain_id);
     jtx["nonce"] = hex0x(tx.nonce);
+    jtx["v"] = hex0x(tx.v);
     if (tx.type >= Transaction::Type::eip1559)
     {
         jtx["maxFeePerGas"] = hex0x(tx.max_gas_price);
