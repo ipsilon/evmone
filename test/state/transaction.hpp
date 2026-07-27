@@ -89,11 +89,12 @@ struct Transaction
 [[nodiscard]] std::optional<Transaction> decode_transaction(bytes_view data) noexcept;
 
 /// Recovers the sender (the signer) of the transaction @p tx decoded from @p txbytes,
-/// std::nullopt if the signature is invalid: r or s outside [1, secp256k1n), or s in the upper
-/// half (EIP-2).
+/// or std::nullopt if the signature is invalid.
 ///
 /// The serialization is needed as well because the signing preimage is a slice of it; @p tx must
 /// be what decode_transaction(@p txbytes) returned.
+///
+/// The recovery is strict at every revision: r, s in [1, secp256k1n) and low s (EIP-2).
 [[nodiscard]] std::optional<address> recover_sender(
     const Transaction& tx, bytes_view txbytes) noexcept;
 
