@@ -43,7 +43,7 @@ std::optional<address> recover(const bytes& txbytes)
 {
     const auto tx = state::decode_transaction(txbytes);
     EXPECT_TRUE(tx.has_value());
-    return tx.has_value() ? state::recover_sender(*tx, txbytes) : std::nullopt;
+    return state::recover_sender(tx.value(), txbytes);
 }
 
 /// Compares all decoded fields of two transactions (sender is not recovered by the decoder).
@@ -645,7 +645,8 @@ TEST(state_rlp_decode, recover_sender_legacy_protected)
     // The same fields signed twice: over the pre-EIP-155 preimage and over the EIP-155 one for
     // chain 0 (wire v = 35/36). Both decode to chain_id 0, so only the verbatim v says which
     // preimage was signed. No EEST fixture signs for chain 0, which is why this is pinned here.
-    // Signer of both: 0x1d694d5ad94f32132ff5c14c901d3ddbee90a550 (private key 0xa5).
+    // Signer of both: 0x1d694d5ad94f32132ff5c14c901d3ddbee90a550 (private key 0xa5). evmone only
+    // recovers, so changing the fields means re-signing each preimage elsewhere, with a low s.
     constexpr auto signer = 0x1d694d5ad94f32132ff5c14c901d3ddbee90a550_address;
 
     const auto protected_tx =
@@ -667,5 +668,17 @@ TEST(state_rlp_decode, recover_sender_rejects_out_of_range_s)
     // transaction decodes and only the recovery rejects it.
     auto tx = MINIMAL_LEGACY_TX;
     tx.s = evmmax::secp256k1::Curve::ORDER;
+    EXPECT_FALSE(recover(rlp::encode(tx)).has_value());
+}
+
+TEST(state_rlp_decode, recover_sender_rejects_high_s)
+{
+    // EIP-2 bounds s to the lower half of the curve order, on top of the [1, secp256k1n) range.
+    // One above the bound differs from the largest accepted s in nothing else.
+    auto tx = MINIMAL_LEGACY_TX;
+    tx.s = evmmax::secp256k1::Curve::ORDER / 2;
+    EXPECT_TRUE(recover(rlp::encode(tx)).has_value());
+
+    tx.s += 1;
     EXPECT_FALSE(recover(rlp::encode(tx)).has_value());
 }
