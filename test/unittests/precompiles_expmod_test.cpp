@@ -455,3 +455,56 @@ TEST(expmod, huge_inputs_analysis)
         EXPECT_EQ(max_output_size, expected_output_size);
     }
 }
+
+#ifdef EVMONE_PRECOMPILES_GMP
+namespace
+{
+/// Runs modexp through a specific implementation and returns the result bytes.
+evmc::bytes run_expmod(
+    ExpmodExecuteFn fn, const evmc::bytes& base, const evmc::bytes& exp, const evmc::bytes& mod)
+{
+    evmc::bytes input(3 * 32, 0);
+    using namespace intx;
+    be::unsafe::store(&input[0], uint256{base.size()});
+    be::unsafe::store(&input[32], uint256{exp.size()});
+    be::unsafe::store(&input[64], uint256{mod.size()});
+    input += base;
+    input += exp;
+    input += mod;
+    evmc::bytes result(mod.size(), 0xfe);
+    const auto [status, output_size] = fn(input.data(), input.size(), result.data(), result.size());
+    EXPECT_EQ(status, EVMC_SUCCESS);
+    EXPECT_EQ(output_size, mod.size());
+    return result;
+}
+}  // namespace
+
+// Differential test for the fixed-window exponentiation in modexp_odd: exercises
+// many exponent bit-lengths (crossing the binary<->window threshold) and bit
+// patterns (all window values) against the GMP reference, for odd and even moduli.
+TEST(expmod, windowing_vs_gmp)
+{
+    const auto base = make_val(32, 0xab, 0xcd, 0xa5);
+    for (const auto& mod : {
+             make_val(32, 0xff, 0xff, 0xff),  // 2^256-1 (odd: direct window path)
+             make_val(32, 0xff, 0xfe, 0xff),  // even (odd part via CRT still windows)
+         })
+    {
+        for (size_t size = 2; size <= 40; ++size)  // exponent 16..320 bits
+        {
+            for (const uint8_t msb : {uint8_t{0x01}, uint8_t{0x80}, uint8_t{0xff}})
+            {
+                for (const uint8_t fill : {uint8_t{0x00}, uint8_t{0xa5}, uint8_t{0xff}})
+                {
+                    const auto exp = make_val(size, msb, 0x01, fill);
+                    const auto ev =
+                        run_expmod(&evmone::state::expmod_execute_evmone, base, exp, mod);
+                    const auto gm = run_expmod(&evmone::state::expmod_execute_gmp, base, exp, mod);
+                    EXPECT_EQ(ev, gm)
+                        << "exp_size=" << size << " msb=" << +msb << " fill=" << +fill;
+                }
+            }
+        }
+    }
+}
+#endif
