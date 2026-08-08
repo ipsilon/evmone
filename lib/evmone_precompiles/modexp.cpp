@@ -368,13 +368,15 @@ template <>
     mul_amm_256(r, x, y, mod, mod_inv);
 }
 
-/// Maximum fixed-window width used by modexp_odd, and the resulting size of the
-/// precomputed power table (b^1 .. b^(2^w - 1)). Bounds the extra scratch space.
-constexpr unsigned MODEXP_WINDOW_MAX = 4;
-constexpr size_t MODEXP_TABLE_MAX = (size_t{1} << MODEXP_WINDOW_MAX) - 1;
+/// Maximum fixed-window width used by modexp_odd.
+constexpr unsigned MAX_WINDOW_WIDTH = 4;
+
+/// Number of base powers b^1 .. b^(2^w - 1) precomputed for the widest window.
+/// Bounds the extra scratch space taken by the power table.
+constexpr size_t MAX_PRECOMPUTED = (size_t{1} << MAX_WINDOW_WIDTH) - 1;
 
 /// Computes result[] = base[]^exp % mod[] for odd mod[] (mod[0] % 2 != 0).
-/// Scratch space required: (MODEXP_TABLE_MAX + 3)*n + 3*base.size() + 2 words,
+/// Scratch space required: (MAX_PRECOMPUTED + 3)*n + 3*base.size() + 2 words,
 /// where n = mod.size().
 void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Exponent exp,
     std::span<const uint64_t> mod, std::span<uint64_t> scratch) noexcept
@@ -395,7 +397,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     // sparse exponent, and small exponents stay on the plain binary path.
     const unsigned w = [exp_bits]() -> unsigned {
         if (exp_bits > 144)
-            return MODEXP_WINDOW_MAX;
+            return MAX_WINDOW_WIDTH;
         if (exp_bits > 48)
             return 3;
         if (exp_bits > 16)
@@ -404,15 +406,15 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     }();
     const size_t table_size = (size_t{1} << w) - 1;  // entries b^1 .. b^(2^w - 1)
 
-    // Layout: u[n+base.size()] | table[MODEXP_TABLE_MAX*n] | rem_scratch[2n+2b+2].
+    // Layout: u[n+base.size()] | table[MAX_PRECOMPUTED*n] | rem_scratch[2n+2b+2].
     // table[0] doubles as base_mont (b^1 in Montgomery form). rem_scratch is only
     // live during the initial to-Montgomery conversion.
-    assert(scratch.size() >= (MODEXP_TABLE_MAX + 3) * n + 3 * base.size() + 2);
+    assert(scratch.size() >= (MAX_PRECOMPUTED + 3) * n + 3 * base.size() + 2);
     const auto u = scratch.subspan(0, n + base.size());
-    const auto table = scratch.subspan(n + base.size(), MODEXP_TABLE_MAX * n);
+    const auto table = scratch.subspan(n + base.size(), MAX_PRECOMPUTED * n);
     const auto base_mont = table.first(n);
     const auto rem_scratch =
-        scratch.subspan(n + base.size() + MODEXP_TABLE_MAX * n, 2 * n + 2 * base.size() + 2);
+        scratch.subspan(n + base.size() + MAX_PRECOMPUTED * n, 2 * n + 2 * base.size() + 2);
 
     // Compute base_mont = table[0] = (base * R) % mod, where R = 2^(n*64).
     // The numerator u = base << (n*64): base in the upper words, lower n words are zero.
@@ -585,12 +587,12 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
 
     // Bump allocator for all working memory (values + scratch).
     // Stack buffer covers inputs up to the EIP-7823 limit (1024 bytes).
-    // Capacity: values[b+2m] + op scratch[(TABLE_MAX+3)m+3b+2] + CRT[m+2]
-    //         = 4b + (TABLE_MAX+6)m + 4 words.
-    // The op scratch grows by the modexp_odd power table (MODEXP_TABLE_MAX*m words).
+    // Capacity: values[b+2m] + op scratch[(MAX_PRECOMPUTED+3)m+3b+2] + CRT[m+2]
+    //         = 4b + (MAX_PRECOMPUTED+6)m + 4 words.
+    // The op scratch grows by the modexp_odd power table (MAX_PRECOMPUTED*m words).
     // The worst case is an even modulus with 1 trailing zero bit (odd_size=m, pow2_size=1).
     static constexpr size_t MAX_SIZE = 1024 / sizeof(uint64_t);  // EIP-7823
-    static constexpr size_t STACK_CAPACITY = 4 * MAX_SIZE + (6 + MODEXP_TABLE_MAX) * MAX_SIZE + 4;
+    static constexpr size_t STACK_CAPACITY = 4 * MAX_SIZE + (6 + MAX_PRECOMPUTED) * MAX_SIZE + 4;
     alignas(uint64_t) std::byte stack_buf[STACK_CAPACITY * sizeof(uint64_t)];
     std::pmr::monotonic_buffer_resource pool{stack_buf, sizeof(stack_buf)};
     std::pmr::polymorphic_allocator<uint64_t> alloc{&pool};
@@ -635,7 +637,7 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
 
         // Allocate operation scratch (dead after each call, reused sequentially).
         const size_t odd_scratch =
-            !odd_is_trivial ? (MODEXP_TABLE_MAX + 3) * odd_size + 3 * base.size() + 2 : 0;
+            !odd_is_trivial ? (MAX_PRECOMPUTED + 3) * odd_size + 3 * base.size() + 2 : 0;
         const size_t pow2_scratch = !pow2_is_trivial ? pow2_size : 0;
         const size_t inv_scratch = need_crt ? 2 * pow2_size : 0;
         const size_t op_scratch_size = std::max({odd_scratch, pow2_scratch, inv_scratch});
