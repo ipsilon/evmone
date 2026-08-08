@@ -368,13 +368,14 @@ template <>
     mul_amm_256(r, x, y, mod, mod_inv);
 }
 
-/// Computes result[] = base[]^exp % mod[] for odd mod[] (mod[0] % 2 != 0).
-/// Scratch space required: 4n + 3*base.size() + 2 words, where n = mod.size().
 /// Maximum fixed-window width used by modexp_odd, and the resulting size of the
 /// precomputed power table (b^1 .. b^(2^w - 1)). Bounds the extra scratch space.
 constexpr unsigned MODEXP_WINDOW_MAX = 4;
 constexpr size_t MODEXP_TABLE_MAX = (size_t{1} << MODEXP_WINDOW_MAX) - 1;
 
+/// Computes result[] = base[]^exp % mod[] for odd mod[] (mod[0] % 2 != 0).
+/// Scratch space required: (MODEXP_TABLE_MAX + 3)*n + 3*base.size() + 2 words,
+/// where n = mod.size().
 void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Exponent exp,
     std::span<const uint64_t> mod, std::span<uint64_t> scratch) noexcept
 {
