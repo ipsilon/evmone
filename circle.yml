@@ -140,26 +140,27 @@ commands:
         type: string
       fixtures_suffix:
         type: string
-        default: stable
+        default: ""
     steps:
       - run:
           name: "Download execution-spec-tests: <<parameters.release>>"
           working_directory: ~/spec-tests
           command: |
             find . -delete
-            curl -L --retry 3 -C - --output-dir /tmp -O https://github.com/<<parameters.repo>>/releases/download/<<parameters.release>>/fixtures_<<parameters.fixtures_suffix>>.tar.gz
-            tar -xzf /tmp/fixtures_<<parameters.fixtures_suffix>>.tar.gz
+            curl -L --retry 3 -C - --output-dir /tmp -O https://github.com/<<parameters.repo>>/releases/download/<<parameters.release>>/fixtures<<parameters.fixtures_suffix>>.tar.gz
+            tar -xzf /tmp/fixtures<<parameters.fixtures_suffix>>.tar.gz
             ls -l
 
   run_execution_spec_tests:
     parameters:
       repo:
         type: string
-        default: ethereum/execution-spec-tests
+        default: ethereum/execution-specs
       release:
         type: string
       fixtures_suffix:
         type: string
+        default: ""
       filter:
         type: string
         default: "*"
@@ -422,17 +423,15 @@ jobs:
     steps:
       - build
       - run_execution_spec_tests:
-          repo: ethereum/execution-specs
-          release: tests-glamsterdam-devnet@v6.1.0
-          fixtures_suffix: glamsterdam-devnet
+          release: tests-glamsterdam-devnet@v6.1.1
+          fixtures_suffix: _glamsterdam-devnet
           filter: "-for_amsterdam/*:for_bpo2toamsterdamattime15k/*"
       - collect_coverage_clang:
           flags: eest-develop
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
           binaries: evmone-statetest evmone-blockchaintest
       - run_execution_spec_tests:
-          release: v5.4.0
-          fixtures_suffix: develop
+          release: tests@v20.0.0
       - collect_coverage_clang:
           flags: eest-stable
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
@@ -491,8 +490,7 @@ jobs:
     steps:
       - build
       - download_execution_spec_tests:
-          release: v5.4.0
-          fixtures_suffix: stable
+          release: tests@v20.0.0
       - run:
           name: "Execution spec tests (state_tests)"
           working_directory: ~/build
@@ -512,8 +510,7 @@ jobs:
           command: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
       - build
       - download_execution_spec_tests:
-          release: v5.4.0
-          fixtures_suffix: stable
+          release: tests@v20.0.0
       - run:
           name: "Execution spec tests (state_tests)"
           working_directory: ~/build
@@ -568,8 +565,7 @@ jobs:
       - build
       - test
       - run_execution_spec_tests:
-          release: v5.4.0
-          fixtures_suffix: develop
+          release: tests@v20.0.0
 
   clang-tidy:
     executor: linux-clang-selfhosted
