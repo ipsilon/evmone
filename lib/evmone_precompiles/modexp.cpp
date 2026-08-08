@@ -392,9 +392,13 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
 
     // Fixed-window exponentiation width. w == 1 is plain binary square-and-multiply
     // (no table); a wider window precomputes b^1..b^(2^w-1) once and then does one
-    // multiply per w exponent bits instead of one per set bit. The width scales with
-    // the exponent size so the table (which grows as 2^w) stays amortized even for a
-    // sparse exponent, and small exponents stay on the plain binary path.
+    // multiply per w exponent bits instead of one per set bit.
+    //
+    // The thresholds are the break-even points for a random exponent, where the 2^w extra
+    // table multiplies stop being repaid by the sparser multiplies in the loop:
+    // exp_bits = 2^w / ((1-2^-w)/w - (1-2^-(w+1))/(w+1)), giving 16, 48 and 140.
+    // A random exponent is the worst case for windowing, so this errs towards the smaller
+    // window: a dense exponent would prefer the next width up at every threshold.
     const unsigned w = [exp_bits]() -> unsigned {
         if (exp_bits > 144)
             return MAX_WINDOW_WIDTH;
