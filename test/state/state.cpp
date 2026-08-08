@@ -9,6 +9,7 @@
 #include "state_view.hpp"
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
+#include <evmone/instructions_traits.hpp>
 #include <evmone/state_gas.hpp>
 #include <algorithm>
 #include <ranges>
@@ -66,22 +67,30 @@ struct TransactionCost
 /// state gas is always zero on Amsterdam.
 TransactionCost compute_tx_intrinsic_cost_amsterdam(const Transaction& tx) noexcept
 {
-    static constexpr int64_t TX_BASE = 12000;       // ECDSA recovery + sender access & write.
-    static constexpr int64_t TX_VALUE_COST = 4244;  // Recipient balance write on a value transfer.
-    static constexpr int64_t TRANSFER_LOG_COST = 1756;  // EIP-7708 transfer log.
-    static constexpr int64_t COLD_ACCOUNT_ACCESS = 3000;
-    static constexpr int64_t COLD_STORAGE_ACCESS = 3000;
-    static constexpr int64_t ACCOUNT_WRITE = 8000;
-    static constexpr int64_t CREATE_ACCESS = ACCOUNT_WRITE + COLD_STORAGE_ACCESS;  // 11000.
+    // Sender cost: ECDSA recovery, the sender's account access and write, block inclusion.
+    static constexpr int64_t TX_BASE_COST = 12000;
+    // Recipient balance write plus the EIP-7708 transfer log performed by a value transfer.
+    static constexpr int64_t TX_VALUE_COST = 6000;
+    // EIP-8038: CREATE_ACCESS = ACCOUNT_WRITE + COLD_ACCOUNT_ACCESS (12000).
+    static constexpr int64_t CREATE_ACCESS = instr::create_access_cost_amsterdam;
     static constexpr int64_t DATA_TOKEN_STANDARD = 4;
     static constexpr int64_t DATA_TOKEN_FLOOR = 16;
     static constexpr int64_t INITCODE_WORD_COST = 2;
     static constexpr int64_t ACCESS_LIST_ADDRESS_FLOOR_TOKENS = 80;       // 20 bytes × 4.
     static constexpr int64_t ACCESS_LIST_STORAGE_KEY_FLOOR_TOKENS = 128;  // 32 bytes × 4.
-    // EIP-8038: REGULAR_PER_AUTH_BASE_COST = AUTH_TUPLE_BYTES (101) × DATA_TOKEN_FLOOR (16)
-    //   + PRECOMPILE_ECRECOVER (3000) + COLD_ACCOUNT_ACCESS (3000) + 2 × WARM_ACCESS (100).
-    static constexpr int64_t REGULAR_PER_AUTH_BASE_COST =
-        101 * 16 + 3000 + 3000 + 2 * 100;  // 7816.
+    // EIP-8038: the access-list entries prepay the cold access minus the warm access still
+    // charged when the transaction touches the prepaid address/slot.
+    static constexpr int64_t ACCESS_LIST_ADDRESS_COST =
+        instr::cold_account_access_cost_amsterdam - instr::warm_storage_read_cost;
+    static constexpr int64_t ACCESS_LIST_STORAGE_KEY_COST =
+        instr::cold_sload_cost - instr::warm_storage_read_cost;
+    static constexpr int64_t PRECOMPILE_ECRECOVER = 3000;
+    static constexpr int64_t AUTH_TUPLE_BYTES = 101;  // chain_id 8 + addr 20 + nonce 8 + v/r/s 65.
+    // EIP-8037: EXECUTION_PER_AUTH_BASE_COST = AUTH_TUPLE_BYTES × DATA_TOKEN_FLOOR
+    //   + PRECOMPILE_ECRECOVER + COLD_ACCOUNT_ACCESS + 2 × WARM_ACCESS (7816).
+    static constexpr int64_t EXECUTION_PER_AUTH_BASE_COST =
+        AUTH_TUPLE_BYTES * DATA_TOKEN_FLOOR + PRECOMPILE_ECRECOVER +
+        instr::cold_account_access_cost_amsterdam + 2 * instr::warm_storage_read_cost;
 
     const auto is_create = !tx.to.has_value();
     const auto is_self_transfer = tx.to.has_value() && *tx.to == tx.sender;
@@ -96,21 +105,20 @@ TransactionCost compute_tx_intrinsic_cost_amsterdam(const Transaction& tx) noexc
     int64_t init_code_gas = 0;
     if (is_create)
     {
+        // A value transfer adds nothing: the recipient balance write is part of CREATE_ACCESS.
         recipient_regular = CREATE_ACCESS;
         init_code_gas = INITCODE_WORD_COST * num_words(tx.data.size());
-        if (has_value)
-            recipient_regular += TRANSFER_LOG_COST;
     }
     else if (!is_self_transfer)
     {
-        recipient_regular = COLD_ACCOUNT_ACCESS;
+        recipient_regular = instr::cold_account_access_cost_amsterdam;
         if (has_value)
-            recipient_regular += TRANSFER_LOG_COST + TX_VALUE_COST;
+            recipient_regular += TX_VALUE_COST;
     }
 
     const auto [num_addresses, num_storage_keys] = count_access_list(tx.access_list);
     const auto access_list_regular = static_cast<int64_t>(
-        num_addresses * COLD_ACCOUNT_ACCESS + num_storage_keys * COLD_STORAGE_ACCESS);
+        num_addresses * ACCESS_LIST_ADDRESS_COST + num_storage_keys * ACCESS_LIST_STORAGE_KEY_COST);
     const auto access_list_tokens =
         static_cast<int64_t>(num_addresses * ACCESS_LIST_ADDRESS_FLOOR_TOKENS +
                              num_storage_keys * ACCESS_LIST_STORAGE_KEY_FLOOR_TOKENS);
@@ -119,11 +127,11 @@ TransactionCost compute_tx_intrinsic_cost_amsterdam(const Transaction& tx) noexc
     // Only the state-independent per-authorization base cost is charged here; the ACCOUNT_WRITE
     // regular gas and the NEW_ACCOUNT/AUTH_BASE state gas are charged at the top frame.
     const auto num_auth = static_cast<int64_t>(tx.authorization_list.size());
-    const auto auth_regular = num_auth * REGULAR_PER_AUTH_BASE_COST;
+    const auto auth_regular = num_auth * EXECUTION_PER_AUTH_BASE_COST;
 
     // Decomposed regular-gas intrinsic base (EIP-2780), which also anchors the calldata floor so
     // the floor never undercuts the transaction's own intrinsic base (EELS #3120).
-    const auto base_regular = TX_BASE + recipient_regular;
+    const auto base_regular = TX_BASE_COST + recipient_regular;
 
     const auto intrinsic_regular =
         base_regular + init_code_gas + data_cost + access_list_cost + auth_regular;
@@ -254,7 +262,7 @@ AuthOutcome process_authorization_list(State& state, uint64_t chain_id,
     const address& sender, const std::optional<address>& value_recipient, int64_t& gas_left,
     StateGas& reservoir)
 {
-    static constexpr int64_t ACCOUNT_WRITE = 8000;  // EIP-8038.
+    static constexpr int64_t ACCOUNT_WRITE = instr::account_write_cost_amsterdam;  // EIP-8038.
     const auto amsterdam = rev >= EVMC_AMSTERDAM;
     const auto auth_base_state = STATE_BYTES_PER_AUTH_BASE * cpsb;
     const auto new_account_state = STATE_BYTES_PER_NEW_ACCOUNT * cpsb;

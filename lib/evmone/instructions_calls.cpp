@@ -9,7 +9,9 @@
 #include <variant>
 
 constexpr int64_t CALL_VALUE_COST = 9000;
-constexpr int64_t CALL_VALUE_COST_AMSTERDAM = 10300;  // EIP-8038: ACCOUNT_WRITE (8000) + CALL_STIPEND (2300).
+/// EIP-8038 redefines CALL_VALUE as ACCOUNT_WRITE + CALL_STIPEND.
+constexpr int64_t CALL_VALUE_COST_AMSTERDAM =
+    evmone::instr::account_write_cost_amsterdam + evmone::CALL_STIPEND;
 constexpr int64_t ACCOUNT_CREATION_COST = 25000;
 
 namespace evmone::instr::core
@@ -336,9 +338,10 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     int64_t create_state_gas_charged = 0;
     if (state.rev >= EVMC_AMSTERDAM)
     {
-        const auto target_alive = state.host.get_nonce(create_addr) != 0 ||
-                                  intx::be::load<uint256>(state.host.get_balance(create_addr)) != 0 ||
-                                  state.host.get_code_size(create_addr) != 0;
+        const auto target_alive =
+            state.host.get_nonce(create_addr) != 0 ||
+            intx::be::load<uint256>(state.host.get_balance(create_addr)) != 0 ||
+            state.host.get_code_size(create_addr) != 0;
         if (!target_alive)
         {
             create_state_gas_charged = NEW_ACCOUNT_STATE_GAS;

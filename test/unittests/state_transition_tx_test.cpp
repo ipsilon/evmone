@@ -267,12 +267,12 @@ TEST_F(state_transition, tx_data_floor_osaka_uses_eip7623)
 
 TEST_F(state_transition, access_list_cost_amsterdam)
 {
-    // EIP-2780 decomposition (Amsterdam): TX_BASE 12000 + recipient COLD 3000
-    // + access list (1 addr*3000 + 1 key*3000 + (80+128) floor tokens*16) = 24328.
+    // EIP-2780 decomposition (Amsterdam): TX_BASE_COST 12000 + recipient COLD_ACCOUNT_ACCESS 3000
+    // + access list (1 addr*2900 + 1 key*2000 + (80+128) floor tokens*16) = 23228.
     rev = EVMC_AMSTERDAM;
     tx.to = To;
     tx.access_list = {{To, {0x01_bytes32}}};
-    expect.gas_used = 24328;
+    expect.gas_used = 23228;
 }
 
 TEST_F(state_transition, access_list_cost_osaka_unchanged)
@@ -303,8 +303,8 @@ TEST_F(state_transition, access_list_floor_amsterdam)
     tx.to = To;
     tx.data = bytes(100, 0x00);
     tx.access_list = {{To, {}}};
-    // intrinsic = 15000 base (12000 + 3000 recipient) + 100*4 data + (3000 + 1280 access list) = 19680
-    // floor     = 15000 base + 16*(100*4 + 80 access-list tokens)                               = 22680
+    // intrinsic = 15000 base (12000 + 3000 recipient) + 100*4 data + (3000 + 1280 access list) =
+    // 19680 floor     = 15000 base + 16*(100*4 + 80 access-list tokens) = 22680
     expect.gas_used = 22680;  // floor (anchored on the decomposed base per EELS #3120)
 }
 

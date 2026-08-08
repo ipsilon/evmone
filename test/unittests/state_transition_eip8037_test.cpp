@@ -70,7 +70,7 @@ TEST_F(state_transition, eip8037_create_tx_collision_excess_reservoir_refunded)
 namespace
 {
 // Gas pinned empirically (Amsterdam: EIP-2780 decomposition + EIP-8037 2D gas).
-constexpr int64_t CallLightfailRegularGas = 26'021;
+constexpr int64_t CallLightfailRegularGas = 27'021;
 }  // namespace
 
 TEST_F(state_transition, eip8037_call_value_lightfail_new_account_charge_refilled)
@@ -83,8 +83,8 @@ TEST_F(state_transition, eip8037_call_value_lightfail_new_account_charge_refille
     // but only AFTER NEW_ACCOUNT_STATE_GAS is charged for the absent Target.
     pre[To] = {.code = call(Target).value(1).gas(0xffff) + OP_STOP};
 
-    expect.status = EVMC_SUCCESS;  // To STOPs after the failed CALL (light failure)
-    expect.post[To] = {};          // To survives
+    expect.status = EVMC_SUCCESS;        // To STOPs after the failed CALL (light failure)
+    expect.post[To] = {};                // To survives
     expect.post[Target].exists = false;  // no account was created
     expect.gas_used = CallLightfailRegularGas;
     expect.state_gas = 0;  // the NEW_ACCOUNT charge for the absent Target is refilled

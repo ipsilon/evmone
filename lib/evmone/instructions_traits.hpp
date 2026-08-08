@@ -21,9 +21,15 @@ inline constexpr auto cold_account_access_cost = 2600;
 inline constexpr auto warm_storage_read_cost = 100;
 
 /// EIP-8038 repriced state-access costs, applied from Amsterdam.
+/// COLD_STORAGE_ACCESS is only a rename of COLD_SLOAD_COST: its value is not repriced,
+/// so cold_sload_cost is used for it on every revision.
 inline constexpr auto cold_account_access_cost_amsterdam = 3000;
-inline constexpr auto cold_storage_access_cost_amsterdam = 3000;
-inline constexpr auto account_write_cost_amsterdam = 8000;
+inline constexpr auto account_write_cost_amsterdam = 9000;
+inline constexpr auto storage_write_cost_amsterdam = 10000;
+
+/// EIP-8038: CREATE_ACCESS = ACCOUNT_WRITE + COLD_ACCOUNT_ACCESS.
+inline constexpr auto create_access_cost_amsterdam =
+    account_write_cost_amsterdam + cold_account_access_cost_amsterdam;
 
 /// The full cold-account-access cost for the given revision (EIP-2929 / EIP-8038).
 /// Used where no warm base cost has been pre-charged: SELFDESTRUCT, delegation resolution.
@@ -42,12 +48,10 @@ inline constexpr int64_t additional_cold_account_access_cost(evmc_revision rev) 
 }
 
 /// Additional cold storage access cost over the unconditionally-charged warm cost
-/// (SLOAD always; SSTORE from Amsterdam). EIP-2929 / EIP-8038.
-inline constexpr int64_t additional_cold_storage_access_cost(evmc_revision rev) noexcept
-{
-    return (rev >= EVMC_AMSTERDAM ? cold_storage_access_cost_amsterdam : cold_sload_cost) -
-           warm_storage_read_cost;
-}
+/// (SLOAD always; SSTORE from Amsterdam). Revision-independent: EIP-8038 renames
+/// COLD_SLOAD_COST to COLD_STORAGE_ACCESS but does not reprice it.
+inline constexpr int64_t additional_cold_storage_access_cost =
+    cold_sload_cost - warm_storage_read_cost;
 /// @}
 
 
@@ -202,10 +206,10 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_AMSTERDAM][OP_DUPN] = 3;
     table[EVMC_AMSTERDAM][OP_SWAPN] = 3;
     table[EVMC_AMSTERDAM][OP_EXCHANGE] = 3;
-    // EIP-8038: CREATE_ACCESS = ACCOUNT_WRITE (8000) + COLD_STORAGE_ACCESS (3000). The new-account
-    // state-creation cost stays in state gas (EIP-8037). Was 9000 (bal-devnet-7), 32000 pre-Amsterdam.
-    table[EVMC_AMSTERDAM][OP_CREATE] = 11000;
-    table[EVMC_AMSTERDAM][OP_CREATE2] = 11000;
+    // EIP-8038: GAS_CREATE is replaced by CREATE_ACCESS. The new-account state-creation cost
+    // stays in state gas (EIP-8037). Was 9000 (bal-devnet-7), 32000 pre-Amsterdam.
+    table[EVMC_AMSTERDAM][OP_CREATE] = create_access_cost_amsterdam;
+    table[EVMC_AMSTERDAM][OP_CREATE2] = create_access_cost_amsterdam;
 
     table[EVMC_EXPERIMENTAL] = table[EVMC_AMSTERDAM];
 
