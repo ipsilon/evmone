@@ -396,7 +396,8 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     //
     // The thresholds are the break-even points for a random exponent, where the 2^w extra
     // table multiplies stop being repaid by the sparser multiplies in the loop:
-    // exp_bits = 2^w / ((1-2^-w)/w - (1-2^-(w+1))/(w+1)), giving 16, 48 and 140.
+    // exp_bits = 2^w / ((1-2^-w)/w - (1-2^-(w+1))/(w+1)), giving 16, 48 and 140 (rounded
+    // up to 144 below; the two widths are within 0.2% of each other over 140..144).
     // A random exponent is the worst case for windowing, so this errs towards the smaller
     // window: a dense exponent would prefer the next width up at every threshold.
     const unsigned w = [exp_bits]() -> unsigned {
@@ -410,9 +411,11 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     }();
     const size_t table_size = (size_t{1} << w) - 1;  // entries b^1 .. b^(2^w - 1)
 
-    // Layout: u[n+base.size()] | table[MAX_PRECOMPUTED*n] | rem_scratch[2n+2b+2].
-    // table[0] doubles as base_mont (b^1 in Montgomery form). rem_scratch is only
-    // live during the initial to-Montgomery conversion.
+    // Layout: u[n + base.size()] | table[MAX_PRECOMPUTED*n]
+    //       | rem_scratch[2*n + 2*base.size() + 2].
+    // table[0] doubles as base_mont (b^1 in Montgomery form). Both u and rem_scratch are
+    // dead after the to-Montgomery conversion, and u's first n words are then reused as
+    // the exponentiation double-buffer.
     assert(scratch.size() >= (MAX_PRECOMPUTED + 3) * n + 3 * base.size() + 2);
     const auto u = scratch.subspan(0, n + base.size());
     const auto table = scratch.subspan(n + base.size(), MAX_PRECOMPUTED * n);
@@ -433,8 +436,8 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
         auto r_cur = std::span<uint64_t, N>{result};
         auto r_tmp = std::span<uint64_t, N>{u.first(n)};
 
-        // Precompute the odd/all-powers table: table[j] = base^(j+1) in Montgomery
-        // form. table[0] = base_mont is already set; for w == 1 the loop is empty.
+        // Precompute the power table: table[j] = base^(j+1) in Montgomery form, i.e. all
+        // of b^1..b^(2^w-1). table[0] = base_mont is already set; empty for w == 1.
         for (size_t j = 1; j < table_size; ++j)
         {
             const auto prev = std::span<const uint64_t, N>{table.subspan((j - 1) * n, n)};
