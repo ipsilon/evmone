@@ -289,7 +289,7 @@ state::BlockInfo from_json_with_rev(
         .blob_gas_used = load_optional<uint64_t>(j, "blobGasUsed"),
         .excess_blob_gas = excess_blob_gas,
         .blob_base_fee = state::compute_blob_gas_price(blob_params, excess_blob_gas),
-        .slot_number = load_or<uint64_t>(j, "slotNumber", 0),
+        .slot_number = load_optional<uint64_t>(j, "slotNumber"),
         .ommers = std::move(ommers),
         .withdrawals = std::move(withdrawals),
     };

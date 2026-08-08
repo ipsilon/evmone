@@ -34,7 +34,7 @@ BlockHeader from_json<BlockHeader>(const json::json& j)
         .blob_gas_used = load_optional<uint64_t>(j, "blobGasUsed"),
         .excess_blob_gas = load_optional<uint64_t>(j, "excessBlobGas"),
         .requests_hash = load_or<hash256>(j, "requestsHash", {}),
-        .slot_number = load_or<uint64_t>(j, "slotNumber", 0),
+        .slot_number = load_optional<uint64_t>(j, "slotNumber"),
     };
 }
 

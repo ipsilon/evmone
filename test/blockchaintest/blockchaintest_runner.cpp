@@ -116,6 +116,10 @@ std::error_code validate_block(evmc_revision rev, state::BlobParams blob_params,
             return make_error_code(INCORRECT_BLOCK_FORMAT);
     }
 
+    // `slot_number` is mandatory from Amsterdam and invalid before (EIP-7843).
+    if (test_block.block_info.slot_number.has_value() != (rev >= EVMC_AMSTERDAM))
+        return make_error_code(INCORRECT_BLOCK_FORMAT);
+
     // Block is invalid if some of the withdrawal fields failed to be parsed.
     if (!test_block.withdrawals_parse_success)
         return make_error_code(INCORRECT_BLOCK_FORMAT);

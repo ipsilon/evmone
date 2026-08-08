@@ -152,6 +152,7 @@ TEST(json_loader, blockchain_test)
     EXPECT_EQ(btt[0].test_blocks[0].block_info.gas_limit, 0x016345785d8a0000);
     EXPECT_EQ(btt[0].test_blocks[0].block_info.number, 5);
     EXPECT_EQ(btt[0].test_blocks[0].block_info.timestamp, 0x03e8);
+    EXPECT_FALSE(btt[0].test_blocks[0].block_info.slot_number.has_value());
     EXPECT_EQ(btt[0].test_blocks[0].block_info.ommers.size(), 1);
     EXPECT_EQ(btt[0].test_blocks[0].block_info.ommers[0].beneficiary,
         0xb94f5374fce5ed0000000097c15331677e6ebf0b_address);
@@ -383,4 +384,88 @@ TEST(json_loader, blockchain_test_pre_paris)
         0x01de610f00331cea813e8143d51eb44ca352cdd90c602bb4b4bcf3c6cf9d5531_bytes32);
     EXPECT_EQ(btt[0].test_blocks[0].block_info.prev_randao,
         0x0000000000000000000000000000000000000000000000000000000000020000_bytes32);
+}
+
+/// EIP-7843: `slotNumber` absent and `slotNumber` present-and-zero are different encodings.
+/// The block header validation requires the field exactly from Amsterdam, so the loader must
+/// keep them distinguishable; loading it as a plain integer collapsed both to 0.
+TEST(json_loader, blockchain_test_slot_number_absent_differs_from_zero)
+{
+    // NOTE: fake `rlp` field! Never decoded by loader, only size is read and checked.
+    // The second block intentionally omits `slotNumber`; the loader does not validate headers.
+    std::istringstream input{R"({
+        "000-slotnum": {
+            "network": "Amsterdam",
+            "genesisBlockHeader": {
+                "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "coinbase": "0x0000000000000000000000000000000000000000",
+                "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "transactionsTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                "receiptTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                "bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                "number": "0x00",
+                "gasLimit": "0x01000000",
+                "gasUsed": "0x00",
+                "timestamp": "0x00",
+                "extraData": "0x00",
+                "slotNumber": "0x00",
+                "hash": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            },
+            "pre": {},
+            "blocks": [
+                {
+                    "rlp": "0x00",
+                    "blockHeader": {
+                        "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                        "coinbase": "0x0000000000000000000000000000000000000000",
+                        "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "transactionsTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "receiptTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "number": "0x01",
+                        "gasLimit": "0x01000000",
+                        "gasUsed": "0x00",
+                        "timestamp": "0x0c",
+                        "extraData": "0x",
+                        "slotNumber": "0x00",
+                        "hash": "0x0000000000000000000000000000000000000000000000000000000000000002"
+                    },
+                    "transactions": [],
+                    "withdrawals": [],
+                    "uncleHeaders": []
+                },
+                {
+                    "rlp": "0x00",
+                    "blockHeader": {
+                        "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                        "coinbase": "0x0000000000000000000000000000000000000000",
+                        "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                        "transactionsTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "receiptTrie": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+                        "bloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+                        "number": "0x02",
+                        "gasLimit": "0x01000000",
+                        "gasUsed": "0x00",
+                        "timestamp": "0x0d",
+                        "extraData": "0x",
+                        "hash": "0x0000000000000000000000000000000000000000000000000000000000000003"
+                    },
+                    "transactions": [],
+                    "withdrawals": [],
+                    "uncleHeaders": []
+                }
+            ],
+            "lastblockhash": "0x0000000000000000000000000000000000000000000000000000000000000003",
+            "postState": {},
+            "sealEngine": "NoProof"
+        }
+        })"};
+
+    const auto btt = load_blockchain_tests(input);
+
+    ASSERT_EQ(btt.size(), 1);
+    ASSERT_EQ(btt[0].test_blocks.size(), 2);
+    EXPECT_EQ(btt[0].genesis_block_header.slot_number, 0);
+    EXPECT_EQ(btt[0].test_blocks[0].block_info.slot_number, 0);
+    EXPECT_FALSE(btt[0].test_blocks[1].block_info.slot_number.has_value());
 }
