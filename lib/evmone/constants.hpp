@@ -17,4 +17,7 @@ constexpr auto MAX_INITCODE_SIZE = 2 * MAX_CODE_SIZE;
 /// Transactions and create instructions with nonce equal or above this value are invalid.
 /// Defined by [EIP-2681](https://eips.ethereum.org/EIPS/eip-2681).
 constexpr auto MAX_NONCE = 0xffff'ffff'ffff'ffff;
+
+/// The gas given back to a value-transferring CALL, the Yellow Paper's G_callstipend.
+constexpr auto CALL_STIPEND = 2300;
 }  // namespace evmone

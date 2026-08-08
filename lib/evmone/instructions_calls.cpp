@@ -163,8 +163,8 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     {
         if (has_value)
         {
-            msg.gas += 2300;  // Add stipend.
-            gas_left += 2300;
+            msg.gas += CALL_STIPEND;
+            gas_left += CALL_STIPEND;
             if (intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < value)
                 return {EVMC_SUCCESS, gas_left};  // "Light" failure.
         }

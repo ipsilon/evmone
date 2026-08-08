@@ -2,6 +2,7 @@
 // Copyright 2019 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "constants.hpp"
 #include "instructions.hpp"
 
 namespace evmone::instr::core
@@ -120,7 +121,7 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     if (state.in_static_mode())
         return {EVMC_STATIC_MODE_VIOLATION, gas_left};
 
-    if (state.rev >= EVMC_ISTANBUL && gas_left <= 2300)
+    if (state.rev >= EVMC_ISTANBUL && gas_left <= CALL_STIPEND)
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto key = intx::be::store<evmc::bytes32>(stack.pop());
