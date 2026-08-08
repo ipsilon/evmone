@@ -314,7 +314,8 @@ AuthOutcome process_authorization_list(State& state, uint64_t chain_id,
                 }
             }
             // A net-new delegation indicator: the authority held none before the tx, none was set
-            // for it earlier in the tx, and this authorization sets one. Charged once per authority.
+            // for it earlier in the tx, and this authorization sets one. Charged once per
+            // authority.
             if (!is_zero(auth.addr) && delegation_set_for.insert(authority_addr).second &&
                 !was_delegated_before_tx)
             {
@@ -962,13 +963,17 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         host.access_account(block.coinbase);
 
     // EIP-8037: split execution gas into a regular budget and a state-gas reservoir. The intrinsic
-    // (regular only; the Amsterdam intrinsic state gas is zero) is already subtracted from gas_limit.
-    //   regular = min(MAX_TX_GAS_LIMIT - intrinsic_regular, exec_gas); reservoir = exec_gas - regular.
+    // (regular only; the Amsterdam intrinsic state gas is zero) is already subtracted from
+    // gas_limit.
+    //   regular = min(MAX_TX_GAS_LIMIT - intrinsic_regular, exec_gas); reservoir = exec_gas -
+    //   regular.
     // Any top-frame charge running out of gas halts the frame: all gas is consumed and the applied
-    // authorizations are rolled back (nothing else runs), matching EELS set_delegation/prepare_dispatch.
+    // authorizations are rolled back (nothing else runs), matching EELS
+    // set_delegation/prepare_dispatch.
     const auto amsterdam = rev >= EVMC_AMSTERDAM;
     bool top_frame_halted = false;
     StateGas reservoir;
+    int64_t reservoir_initial = 0;
     const auto auth_checkpoint = state.checkpoint();
     const auto halt_top_frame = [&] {
         state.rollback(auth_checkpoint);
@@ -982,6 +987,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         const auto regular_exec = std::min(exec_gas, regular_cap);
         message.gas = regular_exec;
         reservoir.left = exec_gas - regular_exec;
+        reservoir_initial = reservoir.left;
     }
 
     // EIP-7702: apply the authorizations (after the sender fee deduction and warming, before the
@@ -1007,10 +1013,11 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         {
             message.code_address = *delegate;
             message.flags |= EVMC_DELEGATED;
-            // EIP-8038: reading the delegated code costs WARM_ACCESS if the target is already in the
-            // accessed set, else COLD_ACCOUNT_ACCESS. That set is the sender, the recipient, the
-            // coinbase (EIP-3651), access-list entries, and the precompiles (EIP-2929). find_modified
-            // checks the warm set without lazy-loading (a warmed empty coinbase has no state leaf).
+            // EIP-8038: reading the delegated code costs WARM_ACCESS if the target is already in
+            // the accessed set, else COLD_ACCOUNT_ACCESS. That set is the sender, the recipient,
+            // the coinbase (EIP-3651), access-list entries, and the precompiles (EIP-2929).
+            // find_modified checks the warm set without lazy-loading (a warmed empty coinbase has
+            // no state leaf).
             if (amsterdam)
             {
                 const auto* const del = state.find_modified(message.code_address);
@@ -1046,7 +1053,12 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     if (amsterdam)
         message.state_gas = reservoir.left;
 
-    evmc::Result result{EVMC_OUT_OF_GAS, 0};  // Default: a top-frame charge halted before dispatch.
+    // Default: a top-frame charge halted before dispatch. All regular gas is consumed, but the
+    // preparation snapshot rolled every applied delegation back, refilling their state charges,
+    // so the reservoir is returned whole — the halt consumes at most the regular budget
+    // (EIP-8037 settlement of the EELS preparation snapshot).
+    evmc::Result result{EVMC_OUT_OF_GAS, 0};
+    result.state_gas_left = reservoir_initial;
     if (!top_frame_halted)
         result = host.call(message);
 
@@ -1055,9 +1067,11 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     // create/value NEW_ACCOUNT charge is already reflected in the returned reservoir. Zero on an
     // auth halt: the applied delegations were rolled back, so no state grew. Clamped at
     // 0: EIP-7928 BAL coupling refunds can return more reservoir than the frame started with.
-    const auto exec_state_gas = top_frame_halted ? int64_t{0} :
-        auth.state_charge + std::max<int64_t>(0, message.state_gas - result.state_gas_left +
-                                                     result.state_gas_spilled);
+    const auto exec_state_gas =
+        top_frame_halted ?
+            int64_t{0} :
+            auth.state_charge + std::max<int64_t>(0, message.state_gas - result.state_gas_left +
+                                                         result.state_gas_spilled);
 
     // EIP-8037: actual gas consumed = gas_limit - regular_unspent - reservoir_unspent.
     // Pre-refund/pre-floor; stays raw on the Amsterdam path (the receipt's
@@ -1083,8 +1097,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         // The block header formula `max(sum_regular, sum_state)` is computed by the runner
         // from these per-tx values.
         amsterdam_state_gas = exec_state_gas;
-        amsterdam_regular_gas =
-            std::max(total_consumed - exec_state_gas, tx_props.min_gas_cost);
+        amsterdam_regular_gas = std::max(total_consumed - exec_state_gas, tx_props.min_gas_cost);
 
         // Refund based on total consumed, capped at 1/5. Sender pays the total minus the refund,
         // floored at the EIP-7623 calldata floor (EELS: max(before_refund - refund, floor)).
