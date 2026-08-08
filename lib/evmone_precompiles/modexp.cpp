@@ -585,11 +585,12 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
 
     // Bump allocator for all working memory (values + scratch).
     // Stack buffer covers inputs up to the EIP-7823 limit (1024 bytes).
-    // Capacity: values[b+2m] + op scratch[(TABLE_MAX+4)m+3b+2] + CRT[m+2].
+    // Capacity: values[b+2m] + op scratch[(TABLE_MAX+3)m+3b+2] + CRT[m+2]
+    //         = 4b + (TABLE_MAX+6)m + 4 words.
     // The op scratch grows by the modexp_odd power table (MODEXP_TABLE_MAX*m words).
     // The worst case is an even modulus with 1 trailing zero bit (odd_size=m, pow2_size=1).
     static constexpr size_t MAX_SIZE = 1024 / sizeof(uint64_t);  // EIP-7823
-    static constexpr size_t STACK_CAPACITY = 4 * MAX_SIZE + (7 + MODEXP_TABLE_MAX) * MAX_SIZE + 4;
+    static constexpr size_t STACK_CAPACITY = 4 * MAX_SIZE + (6 + MODEXP_TABLE_MAX) * MAX_SIZE + 4;
     alignas(uint64_t) std::byte stack_buf[STACK_CAPACITY * sizeof(uint64_t)];
     std::pmr::monotonic_buffer_resource pool{stack_buf, sizeof(stack_buf)};
     std::pmr::polymorphic_allocator<uint64_t> alloc{&pool};
