@@ -280,8 +280,8 @@ public:
 
     [[nodiscard]] size_t bit_width() const noexcept { return bit_width_; }
 
-    /// Returns the bit value of the exponent at the given index, counting from the most significant
-    /// bit (e[0] is the top bit).
+    /// Returns the bit value of the exponent at the given index, counting from the least
+    /// significant bit (e[0] is the bottom bit, e[bit_width() - 1] is the top bit, always set).
     bool operator[](size_t index) const noexcept
     {
         // TODO: Replace this with a custom iterator type.
