@@ -323,16 +323,11 @@ static inline ALWAYS_INLINE void keccak(
     const size_t hash_size = bits / 8;
     const size_t block_size = (1600 - bits * 2) / 8;
 
-    size_t i;
-    uint64_t* state_iter;
-    uint64_t last_word = 0;
-    uint8_t* last_word_iter = (uint8_t*)&last_word;
-
     uint64_t state[25] = {0};
 
     while (size >= block_size)
     {
-        for (i = 0; i < (block_size / word_size); ++i)
+        for (size_t i = 0; i < (block_size / word_size); ++i)
         {
             state[i] ^= load_le(data);
             data += word_size;
@@ -343,7 +338,7 @@ static inline ALWAYS_INLINE void keccak(
         size -= block_size;
     }
 
-    state_iter = state;
+    uint64_t* state_iter = state;
 
     while (size >= word_size)
     {
@@ -353,21 +348,17 @@ static inline ALWAYS_INLINE void keccak(
         size -= word_size;
     }
 
-    while (size > 0)
-    {
-        *last_word_iter = *data;
-        ++last_word_iter;
-        ++data;
-        --size;
-    }
-    *last_word_iter = 0x01;
-    *state_iter ^= to_le64(last_word);
+    // Absorb last 0–7 bytes of input + the padding byte.
+    uint64_t last_word = (uint64_t)0x01 << (size * 8);
+    for (size_t i = 0; i < size; ++i)
+        last_word |= (uint64_t)data[i] << (i * 8);
+    *state_iter ^= last_word;
 
-    state[(block_size / word_size) - 1] ^= 0x8000000000000000;
+    state[(block_size / word_size) - 1] ^= 0x8000000000000000;  // Last block bit flip.
 
     keccakf1600_best(state);
 
-    for (i = 0; i < (hash_size / word_size); ++i)
+    for (size_t i = 0; i < (hash_size / word_size); ++i)
         out[i] = to_le64(state[i]);
 }
 
