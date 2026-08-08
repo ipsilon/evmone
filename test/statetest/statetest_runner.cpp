@@ -5,7 +5,6 @@
 #include <gtest/gtest.h>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
-#include <test/utils/rlp_encode.hpp>
 #include <test/utils/statetest.hpp>
 
 namespace evmone::test
@@ -34,7 +33,9 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
             {
                 tx = state::decode_transaction(*expected.txbytes);
                 if (!tx.has_value())
+                {
                     error = make_error_code(state::INVALID_ENCODING);
+                }
                 else
                 {
                     // Decoding is the inverse of encoding: what decoded must encode back exactly.
@@ -49,7 +50,9 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
                 }
             }
             else
+            {
                 tx = test.multi_tx.get(expected.indexes);
+            }
 
             const auto res =
                 error ? error :
