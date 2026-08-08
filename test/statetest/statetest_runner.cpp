@@ -5,7 +5,6 @@
 #include <gtest/gtest.h>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
-#include <test/utils/rlp_encode.hpp>
 #include <test/utils/statetest.hpp>
 
 namespace evmone::test
@@ -28,26 +27,37 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
             auto state = test.pre_state;
             const auto blob_params = get_blob_params(rev, test.blob_schedule);
 
-            // Decode transaction from txbytes if available.
-            const auto template_tx = test.multi_tx.get(expected.indexes);
-            auto tx = std::optional{template_tx};
+            std::optional<state::Transaction> tx;
+            std::error_code error;
             if (expected.txbytes.has_value())
             {
                 tx = state::decode_transaction(*expected.txbytes);
-                if (tx.has_value())
+                if (!tx.has_value())
+                {
+                    error = make_error_code(state::INVALID_ENCODING);
+                }
+                else
                 {
                     // Decoding is the inverse of encoding: what decoded must encode back exactly.
                     EXPECT_EQ(rlp::encode(*tx), *expected.txbytes);
 
-                    tx->sender = template_tx.sender;  // No recovery yet, take sender from JSON.
+                    // Recover the signer, as a node does, instead of taking it from JSON.
+                    const auto sender = state::recover_sender(*tx, *expected.txbytes);
+                    if (sender.has_value())
+                        tx->sender = *sender;
+                    else
+                        error = make_error_code(state::INVALID_SIGNATURE);
                 }
+            }
+            else
+            {
+                tx = test.multi_tx.get(expected.indexes);
             }
 
             const auto res =
-                tx.has_value() ?
-                    transition(state, block, test.block_hashes, *tx, rev, vm, block.gas_limit,
-                        static_cast<int64_t>(state::max_blob_gas_per_block(blob_params))) :
-                    make_error_code(state::INVALID_ENCODING);
+                error ? error :
+                        transition(state, block, test.block_hashes, *tx, rev, vm, block.gas_limit,
+                            static_cast<int64_t>(state::max_blob_gas_per_block(blob_params)));
 
             if (holds_alternative<state::TransactionReceipt>(res))
             {

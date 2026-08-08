@@ -3,8 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "transaction.hpp"
+// TODO: The RLP encoder belongs in the state library, see the note in authorization.cpp.
+#include "../utils/rlp.hpp"
 #include "../utils/stdx/utility.hpp"
+#include "hash_utils.hpp"
 #include "rlp_decode.hpp"
+#include <evmone_precompiles/secp256k1.hpp>
 
 namespace evmone::state
 {
@@ -135,5 +139,38 @@ std::optional<Transaction> decode_transaction(bytes_view data) noexcept
     if (!decode_transaction_body(data, tx) || !data.empty())
         return std::nullopt;  // Malformed transaction or trailing data.
     return tx;
+}
+
+std::optional<address> recover_sender(const Transaction& tx, bytes_view txbytes) noexcept
+{
+    // The signing preimage is the transaction's encoding without the trailing (v, r, s).
+    const auto typed = tx.type != Transaction::Type::legacy;
+    auto envelope = txbytes.substr(typed ? 1 : 0);  // Skip the EIP-2718 type byte.
+    bytes_view payload;
+    [[maybe_unused]] const auto is_list = rlp::take_list_payload(envelope, payload);
+    assert(is_list);  // tx has been decoded from txbytes, so its list header is valid.
+
+    // Find the length of the encoded signature to find the preimage length.
+    // The decoder accepts only canonical integers, so re-encoding (v, r, s) gives their wire sizes.
+    const auto signature_size =
+        rlp::encode(tx.v).size() + rlp::encode(tx.r).size() + rlp::encode(tx.s).size();
+    assert(signature_size <= payload.size());
+    auto preimage = bytes{payload.substr(0, payload.size() - signature_size)};
+
+    // Protected legacy transaction sign chain_id by appending (chain_id, 0, 0) (EIP-155).
+    // TODO: allocated bytes only in this case; use views only for typed transactions.
+    if (!typed && tx.chain_id_protected())
+        preimage += rlp::encode(tx.chain_id) + rlp::encode(uint64_t{}) + rlp::encode(uint64_t{});
+
+    // A typed v is {0, 1}. A legacy v is 27 + y_parity, or 35 + 2 * chain_id + y_parity (EIP-155):
+    // both bases are odd, so an even v means y_parity 1.
+    const auto y_parity = typed ? tx.v != 0 : tx.v % 2 == 0;
+
+    const auto h = keccak256((typed ? bytes{stdx::to_underlying(tx.type)} : bytes{}) +
+                             rlp::internal::wrap_list(preimage));
+    const auto r_bytes = intx::be::store<bytes32>(tx.r);
+    const auto s_bytes = intx::be::store<bytes32>(tx.s);
+    return evmmax::secp256k1::ecrecover(
+        h.bytes, r_bytes.bytes, s_bytes.bytes, y_parity, evmmax::secp256k1::RecoveryMode::strict);
 }
 }  // namespace evmone::state

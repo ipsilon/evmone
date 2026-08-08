@@ -2,6 +2,7 @@
 // Copyright 2026 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include <evmone_precompiles/secp256k1.hpp>
 #include <gtest/gtest.h>
 #include <test/state/rlp_decode.hpp>
 #include <test/state/transaction.hpp>
@@ -35,6 +36,14 @@ state::Transaction round_trip(const state::Transaction& tx)
     EXPECT_TRUE(decoded.has_value());
     // The argument cannot be spelled {}: value_or() deduces its parameter type (libc++ rejects it).
     return decoded.value_or(state::Transaction{});
+}
+
+/// Decodes @p txbytes and recovers the sender of the transaction; it must decode.
+std::optional<address> recover(const bytes& txbytes)
+{
+    const auto tx = state::decode_transaction(txbytes);
+    EXPECT_TRUE(tx.has_value());
+    return state::recover_sender(tx.value(), txbytes);
 }
 
 /// Compares all decoded fields of two transactions (sender is not recovered by the decoder).
@@ -629,4 +638,47 @@ TEST(state_rlp_decode, decode_authorization_field_positions)
     EXPECT_TRUE(state::decode(v, a));
     EXPECT_TRUE(v.empty());
     EXPECT_EQ(a.nonce, 7u);
+}
+
+TEST(state_rlp_decode, recover_sender_legacy_protected)
+{
+    // The same fields signed twice: over the pre-EIP-155 preimage and over the EIP-155 one for
+    // chain 0 (wire v = 35/36). Both decode to chain_id 0, so only the verbatim v says which
+    // preimage was signed. No EEST fixture signs for chain 0, which is why this is pinned here.
+    // Signer of both: 0x1d694d5ad94f32132ff5c14c901d3ddbee90a550 (private key 0xa5). evmone only
+    // recovers, so changing the fields means re-signing each preimage elsewhere, with a low s.
+    constexpr auto signer = 0x1d694d5ad94f32132ff5c14c901d3ddbee90a550_address;
+
+    const auto protected_tx =
+        "0xf86807820102825208949232a548dd9e81bac65500b5e0d918f8ba93675c83abcdef84deadbeef23"
+        "a0d6c3bc8b0fc4456b4687ef74c42a70f0dfd2b2d2575a6f614749685164fe85c2"
+        "a02264f7f854576e62b8c8415e5f6fdd0ead0876c2b13b8e8d70ddda9239b95f16"_hex;
+    EXPECT_EQ(recover(protected_tx), signer);
+
+    const auto unprotected_tx =
+        "0xf86807820102825208949232a548dd9e81bac65500b5e0d918f8ba93675c83abcdef84deadbeef1c"
+        "a07290c0bb6429493499b400d2912ef585ee39b7c722d086f6de5b175cb495feae"
+        "a011417a917fff6e40eb2f74cdd22fb15c268c0ee6fd5ad97fc55af15aab9ae27f"_hex;
+    EXPECT_EQ(recover(unprotected_tx), signer);
+}
+
+TEST(state_rlp_decode, recover_sender_rejects_out_of_range_s)
+{
+    // s = the curve order is outside [1, secp256k1n) yet a canonical 32-byte integer, so the
+    // transaction decodes and only the recovery rejects it.
+    auto tx = MINIMAL_LEGACY_TX;
+    tx.s = evmmax::secp256k1::Curve::ORDER;
+    EXPECT_FALSE(recover(rlp::encode(tx)).has_value());
+}
+
+TEST(state_rlp_decode, recover_sender_rejects_high_s)
+{
+    // EIP-2 bounds s to the lower half of the curve order, on top of the [1, secp256k1n) range.
+    // One above the bound differs from the largest accepted s in nothing else.
+    auto tx = MINIMAL_LEGACY_TX;
+    tx.s = evmmax::secp256k1::Curve::ORDER / 2;
+    EXPECT_TRUE(recover(rlp::encode(tx)).has_value());
+
+    tx.s += 1;
+    EXPECT_FALSE(recover(rlp::encode(tx)).has_value());
 }
