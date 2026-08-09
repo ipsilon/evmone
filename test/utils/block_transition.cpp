@@ -67,8 +67,7 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
 
         if (holds_alternative<std::error_code>(res))
         {
-            const auto ec = std::get<std::error_code>(res);
-            rejected_txs.push_back({computed_tx_hash, i, ec.message()});
+            rejected_txs.push_back({computed_tx_hash, i, std::get<std::error_code>(res)});
         }
         else
         {

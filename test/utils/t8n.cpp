@@ -133,7 +133,7 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
                 JSON j_rejected_tx;
                 j_rejected_tx["hash"] = hex0x(rejected_it->hash);
                 j_rejected_tx["index"] = i;
-                j_rejected_tx["error"] = rejected_it->message;
+                j_rejected_tx["error"] = rejected_it->error.message();
                 j_result["rejected"].push_back(j_rejected_tx);
                 ++rejected_it;
             }

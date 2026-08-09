@@ -5,16 +5,17 @@
 #include "error_matching.hpp"
 #include <test/state/errors.hpp>
 #include <algorithm>
+#include <span>
 
 namespace evmone::test
 {
 namespace
 {
-/// The exceptions a fixture may name for a transaction evmone rejects with this error, on top of
+/// The exceptions a fixture may name for a rejection evmone reports with this error, on top of
 /// the canonical name its error message carries.
 struct AlternativeExceptions
 {
-    state::ErrorCode errc;   ///< The code evmone rejects the transaction with.
+    state::ErrorCode errc;   ///< The code evmone rejects with.
     std::string_view names;  ///< The other names the fixtures use for it, `|`-separated.
 };
 
@@ -42,6 +43,21 @@ constexpr AlternativeExceptions ALTERNATIVE_TX_EXCEPTIONS[]{
     // decode_transaction() reports one code for every malformed encoding, so this accepts more
     // than the v rule; narrowing it needs the decoder to report the v domain separately.
     {state::INVALID_ENCODING, "TransactionException.INVALID_SIGNATURE_VRS"},
+};
+
+/// The same, for the rules evmone checks on the block rather than the transaction.
+constexpr AlternativeExceptions ALTERNATIVE_BLOCK_EXCEPTIONS[]{
+    // A parent that is absent and one whose hash is zero are the same lookup miss to evmone.
+    {state::UNKNOWN_PARENT, "BlockException.UNKNOWN_PARENT_ZERO"},
+
+    // evmone reports one malformed-header error where the specs name the individual rule. Nine
+    // validate_block() branches share that code, so these names are interchangeable to it;
+    // separating them needs a distinct code per branch.
+    {state::INCORRECT_BLOCK_FORMAT,
+        "BlockException.GAS_USED_OVERFLOW|"
+        "BlockException.IMPORT_IMPOSSIBLE_UNCLES_OVER_PARIS|"
+        "BlockException.RLP_STRUCTURES_ENCODING|"
+        "BlockException.RLP_INVALID_FIELD_OVERFLOW_64"},
 };
 
 /// A retesteth `expectException` value and the evmone rejection(s) it stands for. Some legacy
@@ -80,12 +96,7 @@ constexpr LegacyException LEGACY_EXCEPTIONS[]{
     {"TR_BLOBVERSION_INVALID", state::INVALID_BLOB_HASH_VERSION},
     {"TR_BLOBLIST_OVERSIZE", state::BLOB_GAS_LIMIT_EXCEEDED},
 
-    // Block-level. The first three are spec names, not retesteth ones: they name rules evmone
-    // does not tell apart, so the fixture's value is replaced with the one evmone reports.
-    {"BlockException.IMPORT_IMPOSSIBLE_UNCLES_OVER_PARIS", state::INCORRECT_BLOCK_FORMAT},
-    {"BlockException.GAS_USED_OVERFLOW", state::INCORRECT_BLOCK_FORMAT},
-    {"BlockException.RLP_STRUCTURES_ENCODING|BlockException.RLP_INVALID_FIELD_OVERFLOW_64",
-        state::INCORRECT_BLOCK_FORMAT},
+    // Block-level.
     {"PostParisUncleHashIsNotEmpty", state::INCORRECT_BLOCK_FORMAT},
     {"3675PreParis1559BlockRejected", state::INCORRECT_BLOCK_FORMAT},
     {"InvalidNumber", state::INCORRECT_BLOCK_FORMAT},
@@ -132,13 +143,27 @@ bool contains_any(std::string_view expected, std::string_view names) noexcept
     return false;
 }
 
-bool is_expected_tx_exception(const std::error_code& ec, std::string_view expected) noexcept
+namespace
+{
+bool is_expected_exception(std::span<const AlternativeExceptions> alternatives,
+    const std::error_code& ec, std::string_view expected) noexcept
 {
     if (contains_any(expected, ec.message()))  // The message is the canonical exception name.
         return true;
 
-    return std::ranges::any_of(ALTERNATIVE_TX_EXCEPTIONS, [&](const AlternativeExceptions& a) {
+    return std::ranges::any_of(alternatives, [&](const AlternativeExceptions& a) {
         return make_error_code(a.errc) == ec && contains_any(expected, a.names);
     });
+}
+}  // namespace
+
+bool is_expected_tx_exception(const std::error_code& ec, std::string_view expected) noexcept
+{
+    return is_expected_exception(ALTERNATIVE_TX_EXCEPTIONS, ec, expected);
+}
+
+bool is_expected_block_exception(const std::error_code& ec, std::string_view expected) noexcept
+{
+    return is_expected_exception(ALTERNATIVE_BLOCK_EXCEPTIONS, ec, expected);
 }
 }  // namespace evmone::test

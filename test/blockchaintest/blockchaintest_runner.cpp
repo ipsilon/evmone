@@ -9,6 +9,7 @@
 #include <test/state/requests.hpp>
 #include <test/state/rlp_decode.hpp>
 #include <test/utils/block_transition.hpp>
+#include <test/utils/error_matching.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
@@ -328,12 +329,9 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 if (block_error)
                 {
                     // Block correctly rejected at validation; verify the reason matches the
-                    // fixture's expected exception. The error message is the `BlockException`
-                    // constant; `expected_exception` may list `|`-separated alternatives, so a
-                    // substring search suffices as long as no constant name is a substring of
-                    // another (true for the constants evmone produces).
-                    EXPECT_NE(test_block.expected_exception.find(block_error.message()),
-                        std::string::npos)
+                    // fixture's expected exception.
+                    EXPECT_TRUE(
+                        is_expected_block_exception(block_error, test_block.expected_exception))
                         << "Block invalidity reason mismatch: got " << block_error.message()
                         << ", expected " << test_block.expected_exception;
                     continue;
@@ -343,58 +341,119 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 assert(parent_data_it != block_data.end());
                 const auto& pre_state = parent_data_it->second.post_state;
 
+                // Legacy fixtures name the broken rule in vocabulary evmone does not speak
+                // (InvalidStateRoot, TooManyUncles); only the spec names can be compared.
+                const auto names_spec_exception =
+                    test_block.expected_exception.find("Exception.") != std::string::npos;
+
+                // TODO: The transaction senders come from the fixture instead of being recovered
+                //   from the signatures, so evmone never sees the signature the test broke. Such a
+                //   transaction executes as the sender the fixture names and the block is rejected
+                //   by whatever rule that sender happens to break, or by its state root alone.
+                const auto sender_not_recovered = contains_any(
+                    test_block.expected_exception, "TransactionException.INVALID_SIGNATURE_VRS");
+
                 const auto res =
                     apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
                         blob_gas_limit, {.block_reward = mining_reward(rev)});
                 if (!res.rejected.empty())
                 {
-                    // Check if EEST expects transaction-level exception (ignore "legacy" names).
-                    // `expected_exception` may list `|`-separated alternatives (and a tx-level
-                    // alternative can appear after a block-level one), so search for a
-                    // `TransactionException.` anywhere rather than only at the start.
-                    if (test_block.expected_exception.find("Exception.") != std::string::npos)
+                    // A transaction was rejected: the fixture must name that reason, not merely
+                    // some rejection.
+                    const auto& rejected = res.rejected.front();
+                    if (names_spec_exception && !sender_not_recovered)
                     {
-                        EXPECT_NE(test_block.expected_exception.find("TransactionException."),
-                            std::string::npos)
-                            << "Transaction-level invalidity mismatch: got "
-                            << res.rejected.front().message << ", expected "
+                        EXPECT_TRUE(
+                            is_expected_tx_exception(rejected.error, test_block.expected_exception))
+                            << "Transaction-level invalidity mismatch: got \""
+                            << rejected.error.message() << "\", expected "
                             << test_block.expected_exception;
                     }
                     continue;
                 }
                 if (res.requests_error)
                 {
-                    // Requests collection failure; verify the reason matches (same
-                    // `BlockException.*` substring match as the block validation errors above).
-                    EXPECT_NE(test_block.expected_exception.find(res.requests_error.message()),
-                        std::string::npos)
+                    // Requests collection failure; verify the reason the same way.
+                    EXPECT_TRUE(is_expected_block_exception(
+                        res.requests_error, test_block.expected_exception))
                         << "Block invalidity reason mismatch: got " << res.requests_error.message()
                         << ", expected " << test_block.expected_exception;
                     continue;
                 }
+                // The block executed, so it is invalid only if it computes something other than
+                // its header claims. Each difference below is the symptom of one BlockException:
+                // a block failing a check other than the one the fixture names breaks a different
+                // rule than the test is about.
+                // TODO: Of the ommers only the count and the distance to their nephew are
+                //   validated, not the ommer headers themselves, so a fixture that breaks an
+                //   ommer's gas limit, number or timestamp reaches execution and lands here.
+                const auto ommers_not_validated = !test_block.block_info.ommers.empty();
+
+                // Asserts the fixture names one of @p names, the exceptions the check that just
+                // fired is the symptom of. Silent where the reason cannot be compared.
+                const auto expect_fixture_names = [&](std::string_view names) {
+                    if (!names_spec_exception || ommers_not_validated)
+                        return;
+                    EXPECT_TRUE(contains_any(test_block.expected_exception, names))
+                        << "Block invalidity reason mismatch: the block failed the check for "
+                        << names << ", expected " << test_block.expected_exception;
+                };
+
                 if (blob_gas_limit - res.blob_gas_left !=
                     static_cast<int64_t>(bi.blob_gas_used.value_or(0)))
+                {
+                    expect_fixture_names(
+                        "BlockException.INCORRECT_BLOB_GAS_USED|"
+                        "BlockException.BLOB_GAS_USED_ABOVE_LIMIT");
                     continue;
+                }
 
                 if (state::mpt_hash(res.block_state) != test_block.expected_block_header.state_root)
+                {
+                    // The state root is also where a sender that was not recovered surfaces,
+                    // see the TODO above.
+                    expect_fixture_names(
+                        "BlockException.INVALID_STATE_ROOT|"
+                        "TransactionException.INVALID_SIGNATURE_VRS");
                     continue;
+                }
 
                 if (rev >= EVMC_SHANGHAI && state::mpt_hash(test_block.block_info.withdrawals) !=
                                                 test_block.expected_block_header.withdrawal_root)
+                {
+                    expect_fixture_names("BlockException.INVALID_WITHDRAWALS_ROOT");
                     continue;
+                }
                 if (state::mpt_hash(test_block.transactions) !=
                     test_block.expected_block_header.transactions_root)
+                {
+                    expect_fixture_names("BlockException.INVALID_TRANSACTIONS_ROOT");
                     continue;
+                }
                 if (state::mpt_hash(res.receipts) != test_block.expected_block_header.receipts_root)
+                {
+                    expect_fixture_names("BlockException.INVALID_RECEIPTS_ROOT");
                     continue;
+                }
                 if (rev >= EVMC_PRAGUE && calculate_requests_hash(res.requests) !=
                                               test_block.expected_block_header.requests_hash)
+                {
+                    expect_fixture_names("BlockException.INVALID_REQUESTS");
                     continue;
+                }
                 if (res.gas_used != test_block.expected_block_header.gas_used)
+                {
+                    expect_fixture_names(
+                        "BlockException.INVALID_GAS_USED|"
+                        "BlockException.GAS_USED_OVERFLOW");
                     continue;
+                }
                 if (bytes_view{res.bloom} !=
                     bytes_view{test_block.expected_block_header.logs_bloom})
+                {
+                    expect_fixture_names("BlockException.INVALID_LOG_BLOOM");
                     continue;
+                }
 
                 EXPECT_TRUE(false) << "Expected block to be invalid but resulted valid";
             }

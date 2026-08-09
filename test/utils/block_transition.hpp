@@ -24,9 +24,9 @@ namespace evmone::test
 /// A transaction rejected during block application.
 struct RejectedTransaction
 {
-    hash256 hash;  ///< keccak256 of the transaction's RLP encoding.
-    size_t index;  ///< Position in the input transaction list.
-    std::string message;
+    hash256 hash;           ///< keccak256 of the transaction's RLP encoding.
+    size_t index;           ///< Position in the input transaction list.
+    std::error_code error;  ///< Why the transaction was rejected.
 };
 
 /// Options for apply_block(). Defaults match block-validation (full) behavior.

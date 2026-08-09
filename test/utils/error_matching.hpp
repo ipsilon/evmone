@@ -29,4 +29,8 @@ namespace evmone::test
 /// specs name more exceptions for the same rule, those are accepted too.
 [[nodiscard]] bool is_expected_tx_exception(
     const std::error_code& ec, std::string_view expected) noexcept;
+
+/// The same for a block validation error.
+[[nodiscard]] bool is_expected_block_exception(
+    const std::error_code& ec, std::string_view expected) noexcept;
 }  // namespace evmone::test
