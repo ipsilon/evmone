@@ -2,6 +2,7 @@
 // Copyright 2022 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "error_matching.hpp"
 #include "statetest.hpp"
 #include "stdx/utility.hpp"
 #include "utils.hpp"
@@ -456,7 +457,8 @@ static void from_json(const json::json& j, StateTransitionTest::Case::Expectatio
     o.indexes = j.at("indexes").get<TestMultiTransaction::Indexes>();
     o.state_hash = from_json<hash256>(j.at("hash"));
     o.logs_hash = from_json<hash256>(j.at("logs"));
-    o.exception = j.contains("expectException");
+    if (const auto it = j.find("expectException"); it != j.end())
+        o.exception = map_legacy_exception(it->get<std::string>());
     o.txbytes = load_optional<bytes>(j, "txbytes");
 }
 

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <gtest/gtest.h>
+#include <test/utils/error_matching.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
@@ -84,10 +85,18 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
                 std::clog << R"("stateRoot":"0x)" << hex(state_root) << "\"}\n";
             }
 
-            if (expected.exception)
+            if (!expected.exception.empty())
             {
                 ASSERT_FALSE(holds_alternative<state::TransactionReceipt>(res))
                     << "unexpected valid transaction";
+
+                // The transaction must be rejected for the reason the fixture states, not merely
+                // rejected: a wrong reason is a wrong implementation of the rule being tested.
+                const auto& reason = get<std::error_code>(res);
+                EXPECT_TRUE(is_expected_tx_exception(reason, expected.exception))
+                    << "transaction rejected as \"" << reason.message() << "\", expected "
+                    << expected.exception;
+
                 EXPECT_EQ(logs_hash(std::vector<state::Log>()), expected.logs_hash);
             }
             else

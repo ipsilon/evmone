@@ -21,6 +21,8 @@ target_sources(
     blockchaintest.hpp
     blockchaintest_loader.cpp
     bytecode.hpp
+    error_matching.hpp
+    error_matching.cpp
     mpt.hpp
     mpt.cpp
     mpt_hash.hpp

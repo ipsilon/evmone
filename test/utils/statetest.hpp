@@ -51,7 +51,11 @@ struct StateTransitionTest
             TestMultiTransaction::Indexes indexes;
             hash256 state_hash;
             hash256 logs_hash = EmptyListHash;
-            bool exception = false;
+
+            /// The exception the transaction is expected to be rejected with, empty if it is
+            /// expected to be valid. Lists `|`-separated alternatives, see
+            /// is_expected_tx_exception() in error_matching.hpp.
+            std::string exception;
 
             /// The full encoded transaction for this case. Not always available.
             std::optional<bytes> txbytes;
@@ -144,7 +148,6 @@ json::json to_json(const TestState& state);
 json::json to_state_test(std::string_view test_name, const state::BlockInfo& block,
     state::Transaction& tx, const TestState& pre, evmc_revision rev,
     const std::variant<state::TransactionReceipt, std::error_code>& res, const TestState& post);
-
 
 std::vector<StateTransitionTest> load_state_tests(std::istream& input);
 
