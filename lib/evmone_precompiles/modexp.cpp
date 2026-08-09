@@ -374,7 +374,7 @@ constexpr unsigned MAX_WINDOW_WIDTH = 4;
 /// Number of precomputed values for the max width windowed method.
 constexpr size_t MAX_PRECOMPUTED = (size_t{1} << MAX_WINDOW_WIDTH) - 1;
 
-/// Selects the fixed-window width off exponent bits.
+/// Selects the fixed-window width from the exponent bit length.
 ///
 /// TODO: Switch to a sliding window: the table then holds only odd powers. Measured ~3-7%.
 /// TODO: Tune for the densest exponent instead of the average, because gas is charged on
@@ -382,6 +382,8 @@ constexpr size_t MAX_PRECOMPUTED = (size_t{1} << MAX_WINDOW_WIDTH) - 1;
 ///   min(MAX_WINDOW_WIDTH, (bit_width(exp_bits) + 1) / 2). Measured +10.7% worst case.
 constexpr unsigned window_width(size_t exp_bits) noexcept
 {
+    // Break-even points for a random exponent, where the 2^w extra table multiplies stop
+    // being repaid: 2^w / ((1-2^-w)/w - (1-2^-(w+1))/(w+1)) = 16, 48, 140 (rounded to 144).
     if (exp_bits <= 16)
         return 1;
     if (exp_bits <= 48)
@@ -432,13 +434,14 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
         const auto bm = std::span<const uint64_t, N>{base_mont};
         const auto m = std::span<const uint64_t, N>{mod};
 
-        // table[j] = base_mont^(j+1); table[0] = base_mont is already set.
+        // The j-th precomputed value.
+        const auto precomputed = [table, n](size_t j) noexcept {
+            return std::span<uint64_t, N>{table.subspan(j * n, n)};
+        };
+
+        // precomputed[j] = base_mont^(j+1); precomputed[0] = base_mont is already set.
         for (size_t j = 1; j < table_size; ++j)
-        {
-            const auto prev = std::span<const uint64_t, N>{table.subspan((j - 1) * n, n)};
-            const auto cur = std::span<uint64_t, N>{table.subspan(j * n, n)};
-            mul_amm<N>(cur, prev, bm, m, mod_inv);
-        }
+            mul_amm<N>(precomputed(j), precomputed(j - 1), bm, m, mod_inv);
 
         // Reads the w-bit (or fewer) window whose most-significant bit is at index `hi`.
         // TODO: A window spans at most two adjacent bytes, so it could be read with one
@@ -457,7 +460,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
         //   exp_bits % w != 0 (up to 4%), at the cost of a special-cased final iteration.
         const size_t top_width = (exp_bits - 1) % w + 1;
         const size_t top_val = window(exp_bits - 1, top_width);
-        std::ranges::copy(table.subspan((top_val - 1) * n, n), r_cur.begin());
+        std::ranges::copy(precomputed(top_val - 1), r_cur.begin());
 
         for (size_t pos = exp_bits - top_width; pos != 0;)
         {
@@ -467,10 +470,9 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
                 mul_amm<N>(r_tmp, r_cur, r_cur, m, mod_inv);
                 std::swap(r_cur, r_tmp);
             }
-            if (const size_t v = window(pos + w - 1, w); v != 0)  // multiply by base^v
+            if (const size_t v = window(pos + w - 1, w); v != 0)  // multiply by base_mont^v
             {
-                const auto tv = std::span<const uint64_t, N>{table.subspan((v - 1) * n, n)};
-                mul_amm<N>(r_tmp, r_cur, tv, m, mod_inv);
+                mul_amm<N>(r_tmp, r_cur, precomputed(v - 1), m, mod_inv);
                 std::swap(r_cur, r_tmp);
             }
         }
