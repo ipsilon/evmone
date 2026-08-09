@@ -338,6 +338,11 @@ TEST_P(expmod, inputs)
         {"03", "0802ae8d294c48793907af3e71b536ed84fa84",
             "fffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
             "40c2770e749bcbf7949855252da0258cc5ae80658427a4af8ba3489a81182ee9"},
+        // Same, with a 5-word modulus: the windowed loop above only ever runs through the
+        // mul_amm<4> specialization, this covers the generic instantiation.
+        {"03", "08f83d563ebc382e09e4b8245edebc817af708",
+            "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
+            "8016137e4c542dd66f4ab5f668fc0ac76d43353a675f3d4616a56f23757e463ca1093164385ef006"},
     };
 
     for (const auto& [base_hex, exp_hex, mod_hex, expected_result_hex] : test_cases)

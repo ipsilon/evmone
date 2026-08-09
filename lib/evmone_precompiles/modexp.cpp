@@ -433,10 +433,10 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
 
     // Double-buffer exponentiation loop, parameterized by mul_amm size.
     const auto exp_loop = [&]<size_t N>() {
-        const auto bm = std::span<const uint64_t, N>{base_mont};
-        const auto m = std::span<const uint64_t, N>{mod};
         auto r_cur = std::span<uint64_t, N>{result};
         auto r_tmp = std::span<uint64_t, N>{u.first(n)};
+        const auto bm = std::span<const uint64_t, N>{base_mont};
+        const auto m = std::span<const uint64_t, N>{mod};
 
         // table[j] = b^(j+1) in Montgomery form; table[0] = base_mont is already set.
         for (size_t j = 1; j < table_size; ++j)
