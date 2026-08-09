@@ -387,18 +387,17 @@ constexpr size_t MAX_PRECOMPUTED = (size_t{1} << MAX_WINDOW_WIDTH) - 1;
 ///   min(MAX_WINDOW_WIDTH, (bit_width(exp_bits) + 1) / 2). Measured +10.7% worst case.
 constexpr unsigned window_width(size_t exp_bits) noexcept
 {
-    if (exp_bits > 144)
-        return MAX_WINDOW_WIDTH;
-    if (exp_bits > 48)
-        return 3;
-    if (exp_bits > 16)
+    if (exp_bits <= 16)
+        return 1;
+    if (exp_bits <= 48)
         return 2;
-    return 1;
+    if (exp_bits <= 144)
+        return 3;
+    return MAX_WINDOW_WIDTH;
 }
 
 /// Computes result[] = base[]^exp % mod[] for odd mod[] (mod[0] % 2 != 0).
-/// Scratch space required: (MAX_PRECOMPUTED + 3)*n + 3*base.size() + 2 words,
-/// where n = mod.size().
+/// Scratch space required: (MAX_PRECOMPUTED + 3)*mod.size() + 3*base.size() + 2 words.
 void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Exponent exp,
     std::span<const uint64_t> mod, std::span<uint64_t> scratch) noexcept
 {
@@ -412,7 +411,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     const auto exp_bits = exp.bit_width();
 
     const auto w = window_width(exp_bits);
-    const size_t table_size = (size_t{1} << w) - 1;
+    const auto table_size = (size_t{1} << w) - 1;
 
     // Layout: u[n + base.size()] | table[MAX_PRECOMPUTED*n]
     //       | rem_scratch[2*n + 2*base.size() + 2].
