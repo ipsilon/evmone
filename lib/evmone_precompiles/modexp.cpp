@@ -433,14 +433,14 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
         auto r_tmp = std::span<uint64_t, N>{u.first(n)};
         const auto m = std::span<const uint64_t, N>{mod};
 
-        // base_mont^k, for k in 1..table_size.
-        const auto precomputed = [table, n](size_t k) noexcept {
-            return std::span<uint64_t, N>{table.subspan((k - 1) * n, n)};
+        // base_mont^j, for j in 1..table_size.
+        const auto precomputed = [table, n](size_t j) noexcept {
+            return std::span<uint64_t, N>{table.subspan((j - 1) * n, n)};
         };
 
         // precomputed(1) = base_mont is already set.
-        for (size_t k = 2; k <= table_size; ++k)
-            mul_amm<N>(precomputed(k), precomputed(k - 1), precomputed(1), m, mod_inv);
+        for (size_t j = 2; j <= table_size; ++j)
+            mul_amm<N>(precomputed(j), precomputed(j - 1), precomputed(1), m, mod_inv);
 
         // Reads the `width` exponent bits starting at index `lo`.
         // TODO: A window spans at most two adjacent bytes, so it could be read with one
