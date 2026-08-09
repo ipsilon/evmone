@@ -375,6 +375,27 @@ constexpr unsigned MAX_WINDOW_WIDTH = 4;
 /// Bounds the extra scratch space taken by the power table.
 constexpr size_t MAX_PRECOMPUTED = (size_t{1} << MAX_WINDOW_WIDTH) - 1;
 
+/// Selects the fixed-window width: one multiply per w exponent bits instead of one per set
+/// bit, at the cost of a 2^w - 1 entry table. w == 1 is plain square-and-multiply.
+/// The thresholds are the break-even points for a random exponent,
+/// exp_bits = 2^w / ((1-2^-w)/w - (1-2^-(w+1))/(w+1)) ≈ 16, 48, 140 (rounded up to 144).
+///
+/// TODO: Switch to a sliding window, as GMP's mpn_powm and OpenSSL's BN_mod_exp_mont do:
+///   the table then holds only odd powers, half the entries per width. Measured ~3-7%.
+/// TODO: Tune for the densest exponent instead of the average, because gas is charged on
+///   exponent bit length and ignores Hamming weight. The width then collapses to
+///   min(MAX_WINDOW_WIDTH, (bit_width(exp_bits) + 1) / 2). Measured +10.7% worst case.
+constexpr unsigned window_width(size_t exp_bits) noexcept
+{
+    if (exp_bits > 144)
+        return MAX_WINDOW_WIDTH;
+    if (exp_bits > 48)
+        return 3;
+    if (exp_bits > 16)
+        return 2;
+    return 1;
+}
+
 /// Computes result[] = base[]^exp % mod[] for odd mod[] (mod[0] % 2 != 0).
 /// Scratch space required: (MAX_PRECOMPUTED + 3)*n + 3*base.size() + 2 words,
 /// where n = mod.size().
@@ -390,45 +411,13 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     const auto mod_inv = -evmmax::modinv(mod[0]);
     const auto exp_bits = exp.bit_width();
 
-    // Fixed-window exponentiation width. w == 1 is plain binary square-and-multiply
-    // (no table); a wider window precomputes b^1..b^(2^w-1) once and then does one
-    // multiply per w exponent bits instead of one per set bit.
-    //
-    // The thresholds are the break-even points for a random exponent, where the 2^w extra
-    // table multiplies stop being repaid by the sparser multiplies in the loop:
-    // exp_bits = 2^w / ((1-2^-w)/w - (1-2^-(w+1))/(w+1)), giving 16, 48 and 140 (rounded
-    // up to 144 below; the two widths are within 0.2% of each other over 140..144).
-    // A random exponent is the worst case for windowing, so this errs towards the smaller
-    // window: a dense exponent would prefer the next width up at every threshold.
-    //
-    // TODO: Switch to a sliding window, as GMP's mpn_powm and OpenSSL's BN_mod_exp_mont
-    //   both do. Its table holds only the odd powers b^1, b^3 .. b^(2^w-1), so it is half
-    //   the size for a given width, which buys one extra width at the same memory.
-    //   Break-even points become 2^(w-1) / (1/(w+1) - 1/(w+2)) = 6, 24, 80, 240, 672 —
-    //   GMP's win_size() uses exactly these (7, 25, 81, 241, 673). Measured ~3-7% over
-    //   the fixed window here.
-    // TODO: Tune the thresholds for the worst case rather than the average. Gas is charged
-    //   on exponent bit length, not Hamming weight, so the costliest input at a given
-    //   charge is the densest exponent, whose break-even points are 2^w*w*(w+1) = 4, 24,
-    //   96, 320. Those have bit widths 3, 5, 7, 9, so the width collapses to a closed form,
-    //   min(MAX_WINDOW_WIDTH, (bit_width(exp_bits) + 1) / 2). Measured +10.7% worst-case
-    //   time per gas over the whole modexp benchmark matrix.
-    const unsigned w = [exp_bits]() -> unsigned {
-        if (exp_bits > 144)
-            return MAX_WINDOW_WIDTH;
-        if (exp_bits > 48)
-            return 3;
-        if (exp_bits > 16)
-            return 2;
-        return 1;
-    }();
-    const size_t table_size = (size_t{1} << w) - 1;  // entries b^1 .. b^(2^w - 1)
+    const auto w = window_width(exp_bits);
+    const size_t table_size = (size_t{1} << w) - 1;
 
     // Layout: u[n + base.size()] | table[MAX_PRECOMPUTED*n]
     //       | rem_scratch[2*n + 2*base.size() + 2].
-    // table[0] doubles as base_mont (b^1 in Montgomery form). Both u and rem_scratch are
-    // dead after the to-Montgomery conversion, and u's first n words are then reused as
-    // the exponentiation double-buffer.
+    // u and rem_scratch are dead after the to-Montgomery conversion; u's first n words are
+    // then reused as the exponentiation double-buffer.
     assert(scratch.size() >= (MAX_PRECOMPUTED + 3) * n + 3 * base.size() + 2);
     const auto u = scratch.subspan(0, n + base.size());
     const auto table = scratch.subspan(n + base.size(), MAX_PRECOMPUTED * n);
@@ -449,23 +438,18 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
         auto r_cur = std::span<uint64_t, N>{result};
         auto r_tmp = std::span<uint64_t, N>{u.first(n)};
 
-        // Precompute the power table: table[j] = base^(j+1) in Montgomery form, i.e. all
-        // of b^1..b^(2^w-1). table[0] = base_mont is already set; empty for w == 1.
+        // table[j] = b^(j+1) in Montgomery form; table[0] = base_mont is already set.
         for (size_t j = 1; j < table_size; ++j)
         {
             const auto prev = std::span<const uint64_t, N>{table.subspan((j - 1) * n, n)};
             const auto cur = std::span<uint64_t, N>{table.subspan(j * n, n)};
-            mul_amm<N>(cur, prev, bm, m, mod_inv);  // b^(j+1) = b^j * b
+            mul_amm<N>(cur, prev, bm, m, mod_inv);
         }
 
         // Reads the w-bit (or fewer) window whose most-significant bit is at index `hi`.
-        // One Exponent::operator[] per exponent bit, the same count as the binary loop
-        // this replaced, so windowing added no extraction work per bit.
-        //
-        // TODO: A w <= 4 bit field spans at most two adjacent bytes, so a window could be
-        //   read with one two-byte load, a shift and a mask instead of w indexed bit
-        //   reads. Below the noise floor everywhere except the n=4 / 8192-bit corner,
-        //   where it is worth an estimated 1-3% of cycles; measure before doing it.
+        // TODO: A window spans at most two adjacent bytes, so it could be read with one
+        //   two-byte load, a shift and a mask. Est. 1-3%, and only for a 4-word modulus
+        //   with a very long exponent; measure before doing it.
         const auto window = [&](size_t hi, size_t width) noexcept {
             size_t v = 0;
             for (size_t b = 0; b < width; ++b)
@@ -473,17 +457,10 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
             return v;
         };
 
-        // Process the most-significant (possibly short) window first, then full
-        // w-bit windows. The top bit is always set, so the first window is nonzero.
-        // This is the usual m-ary layout: windows tile from the bottom, so the ragged
-        // one lands at the top (blst's ec_mult.h does the same, "top excess bits
-        // modulo target window size").
-        //
-        // TODO: Putting the ragged window at the bottom instead would use a full-width
-        //   top window and save w - top_width squarings for the same multiply count.
-        //   Worth 0% whenever exp_bits % w == 0 (so nothing at 256/512/2048/8192 bits),
-        //   but 4.0% at exp_bits=17, 2.9% at 49, 2.0% at 33 and 1.6% at 145. Costs a
-        //   special-cased final iteration.
+        // Windows tile from the bottom, so the ragged one is processed first, at the top.
+        // The top bit is always set, so that first window is nonzero.
+        // TODO: Tiling from the top instead would save w - top_width squarings when
+        //   exp_bits % w != 0 (up to 4%), at the cost of a special-cased final iteration.
         const size_t top_width = (exp_bits - 1) % w + 1;
         const size_t top_val = window(exp_bits - 1, top_width);
         std::ranges::copy(table.subspan((top_val - 1) * n, n), r_cur.begin());
@@ -625,7 +602,6 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     // Stack buffer covers inputs up to the EIP-7823 limit (1024 bytes).
     // Capacity: values[b+2m] + op scratch[(MAX_PRECOMPUTED+3)m+3b+2] + CRT[m+2]
     //         = 4b + (MAX_PRECOMPUTED+6)m + 4 words.
-    // The op scratch grows by the modexp_odd power table (MAX_PRECOMPUTED*m words).
     // The worst case is an even modulus with 1 trailing zero bit (odd_size=m, pow2_size=1).
     static constexpr size_t MAX_SIZE = 1024 / sizeof(uint64_t);  // EIP-7823
     static constexpr size_t STACK_CAPACITY = 4 * MAX_SIZE + (6 + MAX_PRECOMPUTED) * MAX_SIZE + 4;
