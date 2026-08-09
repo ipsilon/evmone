@@ -431,26 +431,25 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     const auto exp_loop = [&]<size_t N>() {
         auto r_cur = std::span<uint64_t, N>{result};
         auto r_tmp = std::span<uint64_t, N>{u.first(n)};
-        const auto bm = std::span<const uint64_t, N>{base_mont};
         const auto m = std::span<const uint64_t, N>{mod};
 
-        // The j-th precomputed value.
-        const auto precomputed = [table, n](size_t j) noexcept {
-            return std::span<uint64_t, N>{table.subspan(j * n, n)};
+        // base_mont^k, for k in 1..table_size.
+        const auto precomputed = [table, n](size_t k) noexcept {
+            return std::span<uint64_t, N>{table.subspan((k - 1) * n, n)};
         };
 
-        // precomputed[j] = base_mont^(j+1); precomputed[0] = base_mont is already set.
-        for (size_t j = 1; j < table_size; ++j)
-            mul_amm<N>(precomputed(j), precomputed(j - 1), bm, m, mod_inv);
+        // precomputed(1) = base_mont is already set.
+        for (size_t k = 2; k <= table_size; ++k)
+            mul_amm<N>(precomputed(k), precomputed(k - 1), precomputed(1), m, mod_inv);
 
-        // Reads the w-bit (or fewer) window whose most-significant bit is at index `hi`.
+        // Reads the `width` exponent bits starting at index `lo`.
         // TODO: A window spans at most two adjacent bytes, so it could be read with one
         //   two-byte load, a shift and a mask. Est. 1-3%, and only for a 4-word modulus
         //   with a very long exponent; measure before doing it.
-        const auto window = [&](size_t hi, size_t width) noexcept {
+        const auto window = [&](size_t lo, size_t width) noexcept {
             size_t v = 0;
             for (size_t b = 0; b < width; ++b)
-                v = (v << 1) | (exp[hi - b] ? size_t{1} : size_t{0});
+                v |= size_t{exp[lo + b]} << b;
             return v;
         };
 
@@ -459,8 +458,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
         // TODO: Tiling from the top instead would save w - top_width squarings when
         //   exp_bits % w != 0 (up to 4%), at the cost of a special-cased final iteration.
         const size_t top_width = (exp_bits - 1) % w + 1;
-        const size_t top_val = window(exp_bits - 1, top_width);
-        std::ranges::copy(precomputed(top_val - 1), r_cur.begin());
+        std::ranges::copy(precomputed(window(exp_bits - top_width, top_width)), r_cur.begin());
 
         for (size_t pos = exp_bits - top_width; pos != 0;)
         {
@@ -470,22 +468,21 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
                 mul_amm<N>(r_tmp, r_cur, r_cur, m, mod_inv);
                 std::swap(r_cur, r_tmp);
             }
-            if (const size_t v = window(pos + w - 1, w); v != 0)  // multiply by base_mont^v
+            if (const size_t v = window(pos, w); v != 0)  // multiply by base_mont^v
             {
-                mul_amm<N>(r_tmp, r_cur, precomputed(v - 1), m, mod_inv);
+                mul_amm<N>(r_tmp, r_cur, precomputed(v), m, mod_inv);
                 std::swap(r_cur, r_tmp);
             }
         }
 
-        // Convert from Montgomery form: multiply by 1. Reuses table[0] storage.
+        // Convert from Montgomery form: multiply by 1. Reuses precomputed(1) storage.
         std::ranges::fill(base_mont, uint64_t{0});
         base_mont[0] = 1;
         mul_amm<N>(r_tmp, r_cur, std::span<const uint64_t, N>{base_mont}, m, mod_inv);
-        std::swap(r_cur, r_tmp);
 
         // If the result ended up in scratch, copy to result.
-        if (r_cur.data() != result.data())
-            std::ranges::copy(r_cur, result.begin());
+        if (r_tmp.data() != result.data())
+            std::ranges::copy(r_tmp, result.begin());
     };
 
     if (n == 4)
