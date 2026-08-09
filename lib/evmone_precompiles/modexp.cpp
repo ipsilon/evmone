@@ -368,20 +368,15 @@ template <>
     mul_amm_256(r, x, y, mod, mod_inv);
 }
 
-/// Maximum fixed-window width used by modexp_odd.
+/// Maximum window width used by the windowed method in modexp_odd.
 constexpr unsigned MAX_WINDOW_WIDTH = 4;
 
-/// Number of base powers b^1 .. b^(2^w - 1) precomputed for the widest window.
-/// Bounds the extra scratch space taken by the power table.
+/// Number of precomputed values for the max width windowed method.
 constexpr size_t MAX_PRECOMPUTED = (size_t{1} << MAX_WINDOW_WIDTH) - 1;
 
-/// Selects the fixed-window width: one multiply per w exponent bits instead of one per set
-/// bit, at the cost of a 2^w - 1 entry table. w == 1 is plain square-and-multiply.
-/// The thresholds are the break-even points for a random exponent,
-/// exp_bits = 2^w / ((1-2^-w)/w - (1-2^-(w+1))/(w+1)) ≈ 16, 48, 140 (rounded up to 144).
+/// Selects the fixed-window width off exponent bits.
 ///
-/// TODO: Switch to a sliding window, as GMP's mpn_powm and OpenSSL's BN_mod_exp_mont do:
-///   the table then holds only odd powers, half the entries per width. Measured ~3-7%.
+/// TODO: Switch to a sliding window: the table then holds only odd powers. Measured ~3-7%.
 /// TODO: Tune for the densest exponent instead of the average, because gas is charged on
 ///   exponent bit length and ignores Hamming weight. The width then collapses to
 ///   min(MAX_WINDOW_WIDTH, (bit_width(exp_bits) + 1) / 2). Measured +10.7% worst case.
@@ -437,7 +432,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
         const auto bm = std::span<const uint64_t, N>{base_mont};
         const auto m = std::span<const uint64_t, N>{mod};
 
-        // table[j] = b^(j+1) in Montgomery form; table[0] = base_mont is already set.
+        // table[j] = base_mont^(j+1); table[0] = base_mont is already set.
         for (size_t j = 1; j < table_size; ++j)
         {
             const auto prev = std::span<const uint64_t, N>{table.subspan((j - 1) * n, n)};
@@ -472,7 +467,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
                 mul_amm<N>(r_tmp, r_cur, r_cur, m, mod_inv);
                 std::swap(r_cur, r_tmp);
             }
-            if (const size_t v = window(pos + w - 1, w); v != 0)  // multiply by b^v
+            if (const size_t v = window(pos + w - 1, w); v != 0)  // multiply by base^v
             {
                 const auto tv = std::span<const uint64_t, N>{table.subspan((v - 1) * n, n)};
                 mul_amm<N>(r_tmp, r_cur, tv, m, mod_inv);
@@ -600,7 +595,7 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     // Bump allocator for all working memory (values + scratch).
     // Stack buffer covers inputs up to the EIP-7823 limit (1024 bytes).
     // Capacity: values[b+2m] + op scratch[(MAX_PRECOMPUTED+3)m+3b+2] + CRT[m+2]
-    //         = 4b + (MAX_PRECOMPUTED+6)m + 4 words.
+    //           = 4b + (MAX_PRECOMPUTED+6)m + 4 words.
     // The worst case is an even modulus with 1 trailing zero bit (odd_size=m, pow2_size=1).
     static constexpr size_t MAX_SIZE = 1024 / sizeof(uint64_t);  // EIP-7823
     static constexpr size_t STACK_CAPACITY = 4 * MAX_SIZE + (6 + MAX_PRECOMPUTED) * MAX_SIZE + 4;
