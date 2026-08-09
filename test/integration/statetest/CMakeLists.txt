@@ -117,6 +117,24 @@ set_tests_properties(
 )
 
 add_test(
+    NAME ${PREFIX}/tx_invalid_signature
+    COMMAND evmone-statetest ${TESTS_TX}/invalid_signature.json
+)
+set_tests_properties(
+    ${PREFIX}/tx_invalid_signature PROPERTIES
+    PASS_REGULAR_EXPRESSION "unexpected invalid transaction: invalid transaction signature"
+)
+
+add_test(
+    NAME ${PREFIX}/tx_invalid_encoding
+    COMMAND evmone-statetest ${TESTS_TX}/invalid_encoding.json
+)
+set_tests_properties(
+    ${PREFIX}/tx_invalid_encoding PROPERTIES
+    PASS_REGULAR_EXPRESSION "unexpected invalid transaction: invalid transaction encoding"
+)
+
+add_test(
     NAME ${PREFIX}/filter
     COMMAND evmone-statetest ${TESTS_FILTER}/one_failing_of_two.json -k passing_test_case
 )
