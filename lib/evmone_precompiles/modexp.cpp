@@ -400,6 +400,19 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     // up to 144 below; the two widths are within 0.2% of each other over 140..144).
     // A random exponent is the worst case for windowing, so this errs towards the smaller
     // window: a dense exponent would prefer the next width up at every threshold.
+    //
+    // TODO: Switch to a sliding window, as GMP's mpn_powm and OpenSSL's BN_mod_exp_mont
+    //   both do. Its table holds only the odd powers b^1, b^3 .. b^(2^w-1), so it is half
+    //   the size for a given width, which buys one extra width at the same memory.
+    //   Break-even points become 2^(w-1) / (1/(w+1) - 1/(w+2)) = 6, 24, 80, 240, 672 —
+    //   GMP's win_size() uses exactly these (7, 25, 81, 241, 673). Measured ~3-7% over
+    //   the fixed window here.
+    // TODO: Tune the thresholds for the worst case rather than the average. Gas is charged
+    //   on exponent bit length, not Hamming weight, so the costliest input at a given
+    //   charge is the densest exponent, whose break-even points are 2^w*w*(w+1) = 4, 24,
+    //   96, 320. Those have bit widths 3, 5, 7, 9, so the width collapses to a closed form,
+    //   min(MAX_WINDOW_WIDTH, (bit_width(exp_bits) + 1) / 2). Measured +10.7% worst-case
+    //   time per gas over the whole modexp benchmark matrix.
     const unsigned w = [exp_bits]() -> unsigned {
         if (exp_bits > 144)
             return MAX_WINDOW_WIDTH;
@@ -446,6 +459,13 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
         }
 
         // Reads the w-bit (or fewer) window whose most-significant bit is at index `hi`.
+        // One Exponent::operator[] per exponent bit, the same count as the binary loop
+        // this replaced, so windowing added no extraction work per bit.
+        //
+        // TODO: A w <= 4 bit field spans at most two adjacent bytes, so a window could be
+        //   read with one two-byte load, a shift and a mask instead of w indexed bit
+        //   reads. Below the noise floor everywhere except the n=4 / 8192-bit corner,
+        //   where it is worth an estimated 1-3% of cycles; measure before doing it.
         const auto window = [&](size_t hi, size_t width) noexcept {
             size_t v = 0;
             for (size_t b = 0; b < width; ++b)
@@ -455,6 +475,15 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
 
         // Process the most-significant (possibly short) window first, then full
         // w-bit windows. The top bit is always set, so the first window is nonzero.
+        // This is the usual m-ary layout: windows tile from the bottom, so the ragged
+        // one lands at the top (blst's ec_mult.h does the same, "top excess bits
+        // modulo target window size").
+        //
+        // TODO: Putting the ragged window at the bottom instead would use a full-width
+        //   top window and save w - top_width squarings for the same multiply count.
+        //   Worth 0% whenever exp_bits % w == 0 (so nothing at 256/512/2048/8192 bits),
+        //   but 4.0% at exp_bits=17, 2.9% at 49, 2.0% at 33 and 1.6% at 145. Costs a
+        //   special-cased final iteration.
         const size_t top_width = (exp_bits - 1) % w + 1;
         const size_t top_val = window(exp_bits - 1, top_width);
         std::ranges::copy(table.subspan((top_val - 1) * n, n), r_cur.begin());
