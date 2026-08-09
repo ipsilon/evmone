@@ -9,6 +9,7 @@
 #include <test/state/errors.hpp>
 #include <test/state/transaction.hpp>
 #include <test/utils/test_state.hpp>
+#include <optional>
 
 namespace json = nlohmann;
 
@@ -114,6 +115,27 @@ state::BlobParams from_json<state::BlobParams>(const json::json& j);
 
 template <>
 BlobSchedule from_json<BlobSchedule>(const json::json& j);
+
+/// Loads the value of the JSON object's @p key, std::nullopt if the object has no such key.
+template <typename T>
+std::optional<T> load_optional(const json::json& j, std::string_view key)
+{
+    if (const auto it = j.find(key); it != j.end())
+        return from_json<T>(*it);
+    return std::nullopt;
+}
+
+/// Loads the value of the JSON object's @p key, @p default_value if the object has no such key.
+/// The default is spelled at the call site, {} for the zero value.
+///
+/// TODO: Inline as load_optional().value_or({}) once the minimum standard library declares
+///   value_or()'s parameter with a defaulted template argument. Deduced, as it is in C++20,
+///   it does not accept a braced initializer.
+template <typename T>
+T load_or(const json::json& j, std::string_view key, T default_value)
+{
+    return load_optional<T>(j, key).value_or(std::move(default_value));
+}
 
 /// Exports the State (accounts) to JSON format (aka pre/post/alloc state).
 json::json to_json(const TestState& state);

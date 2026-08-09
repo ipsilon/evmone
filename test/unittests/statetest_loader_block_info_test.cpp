@@ -299,6 +299,32 @@ TEST(statetest_loader, block_info_current_blob_gas)
     EXPECT_EQ(bi.excess_blob_gas, 2);
 }
 
+TEST(statetest_loader, block_info_blob_gas_used)
+{
+    constexpr std::string_view absent_input = R"({
+        "currentNumber": "0",
+        "currentTimestamp": "0",
+        "currentGasLimit": "0",
+        "currentCoinbase": ""
+    })";
+    constexpr std::string_view zero_input = R"({
+        "currentNumber": "0",
+        "currentTimestamp": "0",
+        "currentGasLimit": "0",
+        "currentCoinbase": "",
+        "blobGasUsed": "0"
+    })";
+
+    const auto blob_params = test::get_blob_params(EVMC_CANCUN);
+
+    // An absent "blobGasUsed" must leave the optional disengaged, not engage it with zero.
+    EXPECT_FALSE(test::from_json_with_rev(json::json::parse(absent_input), EVMC_CANCUN, blob_params)
+            .blob_gas_used.has_value());
+    EXPECT_EQ(test::from_json_with_rev(json::json::parse(zero_input), EVMC_CANCUN, blob_params)
+                  .blob_gas_used,
+        0);
+}
+
 TEST(statetest_loader, block_info_parent_beacon_block_root)
 {
     constexpr std::string_view input = R"({

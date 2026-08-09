@@ -102,18 +102,13 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
                 auto tx = from_json<state::Transaction>(j_tx);
                 tx.chain_id = args.chain_id;
 
-                if (j_tx.contains("hash"))
+                if (const auto loaded_tx_hash = load_optional<hash256>(j_tx, "hash"))
                 {
                     const auto computed_tx_hash = keccak256(rlp::encode(tx));
-                    const auto loaded_tx_hash_opt =
-                        evmc::from_hex<bytes32>(j_tx["hash"].get<std::string>());
-                    if (!loaded_tx_hash_opt)
-                        throw std::logic_error("transaction hash hex is malformed: " +
-                                               j_tx["hash"].get<std::string>());
-                    if (*loaded_tx_hash_opt != computed_tx_hash)
+                    if (*loaded_tx_hash != computed_tx_hash)
                         throw std::logic_error("transaction hash mismatched: computed " +
                                                hex0x(computed_tx_hash) + ", expected " +
-                                               hex0x(*loaded_tx_hash_opt));
+                                               hex0x(*loaded_tx_hash));
                 }
 
                 txs.emplace_back(std::move(tx));
