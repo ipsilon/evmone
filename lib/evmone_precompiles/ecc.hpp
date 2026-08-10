@@ -209,7 +209,7 @@ struct ProjPoint
 
 /// Converts a projected point to an affine point.
 template <typename Curve>
-inline AffinePoint<Curve> to_affine(const ProjPoint<Curve>& p) noexcept
+AffinePoint<Curve> to_affine(const ProjPoint<Curve>& p) noexcept
 {
     // This works correctly for the point at infinity (z == 0) because then z_inv == 0.
     const auto z_inv = 1 / p.z;

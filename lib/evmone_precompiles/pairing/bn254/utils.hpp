@@ -152,7 +152,6 @@ constexpr Fq12 endomorphism(const Fq12& f) noexcept
     });
 }
 
-
 /// Computes `P0 + P1` in Jacobian coordinates.
 /// P0 and P1 must not be the point at infinity, and must not be equal or negations of each other.
 constexpr ecc::ProjPoint<E2> add(
