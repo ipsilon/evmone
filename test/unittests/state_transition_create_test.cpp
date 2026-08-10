@@ -394,3 +394,33 @@ TEST_F(state_transition, created_code_hash)
     expect.post[created].code = runtime_code;
     expect.post[To].storage[0x00_bytes32] = keccak256(runtime_code);
 }
+
+TEST_F(state_transition, create2_rollback_preserves_access_list_slot_warmth)
+{
+    // Rolling back the first CREATE2 must not cool the slots its address had warmed via the tx
+    // access list, so the SSTORE in the second attempt still pays the warm price.
+    rev = EVMC_CANCUN;
+
+    // Initcode reverts on zero CALLVALUE, otherwise stores and deploys nothing.
+    const auto revert_path = revert(0, 0);
+    const auto dest = 4 + revert_path.size();  // CALLVALUE + PUSH1 dest + JUMPI
+    const auto initcode = bytecode{OP_CALLVALUE} + push(dest) + OP_JUMPI + revert_path +
+                          OP_JUMPDEST + sstore(1, 1) + ret(0, 0);
+
+    const auto off = 32 - initcode.size();
+    tx.to = To;
+    pre[To] = {.nonce = 1,
+        .balance = 1,
+        .code = mstore(0, push(initcode)) + create2().input(off, initcode.size()) + OP_POP +
+                create2().value(1).input(off, initcode.size()) + OP_POP};
+
+    const auto created = compute_create2_address(To, {}, initcode);
+    tx.access_list = {{created, {0x01_bytes32}}};
+
+    expect.post[To].nonce = pre[To].nonce + 2;
+    expect.post[To].balance = 0;  // the endowment left the creator
+    expect.post[created].nonce = 1;
+    expect.post[created].balance = 1;
+    expect.post[created].storage[0x01_bytes32] = 0x01_bytes32;
+    expect.gas_used = 109405;  // Cooling the slot would add the 2100 cold surcharge.
+}

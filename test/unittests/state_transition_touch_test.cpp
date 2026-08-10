@@ -254,3 +254,56 @@ TEST_F(state_transition, touch_revert_ripemd_london)
     expect.post[*tx.to].exists = true;
     expect.post[0x03_address].exists = false;  // deleted by the retained touch
 }
+
+// A storage-only account (nonce 0, balance 0, no code) is empty per EIP-158, so it is eligible for
+// the end-of-tx sweep, but only a genuine touch may trigger it. Constructing one in the pre-state
+// needs a fork before EIP-7523.
+
+TEST_F(state_transition, touch_access_list_storage_only)
+{
+    // Warming via the access list is not a touch.
+    rev = EVMC_LONDON;
+    static constexpr auto STORAGE_ONLY = 0x5a_address;
+
+    tx.to = To;
+    tx.access_list = {{STORAGE_ONLY, {}}};
+    pre[*tx.to] = {.code = bytecode{OP_STOP}};
+    pre[STORAGE_ONLY] = {.storage = {{0x01_bytes32, 0x01_bytes32}}};
+
+    expect.post[*tx.to].exists = true;
+    expect.post[STORAGE_ONLY].exists = true;
+    expect.post[STORAGE_ONLY].storage[0x01_bytes32] = 0x01_bytes32;
+}
+
+TEST_F(state_transition, touch_balance_storage_only)
+{
+    // BALANCE loads the account, where the access list above only warms it.
+    rev = EVMC_LONDON;
+    static constexpr auto STORAGE_ONLY = 0x5a_address;
+
+    tx.to = To;
+    pre[*tx.to] = {.code = push(STORAGE_ONLY) + OP_BALANCE + OP_POP};
+    pre[STORAGE_ONLY] = {.storage = {{0x01_bytes32, 0x01_bytes32}}};
+
+    expect.post[*tx.to].exists = true;
+    expect.post[STORAGE_ONLY].exists = true;
+    expect.post[STORAGE_ONLY].storage[0x01_bytes32] = 0x01_bytes32;
+}
+
+TEST_F(state_transition, touch_revert_storage_only)
+{
+    // The rollback must undo the touched flag, or the account is swept despite the revert.
+    rev = EVMC_ISTANBUL;  // Berlin's account access would journal the flag on its own.
+    block.base_fee = 0;
+    static constexpr auto STORAGE_ONLY = 0x5a_address;
+
+    tx.type = Transaction::Type::legacy;
+    tx.to = To;
+    pre[*tx.to] = {.code = call(STORAGE_ONLY) + revert(0, 0)};
+    pre[STORAGE_ONLY] = {.storage = {{0x01_bytes32, 0x01_bytes32}}};
+
+    expect.status = EVMC_REVERT;
+    expect.post[*tx.to].exists = true;
+    expect.post[STORAGE_ONLY].exists = true;
+    expect.post[STORAGE_ONLY].storage[0x01_bytes32] = 0x01_bytes32;
+}
