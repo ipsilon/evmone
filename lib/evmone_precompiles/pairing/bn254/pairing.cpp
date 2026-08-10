@@ -5,6 +5,8 @@
 #include "../../bn254.hpp"
 #include "fields.hpp"
 #include "utils.hpp"
+#include <span>
+#include <vector>
 
 namespace evmmax::bn254
 {
@@ -43,48 +45,72 @@ constexpr void multiply_by_lin_func_value(
 inline constexpr auto ATE_LOOP_COUNT_NAF = 0x1120804220120081204008212022011_u128;
 inline constexpr int LOG_ATE_LOOP_COUNT = 63;
 
-/// Miller loop according to https://eprint.iacr.org/2010/354.pdf Algorithm 1.
-Fq12 miller_loop(const ecc::AffinePoint<E2>& Q, const ecc::AffinePoint<Curve>& P) noexcept
+/// The per-pair state carried across the Miller loop iterations.
+struct MillerPairState
 {
-    auto T = ecc::ProjPoint{Q};
-    const auto nQ = -Q;
+    ecc::ProjPoint<E2> T;       ///< The running point on the twisted curve.
+    ecc::AffinePoint<E2> Q;     ///< The G2 input point.
+    ecc::AffinePoint<E2> nQ;    ///< -Q.
+    ecc::AffinePoint<Curve> P;  ///< The G1 input point.
+    Fq ny;                      ///< -P.y.
+};
+
+/// Miller loop for all the pairs at once,
+/// according to https://eprint.iacr.org/2010/354.pdf Algorithm 1.
+///
+/// The recurrence f ← f²·line is multiplicative across pairs, so one accumulator serves all of
+/// them and the Fq12 squaring is paid once per iteration instead of once per iteration per pair.
+Fq12 multi_miller_loop(std::span<MillerPairState> states) noexcept
+{
     auto f = Fq12::one();
     std::array<Fq2, 3> t;
     auto naf = ATE_LOOP_COUNT_NAF;
-    const auto ny = -P.y;
 
     for (int i = 0; i <= LOG_ATE_LOOP_COUNT; ++i)
     {
-        T = lin_func_and_dbl(T, t);
         f = square(f);
-        multiply_by_lin_func_value(f, t, P.x, ny);
+
+        for (auto& s : states)
+        {
+            s.T = lin_func_and_dbl(s.T, t);
+            multiply_by_lin_func_value(f, t, s.P.x, s.ny);
+        }
 
         if (naf & 1)
         {
-            T = lin_func_and_add(T, Q, t);
-            multiply_by_lin_func_value(f, t, P.x, P.y);
+            for (auto& s : states)
+            {
+                s.T = lin_func_and_add(s.T, s.Q, t);
+                multiply_by_lin_func_value(f, t, s.P.x, s.P.y);
+            }
         }
         else if (naf & 2)
         {
-            T = lin_func_and_add(T, nQ, t);
-            multiply_by_lin_func_value(f, t, P.x, P.y);
+            for (auto& s : states)
+            {
+                s.T = lin_func_and_add(s.T, s.nQ, t);
+                multiply_by_lin_func_value(f, t, s.P.x, s.P.y);
+            }
         }
         naf >>= 2;
     }
 
-    // Frobenius endomorphism for point Q from twisted curve over Fq2 field.
-    // It's essentially untwist -> frobenius -> twist chain of transformation.
-    const auto Q1 = endomorphism<1>(Q);
+    for (auto& s : states)
+    {
+        // Frobenius endomorphism for point Q from twisted curve over Fq2 field.
+        // It's essentially untwist -> frobenius -> twist chain of transformation.
+        const auto Q1 = endomorphism<1>(s.Q);
 
-    // Similar to above one. It makes untwist -> frobenius^2 -> twist transformation plus
-    // negation according to miller loop spec.
-    const auto nQ2 = -endomorphism<2>(Q);
+        // Similar to above one. It makes untwist -> frobenius^2 -> twist transformation plus
+        // negation according to miller loop spec.
+        const auto nQ2 = -endomorphism<2>(s.Q);
 
-    T = lin_func_and_add(T, Q1, t);
-    multiply_by_lin_func_value(f, t, P.x, P.y);
+        s.T = lin_func_and_add(s.T, Q1, t);
+        multiply_by_lin_func_value(f, t, s.P.x, s.P.y);
 
-    lin_func(T, nQ2, t);
-    multiply_by_lin_func_value(f, t, P.x, P.y);
+        lin_func(s.T, nQ2, t);
+        multiply_by_lin_func_value(f, t, s.P.x, s.P.y);
+    }
 
     return f;
 }
@@ -132,7 +158,8 @@ std::optional<bool> pairing_check(std::span<const std::pair<AffinePoint, ExtPoin
     if (pairs.empty())
         return true;
 
-    auto f = Fq12::one();
+    std::vector<MillerPairState> states;
+    states.reserve(pairs.size());
 
     for (const auto& [p, q] : pairs)
     {
@@ -146,12 +173,16 @@ std::optional<bool> pairing_check(std::span<const std::pair<AffinePoint, ExtPoin
         if (!g2_is_inf && (!is_on_twisted_curve(q) || !g2_subgroup_check(q)))
             return std::nullopt;
 
-        // If either point is infinity, miller_loop returns 1, so skip it.
+        // If either point is infinity, the pair contributes 1 to the product, so skip it.
         if (p != 0 && !g2_is_inf)
-            f = f * miller_loop(q, p);
+            states.push_back({ecc::ProjPoint<E2>{q}, q, -q, p, -p.y});
     }
 
+    // With every pair skipped the product is 1, and final_exp(1) == 1.
+    if (states.empty())
+        return true;
+
     // final exp is calculated on accumulated value
-    return final_exp(f) == Fq12::one();
+    return final_exp(multi_miller_loop(states)) == Fq12::one();
 }
 }  // namespace evmmax::bn254
