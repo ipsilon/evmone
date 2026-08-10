@@ -164,6 +164,8 @@ std::optional<address> recover_sender(const Transaction& tx, bytes_view txbytes)
 
     // A typed v is {0, 1}. A legacy v is 27 + y_parity, or 35 + 2 * chain_id + y_parity (EIP-155):
     // both bases are odd, so an even v means y_parity 1.
+    if (typed ? tx.v > 1 : (tx.v < 27 || (tx.v > 28 && tx.v < 35)))
+        return std::nullopt;
     const auto y_parity = typed ? tx.v != 0 : tx.v % 2 == 0;
 
     const auto h = keccak256((typed ? bytes{stdx::to_underlying(tx.type)} : bytes{}) +
