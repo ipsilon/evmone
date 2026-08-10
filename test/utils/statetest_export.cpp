@@ -44,6 +44,30 @@ json::json to_json(const TestState& state)
     return j;
 }
 
+json::json to_json(const state::StateDiff& diff)
+{
+    json::json j;
+    auto& j_modified = j["modifiedAccounts"] = json::json::object();
+    for (const auto& m : diff.modified_accounts)
+    {
+        auto& j_acc = j_modified[hex0x(m.addr)];
+        j_acc["nonce"] = hex0x(m.nonce);
+        j_acc["balance"] = hex0x(m.balance);
+        if (m.code.has_value())
+            j_acc["code"] = hex0x(bytes_view(m.code->data(), m.code->size()));
+
+        auto& j_storage = j_acc["modifiedStorage"] = json::json::object();
+        for (const auto& [key, val] : m.modified_storage)
+            j_storage[hex0x(key)] = hex0x(val);
+    }
+
+    auto& j_deleted = j["deletedAccounts"] = json::json::array();
+    for (const auto& addr : diff.deleted_accounts)
+        j_deleted.emplace_back(hex0x(addr));
+
+    return j;
+}
+
 json::json to_state_test(std::string_view test_name, const state::BlockInfo& block,
     state::Transaction& tx, const TestState& pre, evmc_revision rev,
     const std::variant<state::TransactionReceipt, std::error_code>& res, const TestState& post)

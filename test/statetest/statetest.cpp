@@ -20,11 +20,16 @@ class StateTestFile : public testing::Test
     std::optional<std::string> m_filter;
     evmc::VM& m_vm;
     bool m_trace = false;
+    bool m_dump_statediff = false;
 
 public:
     explicit StateTestFile(fs::path json_test_file, const std::optional<std::string>& filter,
-        evmc::VM& vm, bool trace) noexcept
-      : m_json_test_file{std::move(json_test_file)}, m_filter{filter}, m_vm{vm}, m_trace{trace}
+        evmc::VM& vm, bool trace, bool dump_statediff) noexcept
+      : m_json_test_file{std::move(json_test_file)},
+        m_filter{filter},
+        m_vm{vm},
+        m_trace{trace},
+        m_dump_statediff{dump_statediff}
     {}
 
     void TestBody() final
@@ -35,16 +40,17 @@ public:
         {
             if (m_filter.has_value() && test.name.find(*m_filter) == std::string::npos)
                 continue;
-            evmone::test::run_state_test(test, m_vm, m_trace);
+            evmone::test::run_state_test(test, m_vm, m_trace, m_dump_statediff);
         }
     }
 
     static void register_one(const std::string& suite_name, const fs::path& file,
-        const std::optional<std::string>& filter, evmc::VM& vm, bool trace)
+        const std::optional<std::string>& filter, evmc::VM& vm, bool trace, bool dump_statediff)
     {
         testing::RegisterTest(suite_name.c_str(), file.stem().string().c_str(), nullptr, nullptr,
-            file.string().c_str(), 0, [file, filter, &vm, trace]() -> testing::Test* {
-                return new StateTestFile(file, filter, vm, trace);
+            file.string().c_str(), 0,
+            [file, filter, &vm, trace, dump_statediff]() -> testing::Test* {
+                return new StateTestFile(file, filter, vm, trace, dump_statediff);
             });
     }
 };
@@ -55,27 +61,35 @@ class StateTest : public testing::Test
     evmone::test::StateTransitionTest m_state_transition_test;
     evmc::VM& m_vm;
     bool m_trace = false;
+    bool m_dump_statediff = false;
 
 public:
-    explicit StateTest(
-        evmone::test::StateTransitionTest state_transition_test, evmc::VM& vm, bool trace) noexcept
-      : m_state_transition_test{std::move(state_transition_test)}, m_vm{vm}, m_trace{trace}
+    explicit StateTest(evmone::test::StateTransitionTest state_transition_test, evmc::VM& vm,
+        bool trace, bool dump_statediff) noexcept
+      : m_state_transition_test{std::move(state_transition_test)},
+        m_vm{vm},
+        m_trace{trace},
+        m_dump_statediff{dump_statediff}
     {}
 
-    void TestBody() final { evmone::test::run_state_test(m_state_transition_test, m_vm, m_trace); }
+    void TestBody() final
+    {
+        evmone::test::run_state_test(m_state_transition_test, m_vm, m_trace, m_dump_statediff);
+    }
 
     static void register_one(const evmone::test::StateTransitionTest& test,
         const std::string& suite_name, const std::string& test_name, const fs::path& file,
-        evmc::VM& vm, bool trace)
+        evmc::VM& vm, bool trace, bool dump_statediff)
     {
         testing::RegisterTest(suite_name.c_str(), test_name.c_str(), nullptr, nullptr,
-            file.string().c_str(), 0,
-            [test, &vm, trace]() -> testing::Test* { return new StateTest(test, vm, trace); });
+            file.string().c_str(), 0, [test, &vm, trace, dump_statediff]() -> testing::Test* {
+                return new StateTest(test, vm, trace, dump_statediff);
+            });
     }
 };
 
-void register_test_files(
-    const fs::path& root, const std::optional<std::string>& filter, evmc::VM& vm, bool trace)
+void register_test_files(const fs::path& root, const std::optional<std::string>& filter,
+    evmc::VM& vm, bool trace, bool dump_statediff)
 {
     if (is_directory(root))
     {
@@ -90,7 +104,7 @@ void register_test_files(
 
         for (const auto& p : test_files)
             StateTestFile::register_one(
-                fs::relative(p, root).parent_path().string(), p, filter, vm, trace);
+                fs::relative(p, root).parent_path().string(), p, filter, vm, trace, dump_statediff);
     }
     else  // Treat as a file.
     {
@@ -100,7 +114,8 @@ void register_test_files(
         {
             if (filter.has_value() && test.name.find(*filter) == std::string::npos)
                 continue;
-            StateTest::register_one(test, root.string(), test.name, root, vm, trace);
+            StateTest::register_one(
+                test, root.string(), test.name, root, vm, trace, dump_statediff);
         }
     }
 }
@@ -142,9 +157,13 @@ int main(int argc, char* argv[])
 
         bool trace = false;
         bool trace_summary = false;
+        bool dump_statediff = false;
         const auto trace_opt = app.add_flag("--trace", trace, "Enable EVM tracing");
         app.add_flag("--trace-summary", trace_summary, "Output trace summary only")
             ->excludes(trace_opt);
+        app.add_flag("--dump-statediff", dump_statediff,
+            "Print the transaction's StateDiff (only the accounts/slots it actually "
+            "modified) as JSON to stdout, one line per test case");
 
         CLI11_PARSE(app, argc, argv);
 
@@ -157,7 +176,7 @@ int main(int argc, char* argv[])
         }
 
         for (const auto& p : paths)
-            register_test_files(p, filter, vm, trace || trace_summary);
+            register_test_files(p, filter, vm, trace || trace_summary, dump_statediff);
 
         return RUN_ALL_TESTS();
     }
