@@ -252,8 +252,8 @@ constexpr bool g2_subgroup_check(const ecc::AffinePoint<E2>& p_aff)
     const auto _2px = dbl(px);
 
     const auto e_px = endomorphism<1>(px);
-    const auto ee_px = endomorphism<1>(e_px);
-    const auto eee_2px = endomorphism<1>(endomorphism<2>(_2px));
+    const auto ee_px = endomorphism<2>(px);
+    const auto eee_2px = endomorphism<3>(_2px);
 
     const auto l = add(add(px1, e_px), ee_px);
 
