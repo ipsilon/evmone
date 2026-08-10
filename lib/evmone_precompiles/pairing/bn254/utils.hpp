@@ -192,33 +192,6 @@ constexpr ecc::ProjPoint<E2> add(
     return {X3, Y3, Z3};
 }
 
-/// Computes `Q + Q` in Jacobian coordinates.
-constexpr ecc::ProjPoint<E2> dbl(const ecc::ProjPoint<E2>& Q) noexcept
-{
-    const auto& x = Q.x;
-    const auto& y = Q.y;
-    const auto& z = Q.z;
-
-    const auto y_squared = y * y;
-    const auto x_squared = x * x;
-    const auto z_squared = z * z;
-    const auto y_4 = y_squared * y_squared;
-    const auto _4y_4 = y_4 + y_4 + y_4 + y_4;
-
-    const auto R = y_squared + y_squared;
-    const auto A = (x + R);
-    const auto S = A * A - x_squared - _4y_4;  // 2xR = (x+R)^2 - x^2 - R^2
-    const auto M = x_squared + x_squared + x_squared;
-
-    const auto N = y + z;
-
-    const auto Xp = M * M - (S + S);
-    const auto Yp = M * (S - Xp) - (_4y_4 + _4y_4);
-    const auto Zp = N * N - y_squared - z_squared;  // 2yz = (y+z)^2 - y^2 - z^2
-
-    return {Xp, Yp, Zp};
-}
-
 /// Computes `N` doubles of the point `a` in Jacobian coordinates.
 template <int N>
 constexpr ecc::ProjPoint<E2> n_dbl(const ecc::ProjPoint<E2>& a) noexcept

@@ -371,7 +371,7 @@ ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noe
 }
 
 template <typename Curve>
-ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
+constexpr ProjPoint<Curve> dbl(const ProjPoint<Curve>& p) noexcept
 {
     const auto& [x1, y1, z1] = p;
 
