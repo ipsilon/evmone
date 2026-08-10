@@ -49,7 +49,7 @@ constexpr bool is_on_twisted_curve(const ecc::AffinePoint<E2>& p)
     const auto x3 = p.x * p.x * p.x;
     const auto y2 = p.y * p.y;
 
-    return y2 == x3 + Fq6Config::_3_ksi_inv;
+    return y2 == x3 + E2::B;
 }
 
 // Frobenius endomorphism related functions are implemented based on
