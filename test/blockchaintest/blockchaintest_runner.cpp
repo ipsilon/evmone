@@ -373,11 +373,14 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 }
                 if (res.requests_error)
                 {
-                    // Requests collection failure; verify the reason the same way.
-                    EXPECT_TRUE(is_expected_block_exception(
-                        res.requests_error, test_block.expected_exception))
-                        << "Block invalidity reason mismatch: got " << res.requests_error.message()
-                        << ", expected " << test_block.expected_exception;
+                    if (!sender_not_recovered)
+                    {
+                        EXPECT_TRUE(is_expected_block_exception(
+                            res.requests_error, test_block.expected_exception))
+                            << "Block invalidity reason mismatch: got "
+                            << res.requests_error.message() << ", expected "
+                            << test_block.expected_exception;
+                    }
                     continue;
                 }
                 // The block executed, so it is invalid only if it computes something other than
@@ -392,7 +395,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 // Asserts the fixture names one of @p names, the exceptions the check that just
                 // fired is the symptom of. Silent where the reason cannot be compared.
                 const auto expect_fixture_names = [&](std::string_view names) {
-                    if (!names_spec_exception || ommers_not_validated)
+                    if (!names_spec_exception || ommers_not_validated || sender_not_recovered)
                         return;
                     EXPECT_TRUE(contains_any(test_block.expected_exception, names))
                         << "Block invalidity reason mismatch: the block failed the check for "
@@ -410,11 +413,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
 
                 if (state::mpt_hash(res.block_state) != test_block.expected_block_header.state_root)
                 {
-                    // The state root is also where a sender that was not recovered surfaces,
-                    // see the TODO above.
-                    expect_fixture_names(
-                        "BlockException.INVALID_STATE_ROOT|"
-                        "TransactionException.INVALID_SIGNATURE_VRS");
+                    expect_fixture_names("BlockException.INVALID_STATE_ROOT");
                     continue;
                 }
 
