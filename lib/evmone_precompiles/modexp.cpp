@@ -38,7 +38,7 @@ constexpr void mul(
     assert(r.size() >= std::max(x.size(), y.size()));
     assert(r.size() <= x.size() + y.size());  // No tail zeroing: r may truncate but not exceed.
 
-    // Ensure y is the shorter one to simplify the implementation and to have shorter outer loop.
+    // Make y the shorter operand.
     if (x.size() < y.size())
         std::swap(x, y);
 
@@ -102,8 +102,6 @@ void store(std::span<uint8_t> r, std::span<const uint64_t> words) noexcept
     }
 
     // Handle remaining partial bytes at the beginning.
-    // Assumes little-endian host: after bswap, high-order bytes of the BE value
-    // are at the end of the word's memory representation.
     if (w < words.size() && pos > 0)
     {
         const auto word = bswap(words[w]);
@@ -165,16 +163,14 @@ ModLoad load_mod(std::span<uint64_t> storage, std::span<const uint8_t> data) noe
     const auto top = load(storage, data);
     assert(!top.empty());  // Modulus of zero must be handled outside.
 
-    // Find first non-zero word from bottom.
     const auto it = std::ranges::find_if(top, [](auto w) { return w != 0; });
     // Always found: top is trimmed so top.back() != 0.
 
     const auto tz_words = static_cast<size_t>(it - top.begin());
     const auto bit_shift = static_cast<unsigned>(std::countr_zero(*it));
-    // tz_words * 64 fits in unsigned: overflow requires >512MB trailing zeros which
-    // costs ~50Mx the block gas limit (pre-Osaka) or is impossible (post-Osaka, 1KB).
+    // tz_words * 64 fits in unsigned: an input large enough to overflow is not affordable.
     const auto mod_tz = static_cast<unsigned>(tz_words * 64 + bit_shift);
-    assert(mod_tz == tz_words * 64 + bit_shift);  // No overflow.
+    assert(mod_tz == tz_words * 64 + bit_shift);
 
     if (mod_tz == 0)
         return {top, 0, top.size()};
@@ -251,16 +247,13 @@ void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uin
     }
     else
     {
-        // General case: Knuth's algorithm. The quotient is stored in q_buf;
-        // we don't use it, but udivrem_knuth requires storage for it.
+        // The quotient is unused, but udivrem_knuth requires storage for it.
         intx::internal::udivrem_knuth(q_buf.data(), un, dn);
         denormalize(un.subspan(0, dn.size()));
     }
 }
 
-/// Represents the exponent value of the modular exponentiation operation.
-///
-/// This is a view type of the big-endian bytes representing the bits of the exponent.
+/// View over the big-endian bytes of the exponent.
 class Exponent
 {
     const uint8_t* data_ = nullptr;
@@ -294,21 +287,15 @@ public:
     }
 };
 
-/// Performs the Almost Montgomery Multiplication (AMM).
+/// Almost Montgomery Multiplication (AMM): r = x⋅y⋅R⁻¹ % mod.
 ///
-/// The AMM is a relaxed version of the Montgomery multiplication producing a result in Montgomery
-/// form which is in range [0, 2⋅mod) in plain form, i.e., it may be larger than the modulus.
-/// This allows to skip the final conditional subtraction in most cases, improving performance.
-///
-/// The inputs are expected to be in Montgomery form.
-/// Additionally, passing y=1 converts x from Montgomery form back to plain form,
-/// because for x = aR: mul_amm(x, 1) = aR⋅1⋅R⁻¹ % mod = a % mod.
+/// A relaxed Montgomery multiplication whose result in plain form is in range [0, 2⋅mod),
+/// i.e. it may be larger than the modulus, which skips the final conditional subtraction in
+/// most cases. Inputs are expected to be in Montgomery form; passing y=1 converts x back to
+/// plain form. r must not alias x or y.
 ///
 /// See "Efficient Software Implementations of Modular Exponentiation":
 /// https://eprint.iacr.org/2011/239.pdf
-///
-/// Computes r = x * y * R^-1 mod m (Almost Montgomery Multiplication).
-/// r must not alias x or y.
 template <size_t N = std::dynamic_extent>
 void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
     std::span<const uint64_t, N> y, std::span<const uint64_t, N> mod, uint64_t mod_inv) noexcept
@@ -320,7 +307,7 @@ void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
     assert(y.size() == n);
     assert(mod.size() == n);
     assert(mod.back() != 0);
-    assert(r.data() != x.data() && r.data() != y.data());  // r must not alias inputs.
+    assert(r.data() != x.data() && r.data() != y.data());
 
     const auto r_lo = r.subspan(0, n - 1);
     const auto r_hi = r.subspan(1);
@@ -358,8 +345,6 @@ void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
         sub(r, mod);
 }
 
-/// Almost Montgomery Multiplication specialized for 4-word (256-bit) operands.
-/// Delegates to mul_amm_256 in mulmod.cpp.
 template <>
 [[gnu::always_inline]] inline void mul_amm<4>(std::span<uint64_t, 4> r,
     std::span<const uint64_t, 4> x, std::span<const uint64_t, 4> y,
@@ -561,9 +546,7 @@ void modinv_pow2(
     r[0] = evmmax::modinv(x[0]);                   // Good start: 64 correct bits.
     std::ranges::fill(r.subspan(1), uint64_t{0});  // Zero the rest for correct final subtraction.
 
-    // Newton-Raphson iteration for modular inverse: inv' = inv * (2 - x * inv).
-    // Rearranged as: inv' = 2 * inv - x * inv^2, which avoids the (2 - x) negation helper
-    // and computes the result directly into r (no copy needed).
+    // Newton-Raphson: inv' = inv * (2 - x * inv), computed as 2*inv - x*inv^2 into r.
     // Each iteration doubles the number of correct bits. See evmmax::modinv().
     for (size_t i = 1; i < r.size(); i *= 2)
     {
@@ -602,8 +585,6 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     std::pmr::monotonic_buffer_resource pool{stack_buf, sizeof(stack_buf)};
     std::pmr::polymorphic_allocator<uint64_t> alloc{&pool};
 
-    // Allocate and load values. The actual mod_size may be smaller than declared
-    // if the modulus has leading zero bytes.
     const auto base = load({alloc.allocate(declared_base_size), declared_base_size}, base_bytes);
     const auto [mod_odd, mod_tz, mod_size] =
         load_mod({alloc.allocate(declared_mod_size), declared_mod_size}, mod_bytes);
@@ -612,10 +593,10 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     const auto result = std::span{alloc.allocate(mod_size), mod_size};
     std::ranges::fill(result, uint64_t{0});
 
-    if (exp.bit_width() == 0)  // Exponent is 0:
+    if (exp.bit_width() == 0)
     {
-        // Result is 1 except when mod is 1.
-        if (mod_tz != 0 || mod_odd.size() != 1 || mod_odd[0] != 1)  // mod != 1
+        const auto mod_is_one = mod_tz == 0 && mod_odd.size() == 1 && mod_odd[0] == 1;
+        if (!mod_is_one)
             result[0] = 1;
     }
     else if (base.empty())  // base is 0: 0^exp = 0 for exp > 0.
@@ -628,16 +609,13 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
         // See "Montgomery reduction with even modulus" by Çetin Kaya Koç.
         // https://cetinkayakoc.net/docs/j34.pdf
 
-        // The "odd" part is trivial if the modulus is a pure power of two.
+        // Trivial odd part means the modulus is a pure power of two.
         const auto odd_is_trivial = mod_odd.size() == 1 && mod_odd[0] == 1;
-
-        // The "power-of-two" part is trivial if the modulus is odd.
         const auto pow2_is_trivial = mod_tz == 0;
 
         const auto odd_size = mod_odd.size();
         const size_t pow2_size = (mod_tz + 63) / 64;
 
-        // Combining results via CRT is needed when both parts are non-trivial.
         const auto need_crt = !pow2_is_trivial && !odd_is_trivial;
 
         // Allocate operation scratch (dead after each call, reused sequentially).
@@ -648,10 +626,8 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
         const size_t op_scratch_size = std::max({odd_scratch, pow2_scratch, inv_scratch});
         const auto op_scratch = std::span{alloc.allocate(op_scratch_size), op_scratch_size};
 
-        // Place the odd result directly in the result buffer if the CRT is not needed.
         const auto result_odd =
             need_crt ? std::span{alloc.allocate(odd_size), odd_size} : result.first(odd_size);
-        // Always place the power-of-two result in the result buffer.
         const auto result_pow2 = result.first(pow2_size);
 
         if (!odd_is_trivial) [[likely]]
