@@ -292,6 +292,19 @@ public:
         const auto bit = (byte >> bit_index) & 1;
         return bit != 0;
     }
+
+    /// Returns bits [lo, hi] as an integer, the bit at hi being the most significant.
+    /// The range must span at most 8 bits, so it covers at most two adjacent bytes.
+    [[nodiscard]] size_t window(size_t lo, size_t hi) const noexcept
+    {
+        assert(lo <= hi && hi - lo < 8);
+        const auto exp_size = (bit_width_ + 7) / 8;
+        const auto byte_index = exp_size - 1 - lo / 8;
+        auto bytes = size_t{data_[byte_index]};
+        if (byte_index != 0)  // Prepend the next more significant byte if there is one.
+            bytes |= size_t{data_[byte_index - 1]} << 8;
+        return (bytes >> (lo % 8)) & ((size_t{1} << (hi + 1 - lo)) - 1);
+    }
 };
 
 /// Performs the Almost Montgomery Multiplication (AMM).
@@ -369,27 +382,26 @@ template <>
 }
 
 /// Maximum window width used by the windowed method in modexp_odd.
-constexpr unsigned MAX_WINDOW_WIDTH = 4;
+constexpr unsigned MAX_WINDOW_WIDTH = 5;
+static_assert(MAX_WINDOW_WIDTH <= 8, "Exponent::window() covers at most two adjacent bytes");
 
-/// Number of precomputed values for the max width windowed method.
-constexpr size_t MAX_PRECOMPUTED = (size_t{1} << MAX_WINDOW_WIDTH) - 1;
+/// Number of precomputed base odd powers for the max width windowed method.
+constexpr size_t MAX_PRECOMPUTED = size_t{1} << (MAX_WINDOW_WIDTH - 1);
 
-/// Selects the fixed-window width from the exponent bit length.
-///
-/// TODO: Switch to a sliding window: the table then holds only odd powers. Measured ~3-7%.
-/// TODO: Tune for the densest exponent instead of the average, because gas is charged on
-///   exponent bit length and ignores Hamming weight. The width then collapses to
-///   min(MAX_WINDOW_WIDTH, (bit_width(exp_bits) + 1) / 2). Measured +10.7% worst case.
+/// Selects the sliding-window width from the exponent bit length.
 constexpr unsigned window_width(size_t exp_bits) noexcept
 {
-    // Break-even points for a random exponent, where the 2^w extra table multiplies stop
-    // being repaid: 2^w / ((1-2^-w)/w - (1-2^-(w+1))/(w+1)) = 16, 48, 140 (rounded to 144).
-    if (exp_bits <= 16)
+    // Break-even points for a random exponent, where the table's extra multiply stops being
+    // repaid: 2^(w-1) / (1/(w+1) - 1/(w+2)) = 6, 24, 80, 240. Each narrower width is kept
+    // one bit longer, which measures better on the sparse small exponents seen in practice.
+    if (exp_bits <= 7)
         return 1;
-    if (exp_bits <= 48)
+    if (exp_bits <= 25)
         return 2;
-    if (exp_bits <= 144)
+    if (exp_bits <= 81)
         return 3;
+    if (exp_bits <= 241)
+        return 4;
     return MAX_WINDOW_WIDTH;
 }
 
@@ -408,7 +420,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     const auto exp_bits = exp.bit_width();
 
     const auto w = window_width(exp_bits);
-    const auto table_size = (size_t{1} << w) - 1;
+    const auto table_size = size_t{1} << (w - 1);
 
     // Layout: u[n + base.size()] | table[MAX_PRECOMPUTED*n]
     //       | rem_scratch[2*n + 2*base.size() + 2].
@@ -433,46 +445,50 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
         auto r_tmp = std::span<uint64_t, N>{u.first(n)};
         const auto m = std::span<const uint64_t, N>{mod};
 
-        // base_mont^j, for j in 1..table_size.
-        const auto precomputed = [table, n](size_t j) noexcept {
-            return std::span<uint64_t, N>{table.subspan((j - 1) * n, n)};
+        // base_mont^v, for odd v.
+        const auto precomputed = [table, n](size_t v) noexcept {
+            return std::span<uint64_t, N>{table.subspan((v / 2) * n, n)};
         };
 
-        // precomputed(1) = base_mont is already set.
-        for (size_t j = 2; j <= table_size; ++j)
-            mul_amm<N>(precomputed(j), precomputed(j - 1), precomputed(1), m, mod_inv);
-
-        // Reads the `width` exponent bits starting at index `lo`.
-        // TODO: A window spans at most two adjacent bytes, so it could be read with one
-        //   two-byte load, a shift and a mask. Est. 1-3%, and only for a 4-word modulus
-        //   with a very long exponent; measure before doing it.
-        const auto window = [&](size_t lo, size_t width) noexcept {
-            size_t v = 0;
-            for (size_t b = 0; b < width; ++b)
-                v |= size_t{exp[lo + b]} << b;
-            return v;
-        };
-
-        // Windows tile from the bottom, so the ragged one is processed first, at the top.
-        // The top bit is always set, so that first window is nonzero.
-        // TODO: Tiling from the top instead would save w - top_width squarings when
-        //   exp_bits % w != 0 (up to 4%), at the cost of a special-cased final iteration.
-        const size_t top_width = (exp_bits - 1) % w + 1;
-        std::ranges::copy(precomputed(window(exp_bits - top_width, top_width)), r_cur.begin());
-
-        for (size_t pos = exp_bits - top_width; pos != 0;)
+        // Fill the precomputed table (precomputed(1) is already set).
+        if (table_size > 1)
         {
-            pos -= w;
-            for (unsigned s = 0; s != w; ++s)  // square w times
+            mul_amm<N>(r_tmp, precomputed(1), precomputed(1), m, mod_inv);  // r_tmp = base_mont^2.
+            for (size_t v = 3; v < 2 * table_size; v += 2)
+                mul_amm<N>(precomputed(v), precomputed(v - 2), r_tmp, m, mod_inv);
+        }
+
+        // The widest window of at most w bits ending at bit `hi`, which must be set. Trailing
+        // zero bits are trimmed off, so the value is odd and only odd table entries are
+        // needed. Returns the value and the index of its lowest bit.
+        const auto window = [exp, w](size_t hi) noexcept {
+            const auto lo = hi + 1 >= w ? hi + 1 - w : size_t{0};
+            const auto v = exp.window(lo, hi);
+            const auto tz = static_cast<size_t>(std::countr_zero(v));  // v != 0: exp[hi] is set.
+            return std::pair{v >> tz, lo + tz};
+        };
+
+        // The top bit is always set, so the first window ends there and is loaded directly.
+        auto [v_top, pos] = window(exp_bits - 1);
+        std::ranges::copy(precomputed(v_top), r_cur.begin());
+
+        while (pos != 0)
+        {
+            --pos;
+            mul_amm<N>(r_tmp, r_cur, r_cur, m, mod_inv);  // Square for this bit.
+            std::swap(r_cur, r_tmp);
+            if (!exp[pos])
+                continue;
+
+            const auto [v, lo] = window(pos);
+            for (auto b = lo; b != pos; ++b)  // One more square for each remaining window bit.
             {
                 mul_amm<N>(r_tmp, r_cur, r_cur, m, mod_inv);
                 std::swap(r_cur, r_tmp);
             }
-            if (const size_t v = window(pos, w); v != 0)  // multiply by base_mont^v
-            {
-                mul_amm<N>(r_tmp, r_cur, precomputed(v), m, mod_inv);
-                std::swap(r_cur, r_tmp);
-            }
+            mul_amm<N>(r_tmp, r_cur, precomputed(v), m, mod_inv);
+            std::swap(r_cur, r_tmp);
+            pos = lo;
         }
 
         // Convert from Montgomery form: multiply by 1. Reuses precomputed(1) storage.
