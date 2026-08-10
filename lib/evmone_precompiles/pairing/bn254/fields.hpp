@@ -42,7 +42,13 @@ constexpr Fq2 multiply(const Fq2& a, const Fq2& b) noexcept
 {
     const auto& [a0, a1] = a.coeffs;
     const auto& [b0, b1] = b.coeffs;
-    return Fq2({a0 * b0 - a1 * b1, a1 * b0 + a0 * b1});
+
+    // Karatsuba: for u^2 == -1 the product is (t0 - t1) + ((a0+a1)(b0+b1) - t0 - t1)*u,
+    // trading one of the schoolbook's 4 base field multiplications for 3 additions.
+    // TODO: Lazy reduction (https://eprint.iacr.org/2010/526) needs wide mul and redc in ModArith.
+    const auto t0 = a0 * b0;
+    const auto t1 = a1 * b1;
+    return Fq2({t0 - t1, (a0 + a1) * (b0 + b1) - t0 - t1});
 }
 
 /// Squares an Fq^2 field element.
