@@ -49,41 +49,66 @@ inline constexpr int8_t ATE_LOOP_COUNT_DIGITS[] = {
 };
 // clang-format on
 
-/// Miller loop according to https://eprint.iacr.org/2010/354.pdf Algorithm 1.
-Fq12 miller_loop(const ecc::AffinePoint<E2>& Q, const ecc::AffinePoint<Curve>& P) noexcept
+/// Miller loop for all the pairs at once,
+/// according to https://eprint.iacr.org/2010/354.pdf Algorithm 1.
+Fq12 multi_miller_loop(std::span<const std::pair<AffinePoint, ExtPoint>> pairs) noexcept
 {
-    auto T = ecc::ProjPoint{Q};  // Applies the omitted leading digit 1 of the loop count.
-    const auto nQ = -Q;
+    // The running point of every pair; starting at Q applies the omitted leading digit 1.
+    // TODO: Avoid the allocation: at most 492 pairs fit the transaction gas limit (EIP-7825).
+    // TODO: Caching -Q and -P.y next to the running points may be beneficial.
+    std::vector<ecc::ProjPoint<E2>> Ts;
+    Ts.reserve(pairs.size());
+    for (const auto& [_, Q] : pairs)
+        Ts.emplace_back(Q);
+
     auto f = Fq12::one();
     std::array<Fq2, 3> t;
-    const auto ny = -P.y;
 
     for (const auto digit : ATE_LOOP_COUNT_DIGITS)
     {
-        T = lin_func_and_dbl(T, t);
+        // The f <- f^2 * line recurrence is multiplicative over the pairs, so a single
+        // accumulator serves them all: one squaring per iteration instead of one per pair.
         f = square(f);
-        multiply_by_lin_func_value(f, t, P.x, ny);
 
-        if (digit != 0)
+        for (size_t j = 0; j != pairs.size(); ++j)
         {
-            T = lin_func_and_add(T, digit > 0 ? Q : nQ, t);
-            multiply_by_lin_func_value(f, t, P.x, P.y);
+            const auto& [P, Q] = pairs[j];
+            if (P == 0 || Q == 0)  // A pair with a point at infinity contributes 1.
+                continue;
+
+            auto& T = Ts[j];
+            T = lin_func_and_dbl(T, t);
+            multiply_by_lin_func_value(f, t, P.x, -P.y);
+
+            if (digit != 0)
+            {
+                T = lin_func_and_add(T, digit > 0 ? Q : -Q, t);
+                multiply_by_lin_func_value(f, t, P.x, P.y);
+            }
         }
     }
 
-    // Frobenius endomorphism for point Q from twisted curve over Fq2 field.
-    // It's essentially untwist -> frobenius -> twist chain of transformation.
-    const auto Q1 = endomorphism<1>(Q);
+    for (size_t j = 0; j != pairs.size(); ++j)
+    {
+        const auto& [P, Q] = pairs[j];
+        if (P == 0 || Q == 0)
+            continue;
 
-    // Similar to above one. It makes untwist -> frobenius^2 -> twist transformation plus
-    // negation according to miller loop spec.
-    const auto nQ2 = -endomorphism<2>(Q);
+        // Frobenius endomorphism for point Q from twisted curve over Fq2 field.
+        // It's essentially untwist -> frobenius -> twist chain of transformation.
+        const auto Q1 = endomorphism<1>(Q);
 
-    T = lin_func_and_add(T, Q1, t);
-    multiply_by_lin_func_value(f, t, P.x, P.y);
+        // Similar to above one. It makes untwist -> frobenius^2 -> twist transformation plus
+        // negation according to miller loop spec.
+        const auto nQ2 = -endomorphism<2>(Q);
 
-    lin_func(T, nQ2, t);
-    multiply_by_lin_func_value(f, t, P.x, P.y);
+        auto& T = Ts[j];
+        T = lin_func_and_add(T, Q1, t);
+        multiply_by_lin_func_value(f, t, P.x, P.y);
+
+        lin_func(T, nQ2, t);
+        multiply_by_lin_func_value(f, t, P.x, P.y);
+    }
 
     return f;
 }
@@ -131,26 +156,18 @@ std::optional<bool> pairing_check(std::span<const std::pair<AffinePoint, ExtPoin
     if (pairs.empty())
         return true;
 
-    auto f = Fq12::one();
-
     for (const auto& [p, q] : pairs)
     {
         if (!validate(p))
             return std::nullopt;
 
-        const bool g2_is_inf = q == 0;
-
         // Verify that Q is on the curve and in the proper subgroup. This subgroup is much smaller
         // than the group containing all the points from the twisted curve over Fq2 field.
-        if (!g2_is_inf && (!is_on_twisted_curve(q) || !g2_subgroup_check(q)))
+        // TODO: Fold q != 0 check into curve/subgroup checks.
+        if (q != 0 && (!is_on_twisted_curve(q) || !g2_subgroup_check(q)))
             return std::nullopt;
-
-        // If either point is infinity, miller_loop returns 1, so skip it.
-        if (p != 0 && !g2_is_inf)
-            f = f * miller_loop(q, p);
     }
 
-    // final exp is calculated on accumulated value
-    return final_exp(f) == Fq12::one();
+    return final_exp(multi_miller_loop(pairs)) == Fq12::one();
 }
 }  // namespace evmmax::bn254
