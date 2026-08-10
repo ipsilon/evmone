@@ -186,7 +186,7 @@ constexpr ecc::ProjPoint<E2> add(
     const auto V = U1 * H_squared;
 
     const auto X3 = R_squared - H_cubed - (V + V);
-    const auto Y3 = R * (U1 * H_squared - X3) - S1 * H_cubed;
+    const auto Y3 = R * (V - X3) - S1 * H_cubed;
     const auto Z3 = H * z0 * z1;
 
     return {X3, Y3, Z3};
