@@ -42,7 +42,7 @@ struct Fq12Config
 using Fq12 = ecc::ExtFieldElem<Fq12Config>;
 
 /// Multiplies two Fq^2 field elements
-constexpr Fq2 multiply(const Fq2& a, const Fq2& b)
+constexpr Fq2 multiply(const Fq2& a, const Fq2& b) noexcept
 {
     const auto& [a0, a1] = a.coeffs;
     const auto& [b0, b1] = b.coeffs;
@@ -50,7 +50,7 @@ constexpr Fq2 multiply(const Fq2& a, const Fq2& b)
 }
 
 /// Squares an Fq^2 field element.
-constexpr Fq2 sqr(const Fq2& a)
+constexpr Fq2 sqr(const Fq2& a) noexcept
 {
     const auto& [a0, a1] = a.coeffs;
 
@@ -60,7 +60,7 @@ constexpr Fq2 sqr(const Fq2& a)
 }
 
 /// Multiplies two Fq^6 field elements
-constexpr Fq6 multiply(const Fq6& a, const Fq6& b)
+constexpr Fq6 multiply(const Fq6& a, const Fq6& b) noexcept
 {
     const auto& [a0, a1, a2] = a.coeffs;
     const auto& [b0, b1, b2] = b.coeffs;
@@ -79,7 +79,7 @@ constexpr Fq6 multiply(const Fq6& a, const Fq6& b)
 }
 
 /// Multiplies two Fq^12 field elements
-constexpr Fq12 multiply(const Fq12& a, const Fq12& b)
+constexpr Fq12 multiply(const Fq12& a, const Fq12& b) noexcept
 {
     const auto& [a0, a1] = a.coeffs;
     const auto& [b0, b1] = b.coeffs;
@@ -96,7 +96,7 @@ constexpr Fq12 multiply(const Fq12& a, const Fq12& b)
 }
 
 /// Inverses the Fq^2 field element
-inline Fq2 inverse(const Fq2& f)
+inline Fq2 inverse(const Fq2& f) noexcept
 {
     const auto& [a0, a1] = f.coeffs;
 
@@ -113,7 +113,7 @@ inline Fq2 inverse(const Fq2& f)
 }
 
 /// Inverses the Fq^6 field element
-inline Fq6 inverse(const Fq6& f)
+inline Fq6 inverse(const Fq6& f) noexcept
 {
     const auto& [a0, a1, a2] = f.coeffs;
 
@@ -138,7 +138,7 @@ inline Fq6 inverse(const Fq6& f)
 }
 
 /// Inverses the Fq^12 field element
-inline Fq12 inverse(const Fq12& f)
+inline Fq12 inverse(const Fq12& f) noexcept
 {
     const auto& [a0, a1] = f.coeffs;
 
