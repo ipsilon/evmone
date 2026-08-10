@@ -24,60 +24,6 @@ std::string_view to_test_fork_name(evmc_revision rev) noexcept
 }
 }  // namespace
 
-[[nodiscard]] std::string get_invalid_tx_message(state::ErrorCode errc) noexcept
-{
-    using namespace state;
-    switch (errc)
-    {
-    case SUCCESS:
-        return "";
-    case INTRINSIC_GAS_TOO_LOW:
-        return "TR_IntrinsicGas";
-    case TX_TYPE_NOT_SUPPORTED:
-        return "TR_TypeNotSupported";
-    case INSUFFICIENT_FUNDS:
-        return "TR_NoFunds";
-    case NONCE_HAS_MAX_VALUE:
-        return "TR_NonceHasMaxValue:";
-    case NONCE_TOO_HIGH:
-        return "TR_NonceTooHigh";
-    case NONCE_TOO_LOW:
-        return "TR_NonceTooLow";
-    case TIP_GT_FEE_CAP:
-        return "TR_TipGtFeeCap";
-    case FEE_CAP_LESS_THAN_BLOCKS:
-        return "TR_FeeCapLessThanBlocks";
-    case GAS_LIMIT_REACHED:
-        return "TR_GasLimitReached";
-    case SENDER_NOT_EOA:
-        return "SenderNotEOA";
-    case INIT_CODE_SIZE_LIMIT_EXCEEDED:
-        return "TR_InitCodeLimitExceeded";
-    case CREATE_BLOB_TX:
-        return "TR_BLOBCREATE";
-    case EMPTY_BLOB_HASHES_LIST:
-        return "TR_EMPTYBLOB";
-    case INVALID_BLOB_HASH_VERSION:
-        return "TR_BLOBVERSION_INVALID";
-    case BLOB_GAS_LIMIT_EXCEEDED:
-        return "TR_BLOBLIST_OVERSIZE";
-    case INVALID_CHAIN_ID:
-        return "TransactionException.INVALID_CHAINID";
-    case INVALID_ENCODING:
-        // EEST names every way an encoding can be malformed separately (RLP_*), so there is no
-        // single constant to export here; the plain message follows UNKNOWN_ERROR below.
-        return "Invalid transaction encoding";
-    case INVALID_SIGNATURE:
-        return "TransactionException.INVALID_SIGNATURE_VRS";
-    case UNKNOWN_ERROR:
-        return "Unknown error";
-    default:
-        assert(false);
-        return "Wrong error code";
-    }
-}
-
-
 json::json to_json(const TestState& state)
 {
     json::json j = json::json::object();
@@ -195,8 +141,8 @@ json::json to_state_test(std::string_view test_name, const state::BlockInfo& blo
 
     if (holds_alternative<std::error_code>(res))
     {
-        jpost["expectException"] = get_invalid_tx_message(
-            static_cast<state::ErrorCode>(std::get<std::error_code>(res).value()));
+        // The error message is the execution-spec-tests exception name.
+        jpost["expectException"] = std::get<std::error_code>(res).message();
         jpost["logs"] = hex0x(logs_hash(std::vector<state::Log>()));
     }
     else

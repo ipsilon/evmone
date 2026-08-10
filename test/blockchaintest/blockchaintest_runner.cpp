@@ -37,7 +37,7 @@ std::error_code validate_block(evmc_revision rev, state::BlobParams blob_params,
     // Fail if parent header was not found: the block references a parent that is neither the
     // genesis nor any previously-accepted block (an unknown or rejected parent).
     if (parent_header == nullptr)
-        return make_error_code(INVALID_BLOCK_PARENT);
+        return make_error_code(UNKNOWN_PARENT);
 
     if (test_block.block_info.number != parent_header->block_number + 1)
         return make_error_code(INVALID_BLOCK_NUMBER);

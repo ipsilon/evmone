@@ -97,7 +97,7 @@ add_test(
 string(
     JOIN ".*" EXPECTED_OUT
     # Create blob transaction should be rejected:
-    [=["error": "blob transaction must not be a create transaction"]=]
+    [=["error": "TransactionException.TYPE_3_TX_CONTRACT_CREATION"]=]
 )
 set_tests_properties(
     ${PREFIX}/${TEST_CASE}/out.json PROPERTIES

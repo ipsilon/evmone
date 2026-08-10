@@ -145,9 +145,6 @@ json::json to_state_test(std::string_view test_name, const state::BlockInfo& blo
     state::Transaction& tx, const TestState& pre, evmc_revision rev,
     const std::variant<state::TransactionReceipt, std::error_code>& res, const TestState& post);
 
-/// Returns the standardized error message for the transaction validation error.
-[[nodiscard]] std::string get_invalid_tx_message(state::ErrorCode errc) noexcept;
-
 
 std::vector<StateTransitionTest> load_state_tests(std::istream& input);
 

@@ -445,7 +445,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     {
     case Transaction::Type::blob:
         if (rev < EVMC_CANCUN)
-            return make_error_code(TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(TYPE_NOT_SUPPORTED);
         if (!tx.to.has_value())
             return make_error_code(CREATE_BLOB_TX);
         if (tx.blob_hashes.empty())
@@ -455,7 +455,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
 
         assert(block.blob_base_fee.has_value());
         if (tx.max_blob_gas_price < *block.blob_base_fee)
-            return make_error_code(BLOB_FEE_CAP_LESS_THAN_BLOCKS);
+            return make_error_code(INSUFFICIENT_MAX_FEE_PER_BLOB_GAS);
 
         if (std::ranges::any_of(tx.blob_hashes, [](const auto& h) { return h.bytes[0] != 0x01; }))
             return make_error_code(INVALID_BLOB_HASH_VERSION);
@@ -465,7 +465,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
 
     case Transaction::Type::set_code:
         if (rev < EVMC_PRAGUE)
-            return make_error_code(TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(TYPE_NOT_SUPPORTED);
         if (!tx.to.has_value())
             return make_error_code(CREATE_SET_CODE_TX);
         if (tx.authorization_list.empty())
@@ -481,15 +481,15 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     case Transaction::Type::blob:
     case Transaction::Type::eip1559:
         if (rev < EVMC_LONDON)
-            return make_error_code(TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(TYPE_NOT_SUPPORTED);
 
         if (tx.max_priority_gas_price > tx.max_gas_price)
-            return make_error_code(TIP_GT_FEE_CAP);  // Priority gas price is too high.
+            return make_error_code(PRIORITY_GREATER_THAN_MAX_FEE_PER_GAS);
         [[fallthrough]];
 
     case Transaction::Type::access_list:
         if (rev < EVMC_BERLIN)
-            return make_error_code(TX_TYPE_NOT_SUPPORTED);
+            return make_error_code(TYPE_NOT_SUPPORTED);
         [[fallthrough]];
 
     case Transaction::Type::legacy:;
@@ -498,13 +498,13 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     assert(tx.max_priority_gas_price <= tx.max_gas_price);
 
     if (rev >= EVMC_OSAKA && tx.gas_limit > MAX_TX_GAS_LIMIT)
-        return make_error_code(MAX_GAS_LIMIT_EXCEEDED);
+        return make_error_code(GAS_LIMIT_EXCEEDS_MAXIMUM);
 
     if (tx.gas_limit > block_gas_left)
-        return make_error_code(GAS_LIMIT_REACHED);
+        return make_error_code(GAS_ALLOWANCE_EXCEEDED);
 
     if (tx.max_gas_price < block.base_fee)
-        return make_error_code(FEE_CAP_LESS_THAN_BLOCKS);
+        return make_error_code(INSUFFICIENT_MAX_FEE_PER_GAS);
 
     // We need some information about the sender so lookup the account in the state.
     // TODO: During transaction execution this account will be also needed, so we may pass it along.
@@ -516,7 +516,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
         return make_error_code(SENDER_NOT_EOA);  // Origin must not be a contract (EIP-3607).
 
     if (sender_acc.nonce == MAX_NONCE)  // Nonce value limit (EIP-2681).
-        return make_error_code(NONCE_HAS_MAX_VALUE);
+        return make_error_code(NONCE_IS_MAX);
 
     if (sender_acc.nonce < tx.nonce)
         return make_error_code(NONCE_TOO_HIGH);
@@ -526,7 +526,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
 
     // initcode size is limited by EIP-3860.
     if (rev >= EVMC_SHANGHAI && !tx.to.has_value() && tx.data.size() > MAX_INITCODE_SIZE)
-        return make_error_code(INIT_CODE_SIZE_LIMIT_EXCEEDED);
+        return make_error_code(INITCODE_SIZE_EXCEEDED);
 
     // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
     // Note this is different from tx_max_cost computed with effective gas price later.
@@ -541,7 +541,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
         max_total_fee += total_blob_gas * tx.max_blob_gas_price;
     }
     if (sender_acc.balance < max_total_fee)
-        return make_error_code(INSUFFICIENT_FUNDS);
+        return make_error_code(INSUFFICIENT_ACCOUNT_FUNDS);
 
     const auto [intrinsic_cost, min_cost] = compute_tx_intrinsic_cost(rev, tx);
     if (tx.gas_limit < std::max(intrinsic_cost, min_cost))

@@ -46,7 +46,7 @@ TEST_F(state_transition, invalid_tx_non_existing_sender)
     tx.nonce = 0;
     pre.erase(Sender);
 
-    expect.tx_error = INSUFFICIENT_FUNDS;
+    expect.tx_error = INSUFFICIENT_ACCOUNT_FUNDS;
     expect.post[Sender].exists = false;
 }
 

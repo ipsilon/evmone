@@ -113,7 +113,7 @@ add_test(
 )
 set_tests_properties(
     ${PREFIX}/tx_invalid_nonce PROPERTIES
-    PASS_REGULAR_EXPRESSION "unexpected invalid transaction: nonce too high"
+    PASS_REGULAR_EXPRESSION "unexpected invalid transaction: TransactionException.NONCE_MISMATCH_TOO_HIGH"
 )
 
 add_test(
@@ -122,7 +122,7 @@ add_test(
 )
 set_tests_properties(
     ${PREFIX}/tx_invalid_signature PROPERTIES
-    PASS_REGULAR_EXPRESSION "unexpected invalid transaction: invalid transaction signature"
+    PASS_REGULAR_EXPRESSION "unexpected invalid transaction: TransactionException.INVALID_SIGNATURE_VRS"
 )
 
 add_test(
