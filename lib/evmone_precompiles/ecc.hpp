@@ -130,16 +130,6 @@ public:
 };
 
 /// The affine (two coordinates) point on an Elliptic Curve over a prime field.
-template <typename ValueT>
-struct Point
-{
-    ValueT x = {};
-    ValueT y = {};
-
-    friend constexpr Point operator-(const Point& p) noexcept { return {p.x, -p.y}; }
-};
-
-/// The affine (two coordinates) point on an Elliptic Curve over a prime field.
 template <typename Curve>
 struct AffinePoint
 {
@@ -216,9 +206,6 @@ struct ProjPoint
 
     friend constexpr ProjPoint operator-(const ProjPoint& p) noexcept { return {p.x, -p.y, p.z}; }
 };
-
-template <typename IntT>
-using InvFn = IntT (*)(const ModArith<IntT>&, const IntT& x) noexcept;
 
 /// Converts a projected point to an affine point.
 template <typename Curve>

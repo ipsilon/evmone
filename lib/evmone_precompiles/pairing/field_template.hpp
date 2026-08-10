@@ -50,8 +50,6 @@ struct ExtFieldElem
         return res;
     }
 
-    static constexpr ExtFieldElem zero() noexcept { return ExtFieldElem{}; }
-
     constexpr ExtFieldElem inv() const noexcept { return inverse(*this); }
 
     friend constexpr ExtFieldElem operator+(const ExtFieldElem& e1, const ExtFieldElem& e2) noexcept
