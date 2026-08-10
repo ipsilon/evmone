@@ -192,53 +192,63 @@ constexpr ecc::ProjPoint<E2> add(
     return {X3, Y3, Z3};
 }
 
-/// Computes `N` doubles of the point `a` in Jacobian coordinates.
-template <int N>
-constexpr ecc::ProjPoint<E2> n_dbl(const ecc::ProjPoint<E2>& a) noexcept
+/// Applies `sqr` to `a` N times.
+template <int N, typename T, typename SqrFn>
+constexpr T n_sqr(const T& a, SqrFn sqr) noexcept
 {
-    auto r = dbl(a);
-    for (int i = 0; i < N - 1; ++i)
-        r = dbl(r);
+    auto r = sqr(a);
+    for (int i = 1; i < N; ++i)
+        r = sqr(r);
 
     return r;
+}
+
+/// Addchain generated algorithm raising `a` to the power of X (curve seed),
+/// with `sqr` squaring a value and `mul` combining two of them.
+template <typename T, typename SqrFn, typename MulFn>
+constexpr T pow_by_X(const T& a, SqrFn sqr, MulFn mul) noexcept
+{
+    auto t0 = sqr(a);
+    auto t2 = sqr(t0);
+    auto c = sqr(t2);
+    auto t4 = sqr(c);
+    auto t6 = mul(a, t4);
+    t4 = mul(t6, t0);
+    auto t8 = mul(a, t4);
+    auto t10 = mul(c, t6);
+    auto t12 = sqr(t6);
+    t8 = mul(t8, t4);
+    t4 = mul(t8, t0);
+    t12 = n_sqr<6>(t12, sqr);
+    t2 = mul(t12, t2);
+    t2 = mul(t2, t10);
+    t2 = n_sqr<7>(t2, sqr);
+    t10 = mul(t2, t10);
+    t10 = n_sqr<8>(t10, sqr);
+    t10 = mul(t10, t4);
+    t0 = mul(t10, t0);
+    t0 = n_sqr<6>(t0, sqr);
+    t6 = mul(t0, t6);
+    t6 = n_sqr<8>(t6, sqr);
+    t6 = mul(t6, t4);
+    t6 = n_sqr<6>(t6, sqr);
+    t6 = mul(t6, t4);
+    t6 = n_sqr<10>(t6, sqr);
+    t8 = mul(t6, t8);
+    t8 = n_sqr<6>(t8, sqr);
+    t4 = mul(t4, t8);
+    c = mul(t4, c);
+
+    return c;
 }
 
 /// Addchain generated algorithm which multiplies point `a` in Jacobian coordinated
 /// by X (curve seed).
 constexpr ecc::ProjPoint<E2> mul_by_X(const ecc::ProjPoint<E2>& a) noexcept
 {
-    auto t0 = dbl(a);
-    auto t2 = dbl(t0);
-    auto c = dbl(t2);
-    auto t4 = dbl(c);
-    auto t6 = add(a, t4);
-    t4 = add(t6, t0);
-    auto t8 = add(a, t4);
-    auto t10 = add(c, t6);
-    auto t12 = dbl(t6);
-    t8 = add(t8, t4);
-    t4 = add(t8, t0);
-    t12 = n_dbl<6>(t12);
-    t2 = add(t12, t2);
-    t2 = add(t2, t10);
-    t2 = n_dbl<7>(t2);
-    t10 = add(t2, t10);
-    t10 = n_dbl<8>(t10);
-    t10 = add(t10, t4);
-    t0 = add(t10, t0);
-    t0 = n_dbl<6>(t0);
-    t6 = add(t0, t6);
-    t6 = n_dbl<8>(t6);
-    t6 = add(t6, t4);
-    t6 = n_dbl<6>(t6);
-    t6 = add(t6, t4);
-    t6 = n_dbl<10>(t6);
-    t8 = add(t6, t8);
-    t8 = n_dbl<6>(t8);
-    t4 = add(t4, t8);
-    c = add(t4, c);
-
-    return c;
+    return pow_by_X(
+        a, [](const auto& p) { return dbl(p); },
+        [](const auto& p, const auto& q) { return add(p, q); });
 }
 
 /// Checks that point `p_aff` is in proper subgroup of points from twisted curve over Fq2 field.
@@ -424,53 +434,13 @@ constexpr Fq12 cyclotomic_square(const Fq12& c)
     return Fq12({Fq6({c00, c01, c02}), Fq6({c10, c11, c12})});
 }
 
-/// Computes `cyclotomic_square` N times.
-template <int N>
-constexpr Fq12 n_cyclotomic_square(const Fq12& c)
-{
-    auto r = c;
-    for (int i = 0; i < N; ++i)
-        r = cyclotomic_square(r);
-
-    return r;
-}
-
 /// Computes `a^X` where `X` is the curve seed parameter
 /// and `a` is from cyclotomic subgroup of Fq^12.
 constexpr Fq12 cyclotomic_pow_to_X(const Fq12& a)
 {
-    auto t0 = cyclotomic_square(a);
-    auto t2 = cyclotomic_square(t0);
-    auto c = cyclotomic_square(t2);
-    auto t4 = cyclotomic_square(c);
-    auto t6 = a * t4;
-    t4 = t6 * t0;
-    auto t8 = a * t4;
-    auto t10 = c * t6;
-    auto t12 = cyclotomic_square(t6);
-    t8 = t8 * t4;
-    t4 = t8 * t0;
-    t12 = n_cyclotomic_square<6>(t12);
-    t2 = t12 * t2;
-    t2 = t2 * t10;
-    t2 = n_cyclotomic_square<7>(t2);
-    t10 = t2 * t10;
-    t10 = n_cyclotomic_square<8>(t10);
-    t10 = t10 * t4;
-    t0 = t10 * t0;
-    t0 = n_cyclotomic_square<6>(t0);
-    t6 = t0 * t6;
-    t6 = n_cyclotomic_square<8>(t6);
-    t6 = t6 * t4;
-    t6 = n_cyclotomic_square<6>(t6);
-    t6 = t6 * t4;
-    t6 = n_cyclotomic_square<10>(t6);
-    t8 = t6 * t8;
-    t8 = n_cyclotomic_square<6>(t8);
-    t4 = t4 * t8;
-    c = t4 * c;
-
-    return c;
+    return pow_by_X(
+        a, [](const Fq12& f) { return cyclotomic_square(f); },
+        [](const Fq12& f, const Fq12& g) { return f * g; });
 }
 
 }  // namespace evmmax::bn254
