@@ -5,6 +5,154 @@ Documentation of all notable changes to the **evmone** project.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.23.0] — unreleased
+
+This release continues the implementation of the Amsterdam EVM revision
+and reshapes the EVMC interface around it: the CREATE address is now computed
+by the VM and unused parts of the API have been dropped.
+
+### Added
+
+- **Amsterdam EVM revision**: next set of EIPs.
+  - [EIP-7708]: ETH transfers emit a log.
+    [#1573](https://github.com/ipsilon/evmone/pull/1573)
+  - [EIP-7954]: Increase Maximum Contract Size — the code limit is raised
+    to 0x10000 ([EIP-170]) and the init code limit to 0x20000 ([EIP-3860]).
+    [#1575](https://github.com/ipsilon/evmone/pull/1575)
+  - [EIP-8246]: Remove SELFDESTRUCT Burn.
+    [#1572](https://github.com/ipsilon/evmone/pull/1572)
+- **`get_nonce()` in the EVMC Host interface**, a live query needed by the VM
+  to compute the CREATE address.
+  [#1588](https://github.com/ipsilon/evmone/pull/1588)
+- **Transaction decoding in the state library**: `state::decode_transaction()`,
+  the inverse of the RLP encoder for legacy and [EIP-2718] typed transactions.
+  [#1580](https://github.com/ipsilon/evmone/pull/1580)
+  [#1581](https://github.com/ipsilon/evmone/pull/1581)
+- **Transaction sender recovery from the signature**, used by the state test
+  runner instead of the fixture's `sender` field.
+  [#1615](https://github.com/ipsilon/evmone/pull/1615)
+- Non-malleable (strict) mode of the secp256k1 signature recovery, accepting
+  only `s` values from the lower half of the curve order ([EIP-2]).
+  [#1612](https://github.com/ipsilon/evmone/pull/1612)
+- Test runners now check _why_ a transaction or block was rejected, not merely
+  that it was. Block-level reasons stay unchecked for legacy exception names,
+  blocks with ommers and unverified transaction signatures.
+  [#1621](https://github.com/ipsilon/evmone/pull/1621)
+  [#1623](https://github.com/ipsilon/evmone/pull/1623)
+  [#1624](https://github.com/ipsilon/evmone/pull/1624)
+  [#1632](https://github.com/ipsilon/evmone/pull/1632)
+
+### Changed
+
+- **EVMC ABI version bumped to 18** by the incompatible API changes below.
+  [#1587](https://github.com/ipsilon/evmone/pull/1587)
+  [#1588](https://github.com/ipsilon/evmone/pull/1588)
+  [#1589](https://github.com/ipsilon/evmone/pull/1589)
+  [#1593](https://github.com/ipsilon/evmone/pull/1593)
+  [#1596](https://github.com/ipsilon/evmone/pull/1596)
+- **The CREATE address is computed by the VM**, not by the Host: the creating
+  frame derives it from the sender's nonce, warms it ([EIP-2929]) and passes it
+  down in `msg.recipient`. The [EIP-2681] nonce-overflow light failure moves
+  there too.
+  [#1589](https://github.com/ipsilon/evmone/pull/1589)
+  [#1590](https://github.com/ipsilon/evmone/pull/1590)
+  [#1591](https://github.com/ipsilon/evmone/pull/1591)
+  [#1592](https://github.com/ipsilon/evmone/pull/1592)
+- The `evmc_access_status` enum has a `bool` underlying type.
+  [#1596](https://github.com/ipsilon/evmone/pull/1596)
+- EVM revisions are identified by name rather than by number: `evmone run --rev`
+  takes a name and the `evmc_revision` enumerators lost their explicit values.
+  [#1586](https://github.com/ipsilon/evmone/pull/1586)
+- **`modexp` windowed exponentiation**: the Montgomery path uses a sliding
+  window sized from the exponent's bit width, up to 1.5x faster.
+  [#1618](https://github.com/ipsilon/evmone/pull/1618)
+  [#1631](https://github.com/ipsilon/evmone/pull/1631)
+- **State library performance**: warm storage accesses are no longer journaled,
+  the storage journal holds slot pointers instead of keys, the account-flag
+  entries are merged into one, `Account` is smaller and repeated account
+  lookups are gone.
+  [#1585](https://github.com/ipsilon/evmone/pull/1585)
+  [#1594](https://github.com/ipsilon/evmone/pull/1594)
+  [#1597](https://github.com/ipsilon/evmone/pull/1597)
+  [#1598](https://github.com/ipsilon/evmone/pull/1598)
+  [#1600](https://github.com/ipsilon/evmone/pull/1600)
+  [#1601](https://github.com/ipsilon/evmone/pull/1601)
+  [#1602](https://github.com/ipsilon/evmone/pull/1602)
+  [#1603](https://github.com/ipsilon/evmone/pull/1603)
+  [#1605](https://github.com/ipsilon/evmone/pull/1605)
+  [#1606](https://github.com/ipsilon/evmone/pull/1606)
+  [#1607](https://github.com/ipsilon/evmone/pull/1607)
+  [#1609](https://github.com/ipsilon/evmone/pull/1609)
+- BN254 pairing arithmetic cleanups with small instruction-count wins: G2
+  doubling reuses the generic `ecc::dbl` and G2 addition a repeated term.
+  [#1633](https://github.com/ipsilon/evmone/pull/1633)
+  [#1635](https://github.com/ipsilon/evmone/pull/1635)
+  [#1636](https://github.com/ipsilon/evmone/pull/1636)
+  [#1641](https://github.com/ipsilon/evmone/pull/1641)
+  [#1642](https://github.com/ipsilon/evmone/pull/1642)
+  [#1643](https://github.com/ipsilon/evmone/pull/1643)
+- The cryptography code (`evmone_precompiles`) is built with `-O1` in Debug
+  configurations, keeping the precompiles usable there.
+  [#1619](https://github.com/ipsilon/evmone/pull/1619)
+- Keccak absorption of the final input bytes reworked, preventing a compiler
+  from replacing the tail copy with a `memcpy` call.
+  [#1620](https://github.com/ipsilon/evmone/pull/1620)
+- Fork names are spelled `TangerineWhistle` and `SpuriousDragon`, matching
+  [execution-specs].
+  [#1576](https://github.com/ipsilon/evmone/pull/1576)
+- The [Execution Spec Tests] fixtures are taken from [execution-specs]:
+  `tests@v20.0.1` and the `glamsterdam-devnet` pin for the Amsterdam work.
+  [#1577](https://github.com/ipsilon/evmone/pull/1577)
+  [#1579](https://github.com/ipsilon/evmone/pull/1579)
+- The state test runner takes each transaction from its `txbytes` encoding, and
+  the codec is checked against every encoding a fixture carries, including the
+  transactions in a valid block's RLP.
+  [#1614](https://github.com/ipsilon/evmone/pull/1614)
+  [#1617](https://github.com/ipsilon/evmone/pull/1617)
+- The `CHAINID` opcode returns the configured chain id instead of a hardcoded 1.
+  [#1610](https://github.com/ipsilon/evmone/pull/1610)
+- Frame exit result construction is shared between the Baseline and Advanced
+  interpreters.
+  [#1578](https://github.com/ipsilon/evmone/pull/1578)
+- The blockchain test runner reuses the state root of the canonical chain tip
+  instead of rebuilding the whole trie for the post-state check.
+  [#1595](https://github.com/ipsilon/evmone/pull/1595)
+
+### Removed
+
+- **The Constantinople revision**: it never activated on Mainnet (superseded by
+  [Petersburg]) and no live testnet runs it. Its opcodes retarget to Petersburg.
+  [#1587](https://github.com/ipsilon/evmone/pull/1587)
+- **The EVMC capabilities feature**: eWASM is gone and precompiles-only VMs
+  did not take off.
+  [#1593](https://github.com/ipsilon/evmone/pull/1593)
+- `evmc_result::create_address` and `evmc_message::create2_salt`, left without
+  readers by the VM-side CREATE address computation.
+  [#1589](https://github.com/ipsilon/evmone/pull/1589)
+
+### Fixed
+
+- **An [EIP-7702] authorization signature was never verified**: only its shape
+  was checked and the authority came from a non-standard `signer` field, so any
+  address could be given a delegation designation.
+  [#1611](https://github.com/ipsilon/evmone/pull/1611)
+- Transaction chain ids above 255 and [EIP-155] `v` values above 0xff were
+  rejected by the transaction loader, so `evmone t8n` failed on common networks
+  such as Sepolia.
+  [#1570](https://github.com/ipsilon/evmone/pull/1570)
+  [#1571](https://github.com/ipsilon/evmone/pull/1571)
+- A transaction with a mismatched chain id is rejected, and the [EIP-155]
+  protected form is recognized, so one signed for chain 0 is no longer accepted
+  on every chain.
+  [#1610](https://github.com/ipsilon/evmone/pull/1610)
+  [#1616](https://github.com/ipsilon/evmone/pull/1616)
+- The presence of the block header's `slotNumber` ([EIP-7843]) is validated;
+  a post-fork block missing it and a pre-fork block carrying it were accepted.
+  [#1626](https://github.com/ipsilon/evmone/pull/1626)
+- The JSON loaders conflated an absent optional key with a zero value, e.g.
+  an env without `blobGasUsed` produced an engaged optional holding 0.
+  [#1622](https://github.com/ipsilon/evmone/pull/1622)
+
 ## [0.22.0] — 2026-06-13
 
 This release starts the implementation of the Amsterdam EVM revision.
@@ -1317,6 +1465,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 - Exposes [EVMC] 6 ABI.
 - The [intx 0.2.0](https://github.com/chfast/intx/releases/tag/v0.2.0) library is used for 256-bit precision arithmetic. 
 
+[0.23.0]: https://github.com/ipsilon/evmone/compare/v0.22.0...master
 [0.22.0]: https://github.com/ipsilon/evmone/releases/tag/v0.22.0
 [0.21.0]: https://github.com/ipsilon/evmone/releases/tag/v0.21.0
 [0.20.0]: https://github.com/ethereum/evmone/releases/tag/v0.20.0
@@ -1346,6 +1495,8 @@ It delivers fully-compatible and high-speed EVM implementation.
 [0.1.1]: https://github.com/ethereum/evmone/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ethereum/evmone/releases/tag/v0.1.0
 
+[EIP-2]: https://eips.ethereum.org/EIPS/eip-2
+[EIP-155]: https://eips.ethereum.org/EIPS/eip-155
 [EIP-170]: https://eips.ethereum.org/EIPS/eip-170
 [EIP-663]: https://eips.ethereum.org/EIPS/eip-663
 [EIP-1153]: https://eips.ethereum.org/EIPS/eip-1153
@@ -1353,6 +1504,8 @@ It delivers fully-compatible and high-speed EVM implementation.
 [EIP-1344]: https://eips.ethereum.org/EIPS/eip-1344
 [EIP-2200]: https://eips.ethereum.org/EIPS/eip-2200
 [EIP-2537]: https://eips.ethereum.org/EIPS/eip-2537
+[EIP-2681]: https://eips.ethereum.org/EIPS/eip-2681
+[EIP-2718]: https://eips.ethereum.org/EIPS/eip-2718
 [EIP-2929]: https://eips.ethereum.org/EIPS/eip-2929
 [EIP-2935]: https://eips.ethereum.org/EIPS/eip-2935
 [EIP-3155]: https://eips.ethereum.org/EIPS/eip-3155
@@ -1380,6 +1533,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 [EIP-7691]: https://eips.ethereum.org/EIPS/eip-7691
 [EIP-7692]: https://eips.ethereum.org/EIPS/eip-7692
 [EIP-7702]: https://eips.ethereum.org/EIPS/eip-7702
+[EIP-7708]: https://eips.ethereum.org/EIPS/eip-7708
 [EIP-7778]: https://eips.ethereum.org/EIPS/eip-7778
 [EIP-7843]: https://eips.ethereum.org/EIPS/eip-7843
 [EIP-7594]: https://eips.ethereum.org/EIPS/eip-7594
@@ -1392,9 +1546,11 @@ It delivers fully-compatible and high-speed EVM implementation.
 [EIP-7934]: https://eips.ethereum.org/EIPS/eip-7934
 [EIP-7939]: https://eips.ethereum.org/EIPS/eip-7939
 [EIP-7951]: https://eips.ethereum.org/EIPS/eip-7951
+[EIP-7954]: https://eips.ethereum.org/EIPS/eip-7954
 [EIP-7976]: https://eips.ethereum.org/EIPS/eip-7976
 [EIP-7981]: https://eips.ethereum.org/EIPS/eip-7981
 [EIP-8024]: https://eips.ethereum.org/EIPS/eip-8024
+[EIP-8246]: https://eips.ethereum.org/EIPS/eip-8246
 
 [Spurious Dragon]: https://eips.ethereum.org/EIPS/eip-607
 [Petersburg]: https://eips.ethereum.org/EIPS/eip-1716
@@ -1442,6 +1598,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 [tests 8.0.4]: https://github.com/ethereum/tests/releases/tag/8.0.4
 
 [Execution Spec Tests]: https://github.com/ethereum/execution-spec-tests
+[execution-specs]: https://github.com/ethereum/execution-specs
 [Execution Spec Tests 5.3.0]: https://github.com/ethereum/execution-spec-tests/releases/tag/v5.3.0
 [Execution Spec Tests 3.0.0]: https://github.com/ethereum/execution-spec-tests/releases/tag/v3.0.0
 [Execution Spec Tests 1.0.6]: https://github.com/ethereum/execution-spec-tests/releases/tag/v1.0.6
