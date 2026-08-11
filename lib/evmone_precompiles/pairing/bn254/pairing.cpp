@@ -36,40 +36,39 @@ constexpr void multiply_by_lin_func_value(
         f.coeffs[1].coeffs[2] * t0y + f.coeffs[0].coeffs[2] * t1x + f.coeffs[0].coeffs[1] * t[2];
 }
 
-// 0000000100010010000010000000010000100010000000010010000000001000000100100000010000000000100000100001001000000010001000000001000101
-// NAF rep 00 -> 0, 01 -> 1, 10 -> -1
-// miller loop goes from L-2 to 0 inclusively. NAF rep of 29793968203157093288 (6x+2) is two bits
-// longer, but we omit lowest 2 bits.
-inline constexpr auto ATE_LOOP_COUNT_NAF = 0x1120804220120081204008212022011_u128;
-inline constexpr int LOG_ATE_LOOP_COUNT = 63;
+/// The signed digits of the ate loop count 6x+2 = 29793968203157093288, most significant first,
+/// with the leading 1 omitted. This is a semi-NAF: adjacent non-zeros occur only at the leading
+/// 1, 1, which the non-adjacent form spells as 1, 0, -1. Both have 22 non-zero digits, but this
+/// one is a digit shorter, i.e. one loop iteration less.
+// clang-format off
+inline constexpr int8_t ATE_LOOP_COUNT_DIGITS[] = {
+     1,  0,  1,  0,  0,  0, -1,  0, -1,  0,  0,  0, -1,  0,  1,  0,
+    -1,  0,  0, -1,  0,  0,  0,  0,  0,  1,  0,  0, -1,  0,  1,  0,
+     0, -1,  0,  0,  0,  0, -1,  0,  1,  0,  0,  0, -1,  0, -1,  0,
+     0,  1,  0,  0,  0, -1,  0,  0, -1,  0,  1,  0,  1,  0,  0,  0,
+};
+// clang-format on
 
 /// Miller loop according to https://eprint.iacr.org/2010/354.pdf Algorithm 1.
 Fq12 miller_loop(const ecc::AffinePoint<E2>& Q, const ecc::AffinePoint<Curve>& P) noexcept
 {
-    auto T = ecc::ProjPoint{Q};
+    auto T = ecc::ProjPoint{Q};  // Applies the omitted leading digit 1 of the loop count.
     const auto nQ = -Q;
     auto f = Fq12::one();
     std::array<Fq2, 3> t;
-    auto naf = ATE_LOOP_COUNT_NAF;
     const auto ny = -P.y;
 
-    for (int i = 0; i <= LOG_ATE_LOOP_COUNT; ++i)
+    for (const auto digit : ATE_LOOP_COUNT_DIGITS)
     {
         T = lin_func_and_dbl(T, t);
         f = square(f);
         multiply_by_lin_func_value(f, t, P.x, ny);
 
-        if (naf & 1)
+        if (digit != 0)
         {
-            T = lin_func_and_add(T, Q, t);
+            T = lin_func_and_add(T, digit > 0 ? Q : nQ, t);
             multiply_by_lin_func_value(f, t, P.x, P.y);
         }
-        else if (naf & 2)
-        {
-            T = lin_func_and_add(T, nQ, t);
-            multiply_by_lin_func_value(f, t, P.x, P.y);
-        }
-        naf >>= 2;
     }
 
     // Frobenius endomorphism for point Q from twisted curve over Fq2 field.
