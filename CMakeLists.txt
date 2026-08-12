@@ -23,7 +23,7 @@ cable_set_build_type(DEFAULT Release CONFIGURATION_TYPES Release Debug)
 include(Hunter/init)
 
 project(evmone LANGUAGES CXX C)
-set(PROJECT_VERSION 0.22.0)
+set(PROJECT_VERSION 0.23.0)
 
 option(EVMONE_TOOLS "Build evmone tools" ${PROJECT_IS_TOP_LEVEL})
 

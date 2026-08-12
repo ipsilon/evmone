@@ -73,6 +73,9 @@ struct E2
 {
     using Fp = Fq2;
     static constexpr auto A = 0;
+    /// b/ξ, i.e. Curve::B divided by the Fq⁶ non-residue ξ.
+    static constexpr Fp B{0x2b149d40ceb8aaae81be18991be06ac3b5b4c5e559dbefa33267e6dc24a138e5_u256,
+        0x9713b03af0fed4cd2cafadeed8fdf4a74fa084e52d1852e4a2bd0685c315d2_u256};
 };
 
 using ExtPoint = ecc::AffinePoint<E2>;

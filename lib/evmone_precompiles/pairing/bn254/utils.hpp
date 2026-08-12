@@ -44,12 +44,12 @@ inline constexpr std::array<std::array<Fq2, 5>, 3> FROBENIUS_COEFFS = {{
 }};
 
 /// Verifies that affine point over Fq^2 field is on the twisted curve.
-constexpr bool is_on_twisted_curve(const ecc::AffinePoint<E2>& p)
+constexpr bool is_on_twisted_curve(const ecc::AffinePoint<E2>& p) noexcept
 {
     const auto x3 = p.x * p.x * p.x;
     const auto y2 = p.y * p.y;
 
-    return y2 == x3 + Fq6Config::_3_ksi_inv;
+    return y2 == x3 + E2::B;
 }
 
 // Frobenius endomorphism related functions are implemented based on
@@ -152,7 +152,6 @@ constexpr Fq12 endomorphism(const Fq12& f) noexcept
     });
 }
 
-
 /// Computes `P0 + P1` in Jacobian coordinates.
 /// P0 and P1 must not be the point at infinity, and must not be equal or negations of each other.
 constexpr ecc::ProjPoint<E2> add(
@@ -243,7 +242,7 @@ constexpr ecc::ProjPoint<E2> mul_by_X(const ecc::ProjPoint<E2>& a) noexcept
 
 /// Checks that point `p_aff` is in proper subgroup of points from twisted curve over Fq2 field.
 /// For more details see https://eprint.iacr.org/2022/348.pdf Example 1 from 3.1.2 Examples
-constexpr bool g2_subgroup_check(const ecc::AffinePoint<E2>& p_aff)
+constexpr bool g2_subgroup_check(const ecc::AffinePoint<E2>& p_aff) noexcept
 {
     const auto p = ecc::ProjPoint<E2>{p_aff};
 
@@ -377,7 +376,7 @@ constexpr void lin_func(
 
 /// Computes `a^2` for `a` from `Fq^4 = Fq^2[V](V^2 - ksi)` where `V` is from Fq^2 extended field.
 /// For more reference see https://eprint.iacr.org/2010/354.pdf Algorithm 9
-constexpr std::pair<Fq2, Fq2> fq4_square(const std::pair<Fq2, Fq2>& a)
+constexpr std::pair<Fq2, Fq2> fq4_square(const std::pair<Fq2, Fq2>& a) noexcept
 {
     const auto& a0 = a.first;
     const auto& a1 = a.second;
@@ -394,7 +393,7 @@ constexpr std::pair<Fq2, Fq2> fq4_square(const std::pair<Fq2, Fq2>& a)
 
 /// Computes `c^2` for `x` from Fq^12 where `x^(FieldPrime^6 - 1) == 1`.
 /// This is Fq^12 subgroup called cyclotomic polynomials or group of `r` roots of unity.
-constexpr Fq12 cyclotomic_square(const Fq12& c)
+constexpr Fq12 cyclotomic_square(const Fq12& c) noexcept
 {
     const auto& g = c.coeffs[0];
     const auto& h = c.coeffs[1];
@@ -426,7 +425,7 @@ constexpr Fq12 cyclotomic_square(const Fq12& c)
 
 /// Computes `cyclotomic_square` N times.
 template <int N>
-constexpr Fq12 n_cyclotomic_square(const Fq12& c)
+constexpr Fq12 n_cyclotomic_square(const Fq12& c) noexcept
 {
     auto r = c;
     for (int i = 0; i < N; ++i)
@@ -437,7 +436,7 @@ constexpr Fq12 n_cyclotomic_square(const Fq12& c)
 
 /// Computes `a^X` where `X` is the curve seed parameter
 /// and `a` is from cyclotomic subgroup of Fq^12.
-constexpr Fq12 cyclotomic_pow_to_X(const Fq12& a)
+constexpr Fq12 cyclotomic_pow_to_X(const Fq12& a) noexcept
 {
     auto t0 = cyclotomic_square(a);
     auto t2 = cyclotomic_square(t0);

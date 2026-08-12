@@ -28,8 +28,8 @@ AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept
     // See ecc::decompose() for more details.
     const auto [k1, k2] = ecc::decompose<Curve>(c);
 
-    const auto q = AffinePoint{Curve::BETA * pt.x, !k2.sign ? pt.y : -pt.y};
-    const auto p = AffinePoint{pt.x, !k1.sign ? pt.y : -pt.y};
+    const auto q = AffinePoint{Curve::BETA * pt.x, k2.sign ? -pt.y : pt.y};
+    const auto p = AffinePoint{pt.x, k1.sign ? -pt.y : pt.y};
     const auto pr = msm(k1.value, p, k2.value, q);
     return ecc::to_affine(pr);
 }
