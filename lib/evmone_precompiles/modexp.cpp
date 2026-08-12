@@ -316,7 +316,7 @@ template <size_t N = std::dynamic_extent>
 void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
     std::span<const uint64_t, N> y, std::span<const uint64_t, N> mod, uint64_t mod_inv) noexcept
 {
-    // Use Coarsely Integrated Operand Scanning (CIOS) method with the "almost" reduction.
+    // Use Finely Integrated Operand Scanning (FIOS) method with the "almost" reduction.
     const auto n = r.size();
     assert(n > 0);
     assert(x.size() == n);
@@ -325,33 +325,44 @@ void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
     assert(mod.back() != 0);
     assert(r.data() != x.data() && r.data() != y.data());  // r must not alias inputs.
 
-    const auto r_lo = r.subspan(0, n - 1);
-    const auto r_hi = r.subspan(1);
-    const auto mod_hi = mod.subspan(1);
+    // Single iteration: r[] = (r[] + x[]⋅y_i + mod[]⋅m) / 2^64, where m is selected to cancel the
+    // lowest word. The product and the reduction multiple are added in one pass over r[], with a
+    // separate carry for each. For the first iteration r[] is uninitialized, i.e. implicitly zero.
+    // Returns the two carries out of the top word.
+    const auto iteration = [r, x, mod, mod_inv, n]<bool First>(uint64_t y_i) noexcept {
+        auto p = umul(x[0], y_i);
+        if constexpr (!First)
+            p += r[0];
+        const auto m = p[0] * mod_inv;
+        auto c_prod = p[1];
+        auto c_mod = (umul(mod[0], m) + p[0])[1];
 
-    // First iteration: r is uninitialized, so use mul instead of addmul.
+#pragma GCC unroll 4
+        for (size_t j = 1; j != n; ++j)
+        {
+            auto t = umul(x[j], y_i) + c_prod;
+            if constexpr (!First)
+                t += r[j];
+            c_prod = t[1];
+
+            const auto u = umul(mod[j], m) + t[0] + c_mod;
+            c_mod = u[1];
+            r[j - 1] = u[0];
+        }
+        return std::pair{c_prod, c_mod};
+    };
+
     bool r_carry = false;
     {
-        const auto c1 = crypto::mul(r, x, y[0]);
-
-        const auto m = r[0] * mod_inv;
-        const auto c2 = (umul(mod[0], m) + r[0])[1];
-
-        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, c2);
-        std::tie(r[n - 1], r_carry) = intx::addc(c1, c3);
+        const auto [c_prod, c_mod] = iteration.template operator()<true>(y[0]);
+        std::tie(r[n - 1], r_carry) = intx::addc(c_prod, c_mod);
     }
 
-    // Remaining iterations.
     for (size_t i = 1; i != n; ++i)
     {
-        const auto c1 = addmul(r, r, x, y[i]);
-        const auto [sum1, d1] = intx::addc(c1, uint64_t{r_carry});
-
-        const auto m = r[0] * mod_inv;
-        const auto c2 = (umul(mod[0], m) + r[0])[1];
-
-        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, c2);
-        const auto [sum2, d2] = intx::addc(sum1, c3);
+        const auto [c_prod, c_mod] = iteration.template operator()<false>(y[i]);
+        const auto [sum1, d1] = intx::addc(c_prod, c_mod);
+        const auto [sum2, d2] = intx::addc(sum1, uint64_t{r_carry});
         r[n - 1] = sum2;
         assert(!(d1 && d2));
         r_carry = d1 || d2;
