@@ -271,4 +271,52 @@ public:
         return inv_scaled(x, r_squared_);
     }
 };
+
+/// The modular arithmetic backend of a prime field.
+///
+/// An implementation keeps values in an internal representation of its choice. Every operation
+/// takes and returns fully reduced values, i.e. less than the modulus. Additionally,
+/// to_internal() requires its argument to be already reduced, because a plain representation
+/// cannot reduce it. inv() returns 0 for non-invertible input, including 0.
+template <typename T>
+concept FieldArith = requires(const typename T::uint_type& x, const typename T::uint_type& y) {
+    { T::to_internal(x) } -> std::same_as<typename T::uint_type>;
+    { T::from_internal(x) } -> std::same_as<typename T::uint_type>;
+    { T::mul(x, y) } -> std::same_as<typename T::uint_type>;
+    { T::add(x, y) } -> std::same_as<typename T::uint_type>;
+    { T::sub(x, y) } -> std::same_as<typename T::uint_type>;
+    { T::inv(x) } -> std::same_as<typename T::uint_type>;
+};
+
+/// The Montgomery multiplication backend, usable with any odd modulus.
+/// Values are kept in the Montgomery form.
+template <const auto& Mod>
+struct MontgomeryArith
+{
+    using uint_type = std::remove_cvref_t<decltype(Mod)>;
+
+    static constexpr uint_type to_internal(const uint_type& v) noexcept { return M.to_mont(v); }
+    static constexpr uint_type from_internal(const uint_type& v) noexcept { return M.from_mont(v); }
+
+    static constexpr uint_type mul(const uint_type& x, const uint_type& y) noexcept
+    {
+        return M.mul(x, y);
+    }
+    static constexpr uint_type add(const uint_type& x, const uint_type& y) noexcept
+    {
+        return M.add(x, y);
+    }
+    static constexpr uint_type sub(const uint_type& x, const uint_type& y) noexcept
+    {
+        return M.sub(x, y);
+    }
+    static constexpr uint_type inv(const uint_type& x) noexcept { return M.inv(x); }
+
+private:
+    static constexpr ModArith<uint_type> M{Mod};
+};
+
+/// Selects the arithmetic backend for the given modulus.
+template <const auto& Mod>
+using ArithFor = MontgomeryArith<Mod>;
 }  // namespace evmmax
