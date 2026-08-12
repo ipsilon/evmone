@@ -89,10 +89,9 @@ inline void reduce(uint64_t a0, uint64_t& a1, uint64_t& a2, uint64_t& a3, uint64
         "adoxq %[hi], %[a3]\n\t"
         "mulxq 24(%[mod]), %[lo], %[hi]\n\t"
         "adcxq %[lo], %[a3]\n\t"
-        "adoxq %[hi], %[a4]\n\t"
-        "adcxq %[z], %[a4]\n\t"
-        "adoxq %[z], %[c]\n\t"
-        "adcq $0, %[c]"
+        "adoxq %[z], %[hi]\n\t"
+        "adcxq %[hi], %[a4]\n\t"
+        "adcxq %[z], %[c]"
         : [a1] "+r"(a1), [a2] "+r"(a2), [a3] "+r"(a3), [a4] "+r"(a4),
           [c] "+r"(c), [z] "=&r"(z), [lo] "=&r"(lo), [hi] "=&r"(hi)
         : [a0] "r"(a0), [mod] "r"(&mod), "d"(m), "m"(mod)
