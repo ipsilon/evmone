@@ -5,6 +5,7 @@
 #include <evmmax/evmmax.hpp>
 #include <gtest/gtest.h>
 #include <array>
+#include <vector>
 
 using namespace intx;
 using namespace evmmax;
@@ -17,6 +18,13 @@ constexpr auto M256 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 constexpr auto BLS12384Mod =
     0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab_u384;
 
+
+// Only the secp256k1 field prime (2²⁵⁶-2³²-977) and 2²⁵⁶-1 are pseudo-Mersenne.
+static_assert(pseudo_mersenne_c(Secp256k1Mod) == 0x1000003d1);
+static_assert(pseudo_mersenne_c(M256) == 1);
+static_assert(pseudo_mersenne_c(P23) == 0);
+static_assert(pseudo_mersenne_c(BN254Mod) == 0);
+static_assert(pseudo_mersenne_c(BLS12384Mod) == 0);
 
 template <typename UintT, const UintT& Mod>
 struct ModA : ModArith<UintT>
@@ -166,4 +174,48 @@ TYPED_TEST(evmmax_test, inv)
         const auto pm = m.mul(xm, xm_inv);
         EXPECT_EQ(m.from_mont(pm), 1);
     }
+}
+
+/// Reduces by generic division, as the reference for pseudo_mersenne_reduce().
+template <const auto& Mod>
+static auto reduce_ref(
+    const intx::uint<2 * std::remove_cvref_t<decltype(Mod)>::num_bits>& p) noexcept
+{
+    using UintT = std::remove_cvref_t<decltype(Mod)>;
+    return static_cast<UintT>(udivrem(p, decltype(p){Mod}).rem);
+}
+
+/// Checks pseudo_mersenne_reduce() against the reference for the whole input range, including
+/// the two carry foldings that no product of two canonical operands can reach.
+template <const auto& Mod>
+static void test_reduce()
+{
+    using UintT = std::remove_cvref_t<decltype(Mod)>;
+    using WideT = intx::uint<2 * UintT::num_bits>;
+    static constexpr auto C = pseudo_mersenne_c(Mod);
+
+    std::vector<WideT> inputs{0, 1, WideT{Mod} - 1, WideT{Mod} + 1, ~WideT{},
+        umul(Mod - 1, Mod - 1), WideT{~UintT{}}, WideT{~UintT{}} - C, WideT{C}};
+
+    // Reaches the final subtraction: a zero high half makes the folding an identity, so any
+    // value in [Mod, 2ⁿ) needs the subtraction. Mod itself must reduce to 0.
+    inputs.push_back(WideT{Mod});
+
+    // Reaches the folding of the leftover word's overflow: solving l + h⋅C = 2ⁿ + (2ⁿ-1) leaves
+    // the first folding at 2ⁿ-1 with a leftover word of 1, so adding 1⋅C overflows.
+    const auto target = (WideT{1} << (UintT::num_bits + 1)) - 1;
+    inputs.push_back(((target / C) << UintT::num_bits) | (target % C));
+
+    for (const auto& p : inputs)
+        EXPECT_EQ(pseudo_mersenne_reduce<Mod>(p), reduce_ref<Mod>(p)) << to_string(p, 16);
+}
+
+TEST(evmmax, pseudo_mersenne_reduce_secp256k1)
+{
+    test_reduce<Secp256k1Mod>();
+}
+
+TEST(evmmax, pseudo_mersenne_reduce_m256)
+{
+    test_reduce<M256>();
 }

@@ -59,6 +59,48 @@ constexpr std::pair<uint64_t, uint64_t> addmul(
     return {p[1], p[0]};
 }
 
+/// Returns the c of a "pseudo-Mersenne" modulus 2ⁿ-c, where n is the bit width of the type.
+/// Returns 0 if c does not fit in a single word, i.e. if the modulus is not pseudo-Mersenne
+/// for the purpose of pseudo_mersenne_reduce().
+template <typename UintT>
+consteval uint64_t pseudo_mersenne_c(const UintT& mod) noexcept
+{
+    const UintT c = -mod;  // 2ⁿ - mod, because the negation is modulo 2ⁿ.
+    return (c == UintT{c[0]}) ? c[0] : 0;
+}
+
+/// Reduces a double-width value modulo the pseudo-Mersenne modulus Mod = 2ⁿ-c.
+/// Accepts any value of the double width and returns the fully reduced result.
+template <const auto& Mod>
+constexpr auto pseudo_mersenne_reduce(
+    const intx::uint<2 * std::remove_cvref_t<decltype(Mod)>::num_bits>& p) noexcept
+{
+    using UintT = std::remove_cvref_t<decltype(Mod)>;
+    constexpr auto S = UintT::num_words;
+    constexpr auto C = pseudo_mersenne_c(Mod);
+    static_assert(C != 0, "the modulus is not pseudo-Mersenne");
+
+    // Fold the high half into the low one: h⋅2ⁿ + l ≡ l + h⋅c (mod 2ⁿ-c).
+    UintT t;
+    uint64_t c = 0;
+#pragma GCC unroll 8
+    for (size_t i = 0; i != S; ++i)
+        std::tie(c, t[i]) = addmul(p[i], p[S + i], C, c);
+
+    // Fold the leftover word the same way. It is not greater than c, so the product spans
+    // two words at most and the addition below overflows by at most 1.
+    auto [r, overflow] = addc(t, UintT{intx::umul(c, C)});
+
+    // Fold the overflow again. This cannot overflow, because the addition above only overflows
+    // when the low part of its result is as small as the two-word product.
+    if (overflow) [[unlikely]]
+        r += C;
+
+    if (r >= Mod) [[unlikely]]  // The result may exceed the modulus, but by less than c.
+        r -= Mod;
+    return r;
+}
+
 /// The modular arithmetic operations for EVMMAX (EVM Modular Arithmetic Extensions).
 template <typename UintT>
 class ModArith
