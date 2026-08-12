@@ -263,34 +263,25 @@ void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uin
 /// This is a view type of the big-endian bytes representing the bits of the exponent.
 class Exponent
 {
-    const uint8_t* data_ = nullptr;
+    std::span<const uint8_t> bytes_;  ///< Big-endian bytes with the leading zeros trimmed.
     size_t bit_width_ = 0;
 
 public:
     explicit Exponent(std::span<const uint8_t> bytes) noexcept
+      : bytes_{std::ranges::find_if(bytes, [](auto x) { return x != 0; }), bytes.end()}
     {
-        const auto it = std::ranges::find_if(bytes, [](auto x) { return x != 0; });
-        const auto trimmed_bytes = std::span{it, bytes.end()};
-        bit_width_ = trimmed_bytes.empty() ? 0 :
-                                             static_cast<size_t>(std::bit_width(trimmed_bytes[0])) +
-                                                 (trimmed_bytes.size() - 1) * 8;
-        data_ = trimmed_bytes.data();
+        bit_width_ = bytes_.empty() ? 0 :
+                                      static_cast<size_t>(std::bit_width(bytes_.front())) +
+                                          (bytes_.size() - 1) * 8;
     }
-
 
     [[nodiscard]] size_t bit_width() const noexcept { return bit_width_; }
 
     /// Returns the bit value of the exponent at the given index, counting from the least
     /// significant bit (e[0] is the bottom bit, e[bit_width() - 1] is the top bit, always set).
-    bool operator[](size_t index) const noexcept
+    [[nodiscard]] bool operator[](size_t index) const noexcept
     {
-        // TODO: Replace this with a custom iterator type.
-        const auto exp_size = (bit_width_ + 7) / 8;
-        const auto byte_index = index / 8;
-        const auto byte = data_[exp_size - 1 - byte_index];
-        const auto bit_index = index % 8;
-        const auto bit = (byte >> bit_index) & 1;
-        return bit != 0;
+        return ((bytes_[bytes_.size() - 1 - index / 8] >> (index % 8)) & 1) != 0;
     }
 
     /// Returns bits [lo, hi] as an integer, the bit at hi being the most significant.
@@ -298,11 +289,10 @@ public:
     [[nodiscard]] size_t window(size_t lo, size_t hi) const noexcept
     {
         assert(lo <= hi && hi - lo < 8);
-        const auto exp_size = (bit_width_ + 7) / 8;
-        const auto byte_index = exp_size - 1 - lo / 8;
-        auto bytes = size_t{data_[byte_index]};
+        const auto byte_index = bytes_.size() - 1 - lo / 8;
+        auto bytes = size_t{bytes_[byte_index]};
         if (byte_index != 0)  // Prepend the next more significant byte if there is one.
-            bytes |= size_t{data_[byte_index - 1]} << 8;
+            bytes |= size_t{bytes_[byte_index - 1]} << 8;
         return (bytes >> (lo % 8)) & ((size_t{1} << (hi + 1 - lo)) - 1);
     }
 };
