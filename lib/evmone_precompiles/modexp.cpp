@@ -263,32 +263,31 @@ void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uin
 /// This is a view type of the big-endian bytes representing the bits of the exponent.
 class Exponent
 {
-    const uint8_t* data_ = nullptr;
-    size_t bit_width_ = 0;
+    std::span<const uint8_t> bytes_;  ///< Big-endian bytes with the leading zeros trimmed.
 
 public:
     explicit Exponent(std::span<const uint8_t> bytes) noexcept
+      : bytes_{std::ranges::find_if(bytes, [](auto x) { return x != 0; }), bytes.end()}
+    {}
+
+    /// Returns true for the exponent of zero.
+    [[nodiscard]] bool empty() const noexcept { return bytes_.empty(); }
+
+    /// The number of significant bits of the exponent. Must not be empty.
+    [[nodiscard]] size_t bit_width() const noexcept
     {
-        const auto it = std::ranges::find_if(bytes, [](auto x) { return x != 0; });
-        const auto trimmed_bytes = std::span{it, bytes.end()};
-        bit_width_ = trimmed_bytes.empty() ? 0 :
-                                             static_cast<size_t>(std::bit_width(trimmed_bytes[0])) +
-                                                 (trimmed_bytes.size() - 1) * 8;
-        data_ = trimmed_bytes.data();
+        assert(!empty());
+        return static_cast<size_t>(std::bit_width(bytes_.front())) + (bytes_.size() - 1) * 8;
     }
-
-
-    [[nodiscard]] size_t bit_width() const noexcept { return bit_width_; }
 
     /// Returns the bit value of the exponent at the given index, counting from the least
     /// significant bit (e[0] is the bottom bit, e[bit_width() - 1] is the top bit, always set).
-    bool operator[](size_t index) const noexcept
+    [[nodiscard]] bool operator[](size_t index) const noexcept
     {
         // TODO: Replace this with a custom iterator type.
-        const auto exp_size = (bit_width_ + 7) / 8;
         const auto byte_index = index / 8;
-        const auto byte = data_[exp_size - 1 - byte_index];
         const auto bit_index = index % 8;
+        const auto byte = bytes_[bytes_.size() - 1 - byte_index];
         const auto bit = (byte >> bit_index) & 1;
         return bit != 0;
     }
@@ -298,11 +297,10 @@ public:
     [[nodiscard]] size_t window(size_t lo, size_t hi) const noexcept
     {
         assert(lo <= hi && hi - lo < 8);
-        const auto exp_size = (bit_width_ + 7) / 8;
-        const auto byte_index = exp_size - 1 - lo / 8;
-        auto bytes = size_t{data_[byte_index]};
+        const auto byte_index = bytes_.size() - 1 - lo / 8;
+        auto bytes = size_t{bytes_[byte_index]};
         if (byte_index != 0)  // Prepend the next more significant byte if there is one.
-            bytes |= size_t{data_[byte_index - 1]} << 8;
+            bytes |= size_t{bytes_[byte_index - 1]} << 8;
         return (bytes >> (lo % 8)) & ((size_t{1} << (hi + 1 - lo)) - 1);
     }
 };
@@ -413,7 +411,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     assert(!mod.empty() && mod.back() != 0);    // mod must be trimmed.
     assert(!base.empty() && base.back() != 0);  // base must be trimmed.
     assert(result.size() == mod.size());
-    assert(exp.bit_width() != 0);
+    assert(!exp.empty());
 
     const auto n = mod.size();
     const auto mod_inv = -modinv(mod[0]);
@@ -530,7 +528,7 @@ void modexp_pow2(std::span<uint64_t> r, std::span<const uint64_t> base, Exponent
     std::span<uint64_t> scratch) noexcept
 {
     assert(k != 0);                             // Modulus of 1 should be covered as "odd".
-    assert(exp.bit_width() != 0);               // Exponent of zero must be handled outside.
+    assert(!exp.empty());                       // Exponent of zero must be handled outside.
     assert(!base.empty() && base.back() != 0);  // base must be trimmed.
     assert(r.data() != base.data());            // No in-place operation.
 
@@ -628,7 +626,7 @@ void modexp(std::span<const uint8_t> base_bytes, std::span<const uint8_t> exp_by
     const auto result = std::span{alloc.allocate(mod_size), mod_size};
     std::ranges::fill(result, uint64_t{0});
 
-    if (exp.bit_width() == 0)  // Exponent is 0:
+    if (exp.empty())  // Exponent is 0:
     {
         // Result is 1 except when mod is 1.
         if (mod_tz != 0 || mod_odd.size() != 1 || mod_odd[0] != 1)  // mod != 1
