@@ -252,6 +252,7 @@ void modexp(benchmark::State& state)
     intx::be::unsafe::store(&input[32], intx::uint256{exp_len});
     intx::be::unsafe::store(&input[64], intx::uint256{base_mod_len});
     const std::span payload{&input[3 * 32], payload_len};
+    // TODO: The base is always odd, so the even base path of the power-of-two part is not covered.
     std::fill_n(&payload[0], base_mod_len, 0xff);
     std::fill_n(&payload[base_mod_len + 1], exp_len - 1, 0xff);
     payload[base_mod_len] = 0xff >> exp_clz;
