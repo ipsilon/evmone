@@ -158,9 +158,9 @@ public:
         return (d.carry) ? s : d.value;
     }
 
-    /// Computes modular inverse of x in Montgomery form. Result is in Montgomery form.
+    /// Computes u⋅x⁻¹ % mod for the given initial value of the Bézout coefficient u.
     /// Returns 0 for non-invertible x (including x == 0).
-    constexpr UintT inv(const UintT& x) const noexcept
+    constexpr UintT inv_scaled(const UintT& x, UintT u) const noexcept
     {
         assert((mod_ & 1) == 1);
         assert(mod_ >= 3);
@@ -179,12 +179,6 @@ public:
         // TODO: The same paper has additional optimizations that could be applied.
         UintT a = x;
         UintT b = mod_;
-
-        // Bézout's coefficients are originally initialized to 1 and 0. But because the input x
-        // is in Montgomery form XR the algorithm would compute X⁻¹R⁻¹. To get the expected X⁻¹R,
-        // we need to multiply the result by R². We can achieve the same effect "for free"
-        // by initializing u to R² instead of 1.
-        UintT u = r_squared_;
         UintT v = 0;
 
         while (a != 0)
@@ -222,6 +216,17 @@ public:
         if (b != 1) [[unlikely]]
             v = 0;  // not invertible
         return v;
+    }
+
+    /// Computes modular inverse of x in Montgomery form. Result is in Montgomery form.
+    /// Returns 0 for non-invertible x (including x == 0).
+    constexpr UintT inv(const UintT& x) const noexcept
+    {
+        // Bézout's coefficient u is originally initialized to 1. But because the input x is in
+        // Montgomery form XR the algorithm would compute X⁻¹R⁻¹. To get the expected X⁻¹R, we
+        // need to multiply the result by R². We can achieve the same effect "for free"
+        // by initializing u to R² instead of 1.
+        return inv_scaled(x, r_squared_);
     }
 };
 }  // namespace evmmax
