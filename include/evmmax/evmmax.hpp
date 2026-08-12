@@ -316,7 +316,49 @@ private:
     static constexpr ModArith<uint_type> M{Mod};
 };
 
-/// Selects the arithmetic backend for the given modulus.
+/// The pseudo-Mersenne backend for a modulus 2ⁿ-c with a single-word c.
+/// Values are kept plain, so the conversions to and from the internal form are free.
 template <const auto& Mod>
-using ArithFor = MontgomeryArith<Mod>;
+struct PseudoMersenneArith
+{
+    using uint_type = std::remove_cvref_t<decltype(Mod)>;
+
+    static constexpr uint_type to_internal(const uint_type& v) noexcept
+    {
+        // Unlike the conversion to the Montgomery form, this does not reduce the input.
+        assert(v < Mod);
+        return v;
+    }
+    static constexpr uint_type from_internal(const uint_type& v) noexcept { return v; }
+
+    static constexpr uint_type mul(const uint_type& x, const uint_type& y) noexcept
+    {
+        return pseudo_mersenne_reduce<Mod>(intx::umul(x, y));
+    }
+    static constexpr uint_type add(const uint_type& x, const uint_type& y) noexcept
+    {
+        return M.add(x, y);
+    }
+    static constexpr uint_type sub(const uint_type& x, const uint_type& y) noexcept
+    {
+        return M.sub(x, y);
+    }
+
+    /// The plain representation needs no R² factor folded in, unlike the Montgomery one.
+    static constexpr uint_type inv(const uint_type& x) noexcept
+    {
+        return M.inv_scaled(x, uint_type{1});
+    }
+
+private:
+    /// Reused for the operations not affected by the representation and for the binary GCD.
+    static constexpr ModArith<uint_type> M{Mod};
+};
+
+/// Selects the arithmetic backend from the structure of the modulus.
+/// Both alternatives are named for any modulus, but only the selected one is instantiated,
+/// so a backend must not place its precondition in the class scope.
+template <const auto& Mod>
+using ArithFor =
+    std::conditional_t<pseudo_mersenne_c(Mod) != 0, PseudoMersenneArith<Mod>, MontgomeryArith<Mod>>;
 }  // namespace evmmax
