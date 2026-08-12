@@ -358,6 +358,31 @@ TEST_P(expmod, inputs)
         {"03", "08f83d563ebc382e09e4b8245edebc817af708",
             "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f",
             "8016137e4c542dd66f4ab5f668fc0ac76d43353a675f3d4616a56f23757e463ca1093164385ef006"},
+        // Exponent reduction for the power-of-two part of the modulus.
+        // Odd base, k=1: the exponent reduces to nothing, the power-of-two part is 1.
+        {"05", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "06", "05"},
+        // Odd base, k=8: the exponent 64 == 2^6 reduces to 0, the power-of-two part is 1.
+        {"03", "40", "ff00", "aa01"},
+        // Odd base, k=8: the exponent reduces to its low 6 bits.
+        {"ab", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "7fffffffffffffffffffffffffffff00", "47548b40b49c4c051dfb86e2c2c5fc03"},
+        // Odd base, k=8: the reduced exponent has leading zero bits to skip.
+        {"ab", "44", "ff00", "f9b1"},
+        // Even base with exp >= k: the power-of-two part is 0.
+        {"02", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "7fffffffffffffffffffffffffffff00", "00000000002000000000000000000000"},
+        // Even base with exp < k: the power-of-two part is 2^32.
+        {"02", "20", "ffffffffffffffff0000000000000000", "00000000000000000000000100000000"},
+        // Even base with exp < k of the same bit width: the comparison must be strict.
+        {"02", "09", "5000", "0200"},
+        // Modulus 2^64 (trivial odd part) with odd base.
+        {"ab", "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            "010000000000000000", "0080bfa02fe80bfa03"},
+        // Modulus 2^64 with even base and exp >= k.
+        {"06", "0100", "010000000000000000", "000000000000000000"},
+        // Even modulus with k=2: the exponent reduces to a single bit.
+        {"07", "010000000000000001", "0300000000000000000000000000000004",
+            "00746574c451e5b990a792326fa8db4c8b"},
     };
 
     for (const auto& [base_hex, exp_hex, mod_hex, expected_result_hex] : test_cases)
