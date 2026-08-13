@@ -213,7 +213,7 @@ void precompile(benchmark::State& state)
 
 
     int64_t total_gas_used = 0;
-    while (state.KeepRunningBatch(inputs<Id>.size()))
+    for ([[maybe_unused]] auto _ : state)
     {
         for (const auto& input : inputs<Id>)
         {
@@ -228,7 +228,10 @@ void precompile(benchmark::State& state)
     }
 
     using benchmark::Counter;
-    state.counters["gas_used"] = Counter(static_cast<double>(batch_gas_cost));
+    const auto num_inputs = static_cast<double>(inputs<Id>.size());
+    state.counters["avg_time_per_input"] = Counter(
+        num_inputs * static_cast<double>(state.iterations()), Counter::kIsRate | Counter::kInvert);
+    state.counters["avg_gas_used"] = Counter(static_cast<double>(batch_gas_cost) / num_inputs);
     state.counters["gas_rate"] = Counter(static_cast<double>(total_gas_used), Counter::kIsRate);
 }
 

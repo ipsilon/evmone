@@ -159,7 +159,7 @@ void find_jumpdest_random(benchmark::State& state)
     const auto begin = map.data();
     benchmark::ClobberMemory();
 
-    while (state.KeepRunningBatch(indexes.size()))
+    for ([[maybe_unused]] auto _ : state)
     {
         for (auto i : indexes)
         {
@@ -167,6 +167,9 @@ void find_jumpdest_random(benchmark::State& state)
             benchmark::DoNotOptimize(x);
         }
     }
+    state.counters["avg_time_per_item"] = benchmark::Counter(
+        static_cast<double>(indexes.size()) * static_cast<double>(state.iterations()),
+        benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
 }
 
 BENCHMARK_TEMPLATE(find_jumpdest_random, int, linear);
@@ -269,7 +272,7 @@ void find_jumpdest_split_random(benchmark::State& state)
     const auto value = map.value.data();
     benchmark::ClobberMemory();
 
-    while (state.KeepRunningBatch(indexes.size()))
+    for ([[maybe_unused]] auto _ : state)
     {
         for (auto i : indexes)
         {
@@ -277,6 +280,9 @@ void find_jumpdest_split_random(benchmark::State& state)
             benchmark::DoNotOptimize(x);
         }
     }
+    state.counters["avg_time_per_item"] = benchmark::Counter(
+        static_cast<double>(indexes.size()) * static_cast<double>(state.iterations()),
+        benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
 }
 
 BENCHMARK_TEMPLATE(find_jumpdest_split, uint16_t, lower_bound) ARGS;
@@ -294,7 +300,7 @@ void find_jumpdest_hashmap_random(benchmark::State& state)
     const auto hashmap = std::unordered_map<T, T>{map.begin(), map.end()};
     benchmark::ClobberMemory();
 
-    while (state.KeepRunningBatch(indexes.size()))
+    for ([[maybe_unused]] auto _ : state)
     {
         for (auto i : indexes)
         {
@@ -303,6 +309,9 @@ void find_jumpdest_hashmap_random(benchmark::State& state)
             benchmark::DoNotOptimize(x);
         }
     }
+    state.counters["avg_time_per_item"] = benchmark::Counter(
+        static_cast<double>(indexes.size()) * static_cast<double>(state.iterations()),
+        benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
 }
 
 BENCHMARK_TEMPLATE(find_jumpdest_hashmap_random, int);

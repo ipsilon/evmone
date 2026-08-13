@@ -19,11 +19,14 @@ void evmmax_add(benchmark::State& state)
     auto a = Mod / 2;
     auto b = Mod / 3;
 
-    while (state.KeepRunningBatch(2))
+    for ([[maybe_unused]] auto _ : state)
     {
         a = m.add(a, b);
         b = m.add(b, a);
     }
+    state.counters["avg_time_per_item"] =
+        benchmark::Counter(2.0 * static_cast<double>(state.iterations()),
+            benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
 }
 
 template <typename UintT, const UintT& Mod>
@@ -33,11 +36,14 @@ void evmmax_sub(benchmark::State& state)
     auto a = Mod / 2;
     auto b = Mod / 3;
 
-    while (state.KeepRunningBatch(2))
+    for ([[maybe_unused]] auto _ : state)
     {
         a = m.sub(a, b);
         b = m.sub(b, a);
     }
+    state.counters["avg_time_per_item"] =
+        benchmark::Counter(2.0 * static_cast<double>(state.iterations()),
+            benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
 }
 
 template <typename UintT, const UintT& Mod>
@@ -47,11 +53,14 @@ void evmmax_mul(benchmark::State& state)
     auto a = m.to_mont(Mod / 2);
     auto b = m.to_mont(Mod / 3);
 
-    while (state.KeepRunningBatch(2))
+    for ([[maybe_unused]] auto _ : state)
     {
         a = m.mul(a, b);
         b = m.mul(b, a);
     }
+    state.counters["avg_time_per_item"] =
+        benchmark::Counter(2.0 * static_cast<double>(state.iterations()),
+            benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
 }
 }  // namespace
 

@@ -108,7 +108,7 @@ void lru_cache_put_empty(benchmark::State& state)
         data[i] = static_cast<Key>(i);
     benchmark::ClobberMemory();
 
-    while (state.KeepRunningBatch(static_cast<benchmark::IterationCount>(capacity)))
+    for ([[maybe_unused]] auto _ : state)
     {
         for (const auto& key : data)
         {
@@ -118,6 +118,9 @@ void lru_cache_put_empty(benchmark::State& state)
         cache.clear();
         state.ResumeTiming();
     }
+    state.counters["avg_time_per_item"] =
+        benchmark::Counter(static_cast<double>(capacity) * static_cast<double>(state.iterations()),
+            benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
 }
 BENCHMARK(lru_cache_put_empty<int, int>)->Arg(5000);
 BENCHMARK(lru_cache_put_empty<hash256, std::shared_ptr<char>>)->Arg(5000);
