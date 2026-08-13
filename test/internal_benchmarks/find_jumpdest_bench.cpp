@@ -2,6 +2,7 @@
 // Copyright 2019 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
+#include "../utils/bench.hpp"
 #include <benchmark/benchmark.h>
 #include <array>
 #include <random>
@@ -159,7 +160,7 @@ void find_jumpdest_random(benchmark::State& state)
     const auto begin = map.data();
     benchmark::ClobberMemory();
 
-    while (state.KeepRunningBatch(indexes.size()))
+    EVMONE_BENCH_LOOP_BATCH(state, indexes.size())
     {
         for (auto i : indexes)
         {
@@ -269,7 +270,7 @@ void find_jumpdest_split_random(benchmark::State& state)
     const auto value = map.value.data();
     benchmark::ClobberMemory();
 
-    while (state.KeepRunningBatch(indexes.size()))
+    EVMONE_BENCH_LOOP_BATCH(state, indexes.size())
     {
         for (auto i : indexes)
         {
@@ -294,7 +295,7 @@ void find_jumpdest_hashmap_random(benchmark::State& state)
     const auto hashmap = std::unordered_map<T, T>{map.begin(), map.end()};
     benchmark::ClobberMemory();
 
-    while (state.KeepRunningBatch(indexes.size()))
+    EVMONE_BENCH_LOOP_BATCH(state, indexes.size())
     {
         for (auto i : indexes)
         {

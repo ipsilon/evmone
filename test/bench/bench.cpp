@@ -116,7 +116,7 @@ void register_benchmarks(std::span<const BenchmarkCase> benchmark_cases)
     {
         if (advanced_vm != nullptr)
         {
-            RegisterBenchmark("advanced/analyse/" + b.name, [&b](State& state) {
+            RegisterBenchmark(EVMONE_BENCH_NAME("advanced/analyse/" + b.name), [&b](State& state) {
                 bench_analyse<advanced::AdvancedCodeAnalysis, advanced_analyse>(
                     state, default_revision, b.code);
             })->Unit(kMicrosecond);
@@ -124,7 +124,7 @@ void register_benchmarks(std::span<const BenchmarkCase> benchmark_cases)
 
         if (baseline_vm != nullptr)
         {
-            RegisterBenchmark("baseline/analyse/" + b.name, [&b](State& state) {
+            RegisterBenchmark(EVMONE_BENCH_NAME("baseline/analyse/" + b.name), [&b](State& state) {
                 bench_analyse<baseline::CodeAnalysis, baseline_analyse>(
                     state, default_revision, b.code);
             })->Unit(kMicrosecond);
@@ -136,7 +136,7 @@ void register_benchmarks(std::span<const BenchmarkCase> benchmark_cases)
 
             if (advanced_vm != nullptr)
             {
-                const auto name = "advanced/execute/" + case_name;
+                const auto name = EVMONE_BENCH_NAME("advanced/execute/" + case_name);
                 RegisterBenchmark(name, [&vm = *advanced_vm, &b, &input](State& state) {
                     bench_advanced_execute(state, vm, b.code, input.input, input.expected_output);
                 })->Unit(kMicrosecond);
@@ -144,7 +144,7 @@ void register_benchmarks(std::span<const BenchmarkCase> benchmark_cases)
 
             if (baseline_vm != nullptr)
             {
-                const auto name = "baseline/execute/" + case_name;
+                const auto name = EVMONE_BENCH_NAME("baseline/execute/" + case_name);
                 RegisterBenchmark(name, [&vm = *baseline_vm, &b, &input](State& state) {
                     bench_baseline_execute(state, vm, b.code, input.input, input.expected_output);
                 })->Unit(kMicrosecond);
@@ -152,7 +152,7 @@ void register_benchmarks(std::span<const BenchmarkCase> benchmark_cases)
 
             if (basel_cg_vm != nullptr)
             {
-                const auto name = "bnocgoto/execute/" + case_name;
+                const auto name = EVMONE_BENCH_NAME("bnocgoto/execute/" + case_name);
                 RegisterBenchmark(name, [&vm = *basel_cg_vm, &b, &input](State& state) {
                     bench_baseline_execute(state, vm, b.code, input.input, input.expected_output);
                 })->Unit(kMicrosecond);
@@ -160,7 +160,7 @@ void register_benchmarks(std::span<const BenchmarkCase> benchmark_cases)
 
             for (auto& [vm_name, vm] : registered_vms)
             {
-                const auto name = std::string{vm_name} + "/total/" + case_name;
+                const auto name = EVMONE_BENCH_NAME(std::string{vm_name} + "/total/" + case_name);
                 RegisterBenchmark(name, [&vm, &b, &input](State& state) {
                     bench_evmc_execute(state, vm, b.code, input.input, input.expected_output);
                 })->Unit(kMicrosecond);
@@ -234,7 +234,12 @@ std::tuple<int, std::vector<BenchmarkCase>> parseargs(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
+#ifndef CODSPEED_ENABLED
+    // Not available in the google/benchmark version the CodSpeed compatibility
+    // layer is based on. Also not needed there: the measurements are done by
+    // CodSpeed itself.
     MaybeReenterWithoutASLR(argc, argv);
+#endif
 
     using namespace evmone::test;
     try

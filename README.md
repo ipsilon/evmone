@@ -3,6 +3,7 @@
 [![ethereum badge]][ethereum]
 [![readme style standard badge]][standard readme]
 [![codecov badge]][codecov]
+[![codspeed badge]][codspeed]
 [![circleci badge]][circleci]
 [![appveyor badge]][appveyor]
 [![license badge]][Apache License, Version 2.0]
@@ -128,6 +129,7 @@ Licensed under the [Apache License, Version 2.0].
 [appveyor]: https://ci.appveyor.com/project/chfast/evmone/branch/master
 [circleci]: https://circleci.com/gh/ethereum/evmone/tree/master
 [codecov]: https://codecov.io/gh/ethereum/evmone/
+[codspeed]: https://app.codspeed.io/ipsilon/evmone?utm_source=badge
 [Apache License, Version 2.0]: LICENSE
 [ethereum]: https://ethereum.org
 [EVMC]: https://github.com/ethereum/evmc
@@ -143,6 +145,7 @@ Licensed under the [Apache License, Version 2.0].
 [appveyor badge]: https://img.shields.io/appveyor/ci/chfast/evmone/master.svg?logo=appveyor
 [circleci badge]: https://img.shields.io/circleci/project/github/ethereum/evmone/master.svg?logo=circleci
 [codecov badge]: https://img.shields.io/codecov/c/github/ethereum/evmone.svg?logo=codecov
+[codspeed badge]: https://img.shields.io/endpoint?url=https://codspeed.io/badge.json
 [ethereum badge]: https://img.shields.io/badge/ethereum-EVM-informational.svg?logo=ethereum
 [license badge]: https://img.shields.io/github/license/ethereum/evmone.svg?logo=apache
 [readme style standard badge]: https://img.shields.io/badge/readme%20style-standard-brightgreen.svg

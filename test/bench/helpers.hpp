@@ -12,6 +12,16 @@
 #include <evmone/baseline.hpp>
 #include <evmone/vm.hpp>
 
+/// Decorates a dynamically registered benchmark name with the location of the registration.
+/// CodSpeed identifies benchmarks by the "source_file::name" URI, which the BENCHMARK() macro
+/// provides automatically, but RegisterBenchmark() does not. Without CodSpeed this is a no-op.
+#ifdef CODSPEED_ENABLED
+#define EVMONE_BENCH_NAME(NAME) \
+    (::codspeed::get_path_relative_to_workspace(__FILE__) + "::" + (NAME))
+#else
+#define EVMONE_BENCH_NAME(NAME) (NAME)
+#endif
+
 namespace evmone::test
 {
 extern std::map<std::string_view, evmc::VM> registered_vms;

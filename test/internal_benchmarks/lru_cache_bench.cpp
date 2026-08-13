@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "../state/hash_utils.hpp"
+#include "../utils/bench.hpp"
 #include <benchmark/benchmark.h>
 #include <evmone/lru_cache.hpp>
 #include <memory>
@@ -108,7 +109,7 @@ void lru_cache_put_empty(benchmark::State& state)
         data[i] = static_cast<Key>(i);
     benchmark::ClobberMemory();
 
-    while (state.KeepRunningBatch(static_cast<benchmark::IterationCount>(capacity)))
+    EVMONE_BENCH_LOOP_BATCH(state, static_cast<benchmark::IterationCount>(capacity))
     {
         for (const auto& key : data)
         {

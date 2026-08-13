@@ -14,6 +14,7 @@ target_sources(
     evmone.testutils
     PRIVATE
     stdx/utility.hpp
+    bench.hpp
     blob_schedule.hpp
     blob_schedule.cpp
     block_transition.hpp
