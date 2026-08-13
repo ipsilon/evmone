@@ -4,7 +4,7 @@
 
 #include "bn254.hpp"
 
-namespace evmmax::bn254
+namespace evmone::crypto::bn254
 {
 static_assert(AffinePoint{} == 0, "default constructed is the point at infinity");
 
@@ -33,4 +33,4 @@ AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept
     const auto pr = msm(k1.value, p, k2.value, q);
     return ecc::to_affine(pr);
 }
-}  // namespace evmmax::bn254
+}  // namespace evmone::crypto::bn254

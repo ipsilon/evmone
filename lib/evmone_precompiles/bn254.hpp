@@ -9,7 +9,7 @@
 #include <span>
 #include <vector>
 
-namespace evmmax::bn254
+namespace evmone::crypto::bn254
 {
 using namespace intx;
 
@@ -98,4 +98,4 @@ AffinePoint mul(const AffinePoint& pt, const uint256& c) noexcept;
 ///               std::nullopt on error.
 std::optional<bool> pairing_check(std::span<const std::pair<AffinePoint, ExtPoint>> pairs) noexcept;
 
-}  // namespace evmmax::bn254
+}  // namespace evmone::crypto::bn254

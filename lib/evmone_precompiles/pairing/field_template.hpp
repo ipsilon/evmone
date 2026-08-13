@@ -7,7 +7,7 @@
 #include <concepts>
 #include <type_traits>
 
-namespace evmmax::ecc
+namespace evmone::crypto::ecc
 {
 /// Implements extension field over the base field or other extension fields.
 /// It is a template struct which can be reused for different pairing implementations.
@@ -99,4 +99,4 @@ struct ExtFieldElem
     }
 };
 
-}  // namespace evmmax::ecc
+}  // namespace evmone::crypto::ecc

@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "modexp.hpp"
+#include "modarith.hpp"
 #include "mulmod.hpp"
-#include <evmmax/evmmax.hpp>
 #include <bit>
 #include <memory_resource>
 #include <ranges>
@@ -416,7 +416,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     assert(exp.bit_width() != 0);
 
     const auto n = mod.size();
-    const auto mod_inv = -evmmax::modinv(mod[0]);
+    const auto mod_inv = -modinv(mod[0]);
     const auto exp_bits = exp.bit_width();
 
     const auto w = window_width(exp_bits);
@@ -574,13 +574,13 @@ void modinv_pow2(
     assert(!r.empty());
     assert(scratch.size() >= 2 * r.size());
 
-    r[0] = evmmax::modinv(x[0]);                   // Good start: 64 correct bits.
+    r[0] = modinv(x[0]);                           // Good start: 64 correct bits.
     std::ranges::fill(r.subspan(1), uint64_t{0});  // Zero the rest for correct final subtraction.
 
     // Newton-Raphson iteration for modular inverse: inv' = inv * (2 - x * inv).
     // Rearranged as: inv' = 2 * inv - x * inv^2, which avoids the (2 - x) negation helper
     // and computes the result directly into r (no copy needed).
-    // Each iteration doubles the number of correct bits. See evmmax::modinv().
+    // Each iteration doubles the number of correct bits. See modinv().
     for (size_t i = 1; i < r.size(); i *= 2)
     {
         // We have i-word correct inverse in r[0..i). Double the precision to n = min(2i, r.size()).

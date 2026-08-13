@@ -5,7 +5,7 @@
 
 #include "fields.hpp"
 
-namespace evmmax::bn254
+namespace evmone::crypto::bn254
 {
 /// Defines coefficients needed for fast Frobenius endomorphism computation.
 /// For more ref see https://eprint.iacr.org/2010/354.pdf 3.2 Frobenius Operator.
@@ -472,4 +472,4 @@ constexpr Fq12 cyclotomic_pow_to_X(const Fq12& a) noexcept
     return c;
 }
 
-}  // namespace evmmax::bn254
+}  // namespace evmone::crypto::bn254

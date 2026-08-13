@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <benchmark/benchmark.h>
-#include <evmmax/evmmax.hpp>
+#include <evmone_precompiles/modarith.hpp>
 
 using namespace intx;
 
@@ -13,9 +13,9 @@ constexpr auto bn254 = 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c1
 constexpr auto secp256k1 = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f_u256;
 
 template <typename UintT, const UintT& Mod>
-void evmmax_add(benchmark::State& state)
+void modarith_add(benchmark::State& state)
 {
-    const evmmax::ModArith<UintT> m{Mod};
+    const evmone::crypto::ModArith<UintT> m{Mod};
     auto a = Mod / 2;
     auto b = Mod / 3;
 
@@ -27,9 +27,9 @@ void evmmax_add(benchmark::State& state)
 }
 
 template <typename UintT, const UintT& Mod>
-void evmmax_sub(benchmark::State& state)
+void modarith_sub(benchmark::State& state)
 {
-    const evmmax::ModArith<UintT> m{Mod};
+    const evmone::crypto::ModArith<UintT> m{Mod};
     auto a = Mod / 2;
     auto b = Mod / 3;
 
@@ -41,9 +41,9 @@ void evmmax_sub(benchmark::State& state)
 }
 
 template <typename UintT, const UintT& Mod>
-void evmmax_mul(benchmark::State& state)
+void modarith_mul(benchmark::State& state)
 {
-    const evmmax::ModArith<UintT> m{Mod};
+    const evmone::crypto::ModArith<UintT> m{Mod};
     auto a = m.to_mont(Mod / 2);
     auto b = m.to_mont(Mod / 3);
 
@@ -55,9 +55,9 @@ void evmmax_mul(benchmark::State& state)
 }
 }  // namespace
 
-BENCHMARK_TEMPLATE(evmmax_add, uint256, bn254);
-BENCHMARK_TEMPLATE(evmmax_add, uint256, secp256k1);
-BENCHMARK_TEMPLATE(evmmax_sub, uint256, bn254);
-BENCHMARK_TEMPLATE(evmmax_sub, uint256, secp256k1);
-BENCHMARK_TEMPLATE(evmmax_mul, uint256, bn254);
-BENCHMARK_TEMPLATE(evmmax_mul, uint256, secp256k1);
+BENCHMARK_TEMPLATE(modarith_add, uint256, bn254);
+BENCHMARK_TEMPLATE(modarith_add, uint256, secp256k1);
+BENCHMARK_TEMPLATE(modarith_sub, uint256, bn254);
+BENCHMARK_TEMPLATE(modarith_sub, uint256, secp256k1);
+BENCHMARK_TEMPLATE(modarith_mul, uint256, bn254);
+BENCHMARK_TEMPLATE(modarith_mul, uint256, secp256k1);

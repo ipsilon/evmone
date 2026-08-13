@@ -170,7 +170,7 @@ std::optional<address> recover_sender(const Transaction& tx, bytes_view txbytes)
                              rlp::internal::wrap_list(preimage));
     const auto r_bytes = intx::be::store<bytes32>(tx.r);
     const auto s_bytes = intx::be::store<bytes32>(tx.s);
-    return evmmax::secp256k1::ecrecover(
-        h.bytes, r_bytes.bytes, s_bytes.bytes, y_parity, evmmax::secp256k1::RecoveryMode::strict);
+    return crypto::secp256k1::ecrecover(
+        h.bytes, r_bytes.bytes, s_bytes.bytes, y_parity, crypto::secp256k1::RecoveryMode::strict);
 }
 }  // namespace evmone::state

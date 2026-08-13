@@ -8,7 +8,7 @@
 #include <evmc/evmc.hpp>
 #include <optional>
 
-namespace evmmax::secp256k1
+namespace evmone::crypto::secp256k1
 {
 using namespace intx;
 
@@ -75,4 +75,4 @@ std::optional<evmc::address> ecrecover(std::span<const uint8_t, 32> hash,
     std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes, bool parity,
     RecoveryMode mode = RecoveryMode::malleable) noexcept;
 
-}  // namespace evmmax::secp256k1
+}  // namespace evmone::crypto::secp256k1

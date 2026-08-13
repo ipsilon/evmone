@@ -348,20 +348,20 @@ BENCHMARK(precompile<PrecompileId::expmod, gmp>);
 
 namespace bench_ecadd
 {
-constexpr auto evmmax_cpp = ecadd_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::ecadd, evmmax_cpp);
+constexpr auto evmone_cpp = ecadd_execute;
+BENCHMARK_TEMPLATE(precompile, PrecompileId::ecadd, evmone_cpp);
 }  // namespace bench_ecadd
 
 namespace bench_ecmul
 {
-constexpr auto evmmax_cpp = ecmul_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::ecmul, evmmax_cpp);
+constexpr auto evmone_cpp = ecmul_execute;
+BENCHMARK_TEMPLATE(precompile, PrecompileId::ecmul, evmone_cpp);
 }  // namespace bench_ecmul
 
 namespace bench_ecpairing
 {
-constexpr auto evmmax_cpp = ecpairing_execute;
-BENCHMARK_TEMPLATE(precompile, PrecompileId::ecpairing, evmmax_cpp);
+constexpr auto evmone_cpp = ecpairing_execute;
+BENCHMARK_TEMPLATE(precompile, PrecompileId::ecpairing, evmone_cpp);
 }  // namespace bench_ecpairing
 
 namespace bench_kzg

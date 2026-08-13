@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include <test/utils/utils.hpp>
 
-using namespace evmmax::secp256k1;
+using namespace evmone::crypto::secp256k1;
 using namespace evmc::literals;
 using namespace evmone::test;
 
@@ -18,8 +18,8 @@ namespace
 /// Convenience wrapper for point multiplication test.
 AffinePoint mul(const AffinePoint& p, const uint256& c) noexcept
 {
-    const auto r = evmmax::ecc::mul(p, c);
-    return evmmax::ecc::to_affine<Curve>(r);
+    const auto r = evmone::crypto::ecc::mul(p, c);
+    return evmone::crypto::ecc::to_affine<Curve>(r);
 }
 }  // namespace
 
@@ -58,7 +58,7 @@ TEST(secp256k1, field_sqrt_invalid)
 
 TEST(secp256k1, scalar_inv)
 {
-    const evmmax::ModArith n{Curve::ORDER};
+    const evmone::crypto::ModArith n{Curve::ORDER};
 
     for (const auto& t : {
              1_u256,
@@ -140,7 +140,7 @@ TEST(secp256k1, point_to_address)
     EXPECT_EQ(to_address({}), 0x3f17f1962B36e491b30A40b2405849e597Ba5FB5_address);
 }
 
-TEST(evmmax, secp256k1_hash_to_number)
+TEST(crypto, secp256k1_hash_to_number)
 {
     const auto max_h = ~uint256{};
     const auto hm = max_h % Curve::FIELD_PRIME;
@@ -150,7 +150,7 @@ TEST(evmmax, secp256k1_hash_to_number)
     EXPECT_EQ(hm2, hm);
 }
 
-TEST(evmmax, secp256k1_pt_add_inf)
+TEST(crypto, secp256k1_pt_add_inf)
 {
     const AffinePoint p1{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256,
         0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256};
@@ -162,7 +162,7 @@ TEST(evmmax, secp256k1_pt_add_inf)
     EXPECT_EQ(add_affine(inf, inf), inf);
 }
 
-TEST(evmmax, secp256k1_pt_add)
+TEST(crypto, secp256k1_pt_add)
 {
     const AffinePoint p1{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256,
         0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256};
@@ -195,7 +195,7 @@ TEST(evmmax, secp256k1_pt_add)
     }
 }
 
-TEST(evmmax, secp256k1_pt_mul_inf)
+TEST(crypto, secp256k1_pt_mul_inf)
 {
     const AffinePoint p1{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256,
         0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256};
@@ -209,7 +209,7 @@ TEST(evmmax, secp256k1_pt_mul_inf)
     EXPECT_EQ(mul(inf, Curve::ORDER), inf);
 }
 
-TEST(evmmax, secp256k1_pt_mul)
+TEST(crypto, secp256k1_pt_mul)
 {
     const AffinePoint p1{0x18f4057699e2d9679421de8f4e11d7df9fa4b9e7cb841ea48aed75f1567b9731_u256,
         0x6db5b7ecd8e226c06f538d15173267bf1e78acc02bb856e83b3d6daec6a68144_u256};
@@ -319,7 +319,7 @@ const TestCase TEST_CASES[]{
 };
 }  // namespace
 
-TEST(evmmax, ecrecovery_malleable)
+TEST(crypto, ecrecovery_malleable)
 {
     for (const auto& [input_hex, expected_output_hex] : TEST_CASES)
     {
@@ -350,7 +350,7 @@ TEST(evmmax, ecrecovery_malleable)
     }
 }
 
-TEST(evmmax, ecrecovery_strict)
+TEST(crypto, ecrecovery_strict)
 {
     const auto order_half = "7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0"_hex;
     ASSERT_EQ(order_half.size(), 32);

@@ -6,10 +6,10 @@
 #include <gtest/gtest.h>
 #include <test/utils/utils.hpp>
 
-using namespace evmmax::bn254;
+using namespace evmone::crypto::bn254;
 using namespace evmone::test;
 
-TEST(evmmax, bn254_point_from_bytes_valid)
+TEST(crypto, bn254_point_from_bytes_valid)
 {
     static constexpr std::string_view TEST_CASES[]{
         "0000000000000000000000000000000000000000000000000000000000000001"
@@ -31,7 +31,7 @@ TEST(evmmax, bn254_point_from_bytes_valid)
     }
 }
 
-TEST(evmmax, bn254_point_from_bytes_not_on_curve)
+TEST(crypto, bn254_point_from_bytes_not_on_curve)
 {
     static constexpr std::string_view TEST_CASES[]{
         "0000000000000000000000000000000000000000000000000000000000000001"
@@ -51,7 +51,7 @@ TEST(evmmax, bn254_point_from_bytes_not_on_curve)
     }
 }
 
-TEST(evmmax, bn254_point_from_bytes_fp_invalid)
+TEST(crypto, bn254_point_from_bytes_fp_invalid)
 {
     static constexpr std::string_view TEST_CASES[]{
         "30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47"

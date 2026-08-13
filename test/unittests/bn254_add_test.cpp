@@ -6,7 +6,7 @@
 #include <gtest/gtest.h>
 #include <test/utils/utils.hpp>
 
-using namespace evmmax::bn254;
+using namespace evmone::crypto::bn254;
 using namespace evmone::test;
 
 namespace
@@ -91,7 +91,7 @@ constexpr TestCase TEST_CASES[]{
 };
 }  // namespace
 
-TEST(evmmax, bn254_add)
+TEST(crypto, bn254_add)
 {
     std::set<bytes> seen_inputs;
 

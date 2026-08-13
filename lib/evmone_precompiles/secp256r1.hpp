@@ -6,7 +6,7 @@
 #include "ecc.hpp"
 #include "hash_types.h"
 
-namespace evmmax::secp256r1
+namespace evmone::crypto::secp256r1
 {
 using namespace intx;
 
@@ -42,4 +42,4 @@ constexpr AffinePoint G{0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a139
 bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const uint256& qx,
     const uint256& qy) noexcept;
 
-}  // namespace evmmax::secp256r1
+}  // namespace evmone::crypto::secp256r1

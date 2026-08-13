@@ -31,12 +31,12 @@ target_sources(
     evm_other_test.cpp
     evm_benchmark_test.cpp
     evm_undefined_instructions_test.cpp
-    evmmax_bn254_add_test.cpp
-    evmmax_bn254_from_bytes.cpp
-    evmmax_bn254_mul_test.cpp
-    evmmax_bn254_pairing_test.cpp
-    evmmax_test.cpp
-    evmmax_secp256k1_test.cpp
+    bn254_add_test.cpp
+    bn254_from_bytes.cpp
+    bn254_mul_test.cpp
+    bn254_pairing_test.cpp
+    modarith_test.cpp
+    secp256k1_test.cpp
     evmone_test.cpp
     execution_state_test.cpp
     exportable_fixture.hpp
@@ -87,7 +87,7 @@ target_sources(
     tooling_t8n_test.cpp
     tracing_test.cpp
 )
-target_link_libraries(evmone-unittests PRIVATE evmone evmone::evmmax evmone::experimental evmone::precompiles evmone::state evmone::testutils blst::blst GTest::gtest GTest::gtest_main)
+target_link_libraries(evmone-unittests PRIVATE evmone evmone::experimental evmone::precompiles evmone::state evmone::testutils blst::blst GTest::gtest GTest::gtest_main)
 target_include_directories(evmone-unittests PRIVATE ${evmone_private_include_dir})
 if(NOT CMAKE_CXX_CLANG_TIDY)
     target_precompile_headers(

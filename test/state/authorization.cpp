@@ -34,7 +34,7 @@ std::optional<address> recover_authority(const Authorization& auth) noexcept
     const auto h = compute_authorization_signing_hash(auth);
     const auto r = intx::be::store<bytes32>(auth.r);
     const auto s = intx::be::store<bytes32>(auth.s);
-    return evmmax::secp256k1::ecrecover(
-        h.bytes, r.bytes, s.bytes, auth.y_parity == 1, evmmax::secp256k1::RecoveryMode::strict);
+    return crypto::secp256k1::ecrecover(
+        h.bytes, r.bytes, s.bytes, auth.y_parity == 1, crypto::secp256k1::RecoveryMode::strict);
 }
 }  // namespace evmone::state

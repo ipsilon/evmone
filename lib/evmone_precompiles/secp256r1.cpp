@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "secp256r1.hpp"
 
-namespace evmmax::secp256r1
+namespace evmone::crypto::secp256r1
 {
 namespace
 {
@@ -61,4 +61,4 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
 
     return x1 == r;
 }
-}  // namespace evmmax::secp256r1
+}  // namespace evmone::crypto::secp256r1

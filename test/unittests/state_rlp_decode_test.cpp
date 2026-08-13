@@ -667,7 +667,7 @@ TEST(state_rlp_decode, recover_sender_rejects_out_of_range_s)
     // s = the curve order is outside [1, secp256k1n) yet a canonical 32-byte integer, so the
     // transaction decodes and only the recovery rejects it.
     auto tx = MINIMAL_LEGACY_TX;
-    tx.s = evmmax::secp256k1::Curve::ORDER;
+    tx.s = crypto::secp256k1::Curve::ORDER;
     EXPECT_FALSE(recover(rlp::encode(tx)).has_value());
 }
 
@@ -676,7 +676,7 @@ TEST(state_rlp_decode, recover_sender_rejects_high_s)
     // EIP-2 bounds s to the lower half of the curve order, on top of the [1, secp256k1n) range.
     // One above the bound differs from the largest accepted s in nothing else.
     auto tx = MINIMAL_LEGACY_TX;
-    tx.s = evmmax::secp256k1::Curve::ORDER / 2;
+    tx.s = crypto::secp256k1::Curve::ORDER / 2;
     EXPECT_TRUE(recover(rlp::encode(tx)).has_value());
 
     tx.s += 1;

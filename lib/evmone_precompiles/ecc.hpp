@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <evmmax/evmmax.hpp>
+#include "modarith.hpp"
 #include <optional>
 #include <span>
 
-namespace evmmax::ecc
+namespace evmone::crypto::ecc
 {
 template <int N>
 struct Constant : std::integral_constant<int, N>
@@ -614,4 +614,4 @@ std::array<SignedScalar<typename Curve::uint_type>, 2> decompose(
     return {k1, k2};
 }
 
-}  // namespace evmmax::ecc
+}  // namespace evmone::crypto::ecc

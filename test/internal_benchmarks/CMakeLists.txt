@@ -4,12 +4,12 @@
 
 add_executable(
     evmone-bench-internal
-    evmmax_bench.cpp
+    modarith_bench.cpp
     find_jumpdest_bench.cpp
     memory_allocation.cpp
     lru_cache_bench.cpp
 )
 
 # TODO: Not sure why evmone::precompiles must be here, but otherwise this don't link.
-target_link_libraries(evmone-bench-internal PRIVATE evmone evmone::precompiles evmone::evmmax benchmark::benchmark)
+target_link_libraries(evmone-bench-internal PRIVATE evmone evmone::precompiles benchmark::benchmark)
 target_include_directories(evmone-bench-internal PRIVATE ${evmone_private_include_dir})

@@ -4,7 +4,7 @@
 #include "secp256k1.hpp"
 #include "keccak.hpp"
 
-namespace evmmax::secp256k1
+namespace evmone::crypto::secp256k1
 {
 namespace
 {
@@ -250,4 +250,4 @@ std::optional<Curve::Fp> field_sqrt(const Curve::Fp& x) noexcept
 
     return z;
 }
-}  // namespace evmmax::secp256k1
+}  // namespace evmone::crypto::secp256k1

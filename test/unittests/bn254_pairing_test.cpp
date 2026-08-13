@@ -5,11 +5,11 @@
 #include "evmone_precompiles/bn254.hpp"
 #include <gtest/gtest.h>
 
-using namespace evmmax::bn254;
+using namespace evmone::crypto::bn254;
 using namespace intx;
 
 
-TEST(evmmax, bn254_pairing)
+TEST(crypto, bn254_pairing)
 {
     const auto P1 = AffinePoint{
         0x1c76476f4def4bb94541d57ebba1193381ffa7aa76ada664dd31c16024c43f59_u256,
@@ -100,7 +100,7 @@ TEST(evmmax, bn254_pairing)
     }
 }
 
-TEST(evmmax, bn254_pairing_invalid_input)
+TEST(crypto, bn254_pairing_invalid_input)
 {
     const std::vector<std::pair<AffinePoint, ExtPoint>> valid_input{{
         {
@@ -155,7 +155,7 @@ TEST(evmmax, bn254_pairing_invalid_input)
 }
 
 // Case taken from https://www.evm.codes/precompiled
-TEST(evmmax_bn254, evm_codes_example)
+TEST(bn254, evm_codes_example)
 {
     // Pair 1
     const auto p1 = AffinePoint{
@@ -196,7 +196,7 @@ TEST(evmmax_bn254, evm_codes_example)
     EXPECT_EQ(result.value(), true) << "Pairing result should be true, matching Solidity.";
 }
 
-TEST(evmmax_bn254, evm_codes_example_changed_order)
+TEST(bn254, evm_codes_example_changed_order)
 {
     // Pair 1
     const auto p1 = AffinePoint{

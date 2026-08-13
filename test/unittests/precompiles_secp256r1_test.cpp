@@ -5,7 +5,7 @@
 #include <evmone_precompiles/secp256r1.hpp>
 #include <gtest/gtest.h>
 
-using namespace evmmax::secp256r1;
+using namespace evmone::crypto::secp256r1;
 using namespace intx;
 
 namespace

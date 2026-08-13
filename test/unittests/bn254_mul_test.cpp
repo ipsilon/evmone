@@ -6,10 +6,10 @@
 #include <gtest/gtest.h>
 #include <test/utils/utils.hpp>
 
-using namespace evmmax::bn254;
+using namespace evmone::crypto::bn254;
 using namespace evmone::test;
 
-TEST(evmmax, bn254_decompose)
+TEST(crypto, bn254_decompose)
 {
     struct TestCase
     {
@@ -176,7 +176,7 @@ TEST(evmmax, bn254_decompose)
         },
     };
 
-    static constexpr auto decompose = evmmax::ecc::decompose<Curve>;
+    static constexpr auto decompose = evmone::crypto::ecc::decompose<Curve>;
 
     for (const auto& t : TEST_CASES)
     {
@@ -327,7 +327,7 @@ constexpr TestCase TEST_CASES[]{
 };
 }  // namespace
 
-TEST(evmmax, bn254_mul)
+TEST(crypto, bn254_mul)
 {
     std::set<bytes> seen_inputs;
 

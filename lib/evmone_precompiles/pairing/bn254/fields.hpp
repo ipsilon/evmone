@@ -7,7 +7,7 @@
 #include "../../ecc.hpp"
 #include "../field_template.hpp"
 
-namespace evmmax::bn254
+namespace evmone::crypto::bn254
 {
 using namespace intx;
 
@@ -151,4 +151,4 @@ inline Fq12 inverse(const Fq12& f) noexcept
 
     return Fq12({c0, c1});
 }
-}  // namespace evmmax::bn254
+}  // namespace evmone::crypto::bn254

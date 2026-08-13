@@ -6,7 +6,7 @@
 #include "fields.hpp"
 #include "utils.hpp"
 
-namespace evmmax::bn254
+namespace evmone::crypto::bn254
 {
 namespace
 {
@@ -170,4 +170,4 @@ std::optional<bool> pairing_check(std::span<const std::pair<AffinePoint, ExtPoin
 
     return final_exp(multi_miller_loop(pairs)) == Fq12::one();
 }
-}  // namespace evmmax::bn254
+}  // namespace evmone::crypto::bn254

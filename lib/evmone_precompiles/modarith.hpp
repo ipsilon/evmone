@@ -6,7 +6,7 @@
 #include <intx/intx.hpp>
 #include <cassert>
 
-namespace evmmax
+namespace evmone::crypto
 {
 /// Compute the modular inverse of the number modulo 2³²: inv⋅a = 1 mod 2³².
 constexpr uint32_t modinv(uint32_t a) noexcept
@@ -59,7 +59,7 @@ constexpr std::pair<uint64_t, uint64_t> addmul(
     return {p[1], p[0]};
 }
 
-/// The modular arithmetic operations for EVMMAX (EVM Modular Arithmetic Extensions).
+/// The modular arithmetic operations using the Montgomery form of the values.
 template <typename UintT>
 class ModArith
 {
@@ -224,4 +224,4 @@ public:
         return v;
     }
 };
-}  // namespace evmmax
+}  // namespace evmone::crypto
