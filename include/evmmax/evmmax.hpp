@@ -59,6 +59,48 @@ constexpr std::pair<uint64_t, uint64_t> addmul(
     return {p[1], p[0]};
 }
 
+/// Returns the c of a "pseudo-Mersenne" modulus 2ⁿ-c, where n is the bit width of the type.
+/// Returns 0 if c does not fit in a single word, i.e. if the modulus is not pseudo-Mersenne
+/// for the purpose of pseudo_mersenne_reduce().
+template <typename UintT>
+consteval uint64_t pseudo_mersenne_c(const UintT& mod) noexcept
+{
+    const UintT c = -mod;  // 2ⁿ - mod, because the negation is modulo 2ⁿ.
+    return (c == UintT{c[0]}) ? c[0] : 0;
+}
+
+/// Reduces a double-width value modulo the pseudo-Mersenne modulus Mod = 2ⁿ-c.
+/// Accepts any value of the double width and returns the fully reduced result.
+template <const auto& Mod>
+constexpr auto pseudo_mersenne_reduce(
+    const intx::uint<2 * std::remove_cvref_t<decltype(Mod)>::num_bits>& p) noexcept
+{
+    using UintT = std::remove_cvref_t<decltype(Mod)>;
+    constexpr auto S = UintT::num_words;
+    constexpr auto C = pseudo_mersenne_c(Mod);
+    static_assert(C != 0, "the modulus is not pseudo-Mersenne");
+
+    // Fold the high half into the low one: h⋅2ⁿ + l ≡ l + h⋅c (mod 2ⁿ-c).
+    UintT t;
+    uint64_t c = 0;
+#pragma GCC unroll 8
+    for (size_t i = 0; i != S; ++i)
+        std::tie(c, t[i]) = addmul(p[i], p[S + i], C, c);
+
+    // Fold the leftover word the same way. It is not greater than c, so the product spans
+    // two words at most and the addition below overflows by at most 1.
+    auto [r, overflow] = addc(t, UintT{intx::umul(c, C)});
+
+    // Fold the overflow again. This cannot overflow, because the addition above only overflows
+    // when the low part of its result is as small as the two-word product.
+    if (overflow) [[unlikely]]
+        r += C;
+
+    if (r >= Mod) [[unlikely]]  // The result may exceed the modulus, but by less than c.
+        r -= Mod;
+    return r;
+}
+
 /// The modular arithmetic operations for EVMMAX (EVM Modular Arithmetic Extensions).
 template <typename UintT>
 class ModArith
@@ -158,9 +200,9 @@ public:
         return (d.carry) ? s : d.value;
     }
 
-    /// Computes modular inverse of x in Montgomery form. Result is in Montgomery form.
+    /// Computes u⋅x⁻¹ % mod for the given initial value of the Bézout coefficient u.
     /// Returns 0 for non-invertible x (including x == 0).
-    constexpr UintT inv(const UintT& x) const noexcept
+    constexpr UintT inv_scaled(const UintT& x, UintT u) const noexcept
     {
         assert((mod_ & 1) == 1);
         assert(mod_ >= 3);
@@ -179,12 +221,6 @@ public:
         // TODO: The same paper has additional optimizations that could be applied.
         UintT a = x;
         UintT b = mod_;
-
-        // Bézout's coefficients are originally initialized to 1 and 0. But because the input x
-        // is in Montgomery form XR the algorithm would compute X⁻¹R⁻¹. To get the expected X⁻¹R,
-        // we need to multiply the result by R². We can achieve the same effect "for free"
-        // by initializing u to R² instead of 1.
-        UintT u = r_squared_;
         UintT v = 0;
 
         while (a != 0)
@@ -223,5 +259,106 @@ public:
             v = 0;  // not invertible
         return v;
     }
+
+    /// Computes modular inverse of x in Montgomery form. Result is in Montgomery form.
+    /// Returns 0 for non-invertible x (including x == 0).
+    constexpr UintT inv(const UintT& x) const noexcept
+    {
+        // Bézout's coefficient u is originally initialized to 1. But because the input x is in
+        // Montgomery form XR the algorithm would compute X⁻¹R⁻¹. To get the expected X⁻¹R, we
+        // need to multiply the result by R². We can achieve the same effect "for free"
+        // by initializing u to R² instead of 1.
+        return inv_scaled(x, r_squared_);
+    }
 };
+
+/// The modular arithmetic backend of a prime field.
+///
+/// An implementation keeps values in an internal representation of its choice. Every operation
+/// takes and returns fully reduced values, i.e. less than the modulus. Additionally,
+/// to_internal() requires its argument to be already reduced, because a plain representation
+/// cannot reduce it. inv() returns 0 for non-invertible input, including 0.
+template <typename T>
+concept FieldArith = requires(const typename T::uint_type& x, const typename T::uint_type& y) {
+    { T::to_internal(x) } -> std::same_as<typename T::uint_type>;
+    { T::from_internal(x) } -> std::same_as<typename T::uint_type>;
+    { T::mul(x, y) } -> std::same_as<typename T::uint_type>;
+    { T::add(x, y) } -> std::same_as<typename T::uint_type>;
+    { T::sub(x, y) } -> std::same_as<typename T::uint_type>;
+    { T::inv(x) } -> std::same_as<typename T::uint_type>;
+};
+
+/// The Montgomery multiplication backend, usable with any odd modulus.
+/// Values are kept in the Montgomery form.
+template <const auto& Mod>
+struct MontgomeryArith
+{
+    using uint_type = std::remove_cvref_t<decltype(Mod)>;
+
+    static constexpr uint_type to_internal(const uint_type& v) noexcept { return M.to_mont(v); }
+    static constexpr uint_type from_internal(const uint_type& v) noexcept { return M.from_mont(v); }
+
+    static constexpr uint_type mul(const uint_type& x, const uint_type& y) noexcept
+    {
+        return M.mul(x, y);
+    }
+    static constexpr uint_type add(const uint_type& x, const uint_type& y) noexcept
+    {
+        return M.add(x, y);
+    }
+    static constexpr uint_type sub(const uint_type& x, const uint_type& y) noexcept
+    {
+        return M.sub(x, y);
+    }
+    static constexpr uint_type inv(const uint_type& x) noexcept { return M.inv(x); }
+
+private:
+    static constexpr ModArith<uint_type> M{Mod};
+};
+
+/// The pseudo-Mersenne backend for a modulus 2ⁿ-c with a single-word c.
+/// Values are kept plain, so the conversions to and from the internal form are free.
+template <const auto& Mod>
+struct PseudoMersenneArith
+{
+    using uint_type = std::remove_cvref_t<decltype(Mod)>;
+
+    static constexpr uint_type to_internal(const uint_type& v) noexcept
+    {
+        // Unlike the conversion to the Montgomery form, this does not reduce the input.
+        assert(v < Mod);
+        return v;
+    }
+    static constexpr uint_type from_internal(const uint_type& v) noexcept { return v; }
+
+    static constexpr uint_type mul(const uint_type& x, const uint_type& y) noexcept
+    {
+        return pseudo_mersenne_reduce<Mod>(intx::umul(x, y));
+    }
+    static constexpr uint_type add(const uint_type& x, const uint_type& y) noexcept
+    {
+        return M.add(x, y);
+    }
+    static constexpr uint_type sub(const uint_type& x, const uint_type& y) noexcept
+    {
+        return M.sub(x, y);
+    }
+
+    /// The plain representation needs no R² factor folded in, unlike the Montgomery one.
+    static constexpr uint_type inv(const uint_type& x) noexcept
+    {
+        return M.inv_scaled(x, uint_type{1});
+    }
+
+private:
+    /// Reused for the operations not affected by the representation and for the binary GCD.
+    static constexpr ModArith<uint_type> M{Mod};
+};
+
+/// Selects the arithmetic backend from the structure of the modulus.
+/// Both alternatives are named for any modulus, but only the selected one is instantiated,
+/// so a backend must not place its precondition in the class scope.
+template <const auto& Mod>
+using ArithFor =
+    std::conditional_t<pseudo_mersenne_c(Mod) != 0, PseudoMersenneArith<Mod>, MontgomeryArith<Mod>>;
 }  // namespace evmmax
