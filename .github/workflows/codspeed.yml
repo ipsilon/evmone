@@ -13,17 +13,17 @@ on:
   # performance analysis in order to generate initial data.
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 env:
   BUILD_DIR: build
   CMAKE_BUILD_PARALLEL_LEVEL: 4
 
 jobs:
-  build:
-    name: Build benchmarks
+  benchmark:
+    name: Benchmark
     runs-on: ubuntu-latest
+    permissions:
+      contents: read # required for actions/checkout
+      id-token: write # required for OIDC authentication with CodSpeed
     steps:
       - uses: actions/checkout@v5
         with:
@@ -42,47 +42,16 @@ jobs:
       - name: Build
         run: cmake --build $BUILD_DIR --target evmone-bench evmone-precompiles-bench
 
-      - name: Upload benchmark executables
-        uses: actions/upload-artifact@v7
-        with:
-          name: benchmarks
-          path: ${{ env.BUILD_DIR }}/bin/
-          retention-days: 1
-
-  benchmark:
-    name: Benchmark ${{ matrix.name }}
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read # required for actions/checkout
-      id-token: write # required for OIDC authentication with CodSpeed
-    strategy:
-      fail-fast: false
-      # The benchmarks are split into shards executed in parallel.
-      # CodSpeed aggregates the results of all the shards of a single workflow run.
-      matrix:
-        include:
-          - name: baseline
-            run: bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter='baseline/(analyse|execute)'
-          - name: precompiles
-            run: bin/evmone-precompiles-bench --benchmark_filter=PrecompileId
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - name: Download benchmark executables
-        uses: actions/download-artifact@v7
-        with:
-          name: benchmarks
-          path: bin
-
-      - name: Make the benchmark executables executable
-        # The executable permission is not preserved by the artifact upload.
-        run: chmod +x bin/*
-
-      - name: Run benchmarks
+      # CodSpeed aggregates the results of all the runs of a single workflow run.
+      - name: Benchmark the baseline VM
         uses: CodSpeedHQ/action@v5
         with:
           mode: simulation
-          run: ${{ matrix.run }}
+          run: ${{ env.BUILD_DIR }}/bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter='baseline/(analyse|execute)'
+
+      - name: Benchmark the precompiles
+        uses: CodSpeedHQ/action@v5
+        with:
+          mode: simulation
+          # The file part of the URI contains "precompile" as well, hence the "::".
+          run: ${{ env.BUILD_DIR }}/bin/evmone-precompiles-bench --benchmark_filter=::precompile
