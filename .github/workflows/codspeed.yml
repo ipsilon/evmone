@@ -40,7 +40,7 @@ jobs:
           -DCODSPEED_MODE=simulation
 
       - name: Build
-        run: cmake --build $BUILD_DIR --target evmone-bench evmone-bench-internal evmone-precompiles-bench
+        run: cmake --build $BUILD_DIR --target evmone-bench evmone-precompiles-bench
 
       - name: Upload benchmark executables
         uses: actions/upload-artifact@v7
@@ -62,18 +62,10 @@ jobs:
       # CodSpeed aggregates the results of all the shards of a single workflow run.
       matrix:
         include:
-          - name: synth
-            run: bin/evmone-bench --benchmark_filter=synth
-          - name: micro
-            run: bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter=micro
-          - name: main
-            run: bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter='main/(blake2b|sha1|structarray|swap_math|weierstrudel)'
-          - name: snailtracer
-            run: bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter=main/snailtracer
-          - name: internal
-            run: bin/evmone-bench-internal
+          - name: baseline
+            run: bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter='baseline/(analyse|execute)'
           - name: precompiles
-            run: bin/evmone-precompiles-bench
+            run: bin/evmone-precompiles-bench --benchmark_filter=PrecompileId
     steps:
       - uses: actions/checkout@v5
         with:
