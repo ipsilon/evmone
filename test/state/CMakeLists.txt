@@ -50,28 +50,28 @@ if(EVMONE_PRECOMPILES_LIBSECP256K1)
         URL https://github.com/bitcoin-core/secp256k1/archive/refs/tags/v0.8.0.tar.gz
         URL_HASH SHA256=eb52b0e9239dff7dc26be5f9623567141b8720ec47da29eb3c1e0a660d17c8bb
     )
-    # TODO(cmake-3.25): Use block().
-    set(BUILD_SHARED_LIBS_ORIG ${BUILD_SHARED_LIBS})
-    set(BUILD_SHARED_LIBS OFF)
-    set(SECP256K1_ENABLE_MODULE_ELLSWIFT OFF)
-    set(SECP256K1_ENABLE_MODULE_MUSIG OFF)
-    set(SECP256K1_ENABLE_MODULE_SILENTPAYMENTS OFF)
-    set(SECP256K1_ENABLE_MODULE_SCHNORRSIG OFF)
-    set(SECP256K1_ENABLE_MODULE_EXTRAKEYS OFF)
-    set(SECP256K1_ENABLE_MODULE_RECOVERY ON)
-    set(SECP256K1_ENABLE_MODULE_ECDH OFF)
-    # On x86_64 using asm is ~1% worse. Untested on ARM.
-    set(SECP256K1_ASM OFF)
-    set(SECP256K1_BUILD_BENCHMARK OFF)
-    set(SECP256K1_BUILD_TESTS OFF)
-    set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
-    set(SECP256K1_BUILD_CTIME_TESTS OFF)
-    set(SECP256K1_INSTALL OFF)
-    set(SECP256K1_BUILD_EXAMPLES OFF)
-    # Not needed for static library.
-    set(SECP256K1_ENABLE_API_VISIBILITY_ATTRIBUTES OFF)
-    set(SECP256K1_VALGRIND OFF)
-    FetchContent_MakeAvailable(libsecp256k1)
+    block()
+        set(BUILD_SHARED_LIBS OFF)
+        set(SECP256K1_ENABLE_MODULE_ELLSWIFT OFF)
+        set(SECP256K1_ENABLE_MODULE_MUSIG OFF)
+        set(SECP256K1_ENABLE_MODULE_SILENTPAYMENTS OFF)
+        set(SECP256K1_ENABLE_MODULE_SCHNORRSIG OFF)
+        set(SECP256K1_ENABLE_MODULE_EXTRAKEYS OFF)
+        set(SECP256K1_ENABLE_MODULE_RECOVERY ON)
+        set(SECP256K1_ENABLE_MODULE_ECDH OFF)
+        # On x86_64 using asm is ~1% worse. Untested on ARM.
+        set(SECP256K1_ASM OFF)
+        set(SECP256K1_BUILD_BENCHMARK OFF)
+        set(SECP256K1_BUILD_TESTS OFF)
+        set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
+        set(SECP256K1_BUILD_CTIME_TESTS OFF)
+        set(SECP256K1_INSTALL OFF)
+        set(SECP256K1_BUILD_EXAMPLES OFF)
+        # Not needed for static library.
+        set(SECP256K1_ENABLE_API_VISIBILITY_ATTRIBUTES OFF)
+        set(SECP256K1_VALGRIND OFF)
+        FetchContent_MakeAvailable(libsecp256k1)
+    endblock()
     foreach(TARGET secp256k1 secp256k1_precomputed)
         set_target_properties(
             ${TARGET}
@@ -89,7 +89,6 @@ if(EVMONE_PRECOMPILES_LIBSECP256K1)
         precompiles_libsecp256k1.hpp
         precompiles_libsecp256k1.cpp
     )
-    set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_ORIG})
 endif()
 
 option(EVMONE_PRECOMPILES_GMP "Enable precompiles implementations via the GMP/MPIR library" OFF)

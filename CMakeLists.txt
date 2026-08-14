@@ -2,7 +2,7 @@
 # Copyright 2019 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-cmake_minimum_required(VERSION 3.22...4.2)
+cmake_minimum_required(VERSION 3.25...4.2)
 
 option(BUILD_SHARED_LIBS "Build evmone as a shared library" ON)
 option(COVERAGE "Build with coverage instrumentation" OFF)
@@ -36,15 +36,11 @@ if(PROJECT_VERSION_MAJOR EQUAL 0)
     set(PROJECT_SOVERSION ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR})
 endif()
 
-if(COMMAND block) # TODO(cmake-3.25)
-    block()
-        set(CMAKE_C_CLANG_TIDY "")
-        set(CMAKE_CXX_CLANG_TIDY "")
-        add_subdirectory(evmc)
-    endblock()
-else()
+block()
+    set(CMAKE_C_CLANG_TIDY "")
+    set(CMAKE_CXX_CLANG_TIDY "")
     add_subdirectory(evmc)
-endif()
+endblock()
 
 cable_configure_compiler(NO_STACK_PROTECTION)
 if(CABLE_COMPILER_GNULIKE)
