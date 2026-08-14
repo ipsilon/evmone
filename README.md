@@ -129,7 +129,7 @@ Licensed under the [Apache License, Version 2.0].
 [appveyor]: https://ci.appveyor.com/project/chfast/evmone/branch/master
 [circleci]: https://circleci.com/gh/ethereum/evmone/tree/master
 [codecov]: https://codecov.io/gh/ethereum/evmone/
-[codspeed]: https://app.codspeed.io/ipsilon/evmone?utm_source=badge
+[codspeed]: https://app.codspeed.io/ipsilon/evmone
 [Apache License, Version 2.0]: LICENSE
 [ethereum]: https://ethereum.org
 [EVMC]: https://github.com/ethereum/evmc

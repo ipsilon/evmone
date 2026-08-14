@@ -1,5 +1,5 @@
 # evmone: Fast Ethereum Virtual Machine implementation
-# Copyright 2025 The evmone Authors.
+# Copyright 2026 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
 name: CodSpeed
@@ -38,11 +38,14 @@ jobs:
         run: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
 
       - name: Configure
-        # RelWithDebInfo keeps the optimizations on and adds the debug information
-        # needed by CodSpeed to attribute the measurements to the source code.
+        # The Release build type keeps the -O3 optimizations on, -g adds the debug information
+        # needed by CodSpeed to attribute the measurements to the source code. CodSpeed recommends
+        # (and warns about) RelWithDebInfo, but that would downgrade the optimizations to -O2.
         run: >
           cmake -S . -B $BUILD_DIR
-          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_FLAGS=-g
+          -DCMAKE_CXX_FLAGS=-g
           -DBUILD_SHARED_LIBS=OFF
           -DEVMONE_TESTING=ON
           -DEVMONE_PRECOMPILES_GMP=ON
