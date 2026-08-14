@@ -11,20 +11,25 @@
 #include <evmone/advanced_execution.hpp>
 #include <evmone/baseline.hpp>
 #include <evmone/vm.hpp>
-
-/// Decorates a dynamically registered benchmark name with the location of the registration.
-/// CodSpeed identifies benchmarks by the "source_file::name" URI, which the BENCHMARK() macro
-/// provides automatically, but RegisterBenchmark() does not. Without CodSpeed this is a no-op.
-#ifdef CODSPEED_ENABLED
-#define EVMONE_BENCH_NAME(NAME) \
-    (::codspeed::get_path_relative_to_workspace(__FILE__) + "::" + (NAME))
-#else
-#define EVMONE_BENCH_NAME(NAME) (NAME)
-#endif
+#include <source_location>
 
 namespace evmone::test
 {
 extern std::map<std::string_view, evmc::VM> registered_vms;
+
+/// Decorates a dynamically registered benchmark name with the location of the registration.
+/// CodSpeed identifies benchmarks by the "source_file::name" URI, which the BENCHMARK() macro
+/// adds automatically, but RegisterBenchmark() does not. Without CodSpeed this is a no-op.
+/// The default argument is evaluated at the call site, naming the file registering the benchmark.
+inline std::string bench_name(std::string name,
+    [[maybe_unused]] const std::source_location loc = std::source_location::current())
+{
+#ifdef CODSPEED_ENABLED
+    return codspeed::get_path_relative_to_workspace(loc.file_name()) + "::" + std::move(name);
+#else
+    return name;
+#endif
+}
 
 constexpr auto default_revision = EVMC_ISTANBUL;
 constexpr auto default_gas_limit = std::numeric_limits<int64_t>::max();
