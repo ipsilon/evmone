@@ -2,6 +2,7 @@
 # Copyright 2019-2020 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
+include(FetchContent)
 include(GoogleTest)
 
 set(evmone_private_include_dir ${PROJECT_SOURCE_DIR}/lib)
@@ -12,8 +13,23 @@ find_package(CLI11 CONFIG REQUIRED)
 hunter_add_package(GTest)
 find_package(GTest CONFIG REQUIRED)
 
-hunter_add_package(benchmark)
-find_package(benchmark CONFIG REQUIRED)
+FetchContent_Declare(
+    benchmark
+    URL https://github.com/google/benchmark/archive/refs/tags/v1.9.5.tar.gz
+    URL_HASH SHA256=9631341c82bac4a288bef951f8b26b41f69021794184ece969f8473977eaa340
+)
+block()
+    set(BUILD_SHARED_LIBS OFF)
+    set(BENCHMARK_ENABLE_TESTING OFF)
+    set(BENCHMARK_ENABLE_INSTALL OFF)
+    FetchContent_MakeAvailable(benchmark)
+endblock()
+set_target_properties(
+    benchmark benchmark_main PROPERTIES
+    COMPILE_OPTIONS $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-w>
+    CXX_CLANG_TIDY ""
+    SYSTEM TRUE  # TODO(cmake-3.26): Use the SYSTEM option of FetchContent_Declare().
+)
 
 include(CableBuildInfo)
 cable_add_buildinfo_library(PROJECT_NAME evmone)
