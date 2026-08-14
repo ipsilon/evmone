@@ -2,7 +2,6 @@
 // Copyright 2023 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "../utils/bench.hpp"
 #include <benchmark/benchmark.h>
 #include <evmone_precompiles/modarith.hpp>
 
@@ -20,7 +19,7 @@ void modarith_add(benchmark::State& state)
     auto a = Mod / 2;
     auto b = Mod / 3;
 
-    EVMONE_BENCH_LOOP_BATCH(state, 2)
+    while (state.KeepRunningBatch(2))
     {
         a = m.add(a, b);
         b = m.add(b, a);
@@ -34,7 +33,7 @@ void modarith_sub(benchmark::State& state)
     auto a = Mod / 2;
     auto b = Mod / 3;
 
-    EVMONE_BENCH_LOOP_BATCH(state, 2)
+    while (state.KeepRunningBatch(2))
     {
         a = m.sub(a, b);
         b = m.sub(b, a);
@@ -48,7 +47,7 @@ void modarith_mul(benchmark::State& state)
     auto a = m.to_mont(Mod / 2);
     auto b = m.to_mont(Mod / 3);
 
-    EVMONE_BENCH_LOOP_BATCH(state, 2)
+    while (state.KeepRunningBatch(2))
     {
         a = m.mul(a, b);
         b = m.mul(b, a);

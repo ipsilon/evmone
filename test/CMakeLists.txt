@@ -24,13 +24,14 @@ block()
             URL_HASH SHA256=9631341c82bac4a288bef951f8b26b41f69021794184ece969f8473977eaa340
         )
     else()
-        # Replace google/benchmark with CodSpeed's compatibility layer to report the benchmark
-        # results to https://codspeed.io. It provides the same benchmark::benchmark target,
+        # Replace google/benchmark with CodSpeed's fork of it to report the benchmark results
+        # to https://codspeed.io. It provides the same benchmark::benchmark target,
         # so the benchmark targets need no changes.
         FetchContent_Declare(
             benchmark
-            GIT_REPOSITORY https://github.com/CodSpeedHQ/codspeed-cpp
-            GIT_TAG f5a917fdd14db7293bd37acb682873fec19f8b6c  # v2.4.0
+            # Fork of v2.4.0 with fixes not yet available upstream.
+            GIT_REPOSITORY https://github.com/chfast/codspeed-cpp
+            GIT_TAG 649071319a5999d5fb02d5abf3f5003e2dd59ef9
             GIT_SHALLOW FALSE
             SOURCE_SUBDIR google_benchmark
         )

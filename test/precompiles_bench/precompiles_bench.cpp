@@ -2,7 +2,6 @@
 // Copyright 2024 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "../utils/bench.hpp"
 #include "../utils/utils.hpp"
 #include <benchmark/benchmark.h>
 #include <intx/intx.hpp>
@@ -215,7 +214,7 @@ void precompile(benchmark::State& state)
 
 
     int64_t total_gas_used = 0;
-    EVMONE_BENCH_LOOP_BATCH(state, inputs<Id>.size())
+    while (state.KeepRunningBatch(inputs<Id>.size()))
     {
         for (const auto& input : inputs<Id>)
         {
