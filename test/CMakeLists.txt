@@ -31,7 +31,7 @@ block()
             benchmark
             # Fork of v2.4.0 with fixes not yet available upstream.
             GIT_REPOSITORY https://github.com/chfast/codspeed-cpp
-            GIT_TAG 649071319a5999d5fb02d5abf3f5003e2dd59ef9
+            GIT_TAG 0ecdd6e7d8f9e858e8e0b2fbe54ff7f427bec528
             GIT_SHALLOW FALSE
             SOURCE_SUBDIR google_benchmark
         )
