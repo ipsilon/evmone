@@ -8,8 +8,9 @@
 
 namespace evmone::crypto
 {
-/// Compute the modular inverse of the number modulo 2³²: inv⋅a = 1 mod 2³².
-constexpr uint32_t modinv(uint32_t a) noexcept
+/// Computes the modular inverse of a modulo 2³², satisfying a⋅inv = 1 mod 2³².
+/// Only odd arguments are invertible modulo a power of two.
+constexpr uint32_t modinv_pow2(uint32_t a) noexcept
 {
     assert(a % 2 == 1);  // The argument must be odd, otherwise the inverse does not exist.
 
@@ -33,11 +34,12 @@ constexpr uint32_t modinv(uint32_t a) noexcept
     return inv;
 }
 
-/// Compute the modular inverse of the number modulo 2⁶⁴: inv⋅a = 1 mod 2⁶⁴.
-constexpr uint64_t modinv(uint64_t a) noexcept
+/// Computes the modular inverse of a modulo 2⁶⁴, satisfying a⋅inv = 1 mod 2⁶⁴.
+/// Only odd arguments are invertible modulo a power of two.
+constexpr uint64_t modinv_pow2(uint64_t a) noexcept
 {
     assert(a % 2 == 1);  // The argument must be odd, otherwise the inverse does not exist.
-    uint64_t inv = modinv(static_cast<uint32_t>(a));  // Start with inversion mod 2³².
+    uint64_t inv = modinv_pow2(static_cast<uint32_t>(a));  // Start with inversion mod 2³².
     inv *= 2 - a * inv;    // One Newton-Raphson iteration: 64 bits correct.
     assert(inv * a == 1);  // Verify the result.
     return inv;
@@ -49,7 +51,7 @@ constexpr uint64_t compute_mont_mod_inv(const UintT& mod) noexcept
 {
     // Compute the inversion mod[0]⁻¹ mod 2⁶⁴, then the final result is N' = -mod[0]⁻¹
     // because this gives mod⋅N' = -1 mod 2⁶⁴ = 2⁶⁴-1.
-    return -modinv(mod[0]);
+    return -modinv_pow2(mod[0]);
 }
 
 constexpr std::pair<uint64_t, uint64_t> addmul(

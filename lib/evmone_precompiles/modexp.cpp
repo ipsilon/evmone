@@ -414,7 +414,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     assert(!exp.empty());
 
     const auto n = mod.size();
-    const auto mod_inv = -modinv(mod[0]);
+    const auto mod_inv = -modinv_pow2(mod[0]);
     const auto exp_bits = exp.bit_width();
 
     const auto w = window_width(exp_bits);
@@ -572,13 +572,13 @@ void modinv_pow2(
     assert(!r.empty());
     assert(scratch.size() >= 2 * r.size());
 
-    r[0] = modinv(x[0]);                           // Good start: 64 correct bits.
+    r[0] = crypto::modinv_pow2(x[0]);              // Good start: 64 correct bits.
     std::ranges::fill(r.subspan(1), uint64_t{0});  // Zero the rest for correct final subtraction.
 
     // Newton-Raphson iteration for modular inverse: inv' = inv * (2 - x * inv).
     // Rearranged as: inv' = 2 * inv - x * inv^2, which avoids the (2 - x) negation helper
     // and computes the result directly into r (no copy needed).
-    // Each iteration doubles the number of correct bits. See modinv().
+    // Each iteration doubles the number of correct bits. See modinv_pow2().
     for (size_t i = 1; i < r.size(); i *= 2)
     {
         // We have i-word correct inverse in r[0..i). Double the precision to n = min(2i, r.size()).
