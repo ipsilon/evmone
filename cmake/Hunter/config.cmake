@@ -13,9 +13,9 @@ hunter_config(
 
 hunter_config(
     GTest
-    VERSION 1.17.0
-    URL https://github.com/google/googletest/archive/v1.17.0.tar.gz
-    SHA1 8a8ee424e8275ec4b480ba4a0d1ba94b5dee3ee4
+    VERSION 1.18.0
+    URL https://github.com/google/googletest/archive/v1.18.0.tar.gz
+    SHA1 91002f753cec495a3214e04c5602b7d3cc79a452
 )
 
 hunter_config(
