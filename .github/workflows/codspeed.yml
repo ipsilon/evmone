@@ -16,6 +16,9 @@ on:
 env:
   BUILD_DIR: build
   CMAKE_BUILD_PARALLEL_LEVEL: 4
+  # The newest GCC on the ubuntu-24.04 image, which otherwise defaults to GCC 13.
+  CC: gcc-14
+  CXX: g++-14
 
 jobs:
   benchmark:
