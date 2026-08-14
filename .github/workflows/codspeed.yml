@@ -20,7 +20,9 @@ env:
 jobs:
   benchmark:
     name: Benchmark
-    runs-on: ubuntu-latest
+    # CodSpeed ships its instrumented Valgrind for Ubuntu 22.04, Ubuntu 24.04 and Debian 12 only,
+    # and bails out with "Unsupported system" anywhere else, so the image cannot be `latest`.
+    runs-on: ubuntu-24.04
     permissions:
       contents: read # required for actions/checkout
       id-token: write # required for OIDC authentication with CodSpeed
