@@ -61,6 +61,96 @@ constexpr std::pair<uint64_t, uint64_t> addmul(
     return {p[1], p[0]};
 }
 
+/// Performs a modular addition. Requires x < mod and y < mod.
+template <typename UintT>
+constexpr UintT modadd(const UintT& x, const UintT& y, const UintT& mod) noexcept
+{
+    assert(x < mod);
+    assert(y < mod);
+    const auto s = addc(x, y);  // TODO: cannot overflow if modulus is sparse (e.g. 255 bits).
+    const auto d = subc(s.value, mod);
+    return (!s.carry && d.carry) ? s.value : d.value;
+}
+
+/// Performs a modular subtraction. Requires x < mod and y < mod.
+template <typename UintT>
+constexpr UintT modsub(const UintT& x, const UintT& y, const UintT& mod) noexcept
+{
+    assert(x < mod);
+    assert(y < mod);
+    const auto d = subc(x, y);
+    const auto s = d.value + mod;
+    return (d.carry) ? s : d.value;
+}
+
+/// Computes scale⋅x⁻¹ % mod, i.e. the modular inverse of x scaled by the given factor.
+/// Returns 0 for non-invertible x (including x == 0).
+/// Requires an odd mod not less than 3, and both x and scale less than mod.
+///
+/// The scale is the initial value of the Bézout coefficient u and the algorithm is linear in it,
+/// so any factor can be folded into the result for free.
+template <typename UintT>
+constexpr UintT modinv_scaled(const UintT& x, const UintT& scale, const UintT& mod) noexcept
+{
+    assert((mod & 1) == 1);
+    assert(mod >= 3);
+    assert(x < mod);
+    assert(scale < mod);  // Otherwise the first modsub() below gets a non-reduced operand.
+
+    // Precompute inverse of 2 modulo mod: inv2 * 2 % mod == 1.
+    // The 1/2 is inexact division that can be fixed by adding "0" to the numerator
+    // and making it even: (mod + 1) / 2. To avoid potential overflow of (1 + mod)
+    // we rewrite it further to (mod - 1 + 2) / 2 = (mod - 1) / 2 + 1 = ⌊mod / 2⌋ + 1.
+    const auto inv2 = (mod >> 1) + 1;
+
+    // Use extended binary Euclidean algorithm. This evolves variables a and b until a is 0.
+    // Then GCD(x, mod) is in b. If GCD(x, mod) == 1 then the inversion exists and is in v.
+    // This follows the classic algorithm (Algorithm 1) presented in
+    // "Optimized Binary GCD for Modular Inversion".
+    // https://eprint.iacr.org/2020/972.pdf#algorithm.1
+    // TODO: The same paper has additional optimizations that could be applied.
+    UintT a = x;
+    UintT b = mod;
+    UintT u = scale;
+    UintT v = 0;
+
+    while (a != 0)
+    {
+        if ((a & 1) != 0)
+        {
+            // if a is odd, update it to a - b.
+            if (const auto [d, less] = subc(a, b); less)
+            {
+                // swap a and b in case a < b.
+                b = a;
+                a = -d;
+
+                using namespace std;
+                swap(u, v);
+            }
+            else
+            {
+                a = d;
+            }
+            u = modsub(u, v, mod);
+        }
+
+        // Compute a / 2 % mod, a is even so division is exact and can be computed as ⌊a / 2⌋.
+        a >>= 1;
+
+        // Compute u / 2 % mod. If u is even, this can be computed as ⌊u / 2⌋.
+        // Otherwise, (u - 1 + 1) / 2 = ⌊u / 2⌋ + (1 / 2 % mod).
+        const auto u_odd = (u & 1) != 0;
+        u >>= 1;
+        if (u_odd)
+            u += inv2;  // if u is odd, add back ½ % mod.
+    }
+
+    if (b != 1) [[unlikely]]
+        v = 0;  // not invertible
+    return v;
+}
+
 /// The modular arithmetic operations using the Montgomery form of the values.
 template <typename UintT>
 class ModArith
@@ -142,88 +232,27 @@ public:
         return static_cast<UintT>(t);
     }
 
-    /// Performs a modular addition. It is required that x < mod and y < mod, but x and y may be
-    /// but are not required to be in Montgomery form.
+    /// Performs a modular addition.
     constexpr UintT add(const UintT& x, const UintT& y) const noexcept
     {
-        const auto s = addc(x, y);  // TODO: cannot overflow if modulus is sparse (e.g. 255 bits).
-        const auto d = subc(s.value, mod_);
-        return (!s.carry && d.carry) ? s.value : d.value;
+        // Using generic procedure is fine for Montgomery forms.
+        return modadd(x, y, mod_);
     }
 
-    /// Performs a modular subtraction. It is required that x < mod and y < mod, but x and y may be
-    /// but are not required to be in Montgomery form.
+    /// Performs a modular subtraction.
     constexpr UintT sub(const UintT& x, const UintT& y) const noexcept
     {
-        const auto d = subc(x, y);
-        const auto s = d.value + mod_;
-        return (d.carry) ? s : d.value;
+        // Using generic procedure is fine for Montgomery forms.
+        return modsub(x, y, mod_);
     }
 
     /// Computes modular inverse of x in Montgomery form. Result is in Montgomery form.
     /// Returns 0 for non-invertible x (including x == 0).
     constexpr UintT inv(const UintT& x) const noexcept
     {
-        assert((mod_ & 1) == 1);
-        assert(mod_ >= 3);
-
-        // Precompute inverse of 2 modulo mod: inv2 * 2 % mod == 1.
-        // The 1/2 is inexact division that can be fixed by adding "0" to the numerator
-        // and making it even: (mod + 1) / 2. To avoid potential overflow of (1 + mod)
-        // we rewrite it further to (mod - 1 + 2) / 2 = (mod - 1) / 2 + 1 = ⌊mod / 2⌋ + 1.
-        const auto inv2 = (mod_ >> 1) + 1;
-
-        // Use extended binary Euclidean algorithm. This evolves variables a and b until a is 0.
-        // Then GCD(x, mod) is in b. If GCD(x, mod) == 1 then the inversion exists and is in v.
-        // This follows the classic algorithm (Algorithm 1) presented in
-        // "Optimized Binary GCD for Modular Inversion".
-        // https://eprint.iacr.org/2020/972.pdf#algorithm.1
-        // TODO: The same paper has additional optimizations that could be applied.
-        UintT a = x;
-        UintT b = mod_;
-
-        // Bézout's coefficients are originally initialized to 1 and 0. But because the input x
-        // is in Montgomery form XR the algorithm would compute X⁻¹R⁻¹. To get the expected X⁻¹R,
-        // we need to multiply the result by R². We can achieve the same effect "for free"
-        // by initializing u to R² instead of 1.
-        UintT u = r_squared_;
-        UintT v = 0;
-
-        while (a != 0)
-        {
-            if ((a & 1) != 0)
-            {
-                // if a is odd, update it to a - b.
-                if (const auto [d, less] = subc(a, b); less)
-                {
-                    // swap a and b in case a < b.
-                    b = a;
-                    a = -d;
-
-                    using namespace std;
-                    swap(u, v);
-                }
-                else
-                {
-                    a = d;
-                }
-                u = sub(u, v);
-            }
-
-            // Compute a / 2 % mod, a is even so division is exact and can be computed as ⌊a / 2⌋.
-            a >>= 1;
-
-            // Compute u / 2 % mod. If u is even, this can be computed as ⌊u / 2⌋.
-            // Otherwise, (u - 1 + 1) / 2 = ⌊u / 2⌋ + (1 / 2 % mod).
-            const auto u_odd = (u & 1) != 0;
-            u >>= 1;
-            if (u_odd)
-                u += inv2;  // if u is odd, add back ½ % mod.
-        }
-
-        if (b != 1) [[unlikely]]
-            v = 0;  // not invertible
-        return v;
+        // The input XR would invert to X⁻¹R⁻¹, so scaling by R² gives the expected Montgomery
+        // form X⁻¹R at no extra cost.
+        return modinv_scaled(x, r_squared_, mod_);
     }
 };
 }  // namespace evmone::crypto
