@@ -34,6 +34,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Install GMP
+        run: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
+
       - name: Configure
         # RelWithDebInfo keeps the optimizations on and adds the debug information
         # needed by CodSpeed to attribute the measurements to the source code.
@@ -42,6 +45,8 @@ jobs:
           -DCMAKE_BUILD_TYPE=RelWithDebInfo
           -DBUILD_SHARED_LIBS=OFF
           -DEVMONE_TESTING=ON
+          -DEVMONE_PRECOMPILES_GMP=ON
+          -DEVMONE_PRECOMPILES_LIBSECP256K1=ON
           -DCODSPEED_MODE=simulation
 
       - name: Build
@@ -54,9 +59,10 @@ jobs:
           mode: simulation
           run: ${{ env.BUILD_DIR }}/bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter='baseline/(analyse|execute)'
 
+      # Both the mainnet inputs and the modexp parameter sweep: the mainnet moduli are all odd
+      # and 256-bit, so they cover a single code path and hide the work done on the others.
       - name: Benchmark the precompiles
         uses: CodSpeedHQ/action@v5
         with:
           mode: simulation
-          # The file part of the URI contains "precompile" as well, hence the "::".
-          run: ${{ env.BUILD_DIR }}/bin/evmone-precompiles-bench --benchmark_filter=::precompile
+          run: ${{ env.BUILD_DIR }}/bin/evmone-precompiles-bench
