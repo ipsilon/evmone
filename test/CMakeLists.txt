@@ -13,10 +13,11 @@ find_package(CLI11 CONFIG REQUIRED)
 hunter_add_package(GTest)
 find_package(GTest CONFIG REQUIRED)
 
-block()
+block(PROPAGATE benchmark_libs)
     set(BUILD_SHARED_LIBS OFF)
     set(BENCHMARK_ENABLE_TESTING OFF)
     set(BENCHMARK_ENABLE_INSTALL OFF)
+    set(benchmark_libs benchmark benchmark_main)
     if(NOT CODSPEED_MODE)
         FetchContent_Declare(
             benchmark
@@ -35,21 +36,18 @@ block()
             GIT_SHALLOW FALSE
             SOURCE_SUBDIR google_benchmark
         )
+        list(APPEND benchmark_libs codspeed instrument_hooks)
     endif()
     FetchContent_MakeAvailable(benchmark)
 endblock()
 
-foreach(TARGET IN ITEMS benchmark benchmark_main codspeed instrument_hooks)
-    if(TARGET ${TARGET})
-        set_target_properties(
-            ${TARGET} PROPERTIES
-            COMPILE_OPTIONS "$<$<COMPILE_LANG_AND_ID:C,GNU,Clang,AppleClang>:-w>;$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-w>"
-            C_CLANG_TIDY ""
-            CXX_CLANG_TIDY ""
-            SYSTEM TRUE  # TODO(cmake-3.26): Use the SYSTEM option of FetchContent_Declare().
-        )
-    endif()
-endforeach()
+set_target_properties(
+    ${benchmark_libs} PROPERTIES
+    COMPILE_OPTIONS "$<$<COMPILE_LANG_AND_ID:C,GNU,Clang,AppleClang>:-w>;$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-w>"
+    C_CLANG_TIDY ""
+    CXX_CLANG_TIDY ""
+    SYSTEM TRUE  # TODO(cmake-3.26): Use the SYSTEM option of FetchContent_Declare().
+)
 
 include(CableBuildInfo)
 cable_add_buildinfo_library(PROJECT_NAME evmone)
