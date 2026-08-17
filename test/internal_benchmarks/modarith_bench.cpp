@@ -12,6 +12,8 @@ namespace
 constexpr auto bn254 = 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
 constexpr auto secp256k1 = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f_u256;
 
+// Each pair of operations forms a single dependency chain, so the reported time is the latency.
+
 template <typename UintT, const UintT& Mod>
 void modarith_add(benchmark::State& state)
 {
@@ -24,6 +26,8 @@ void modarith_add(benchmark::State& state)
         a = m.add(a, b);
         b = m.add(b, a);
     }
+    benchmark::DoNotOptimize(a);
+    benchmark::DoNotOptimize(b);
 }
 
 template <typename UintT, const UintT& Mod>
@@ -38,6 +42,8 @@ void modarith_sub(benchmark::State& state)
         a = m.sub(a, b);
         b = m.sub(b, a);
     }
+    benchmark::DoNotOptimize(a);
+    benchmark::DoNotOptimize(b);
 }
 
 template <typename UintT, const UintT& Mod>
@@ -52,6 +58,8 @@ void modarith_mul(benchmark::State& state)
         a = m.mul(a, b);
         b = m.mul(b, a);
     }
+    benchmark::DoNotOptimize(a);
+    benchmark::DoNotOptimize(b);
 }
 }  // namespace
 
