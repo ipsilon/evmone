@@ -144,6 +144,9 @@ T load_or(const json::json& j, std::string_view key, T default_value)
 /// Exports the State (accounts) to JSON format (aka pre/post/alloc state).
 json::json to_json(const TestState& state);
 
+/// Exports a transaction log to JSON format (as in a receipt's log list).
+json::json to_json(const state::Log& log);
+
 /// Export the state test to JSON format.
 json::json to_state_test(std::string_view test_name, const state::BlockInfo& block,
     state::Transaction& tx, const TestState& pre, evmc_revision rev,

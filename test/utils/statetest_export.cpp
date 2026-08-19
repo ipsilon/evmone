@@ -44,6 +44,17 @@ json::json to_json(const TestState& state)
     return j;
 }
 
+json::json to_json(const state::Log& log)
+{
+    json::json j;
+    j["address"] = hex0x(log.addr);
+    auto& j_topics = j["topics"] = json::json::array();
+    for (const auto& topic : log.topics)
+        j_topics.push_back(hex0x(topic));
+    j["data"] = hex0x(log.data);
+    return j;
+}
+
 json::json to_state_test(std::string_view test_name, const state::BlockInfo& block,
     state::Transaction& tx, const TestState& pre, evmc_revision rev,
     const std::variant<state::TransactionReceipt, std::error_code>& res, const TestState& post)

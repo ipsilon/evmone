@@ -52,6 +52,60 @@ constexpr auto TX_JSON = R"([{
     "r": "0x468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665ae",
     "s": "0x5cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc"
 }])";
+
+/// Runs t8n over the given pre-state and transactions, and returns the result JSON.
+std::string run_t8n(std::string_view alloc_json, std::string_view txs_json, evmc_revision rev)
+{
+    evmc::VM vm{evmc_create_evmone()};
+
+    std::istringstream env{ENV_JSON};
+    std::istringstream alloc{std::string{alloc_json}};
+    std::istringstream txs{std::string{txs_json}};
+    std::ostringstream out_result;
+
+    tooling::T8NArgs args;
+    args.rev = rev;
+    args.chain_id = 1;
+    args.alloc = &alloc;
+    args.env = &env;
+    args.txs = &txs;
+    args.out_result = &out_result;
+
+    tooling::t8n(vm, args);
+    return out_result.str();
+}
+
+/// Legacy transaction calling CALLEE. t8n takes `sender` from the JSON and only checks `hash`
+/// when present, so the signature is never recovered.
+constexpr auto TX_TO_CALLEE = R"([{
+    "to": "0x000000000000000000000000000000000000c0de",
+    "input": "0x",
+    "gas": "0x186a0",
+    "nonce": "0x0",
+    "value": "0x0",
+    "gasPrice": "0x32",
+    "chainId": "0x1",
+    "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+    "v": "0x1b",
+    "r": "0x468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665ae",
+    "s": "0x5cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc"
+}])";
+
+/// Runs TX_TO_CALLEE against a callee deployed with the given code.
+std::string run_call_to(std::string_view callee_code, evmc_revision rev)
+{
+    const auto alloc = R"({
+        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+            "code": "", "nonce": "0x00", "balance": "0x02540be400"
+        },
+        "0x000000000000000000000000000000000000c0de": {
+            "code": ")" +
+                       std::string{callee_code} +
+                       R"(", "nonce": "0x00", "balance": "0x00"
+        }
+    })";
+    return run_t8n(alloc, TX_TO_CALLEE, rev);
+}
 }  // namespace
 
 TEST(tooling_t8n, no_inputs_no_outputs)
@@ -149,31 +203,13 @@ TEST(tooling_t8n, out_body_is_hex_rlp_of_transactions)
 
 TEST(tooling_t8n, pre_byzantium_sets_receipt_post_state)
 {
-    evmc::VM vm{evmc_create_evmone()};
+    // The TX_JSON fixture uses PUSH0 in its init code, so the inner CREATE fails at Homestead,
+    // but the outer tx still produces a receipt, which carries the post-state root instead of
+    // the EIP-658 status.
+    const auto result = run_t8n(ALLOC_JSON, TX_JSON, EVMC_HOMESTEAD);
 
-    // Pre-Byzantium receipts include the post-state root via receipt.post_state.
-    // The TX_JSON fixture uses PUSH0 in its init code, so the inner CREATE fails
-    // at Homestead, but the outer tx still produces a TransactionReceipt that
-    // exercises the `rev < EVMC_BYZANTIUM` branch in t8n().
-    std::istringstream env{ENV_JSON};
-    std::istringstream alloc{ALLOC_JSON};
-    std::istringstream txs{TX_JSON};
-    std::ostringstream out_result;
-
-    tooling::T8NArgs args;
-    args.rev = EVMC_HOMESTEAD;
-    args.chain_id = 1;
-    args.alloc = &alloc;
-    args.env = &env;
-    args.txs = &txs;
-    args.out_result = &out_result;
-
-    tooling::t8n(vm, args);
-
-    // The "receipts" array is initialized empty on every txs-present run; the
-    // distinguishing signal that a receipt was actually produced (i.e., the
-    // tx wasn't classified as rejected) is the presence of transactionHash.
-    EXPECT_THAT(out_result.str(), HasSubstr("\"transactionHash\""));
+    EXPECT_THAT(result, HasSubstr("\"transactionHash\""));
+    EXPECT_THAT(result, HasSubstr("\"root\": \"0x"));
 }
 
 TEST(tooling_t8n, mismatched_tx_hash_throws)
@@ -286,4 +322,22 @@ TEST(tooling_t8n, max_v)
 
     EXPECT_NO_THROW(tooling::t8n(vm, args));
     EXPECT_THAT(out_result.str(), HasSubstr("\"transactionHash\""));
+}
+
+TEST(tooling_t8n, receipt_reports_emitted_logs)
+{
+    // MSTORE8(0, 0xaa); LOG1(offset=0, size=1, topic=0x42).
+    const auto result = run_call_to("0x60aa600053604260016000a100", EVMC_SHANGHAI);
+
+    EXPECT_THAT(result, HasSubstr("\"address\": \"0x000000000000000000000000000000000000c0de\""));
+    EXPECT_THAT(result,
+        HasSubstr("\"0x0000000000000000000000000000000000000000000000000000000000000042\""));
+    EXPECT_THAT(result, HasSubstr("\"data\": \"0xaa\""));
+}
+
+TEST(tooling_t8n, receipt_status_reports_failure)
+{
+    // The callee is the INVALID instruction, so the transaction fails.
+    EXPECT_THAT(run_call_to("0xfe", EVMC_SHANGHAI), HasSubstr("\"status\": \"0x0\""));
+    EXPECT_THAT(run_call_to("0x00", EVMC_SHANGHAI), HasSubstr("\"status\": \"0x1\""));
 }
