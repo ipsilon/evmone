@@ -70,6 +70,10 @@ void run_state_test(
 
             const auto state_root = state::mpt_hash(state);
 
+            const auto actual_logs_hash = holds_alternative<state::TransactionReceipt>(res) ?
+                                               logs_hash(get<state::TransactionReceipt>(res).logs) :
+                                               logs_hash(std::vector<state::Log>());
+
             if (trace_summary)
             {
                 std::clog << '{';
@@ -82,6 +86,7 @@ void run_state_test(
                         std::clog << R"("pass":false,"error":")" << r.status << '"';
                     std::clog << R"(,"gasUsed":"0x)" << std::hex << r.gas_used << R"(",)";
                 }
+                std::clog << R"("logsHash":"0x)" << hex(actual_logs_hash) << R"(",)";
                 std::clog << R"("stateRoot":"0x)" << hex(state_root) << "\"}\n";
             }
 
@@ -98,14 +103,13 @@ void run_state_test(
             {
                 ASSERT_FALSE(holds_alternative<state::TransactionReceipt>(res))
                     << "unexpected valid transaction";
-                EXPECT_EQ(logs_hash(std::vector<state::Log>()), expected.logs_hash);
             }
             else
             {
                 ASSERT_TRUE(holds_alternative<state::TransactionReceipt>(res))
                     << "unexpected invalid transaction: " << get<std::error_code>(res).message();
-                EXPECT_EQ(logs_hash(get<state::TransactionReceipt>(res).logs), expected.logs_hash);
             }
+            EXPECT_EQ(actual_logs_hash, expected.logs_hash);
 
             EXPECT_EQ(state_root, expected.state_hash);
         }
