@@ -814,7 +814,7 @@ inline void tload(StackTop stack, ExecutionState& state) noexcept
 inline Result tstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 {
     if (state.in_static_mode())
-        return {EVMC_STATIC_MODE_VIOLATION, 0};
+        return {EVMC_STATIC_MODE_VIOLATION, gas_left};
 
     const auto key = intx::be::store<evmc::bytes32>(stack.pop());
     const auto value = intx::be::store<evmc::bytes32>(stack.pop());
@@ -1003,7 +1003,7 @@ inline Result log(StackTop stack, int64_t gas_left, ExecutionState& state) noexc
     static_assert(NumTopics <= 4);
 
     if (state.in_static_mode())
-        return {EVMC_STATIC_MODE_VIOLATION, 0};
+        return {EVMC_STATIC_MODE_VIOLATION, gas_left};
 
     const auto& offset = stack.pop();
     const auto& size = stack.pop();

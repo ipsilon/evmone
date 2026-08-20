@@ -85,6 +85,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
     {
+        // TODO: gas_left is used as no-op and ignored by caller. Refactor this.
         if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
