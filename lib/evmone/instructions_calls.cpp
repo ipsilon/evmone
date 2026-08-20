@@ -34,7 +34,7 @@ inline std::variant<evmc::address, Result> get_target_address(
                 instr::cold_account_access_cost :
                 instr::warm_storage_read_cost);
 
-    if ((gas_left -= delegate_account_access_cost) < 0)
+    if ((gas_left -= delegate_account_access_cost) < 0) [[unlikely]]
         return Result{EVMC_OUT_OF_GAS, gas_left};
 
     return *delegate_addr;
@@ -85,7 +85,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        if ((gas_left -= instr::additional_cold_account_access_cost) < 0) [[unlikely]]
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -95,10 +95,10 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     const auto& code_addr = std::get<evmc::address>(target_addr_or_result);
 
-    if (!check_memory(gas_left, state.memory, input_offset_u256, input_size_u256))
+    if (!check_memory(gas_left, state.memory, input_offset_u256, input_size_u256)) [[unlikely]]
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    if (!check_memory(gas_left, state.memory, output_offset_u256, output_size_u256))
+    if (!check_memory(gas_left, state.memory, output_offset_u256, output_size_u256)) [[unlikely]]
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto input_offset = static_cast<size_t>(input_offset_u256);
@@ -132,14 +132,14 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
         if constexpr (Op == OP_CALL)
         {
-            if (has_value && state.in_static_mode())
+            if (has_value && state.in_static_mode()) [[unlikely]]
                 return {EVMC_STATIC_MODE_VIOLATION, gas_left};
 
             if ((has_value || state.rev < EVMC_SPURIOUS_DRAGON) && !state.host.account_exists(dst))
                 cost += ACCOUNT_CREATION_COST;
         }
 
-        if ((gas_left -= cost) < 0)
+        if ((gas_left -= cost) < 0) [[unlikely]]
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -155,7 +155,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     {
         if (state.rev >= EVMC_TANGERINE_WHISTLE)  // Always true for STATICCALL.
             msg.gas = std::min(msg.gas, gas_left - gas_left / 64);
-        else if (msg.gas > gas_left)
+        else if (msg.gas > gas_left) [[unlikely]]
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -200,7 +200,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
 {
     static_assert(Op == OP_CREATE || Op == OP_CREATE2);
 
-    if (state.in_static_mode())
+    if (state.in_static_mode()) [[unlikely]]
         return {EVMC_STATIC_MODE_VIOLATION, gas_left};
 
     const auto endowment = stack.pop();
@@ -212,6 +212,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     state.return_data.clear();
 
     if (!check_memory(gas_left, state.memory, init_code_offset_u256, init_code_size_u256))
+        [[unlikely]]
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto init_code_offset = static_cast<size_t>(init_code_offset_u256);
@@ -219,12 +220,12 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
 
     const size_t max_init_code_size =
         state.rev >= EVMC_AMSTERDAM ? MAX_INITCODE_SIZE_AMSTERDAM : MAX_INITCODE_SIZE;
-    if (state.rev >= EVMC_SHANGHAI && init_code_size > max_init_code_size)
+    if (state.rev >= EVMC_SHANGHAI && init_code_size > max_init_code_size) [[unlikely]]
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);
     const auto init_code_cost = num_words(init_code_size) * init_code_word_cost;
-    if ((gas_left -= init_code_cost) < 0)
+    if ((gas_left -= init_code_cost) < 0) [[unlikely]]
         return {EVMC_OUT_OF_GAS, gas_left};
 
     if (state.msg->depth >= 1024)
