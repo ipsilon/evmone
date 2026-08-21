@@ -73,7 +73,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     const auto gas = stack.pop();
     const auto dst = intx::be::trunc<evmc::address>(stack.pop());
-    const auto value = (!HAS_VALUE_ARG) ? 0 : stack.pop();
+    const auto value = HAS_VALUE_ARG ? stack.pop() : 0;
     const auto has_value = value != 0;
     const auto input_offset_u256 = stack.pop();
     const auto input_size_u256 = stack.pop();
@@ -83,18 +83,12 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     stack.push(0);  // Assume failure.
     state.return_data.clear();
 
-    if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
+    if constexpr (Op == OP_CALL)
     {
         // TODO: gas_left is used as no-op and ignored by caller. Refactor this.
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
-            return {EVMC_OUT_OF_GAS, gas_left};
+        if (has_value && state.in_static_mode())
+            return {EVMC_STATIC_MODE_VIOLATION, gas_left};
     }
-
-    const auto target_addr_or_result = get_target_address(dst, gas_left, state);
-    if (const auto* result = std::get_if<Result>(&target_addr_or_result))
-        return *result;
-
-    const auto& code_addr = std::get<evmc::address>(target_addr_or_result);
 
     if (!check_memory(gas_left, state.memory, input_offset_u256, input_size_u256))
         return {EVMC_OUT_OF_GAS, gas_left};
@@ -106,6 +100,33 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     const auto input_size = static_cast<size_t>(input_size_u256);
     const auto output_offset = static_cast<size_t>(output_offset_u256);
     const auto output_size = static_cast<size_t>(output_size_u256);
+
+    if constexpr (HAS_VALUE_ARG)
+    {
+        if (has_value && (gas_left -= CALL_VALUE_COST) < 0)
+            return {EVMC_OUT_OF_GAS, gas_left};
+    }
+
+    if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
+    {
+        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+            return {EVMC_OUT_OF_GAS, gas_left};
+    }
+
+    const auto target_addr_or_result = get_target_address(dst, gas_left, state);
+    if (const auto* result = std::get_if<Result>(&target_addr_or_result))
+        return *result;
+
+    const auto& code_addr = std::get<evmc::address>(target_addr_or_result);
+
+    if constexpr (Op == OP_CALL)
+    {
+        if ((has_value || state.rev < EVMC_SPURIOUS_DRAGON) && !state.host.account_exists(dst))
+        {
+            if ((gas_left -= ACCOUNT_CREATION_COST) < 0)
+                return {EVMC_OUT_OF_GAS, gas_left};
+        }
+    }
 
     evmc_message msg{.kind = to_call_kind(Op)};
     msg.flags = (Op == OP_STATICCALL) ? uint32_t{EVMC_STATIC} : state.msg->flags;
@@ -125,23 +146,6 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
         // input_offset may be garbage if input_size == 0.
         msg.input_data = &state.memory[input_offset];
         msg.input_size = input_size;
-    }
-
-    if constexpr (HAS_VALUE_ARG)
-    {
-        auto cost = has_value ? CALL_VALUE_COST : 0;
-
-        if constexpr (Op == OP_CALL)
-        {
-            if (has_value && state.in_static_mode())
-                return {EVMC_STATIC_MODE_VIOLATION, gas_left};
-
-            if ((has_value || state.rev < EVMC_SPURIOUS_DRAGON) && !state.host.account_exists(dst))
-                cost += ACCOUNT_CREATION_COST;
-        }
-
-        if ((gas_left -= cost) < 0)
-            return {EVMC_OUT_OF_GAS, gas_left};
     }
 
     msg.gas = std::numeric_limits<int64_t>::max();
