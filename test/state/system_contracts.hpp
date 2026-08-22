@@ -28,6 +28,11 @@ constexpr auto WITHDRAWAL_REQUEST_ADDRESS = 0x00000961EF480EB55E80D19AD83579A64C
 /// The address of the system contract processing consolidations (EIP-7251).
 constexpr auto CONSOLIDATION_REQUEST_ADDRESS = 0x0000BBDDC7CE488642FB579F8B00F3A590007251_address;
 
+/// EIP-8282: builder deposit/exit request system contracts (Amsterdam).
+constexpr auto BUILDER_DEPOSIT_CONTRACT_ADDRESS =
+    0x0000BFF46984E3725691FA540A8C7589300D8282_address;
+constexpr auto BUILDER_EXIT_CONTRACT_ADDRESS = 0x000064D678505AD48F8CCB093BC65613800E8282_address;
+
 struct BlockInfo;
 struct StateDiff;
 class BlockHashes;
