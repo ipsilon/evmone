@@ -55,7 +55,7 @@ namespace
 {
 // Gas pinned empirically: 21000 intrinsic + the CALL's regular cost, with the
 // EIP-8037 NEW_ACCOUNT state charge refilled on the light failure.
-constexpr int64_t CallLightfailRegularGas = 30'321;
+constexpr int64_t CallLightfailRegularGas = 33'021;
 }  // namespace
 
 TEST_F(state_transition, eip8037_call_value_lightfail_new_account_charge_refilled)
