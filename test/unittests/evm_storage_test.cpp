@@ -5,6 +5,7 @@
 /// This file contains EVM unit tests that access or modify the contract storage.
 
 #include "evm_fixture.hpp"
+#include <evmone/constants.hpp>
 #include <array>
 
 using namespace evmc::literals;
@@ -227,6 +228,7 @@ TEST_P(evm, sstore_cost_net_gas_metering)
         int64_t set = -1;
         int64_t reset = -1;
         int64_t clear = -1;
+        int64_t state_set = 0;  ///< Storage creation, charged in state gas (EIP-8037).
     };
 
     const auto test = [this](const evmc::bytes32& original, const evmc::bytes32& current,
@@ -246,8 +248,9 @@ TEST_P(evm, sstore_cost_net_gas_metering)
     cost_constants[EVMC_ISTANBUL] = {800, 20000, 5000, 15000};
     cost_constants[EVMC_BERLIN] = {100, 20000, 2900, 15000};
     cost_constants[EVMC_LONDON] = {100, 20000, 2900, 4800};
+    cost_constants[EVMC_AMSTERDAM] = {100, 10100, 10100, 11616, evmone::STORAGE_SET_STATE_GAS};
 
-    for (const auto r : {EVMC_ISTANBUL, EVMC_BERLIN, EVMC_LONDON})
+    for (const auto r : {EVMC_ISTANBUL, EVMC_BERLIN, EVMC_LONDON, EVMC_AMSTERDAM})
     {
         rev = r;
         const auto& c = cost_constants.at(static_cast<size_t>(r));
@@ -260,7 +263,7 @@ TEST_P(evm, sstore_cost_net_gas_metering)
         test(O, Y, Z, b + c.warm_access, 0);
         test(X, Y, Z, b + c.warm_access, 0);
 
-        test(O, O, Z, b + c.set, 0);                                          // added
+        test(O, O, Z, b + c.set + c.state_set, 0);                            // added
         test(X, X, O, b + c.reset, c.clear);                                  // deleted
         test(X, X, Z, b + c.reset, 0);                                        // modified
         test(X, O, Z, b + c.warm_access, -c.clear);                           // deleted added

@@ -13,17 +13,30 @@ namespace evmone::instr
 /// The special gas cost value marking an EVM instruction as "undefined".
 constexpr int16_t undefined = -1;
 
-/// State-access cost constants (EIP-2929).
+/// State-access cost constants (EIP-2929, EIP-8038).
 /// @{
 inline constexpr auto WARM_ACCESS = 100;
 inline constexpr auto COLD_STORAGE_ACCESS = 2100;
 inline constexpr auto COLD_ACCOUNT_ACCESS = 2600;
+inline constexpr auto COLD_ACCOUNT_ACCESS_AMSTERDAM = 3000;
+inline constexpr auto ACCOUNT_WRITE = 9000;
+inline constexpr auto STORAGE_WRITE = 10000;
+inline constexpr auto CREATE_ACCESS = ACCOUNT_WRITE + COLD_ACCOUNT_ACCESS_AMSTERDAM;
 
-/// Additional cold account access cost.
+/// The full cold-account-access cost for the given revision.
+constexpr auto cold_account_access(evmc_revision rev) noexcept
+{
+    return rev >= EVMC_AMSTERDAM ? COLD_ACCOUNT_ACCESS_AMSTERDAM : COLD_ACCOUNT_ACCESS;
+}
+
+/// Additional cold account access cost over the unconditionally-charged warm cost.
 ///
-/// The warm access cost is unconditionally applied for every account access instruction.
+/// The warm access cost is part of the base cost of every account access instruction.
 /// If the access turns out to be cold, this cost must be applied additionally.
-inline constexpr auto ADDITIONAL_COLD_ACCOUNT_ACCESS = COLD_ACCOUNT_ACCESS - WARM_ACCESS;
+constexpr auto additional_cold_account_access(evmc_revision rev) noexcept
+{
+    return cold_account_access(rev) - WARM_ACCESS;
+}
 
 /// Additional cold storage access cost over the unconditionally-charged warm cost.
 inline constexpr auto ADDITIONAL_COLD_STORAGE_ACCESS = COLD_STORAGE_ACCESS - WARM_ACCESS;
@@ -181,6 +194,10 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_AMSTERDAM][OP_DUPN] = 3;
     table[EVMC_AMSTERDAM][OP_SWAPN] = 3;
     table[EVMC_AMSTERDAM][OP_EXCHANGE] = 3;
+    table[EVMC_AMSTERDAM][OP_CREATE] = CREATE_ACCESS;
+    table[EVMC_AMSTERDAM][OP_CREATE2] = CREATE_ACCESS;
+    table[EVMC_AMSTERDAM][OP_EXTCODESIZE] = 2 * WARM_ACCESS;
+    table[EVMC_AMSTERDAM][OP_EXTCODECOPY] = 2 * WARM_ACCESS;
 
     table[EVMC_EXPERIMENTAL] = table[EVMC_AMSTERDAM];
 

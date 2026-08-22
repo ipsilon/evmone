@@ -42,8 +42,13 @@ constexpr auto STORAGE_COST_SPEC = []() noexcept {
     tbl[EVMC_CANCUN] = tbl[EVMC_LONDON];
     tbl[EVMC_PRAGUE] = tbl[EVMC_LONDON];
     tbl[EVMC_OSAKA] = tbl[EVMC_LONDON];
+
     tbl[EVMC_AMSTERDAM] = tbl[EVMC_LONDON];
-    tbl[EVMC_AMSTERDAM].set = tbl[EVMC_AMSTERDAM].reset;  // Only execution cost (EIP-8037).
+    tbl[EVMC_AMSTERDAM].set = WARM_ACCESS + STORAGE_WRITE;
+    tbl[EVMC_AMSTERDAM].reset = tbl[EVMC_AMSTERDAM].set;
+    tbl[EVMC_AMSTERDAM].clear = (STORAGE_WRITE + COLD_STORAGE_ACCESS) * 4800 / 5000;
+    tbl[EVMC_AMSTERDAM].cold = ADDITIONAL_COLD_STORAGE_ACCESS;
+
     tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_AMSTERDAM];
     return tbl;
 }();

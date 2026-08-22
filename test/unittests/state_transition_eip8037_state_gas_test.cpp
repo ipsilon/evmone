@@ -136,15 +136,14 @@ TEST_F(state_transition, eip8037_nested_create_revert_refills_new_account_charge
 
 namespace
 {
-constexpr int64_t CALL_VALUE_COST = 9000;  // Not exported by the interpreter.
-
 /// The intrinsic plus the CALL's execution gas: its seven arguments, the warm call, the
-/// cold-account surcharge and the value transfer, less the stipend a light failure never spends.
+/// cold-account surcharge and the value transfer. CALL_VALUE is ACCOUNT_WRITE + CALL_STIPEND
+/// and a light failure returns the stipend unspent, so only ACCOUNT_WRITE remains (EIP-8038).
 /// The NEW_ACCOUNT state charge is refilled, so it does not appear here.
 constexpr int64_t CALL_LIGHTFAIL_EXECUTION_GAS =
     21'000 + 7 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1] +
-    instr::gas_costs[EVMC_AMSTERDAM][OP_CALL] + instr::ADDITIONAL_COLD_ACCOUNT_ACCESS +
-    CALL_VALUE_COST - CALL_STIPEND;
+    instr::gas_costs[EVMC_AMSTERDAM][OP_CALL] +
+    instr::additional_cold_account_access(EVMC_AMSTERDAM) + instr::ACCOUNT_WRITE;
 }  // namespace
 
 TEST_F(state_transition, eip8037_call_value_lightfail_new_account_charge_refilled)
@@ -272,9 +271,11 @@ TEST_F(state_transition, eip8037_sstore_slot_allocated_and_cleared_in_one_tx)
     tx.to = To;
     pre[To] = {.code = sstore(1, 1) + sstore(1, 0)};
 
-    // Intrinsic, four PUSHes, the cold allocation, the warm clear, less the clear's refund.
-    expect.gas_used = 21'000 + 12 + 5000 + 100 - 2800;
-    expect.block_gas_used = *expect.gas_used + 2800;
+    // Intrinsic, four PUSHes, the cold allocation, the warm clear; the clear's refund is capped
+    // at a fifth of the pre-refund gas.
+    constexpr auto PRE_REFUND = 21'000 + 12 + 12'100 + 100;
+    expect.gas_used = PRE_REFUND - PRE_REFUND / 5;
+    expect.block_gas_used = PRE_REFUND;
     expect.state_gas = 0;
     expect.post[To].exists = true;
 }
@@ -290,10 +291,11 @@ TEST_F(state_transition, eip8037_sstore_slot_cleared_in_a_child_frame)
     pre[CLEARER] = {.code = sstore(1, 0)};
     pre[To] = {.code = sstore(1, 1) + delegatecall(CLEARER).gas(0xffff) + OP_STOP};
 
-    // Intrinsic, ten PUSHes, the cold allocation, the cold DELEGATECALL, the warm clear,
-    // less the clear's refund.
-    expect.gas_used = 21'000 + 30 + 5000 + 2600 + 100 - 2800;
-    expect.block_gas_used = *expect.gas_used + 2800;
+    // Intrinsic, ten PUSHes, the cold allocation, the cold DELEGATECALL, the warm clear; the
+    // clear's refund is capped at a fifth of the pre-refund gas.
+    constexpr auto PRE_REFUND = 21'000 + 30 + 12'100 + 3000 + 100;
+    expect.gas_used = PRE_REFUND - PRE_REFUND / 5;
+    expect.block_gas_used = PRE_REFUND;
     expect.state_gas = 0;
     expect.post[To].exists = true;
     expect.post[CLEARER].exists = true;
@@ -312,7 +314,7 @@ TEST_F(state_transition, eip8037_reverted_child_keeps_the_slot_allocation_charge
 
     // Intrinsic, twelve PUSHes, the cold allocation and its state charge, the cold DELEGATECALL,
     // the reverted warm clear. The clear's refund dies with the frame.
-    expect.gas_used = 21'000 + 36 + 5000 + STORAGE_SET_STATE_GAS + 2600 + 100;
+    expect.gas_used = 21'000 + 36 + 12'100 + STORAGE_SET_STATE_GAS + 3000 + 100;
     expect.block_gas_used = expect.gas_used;  // No refund.
     expect.state_gas = STORAGE_SET_STATE_GAS;
     expect.post[To].exists = true;

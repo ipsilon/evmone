@@ -13,6 +13,7 @@ namespace evmone::instr::core
 namespace
 {
 constexpr auto CALL_VALUE_COST = 9000;
+constexpr auto CALL_VALUE_COST_AMSTERDAM = ACCOUNT_WRITE + CALL_STIPEND;
 constexpr auto ACCOUNT_CREATION_COST = 25000;
 
 /// Get target address of a code executing instruction.
@@ -30,8 +31,9 @@ inline std::variant<evmc::address, Result> get_target_address(
         return addr;
 
     const auto delegate_account_access_cost =
-        (state.host.access_account(*delegate_addr) == EVMC_ACCESS_COLD ? COLD_ACCOUNT_ACCESS :
-                                                                         WARM_ACCESS);
+        (state.host.access_account(*delegate_addr) == EVMC_ACCESS_COLD ?
+                cold_account_access(state.rev) :
+                WARM_ACCESS);
 
     if ((gas_left -= delegate_account_access_cost) < 0)
         return Result{EVMC_OUT_OF_GAS, gas_left};
@@ -126,13 +128,15 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     if constexpr (HAS_VALUE_ARG)
     {
-        if (has_value && (gas_left -= CALL_VALUE_COST) < 0)
+        const auto call_value_cost =
+            state.rev >= EVMC_AMSTERDAM ? CALL_VALUE_COST_AMSTERDAM : CALL_VALUE_COST;
+        if (has_value && (gas_left -= call_value_cost) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= ADDITIONAL_COLD_ACCOUNT_ACCESS) < 0)
+        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 

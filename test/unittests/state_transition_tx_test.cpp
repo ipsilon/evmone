@@ -292,11 +292,12 @@ TEST_F(state_transition, tx_data_floor_osaka_uses_eip7623)
 TEST_F(state_transition, access_list_cost_amsterdam)
 {
     // EIP-7981: 1280 gas (64*20) per address, 2048 gas (64*32) per storage key.
+    // EIP-8038: the per-entry prices become 2900 and 2000.
     rev = EVMC_AMSTERDAM;
     tx.to = To;
     tx.access_list = {{To, {0x01_bytes32}}};
-    // intrinsic = 21000 + 2400 + 1900 + 1280 + 2048 = 28628
-    expect.gas_used = 28628;
+    // intrinsic = 21000 + 2900 + 2000 + 1280 + 2048 = 29228
+    expect.gas_used = 29228;
 }
 
 TEST_F(state_transition, access_list_cost_osaka_unchanged)
@@ -327,14 +328,14 @@ TEST_F(state_transition, access_list_floor_amsterdam)
     tx.to = To;
     tx.data = bytes(100, 0x00);
     tx.access_list = {{To, {}}};
-    // intrinsic = 21000 + 100*4 + 2400 + 1280 = 25080
+    // intrinsic = 21000 + 100*4 + 2900 + 1280 = 25580
     // floor     = 21000 + 64*(100 + 20)       = 28680  (dominates)
     expect.gas_used = 28680;
 }
 
 TEST_F(state_transition, invalid_access_list_amsterdam_gas_limit_below_floor)
 {
-    // EIP-7981: gas limit must cover the floor (28680) — pre-7981 intrinsic (23800) is not enough.
+    // EIP-7981: gas limit must cover the floor (28680) — the intrinsic cost (25580) is not enough.
     rev = EVMC_AMSTERDAM;
     tx.to = To;
     tx.data = bytes(100, 0x00);

@@ -434,7 +434,7 @@ inline Result balance(StackTop stack, int64_t gas_left, ExecutionState& state) n
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= ADDITIONAL_COLD_ACCOUNT_ACCESS) < 0)
+        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -581,7 +581,7 @@ inline Result extcodesize(StackTop stack, int64_t gas_left, ExecutionState& stat
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= ADDITIONAL_COLD_ACCOUNT_ACCESS) < 0)
+        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -605,7 +605,7 @@ inline Result extcodecopy(StackTop stack, int64_t gas_left, ExecutionState& stat
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= ADDITIONAL_COLD_ACCOUNT_ACCESS) < 0)
+        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -662,7 +662,7 @@ inline Result extcodehash(StackTop stack, int64_t gas_left, ExecutionState& stat
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= ADDITIONAL_COLD_ACCOUNT_ACCESS) < 0)
+        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -1070,7 +1070,7 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(beneficiary) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= COLD_ACCOUNT_ACCESS) < 0)
+        if ((gas_left -= cold_account_access(state.rev)) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -1084,6 +1084,10 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
             {
                 if (state.rev >= EVMC_AMSTERDAM)
                 {
+                    // Balance update costs ACCOUNT_WRITE, charged first so in case of OOG
+                    // the state-gas is not consumed.
+                    if ((gas_left -= ACCOUNT_WRITE) < 0)
+                        return {EVMC_OUT_OF_GAS, gas_left};
                     if (!state.state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
                         return {EVMC_OUT_OF_GAS, gas_left};
                 }
