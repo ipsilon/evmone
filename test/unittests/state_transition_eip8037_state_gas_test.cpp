@@ -10,6 +10,9 @@
 using namespace evmc::literals;
 using namespace evmone::test;
 
+/// The base transaction cost after the EIP-2780 decomposition.
+constexpr int64_t AMSTERDAM_INTRINSIC = 15'000;
+
 TEST_F(state_transition, eip8037_create_tx_collision_excess_reservoir_refunded)
 {
     // A create transaction colliding with an existing account (EIP-7610) returns its state-gas
@@ -36,15 +39,15 @@ TEST_F(state_transition, eip8037_create_tx_collision_excess_reservoir_refunded)
 
 namespace
 {
-constexpr int64_t CALL_VALUE_COST = 9000;  // Not exported by the interpreter.
-
 /// The intrinsic plus the CALL's execution gas: its seven arguments, the warm call, the
-/// cold-account surcharge and the value transfer, less the stipend a light failure never spends.
-/// The NEW_ACCOUNT state charge is refilled, so it does not appear here.
+/// cold-account surcharge and the value transfer. EIP-8038 makes CALL_VALUE
+/// ACCOUNT_WRITE + CALL_STIPEND, and the light failure returns the stipend unspent, so only
+/// ACCOUNT_WRITE remains. The NEW_ACCOUNT state charge is refilled, so it does not appear here.
 constexpr int64_t CALL_LIGHTFAIL_EXECUTION_GAS =
-    21'000 + 7 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1] +
+    AMSTERDAM_INTRINSIC + 7 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1] +
     instr::gas_costs[EVMC_AMSTERDAM][OP_CALL] +
-    instr::additional_cold_account_access_cost(EVMC_AMSTERDAM) + CALL_VALUE_COST - CALL_STIPEND;
+    instr::additional_cold_account_access_cost(EVMC_AMSTERDAM) +
+    instr::account_write_cost_amsterdam;
 }  // namespace
 
 TEST_F(state_transition, eip8037_call_value_lightfail_new_account_charge_refilled)
@@ -110,7 +113,7 @@ TEST_F(state_transition, eip8037_sstore_slot_allocated_and_cleared_in_one_tx)
 
     // Intrinsic, four PUSHes, the cold allocation, the warm clear; the clear's refund is capped
     // at a fifth of the pre-refund gas.
-    constexpr auto PRE_REFUND = 21'000 + 12 + 12'100 + 100;
+    constexpr auto PRE_REFUND = AMSTERDAM_INTRINSIC + 12 + 12'100 + 100;
     expect.gas_used = PRE_REFUND - PRE_REFUND / 5;
     expect.gas_refund = PRE_REFUND / 5;
     expect.state_gas = 0;
@@ -130,7 +133,7 @@ TEST_F(state_transition, eip8037_sstore_slot_cleared_in_a_child_frame)
 
     // Intrinsic, ten PUSHes, the cold allocation, the cold DELEGATECALL, the warm clear; the
     // clear's refund is capped at a fifth of the pre-refund gas.
-    constexpr auto PRE_REFUND = 21'000 + 30 + 12'100 + 3000 + 100;
+    constexpr auto PRE_REFUND = AMSTERDAM_INTRINSIC + 30 + 12'100 + 3000 + 100;
     expect.gas_used = PRE_REFUND - PRE_REFUND / 5;
     expect.gas_refund = PRE_REFUND / 5;
     expect.state_gas = 0;
@@ -151,7 +154,7 @@ TEST_F(state_transition, eip8037_reverted_child_keeps_the_slot_allocation_charge
 
     // Intrinsic, twelve PUSHes, the cold allocation and its state charge, the cold DELEGATECALL,
     // the reverted warm clear. The clear's refund dies with the frame.
-    expect.gas_used = 21'000 + 36 + 12'100 + STORAGE_SET_STATE_GAS + 3000 + 100;
+    expect.gas_used = AMSTERDAM_INTRINSIC + 36 + 12'100 + STORAGE_SET_STATE_GAS + 3000 + 100;
     expect.gas_refund = 0;
     expect.state_gas = STORAGE_SET_STATE_GAS;
     expect.post[To].exists = true;

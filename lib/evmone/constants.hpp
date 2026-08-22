@@ -36,4 +36,8 @@ constexpr auto NEW_ACCOUNT_STATE_GAS = 120 * COST_PER_STATE_BYTE;
 
 /// State-gas cost of allocating a storage slot (EIP-8037).
 constexpr auto STORAGE_SET_STATE_GAS = 64 * COST_PER_STATE_BYTE;
+
+/// State-gas cost of an authorization tuple, excluding the new-account portion
+/// (EIP-8037, EIP-7702).
+constexpr auto AUTH_BASE_STATE_GAS = 23 * COST_PER_STATE_BYTE;
 }  // namespace evmone
