@@ -37,6 +37,10 @@ constexpr auto STATE_BYTES_PER_NEW_ACCOUNT = 120;
 /// State bytes charged when a storage slot is newly allocated (EIP-8037).
 constexpr auto STATE_BYTES_PER_STORAGE_SET = 64;
 
+/// State bytes charged per authorization tuple, excluding the new-account portion
+/// (EIP-8037, EIP-7702).
+constexpr auto STATE_BYTES_PER_AUTH_BASE = 23;
+
 /// State-gas cost of creating a new account (EIP-8037).
 constexpr auto NEW_ACCOUNT_STATE_GAS = STATE_BYTES_PER_NEW_ACCOUNT * COST_PER_STATE_BYTE;
 

@@ -12,13 +12,6 @@ namespace evmone::state
 {
 namespace
 {
-/// Whether a looked-up account is alive, i.e. has a state leaf: it exists and is not empty
-/// (EIP-161). A null pointer is a non-existent account.
-[[nodiscard]] bool is_alive(const Account* account) noexcept
-{
-    return account != nullptr && !account->is_empty();
-}
-
 /// Sets the state-gas fields on a returned Result. `used` is not stored; the caller derives it
 /// as `initial - left + spilled` (EIP-8037).
 void set_state_gas(evmc::Result& r, int64_t left, int64_t spilled) noexcept
@@ -323,8 +316,8 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     auto gas = msg.gas;
 
     // A top-level value transfer pays NEW_ACCOUNT for the recipient it materializes, evaluated
-    // against the pre-transfer state. Charged here because such a transfer runs no code
-    // (EIP-8037).
+    // against the pre-transfer state, after the authorizations and before any opcode. Charged
+    // here because such a transfer runs no code (EIP-8037, EIP-2780).
     // TODO: This belongs in transition(), beside the EIP-7702 authorizations it follows. Moving
     // it drops the `msg.depth == 0` special cases here and the gas plumbed around them.
     StateGas top_level_sg{.left = msg.state_gas};
