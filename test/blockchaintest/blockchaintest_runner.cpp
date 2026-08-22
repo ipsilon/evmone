@@ -346,22 +346,15 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 const auto names_spec_exception =
                     test_block.expected_exception.find("Exception.") != std::string::npos;
 
-                // TODO: The transaction senders come from the fixture instead of being recovered
-                //   from the signatures, so evmone never sees the signature the test broke. Such a
-                //   transaction executes as the sender the fixture names and the block is rejected
-                //   by whatever rule that sender happens to break, or by its state root alone.
-                const auto sender_not_recovered = contains_any(
-                    test_block.expected_exception, "TransactionException.INVALID_SIGNATURE_VRS");
-
-                const auto res =
-                    apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
-                        blob_gas_limit, {.block_reward = mining_reward(rev)});
+                const auto res = apply_block(pre_state, vm, bi, block_hashes,
+                    test_block.transactions, rev, blob_gas_limit,
+                    {.block_reward = mining_reward(rev), .recover_senders = true});
                 if (!res.rejected.empty())
                 {
                     // A transaction was rejected: the fixture must name that reason, not merely
                     // some rejection.
                     const auto& rejected = res.rejected.front();
-                    if (names_spec_exception && !sender_not_recovered)
+                    if (names_spec_exception)
                     {
                         EXPECT_TRUE(
                             is_expected_tx_exception(rejected.error, test_block.expected_exception))
@@ -373,14 +366,10 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 }
                 if (res.requests_error)
                 {
-                    if (!sender_not_recovered)
-                    {
-                        EXPECT_TRUE(is_expected_block_exception(
-                            res.requests_error, test_block.expected_exception))
-                            << "Block invalidity reason mismatch: got "
-                            << res.requests_error.message() << ", expected "
-                            << test_block.expected_exception;
-                    }
+                    EXPECT_TRUE(is_expected_block_exception(
+                        res.requests_error, test_block.expected_exception))
+                        << "Block invalidity reason mismatch: got " << res.requests_error.message()
+                        << ", expected " << test_block.expected_exception;
                     continue;
                 }
                 // The block executed, so it is invalid only if it computes something other than
@@ -395,7 +384,7 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 // Asserts the fixture names one of @p names, the exceptions the check that just
                 // fired is the symptom of. Silent where the reason cannot be compared.
                 const auto expect_fixture_names = [&](std::string_view names) {
-                    if (!names_spec_exception || ommers_not_validated || sender_not_recovered)
+                    if (!names_spec_exception || ommers_not_validated)
                         return;
                     EXPECT_TRUE(contains_any(test_block.expected_exception, names))
                         << "Block invalidity reason mismatch: the block failed the check for "
