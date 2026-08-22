@@ -65,6 +65,19 @@ constexpr std::array REQUESTS_SYSTEM_CONTRACTS{
         CONSOLIDATION_REQUEST_ADDRESS,
         Requests::Type::consolidation,
     },
+    // EIP-8282: builder execution requests. Run at block end after the EIP-7002/7251 contracts;
+    // accessed every block (so they appear in the EIP-7928 block access list) and produce
+    // type-0x03 / type-0x04 requests when their return data is non-empty.
+    RequestsSystemContract{
+        EVMC_AMSTERDAM,
+        BUILDER_DEPOSIT_CONTRACT_ADDRESS,
+        Requests::Type::builder_deposit,
+    },
+    RequestsSystemContract{
+        EVMC_AMSTERDAM,
+        BUILDER_EXIT_CONTRACT_ADDRESS,
+        Requests::Type::builder_exit,
+    },
 };
 
 constexpr auto by_rev = [](const auto& a, const auto& b) noexcept { return a.since < b.since; };
