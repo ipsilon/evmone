@@ -38,6 +38,16 @@ state::Transaction round_trip(const state::Transaction& tx)
     return decoded.value_or(state::Transaction{});
 }
 
+/// Builds a block serialization carrying @p txs, each as it appears in a block body: a legacy
+/// transaction verbatim, a typed one wrapped in an RLP string. The header is an empty list.
+bytes make_block(std::initializer_list<bytes> txs)
+{
+    bytes list;
+    for (const auto& tx : txs)
+        list += (!tx.empty() && tx[0] >= rlp::SHORT_LIST_BASE) ? tx : rlp::encode(tx);
+    return rlp::internal::wrap_list(rlp::internal::wrap_list({}) + rlp::internal::wrap_list(list));
+}
+
 /// Decodes @p txbytes and recovers the sender of the transaction; it must decode.
 std::optional<address> recover(const bytes& txbytes)
 {
@@ -681,4 +691,50 @@ TEST(state_rlp_decode, recover_sender_rejects_high_s)
 
     tx.s += 1;
     EXPECT_FALSE(recover(rlp::encode(tx)).has_value());
+}
+
+TEST(state_rlp_decode, split_block_transactions)
+{
+    const auto legacy = rlp::encode(MINIMAL_LEGACY_TX);
+    auto tx = MINIMAL_LEGACY_TX;
+    tx.type = state::Transaction::Type::eip1559;
+    tx.chain_id = 1;
+    tx.v = 1;
+    const auto typed = rlp::encode(tx);
+    ASSERT_EQ(typed[0], 0x02);  // The EIP-2718 envelope, wrapped in an RLP string by make_block().
+
+    const auto block = make_block({legacy, typed, legacy});
+    const auto txs = state::split_block_transactions(block);
+    ASSERT_TRUE(txs.has_value());
+    ASSERT_EQ(txs->size(), 3);
+    EXPECT_EQ((*txs)[0], bytes_view{legacy});
+    EXPECT_EQ((*txs)[1], bytes_view{typed});
+    EXPECT_EQ((*txs)[2], bytes_view{legacy});
+
+    const auto empty = make_block({});
+    const auto no_txs = state::split_block_transactions(empty);
+    ASSERT_TRUE(no_txs.has_value());
+    EXPECT_TRUE(no_txs->empty());
+}
+
+TEST(state_rlp_decode, split_block_transactions_rejects_malformed)
+{
+    EXPECT_FALSE(state::split_block_transactions({}).has_value());          // Empty input.
+    EXPECT_FALSE(state::split_block_transactions("0x80"_hex).has_value());  // Not a list.
+
+    // A block header alone: the transaction list is missing.
+    const auto header_only = rlp::internal::wrap_list(rlp::internal::wrap_list({}));
+    EXPECT_FALSE(state::split_block_transactions(header_only).has_value());
+
+    // The transaction list is not a list.
+    const auto not_a_list = rlp::internal::wrap_list(rlp::internal::wrap_list({}) + "0x80"_hex);
+    EXPECT_FALSE(state::split_block_transactions(not_a_list).has_value());
+
+    // A truncated item: 0xf8 begins a long list whose length byte is not there.
+    const auto truncated = rlp::internal::wrap_list(
+        rlp::internal::wrap_list({}) + rlp::internal::wrap_list("0xf8"_hex));
+    EXPECT_FALSE(state::split_block_transactions(truncated).has_value());
+
+    // Trailing bytes after the block.
+    EXPECT_FALSE(state::split_block_transactions(make_block({}) + "0x00"_hex).has_value());
 }
