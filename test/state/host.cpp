@@ -325,13 +325,14 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     auto gas = msg.gas;
 
     // TODO: This depth-0 charge belongs to the transaction pre-execution phase in transition(),
-    // beside the EIP-7702 authorizations it follows, not in the per-frame dispatcher. Moving it
-    // drops the `msg.depth == 0` special cases here and the gas plumbed around them.
+    // beside the EIP-7702 authorization charges it follows, not in the per-frame dispatcher.
+    // Moving it drops the `msg.depth == 0` special cases here and the gas plumbed around them.
     // A top-level value transfer pays NEW_ACCOUNT for the recipient it materializes, evaluated
     // against the pre-transfer state, after the authorizations and before any opcode. Charged
-    // here rather than in the interpreter because such a transfer runs no code (EIP-8037).
-    // `msg.state_gas` stays the entry reservoir while `top_level_sg` holds the post-charge pools,
-    // which a consuming path commits on success; on failure Host::call restores them.
+    // here rather than in the interpreter because such a transfer runs no code (EIP-8037,
+    // EIP-2780, EIP-7702). `msg.state_gas` stays the entry reservoir while `top_level_sg` holds
+    // the post-charge pools, which a consuming path commits on success; on failure Host::call
+    // restores them.
     StateGas top_level_sg{.left = msg.state_gas};
     if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
     {

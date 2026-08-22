@@ -40,6 +40,10 @@ constexpr int64_t STATE_BYTES_PER_NEW_ACCOUNT = 120;
 /// (EIP-8037).
 constexpr int64_t STATE_BYTES_PER_STORAGE_SET = 64;
 
+/// State bytes charged per authorization tuple, excluding the new-account portion
+/// (EIP-8037, EIP-7702).
+constexpr int64_t STATE_BYTES_PER_AUTH_BASE = 23;
+
 /// State-gas cost of creating a new account: CREATE/CREATE2, CALL with value to a
 /// nonexistent account, a new SELFDESTRUCT beneficiary (EIP-8037).
 constexpr int64_t NEW_ACCOUNT_STATE_GAS = STATE_BYTES_PER_NEW_ACCOUNT * COST_PER_STATE_BYTE;

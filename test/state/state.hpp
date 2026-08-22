@@ -53,11 +53,21 @@ class State
     struct JournalNonceBump : JournalBase
     {};
 
+    /// EIP-7702: a delegation code change on an authority. Recorded so a top-frame
+    /// authorization-charge out-of-gas can roll the applied delegation back.
+    struct JournalCodeChange : JournalBase
+    {
+        bytes prev_code;
+        bytes32 prev_code_hash;
+        bool prev_code_changed;
+    };
+
     struct JournalCreate : JournalBase
     {};
 
-    using JournalEntry = std::variant<JournalBalanceChange, JournalAccountFlags,
-        JournalStorageChange, JournalNonceBump, JournalCreate, JournalTransientStorageChange>;
+    using JournalEntry =
+        std::variant<JournalBalanceChange, JournalAccountFlags, JournalStorageChange,
+            JournalNonceBump, JournalCodeChange, JournalCreate, JournalTransientStorageChange>;
 
     /// The read-only view of the initial (cold) state.
     const StateView& m_initial;
@@ -114,6 +124,8 @@ public:
     void journal_transient_storage_change(bytes32& slot);
 
     void journal_bump_nonce(const address& addr);
+
+    void journal_code_change(const address& addr);
 
     /// Journals a create over a pre-existing account; revert resets its nonce and code.
     void journal_create(const address& addr);
