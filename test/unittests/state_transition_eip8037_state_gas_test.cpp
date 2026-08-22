@@ -56,7 +56,7 @@ namespace
 {
 // Gas pinned empirically: 21000 intrinsic + the CALL's regular cost, with the
 // EIP-8037 NEW_ACCOUNT state charge refilled on the light failure.
-constexpr int64_t CALL_LIGHTFAIL_REGULAR_GAS = 30'321;
+constexpr int64_t CALL_LIGHTFAIL_REGULAR_GAS = 33'021;
 }  // namespace
 
 TEST_F(state_transition, eip8037_call_value_lightfail_new_account_charge_refilled)
@@ -117,10 +117,10 @@ TEST_F(state_transition, eip8037_sstore_slot_allocated_and_cleared_in_one_tx)
     tx.to = To;
     pre[To] = {.code = sstore(1, 1) + sstore(1, 0)};
 
-    // Pre-refund: 21000 intrinsic + 12 (four PUSHes) + 5000 (cold slot allocation)
-    // + 100 (warm clear) = 26112. The clear refunds set - warm_access = 2800.
-    expect.gas_used = 26112 - 2800;
-    expect.gas_refund = 2800;
+    // Pre-refund: 21000 intrinsic + 12 (four PUSHes) + 12100 (cold slot allocation)
+    // + 100 (warm clear) = 33212. The 9900 clear refund is capped at a fifth of that.
+    expect.gas_used = 33212 - 6642;
+    expect.gas_refund = 6642;
     expect.state_gas = 0;
     expect.post[To].exists = true;
 }
@@ -136,10 +136,11 @@ TEST_F(state_transition, eip8037_sstore_slot_cleared_in_a_child_frame)
     pre[CLEARER] = {.code = sstore(1, 0)};
     pre[To] = {.code = sstore(1, 1) + delegatecall(CLEARER).gas(0xffff) + OP_STOP};
 
-    // Pre-refund: 21000 intrinsic + 30 (ten PUSHes) + 5000 (cold slot allocation)
-    // + 2600 (cold DELEGATECALL) + 100 (warm clear) = 28730. The clear refunds 2800.
-    expect.gas_used = 28730 - 2800;
-    expect.gas_refund = 2800;
+    // Pre-refund: 21000 intrinsic + 30 (ten PUSHes) + 12100 (cold slot allocation)
+    // + 3000 (cold DELEGATECALL) + 100 (warm clear) = 36230. The 9900 clear refund is
+    // capped at a fifth of that.
+    expect.gas_used = 36230 - 7246;
+    expect.gas_refund = 7246;
     expect.state_gas = 0;
     expect.post[To].exists = true;
     expect.post[CLEARER].exists = true;
