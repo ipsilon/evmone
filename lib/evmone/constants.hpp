@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <cstdint>
+
 namespace evmone
 {
 /// The limit of the size of created contract
@@ -27,4 +29,23 @@ constexpr auto MAX_NONCE = 0xffff'ffff'ffff'ffff;
 
 /// The gas given back to a value-transferring CALL, the Yellow Paper's G_callstipend.
 constexpr auto CALL_STIPEND = 2300;
+
+/// EIP-8037: fixed cost-per-state-byte.
+constexpr int64_t COST_PER_STATE_BYTE = 1530;
+
+/// EIP-8037: state bytes charged for creating a new account.
+constexpr int64_t STATE_BYTES_PER_NEW_ACCOUNT = 120;
+
+/// EIP-8037: state bytes charged when a storage slot is newly allocated
+/// (SSTORE 0 -> non-zero).
+constexpr int64_t STATE_BYTES_PER_STORAGE_SET = 64;
+
+/// EIP-8037: state-gas cost of creating a new account (CREATE/CREATE2,
+/// CALL with value to nonexistent, SELFDESTRUCT new beneficiary, etc.).
+constexpr int64_t NEW_ACCOUNT_STATE_GAS = STATE_BYTES_PER_NEW_ACCOUNT * COST_PER_STATE_BYTE;
+
+/// EIP-8037: state-gas cost of an SSTORE 0→non-zero (slot allocation).
+constexpr int64_t STORAGE_SET_STATE_GAS = STATE_BYTES_PER_STORAGE_SET * COST_PER_STATE_BYTE;
+
+// EIP-8037 state-gas charging/refunds live on the StateGas type (state_gas.hpp).
 }  // namespace evmone
