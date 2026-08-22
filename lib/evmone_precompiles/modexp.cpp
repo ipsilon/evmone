@@ -541,10 +541,39 @@ void modexp_pow2(std::span<uint64_t> r, std::span<const uint64_t> base, Exponent
 
     const auto base_k = base.subspan(0, std::min(base.size(), num_pow2_words));
 
+    // The exponent can be reduced, because base^exp % 2^k is periodic in exp.
+    auto num_bits = exp.bit_width();
+    if ((base[0] & 1) == 0)
+    {
+        // For an even base the result is 0 once exp >= k. The bit width comparison is a
+        // sufficient condition: exp >= 2^(num_bits - 1) >= 2^bit_width(k) > k.
+        if (num_bits > static_cast<unsigned>(std::bit_width(k)))
+        {
+            std::ranges::fill(r_k, uint64_t{0});
+            return;
+        }
+    }
+    // For an odd base the multiplicative order divides λ(2^k) = 2^(k-2) for k > 2
+    // (2^(k-1) for k <= 2), so only that many low bits of the exponent matter.
+    else if (const auto period_bits = k <= 2 ? k - 1 : k - 2; num_bits > period_bits)
+    {
+        // Trim the leading zero bits of the reduced exponent.
+        num_bits = period_bits;
+        while (num_bits != 0 && !exp[num_bits - 1])
+            --num_bits;
+
+        if (num_bits == 0)  // The exponent is reduced to 0 and base^0 % 2^k == 1.
+        {
+            std::ranges::fill(r_k, uint64_t{0});
+            r_k[0] = 1;
+            return;
+        }
+    }
+
     const auto [_, pad] = std::ranges::copy(base_k, r_k.begin());
     std::ranges::fill(std::span{pad, r_k.end()}, uint64_t{0});
 
-    for (auto i = exp.bit_width() - 1; i != 0; --i)
+    for (auto i = num_bits - 1; i != 0; --i)
     {
         mul(tmp, r_k, r_k);
         std::swap(r_k, tmp);
