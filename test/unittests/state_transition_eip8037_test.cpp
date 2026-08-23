@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "state_transition.hpp"
+#include <evmone/constants.hpp>
 #include <test/utils/bytecode.hpp>
 
 using namespace evmc::literals;
@@ -88,4 +89,21 @@ TEST_F(state_transition, eip8037_call_value_lightfail_existing_account_baseline)
     expect.post[Target] = {.nonce = 1};         // unchanged by the light-failed call
     expect.gas_used = CallLightfailRegularGas;  // same regular gas as the new-account case
     expect.state_gas = 0;                       // Target exists -> no new-account state-gas charge
+}
+
+TEST_F(state_transition, eip8037_value_to_zero_balance_precompile_pays_new_account)
+{
+    // Funding a zero-balance precompile at depth 0 materializes a state account, so it pays
+    // NEW_ACCOUNT_STATE_GAS (EIP-161). The reservoir is empty for a below-cap gas limit, so the
+    // whole charge spills into regular gas and the precompile must run on the post-charge gas.
+    rev = EVMC_AMSTERDAM;
+    tx.to = 0x04_address;  // identity, intentionally absent from `pre`
+    tx.value = 1;
+
+    static constexpr int64_t IdentityBaseCost = 15;
+
+    expect.status = EVMC_SUCCESS;
+    expect.post[*tx.to].balance = 1;
+    expect.gas_used = 21'000 + IdentityBaseCost + evmone::NEW_ACCOUNT_STATE_GAS;
+    expect.state_gas = evmone::NEW_ACCOUNT_STATE_GAS;
 }
