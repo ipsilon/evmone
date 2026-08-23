@@ -323,7 +323,11 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         if (gas_left < 0)
         {
             if (m_rev == EVMC_FRONTIER)
-                return evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund};
+            {
+                auto r = evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund};
+                set_state_gas(r, state_gas.left, state_gas.spilled);
+                return r;
+            }
             auto r = evmc::Result{EVMC_FAILURE};
             r.state_gas_left = msg.state_gas;  // refill on failure
             return r;
