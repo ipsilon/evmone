@@ -447,15 +447,13 @@ evmc::Result Host::execute_message(const evmc_message& msg_in) noexcept
         return r;
     }
 
-    // Hand the interpreter the reservoir left after the depth-0 charge, and carry that charge's
-    // spill out with whatever the frame itself spills, so the caller's
-    // `state_gas - state_gas_left + state_gas_spilled` still sees it. Unreachable while the
-    // charge implies an empty-code recipient (handled above), but the charge does not depend on
-    // that and must not silently vanish if it stops holding.
-    msg.state_gas = top_level_sg.left;
-    auto result = m_vm.execute(*this, m_rev, msg, code.data(), code.size());
-    result.state_gas_spilled += top_level_sg.spilled;
-    return result;
+    // EIP-8037: the depth-0 charge cannot reach here — it implies a non-alive recipient, which
+    // has empty code and returns above. Assert that instead of guessing the carry-out: EELS
+    // refills this charge when the frame fails (it is charged after commit_state_gas), while the
+    // EIP-7702 authorization charges EIP-2780 adds alongside it must survive a failure, so the
+    // two need to be told apart deliberately rather than both carried out.
+    assert(top_level_sg.left == msg.state_gas && top_level_sg.spilled == 0);
+    return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
 
 evmc::Result Host::call(const evmc_message& msg) noexcept
