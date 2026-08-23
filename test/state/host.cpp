@@ -443,7 +443,15 @@ evmc::Result Host::execute_message(const evmc_message& msg_in) noexcept
         return r;
     }
 
-    return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
+    // Hand the interpreter the reservoir left after the depth-0 charge, and carry that charge's
+    // spill out with whatever the frame itself spills, so the caller's
+    // `state_gas - state_gas_left + state_gas_spilled` still sees it. Unreachable while the
+    // charge implies an empty-code recipient (handled above), but the charge does not depend on
+    // that and must not silently vanish if it stops holding.
+    msg.state_gas = top_level_sg.left;
+    auto result = m_vm.execute(*this, m_rev, msg, code.data(), code.size());
+    result.state_gas_spilled += top_level_sg.spilled;
+    return result;
 }
 
 evmc::Result Host::call(const evmc_message& msg) noexcept
