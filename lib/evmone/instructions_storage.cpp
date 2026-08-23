@@ -52,6 +52,9 @@ struct StorageStoreCost
 {
     int16_t gas_cost;
     int16_t gas_refund;
+    /// EIP-8037 state gas for the slot allocation: positive to charge, negative to refill,
+    /// zero before Amsterdam. Wider than int16_t because 64 * COST_PER_STATE_BYTE is 97'920.
+    int32_t state_gas = 0;
 };
 
 // The lookup table of SSTORE costs by the storage update status.
@@ -89,6 +92,14 @@ constexpr auto sstore_costs = []() noexcept {
                 c.warm_access, static_cast<int16_t>(c.set - c.warm_access)};
             e[EVMC_STORAGE_MODIFIED_RESTORED] = {
                 c.warm_access, static_cast<int16_t>(c.reset - c.warm_access)};
+        }
+
+        // EIP-8037: allocating a slot (0 -> non-zero) costs state gas; undoing it in the same
+        // transaction (0 -> Y -> 0) refills it.
+        if (rev >= EVMC_AMSTERDAM)
+        {
+            e[EVMC_STORAGE_ADDED].state_gas = STORAGE_SET_STATE_GAS;
+            e[EVMC_STORAGE_ADDED_DELETED].state_gas = -STORAGE_SET_STATE_GAS;
         }
     }
 
@@ -135,26 +146,21 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
             0;
     const auto status = state.host.set_storage(state.msg->recipient, key, value);
 
-    const auto [gas_cost_warm, gas_refund] = sstore_costs[state.rev][status];
+    const auto [gas_cost_warm, gas_refund, state_gas] = sstore_costs[state.rev][status];
     const auto gas_cost = gas_cost_warm + gas_cost_cold;
 
-    // EIP-8037: set-then-clear (0 -> Y -> 0) refunds the storage-set state gas in LIFO order,
-    // back to the pools the charge drew from. EELS applies this refill BEFORE the regular-gas
-    // charge, so gas credited back to gas_left (from a prior spill) can fund the charge below.
-    if (state.rev >= EVMC_AMSTERDAM && status == EVMC_STORAGE_ADDED_DELETED)
-        credit_state_gas_refund(gas_left, state, STORAGE_SET_STATE_GAS);
+    // EIP-8037: a refill (0 -> Y -> 0) is applied BEFORE the regular charge, as in EELS, so gas
+    // credited back to gas_left from a prior spill can fund that charge.
+    if (state_gas < 0)
+        credit_state_gas_refund(gas_left, state, -state_gas);
 
     // EIP-8037: charge regular gas FIRST, then state gas, so a state-gas spill never leaves
     // committed state growth behind a subsequent regular OOG.
     if ((gas_left -= gas_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    // EIP-8037: SSTORE 0 -> non-zero allocates a storage slot; charge its state gas.
-    if (state.rev >= EVMC_AMSTERDAM && status == EVMC_STORAGE_ADDED)
-    {
-        if (!charge_state_gas(gas_left, state, STORAGE_SET_STATE_GAS))
-            return {EVMC_OUT_OF_GAS, gas_left};
-    }
+    if (state_gas > 0 && !charge_state_gas(gas_left, state, state_gas))
+        return {EVMC_OUT_OF_GAS, gas_left};
     state.gas_refund += gas_refund;
     return {EVMC_SUCCESS, gas_left};
 }
