@@ -130,7 +130,6 @@ class ExecutionState
 {
 public:
     int64_t gas_refund = 0;
-    StateGas state_gas;  ///< EIP-8037: the frame's state-gas reservoir + spill (used is derived).
     Memory memory;
     const evmc_message* msg = nullptr;
     evmc::HostContext host;
@@ -156,6 +155,13 @@ public:
         const advanced::AdvancedCodeAnalysis* advanced;
     } analysis{};
 
+    /// EIP-8037: the frame's state-gas reservoir + spill (used is derived).
+    ///
+    /// Declared in the cold tail: inserting it earlier shifts `status` and `host` past the
+    /// x86-64 disp8 window, which costs 3 bytes of encoding on every one of the ~195 `status`
+    /// accesses in each dispatch loop.
+    StateGas state_gas;
+
     /// Stack space allocation.
     ///
     /// This is the last field to make other fields' offsets of reasonable values.
@@ -166,11 +172,11 @@ public:
     ExecutionState(const evmc_message& message, evmc_revision revision,
         const evmc_host_interface& host_interface, evmc_host_context* host_ctx,
         bytes_view _code) noexcept
-      : state_gas{.left = message.state_gas},
-        msg{&message},
+      : msg{&message},
         host{host_interface, host_ctx},
         rev{revision},
-        original_code{_code}
+        original_code{_code},
+        state_gas{.left = message.state_gas}
     {}
 
     /// Resets the contents of the ExecutionState so that it could be reused.
