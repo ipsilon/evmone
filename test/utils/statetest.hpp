@@ -9,6 +9,7 @@
 #include <test/state/block.hpp>
 #include <test/state/errors.hpp>
 #include <test/state/transaction.hpp>
+#include <test/utils/test_report.hpp>
 #include <test/utils/test_state.hpp>
 #include <optional>
 
@@ -159,10 +160,11 @@ std::vector<StateTransitionTest> load_state_tests(std::istream& input);
 /// Throws std::invalid_argument exception.
 void validate_state(const TestState& state, evmc_revision rev);
 
-/// Execute the state @p test using the @p vm.
+/// Execute the state @p test using the @p vm, recording what does not match into @p report.
 ///
 /// @param trace_summary  Output execution summary to the default trace stream.
-void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_summary);
+void run_state_test(
+    const StateTransitionTest& test, evmc::VM& vm, bool trace_summary, TestReport& report);
 
 /// Computes the hash of the RLP-encoded list of transaction logs.
 /// This method is only used in tests.

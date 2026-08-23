@@ -2,24 +2,26 @@
 // Copyright 2022 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include <gtest/gtest.h>
 #include <test/utils/error_matching.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
 #include <test/utils/statetest.hpp>
+#include <test/utils/test_report.hpp>
+#include <iostream>
 
 namespace evmone::test
 {
-void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_summary)
+void run_state_test(
+    const StateTransitionTest& test, evmc::VM& vm, bool trace_summary, TestReport& report)
 {
-    SCOPED_TRACE(test.name);
+    report.start_case(test.name);
     for (const auto& [rev, cases, block] : test.cases)
     {
         validate_state(test.pre_state, rev);
         for (size_t case_index = 0; case_index != cases.size(); ++case_index)
         {
-            SCOPED_TRACE(std::string{evmc::to_string(rev)} + '/' + std::to_string(case_index));
+            const auto in_case = report.at(evmc::to_string(rev), '/', case_index);
             // if (rev != EVMC_FRONTIER)
             //     continue;
             // if (case_index != 3)
@@ -41,7 +43,7 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
                 else
                 {
                     // Decoding is the inverse of encoding: what decoded must encode back exactly.
-                    EXPECT_EQ(rlp::encode(*tx), *expected.txbytes);
+                    report.check_eq("transaction re-encoding", rlp::encode(*tx), *expected.txbytes);
 
                     // Recover the signer, as a node does, instead of taking it from JSON.
                     const auto sender = state::recover_sender(*tx, *expected.txbytes);
@@ -87,26 +89,35 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
 
             if (!expected.exception.empty())
             {
-                ASSERT_FALSE(holds_alternative<state::TransactionReceipt>(res))
-                    << "unexpected valid transaction";
+                if (holds_alternative<state::TransactionReceipt>(res))
+                {
+                    report.fail("transaction validity", "unexpected valid transaction");
+                    return;
+                }
 
                 // The transaction must be rejected for the reason the fixture states, not merely
                 // rejected: a wrong reason is a wrong implementation of the rule being tested.
                 const auto& reason = get<std::error_code>(res);
-                EXPECT_TRUE(is_expected_tx_exception(reason, expected.exception))
-                    << "transaction rejected as \"" << reason.message() << "\", expected "
-                    << expected.exception;
+                report.check(is_expected_tx_exception(reason, expected.exception),
+                    "transaction rejection reason", reason, expected.exception);
 
-                EXPECT_EQ(logs_hash(std::vector<state::Log>()), expected.logs_hash);
+                report.check_eq(
+                    "logs hash", logs_hash(std::vector<state::Log>()), expected.logs_hash);
             }
             else
             {
-                ASSERT_TRUE(holds_alternative<state::TransactionReceipt>(res))
-                    << "unexpected invalid transaction: " << get<std::error_code>(res).message();
-                EXPECT_EQ(logs_hash(get<state::TransactionReceipt>(res).logs), expected.logs_hash);
+                if (!holds_alternative<state::TransactionReceipt>(res))
+                {
+                    report.fail("transaction validity",
+                        "unexpected invalid transaction: " + get<std::error_code>(res).message());
+                    return;
+                }
+
+                report.check_eq("logs hash", logs_hash(get<state::TransactionReceipt>(res).logs),
+                    expected.logs_hash);
             }
 
-            EXPECT_EQ(state_root, expected.state_hash);
+            report.check_eq("state root", state_root, expected.state_hash);
         }
     }
 }

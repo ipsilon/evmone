@@ -7,12 +7,24 @@
 #include <evmone/version.h>
 #include <gtest/gtest.h>
 #include <test/utils/statetest.hpp>
+#include <test/utils/test_report.hpp>
 #include <iostream>
 
 namespace fs = std::filesystem;
 
 namespace
 {
+/// Reports each failure to gtest the moment the runner records it, so a run that dies part-way
+/// still shows what it found.
+///
+/// TODO: Bridge for as long as gtest drives these tests. Once the test driver replaces it the
+///   report is the verdict directly and this goes away.
+evmone::test::TestReport make_report()
+{
+    return evmone::test::TestReport{
+        [](const evmone::test::Failure& failure) { ADD_FAILURE() << failure; }};
+}
+
 /// Implementation of a gtest Test which runs all state tests from a given file.
 class StateTestFile : public testing::Test
 {
@@ -29,13 +41,14 @@ public:
 
     void TestBody() final
     {
+        auto report = make_report();
         std::ifstream f{m_json_test_file};
         const auto tests = evmone::test::load_state_tests(f);
         for (const auto& test : tests)
         {
             if (m_filter.has_value() && test.name.find(*m_filter) == std::string::npos)
                 continue;
-            evmone::test::run_state_test(test, m_vm, m_trace);
+            evmone::test::run_state_test(test, m_vm, m_trace, report);
         }
     }
 
@@ -62,7 +75,11 @@ public:
       : m_state_transition_test{std::move(state_transition_test)}, m_vm{vm}, m_trace{trace}
     {}
 
-    void TestBody() final { evmone::test::run_state_test(m_state_transition_test, m_vm, m_trace); }
+    void TestBody() final
+    {
+        auto report = make_report();
+        evmone::test::run_state_test(m_state_transition_test, m_vm, m_trace, report);
+    }
 
     static void register_one(const evmone::test::StateTransitionTest& test,
         const std::string& suite_name, const std::string& test_name, const fs::path& file,

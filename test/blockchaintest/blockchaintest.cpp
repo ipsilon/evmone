@@ -7,12 +7,24 @@
 #include <evmone/evmone.h>
 #include <evmone/version.h>
 #include <gtest/gtest.h>
+#include <test/utils/test_report.hpp>
 #include <iostream>
 
 namespace fs = std::filesystem;
 
 namespace
 {
+/// Reports each failure to gtest the moment the runner records it, so a run that dies part-way
+/// still shows what it found.
+///
+/// TODO: Bridge for as long as gtest drives these tests. Once the test driver replaces it the
+///   report is the verdict directly and this goes away.
+evmone::test::TestReport make_report()
+{
+    return evmone::test::TestReport{
+        [](const evmone::test::Failure& failure) { ADD_FAILURE() << failure; }};
+}
+
 /// Implementation of a gtest Test which runs all blockchain tests from a given file.
 class BlockchainGTestFile : public testing::Test
 {
@@ -26,11 +38,13 @@ public:
 
     void TestBody() final
     {
+        auto report = make_report();
         std::ifstream f{m_json_test_file};
 
         try
         {
-            evmone::test::run_blockchain_tests(evmone::test::load_blockchain_tests(f), m_vm);
+            evmone::test::run_blockchain_tests(
+                evmone::test::load_blockchain_tests(f), m_vm, report);
         }
         catch (const evmone::test::UnsupportedTestFeature& ex)
         {
@@ -59,7 +73,8 @@ public:
 
     void TestBody() final
     {
-        evmone::test::run_blockchain_tests(std::array{m_blockchain_test}, m_vm);
+        auto report = make_report();
+        evmone::test::run_blockchain_tests(std::array{m_blockchain_test}, m_vm, report);
     }
 
     static void register_one(const evmone::test::BlockchainTest& test,

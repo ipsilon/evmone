@@ -38,6 +38,8 @@ target_sources(
     statetest_logs_hash.cpp
     t8n.hpp
     t8n.cpp
+    test_report.hpp
+    test_report.cpp
     test_state.hpp
     test_state.cpp
     utils.hpp

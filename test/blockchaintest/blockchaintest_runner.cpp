@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "blockchaintest_runner.hpp"
-#include <gtest/gtest.h>
 #include <test/state/errors.hpp>
 #include <test/state/ethash_difficulty.hpp>
 #include <test/state/requests.hpp>
@@ -14,6 +13,7 @@
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
 #include <test/utils/statetest.hpp>
+#include <test/utils/test_report.hpp>
 
 namespace evmone::test
 {
@@ -133,21 +133,30 @@ std::error_code validate_block(evmc_revision rev, state::BlobParams blob_params,
 
 /// Checks the transaction codec against a block's own serialization: every transaction in it must
 /// decode, and encode back to the very same bytes.
-void expect_transactions_round_trip(bytes_view block_rlp)
+void check_transactions_round_trip(bytes_view block_rlp, TestReport& report)
 {
     bytes_view body;  // A block is [header, transactions, ...].
-    ASSERT_TRUE(rlp::take_list_payload(block_rlp, body));
-    ASSERT_TRUE(block_rlp.empty()) << "trailing bytes after the block";
-    bytes_view block_header;
-    ASSERT_TRUE(rlp::take_list_payload(body, block_header));  // Skipped over.
+    if (!report.check(rlp::take_list_payload(block_rlp, body), "block RLP", "not a list"))
+        return;
+    if (!report.check(block_rlp.empty(), "block RLP", "trailing bytes after the block"))
+        return;
+    bytes_view block_header;  // Skipped over.
+    if (!report.check(
+            rlp::take_list_payload(body, block_header), "block RLP", "the header is not a list"))
+        return;
     bytes_view txs;
-    ASSERT_TRUE(rlp::take_list_payload(body, txs));
+    if (!report.check(
+            rlp::take_list_payload(body, txs), "block RLP", "the transactions are not a list"))
+        return;
 
     while (!txs.empty())
     {
         const auto item = txs;
         rlp::Header h;
-        ASSERT_TRUE(rlp::decode_header(txs, h));  // Advances txs to the item's payload.
+        // decode_header() advances txs to the item's payload.
+        if (!report.check(
+                rlp::decode_header(txs, h), "block RLP", "a transaction has no RLP header"))
+            return;
         const auto header_size = item.size() - txs.size();
         txs.remove_prefix(h.payload_length);
 
@@ -157,8 +166,12 @@ void expect_transactions_round_trip(bytes_view block_rlp)
                                           item.substr(header_size, h.payload_length);
 
         const auto tx = state::decode_transaction(tx_bytes);
-        ASSERT_TRUE(tx.has_value()) << hex(tx_bytes);
-        EXPECT_EQ(rlp::encode(*tx), tx_bytes);
+        if (!tx.has_value())
+        {
+            report.fail("transaction decoding", hex(tx_bytes));
+            return;
+        }
+        report.check_eq("transaction re-encoding", rlp::encode(*tx), tx_bytes);
     }
 }
 
@@ -199,25 +212,31 @@ std::string print_state(const TestState& s)
 }
 }  // namespace
 
-void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
+void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm, TestReport& report)
 {
     for (size_t case_index = 0; case_index != tests.size(); ++case_index)
     {
         const auto& c = tests[case_index];
         const auto rev_schedule = to_rev_schedule(c.network);
-        SCOPED_TRACE(std::string{evmc::to_string(rev_schedule.get_revision(0))} + '/' +
-                     std::to_string(case_index) + '/' + c.name);
+        report.start_case(c.name);
+        // The network names the whole schedule, so a fork transition shows at the case level and
+        // a block needs only its index. The block number would not do: an invalid block does not
+        // advance it, so two of them can share one.
+        const auto in_case = report.at(c.network, '/', case_index);
 
         // Validate the genesis block header.
-        EXPECT_EQ(c.genesis_block_header.block_number, 0);
-        EXPECT_EQ(c.genesis_block_header.gas_used, 0);
-        EXPECT_EQ(c.genesis_block_header.transactions_root, state::EMPTY_MPT_HASH);
-        EXPECT_EQ(c.genesis_block_header.receipts_root, state::EMPTY_MPT_HASH);
-        EXPECT_EQ(c.genesis_block_header.withdrawal_root,
+        report.check_eq("genesis block number", c.genesis_block_header.block_number, 0);
+        report.check_eq("genesis gas used", c.genesis_block_header.gas_used, 0);
+        report.check_eq("genesis transactions root", c.genesis_block_header.transactions_root,
+            state::EMPTY_MPT_HASH);
+        report.check_eq(
+            "genesis receipts root", c.genesis_block_header.receipts_root, state::EMPTY_MPT_HASH);
+        report.check_eq("genesis withdrawals root", c.genesis_block_header.withdrawal_root,
             rev_schedule.get_revision(c.genesis_block_header.timestamp) >= EVMC_SHANGHAI ?
                 state::EMPTY_MPT_HASH :
                 bytes32{});
-        EXPECT_EQ(c.genesis_block_header.logs_bloom, bytes_view{state::BloomFilter{}});
+        report.check_eq("genesis logs bloom", bytes_view{c.genesis_block_header.logs_bloom},
+            bytes_view{state::BloomFilter{}});
 
         TestBlockHashes block_hashes{
             {c.genesis_block_header.block_number, c.genesis_block_header.hash}};
@@ -252,20 +271,25 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
             const auto blob_gas_limit =
                 static_cast<int64_t>(state::max_blob_gas_per_block(blob_params));
 
-            SCOPED_TRACE(std::string{evmc::to_string(rev)} + '/' + std::to_string(case_index) +
-                         '/' + c.name + '/' + std::to_string(test_block.block_info.number));
+            const auto in_block = report.at(i);
 
             // Invalid blocks are skipped: they may carry transactions that do not even decode.
             if (test_block.expected_exception.empty())
-                expect_transactions_round_trip(test_block.rlp);
+                check_transactions_round_trip(test_block.rlp, report);
 
             const auto block_error =
                 validate_block(rev, blob_params, test_block, parent_header, parent_has_ommers);
 
             if (test_block.expected_exception.empty())
             {
-                ASSERT_FALSE(block_error)
-                    << "Expected block to be valid (validate_block): " << block_error.message();
+                if (block_error)
+                {
+                    report.fail("block validity",
+                        "expected the block to be valid: " + block_error.message());
+                    // TODO: This and the requests failure below abandon the whole file, not
+                    //   just this case. Give each case its own run so only that case stops.
+                    return;
+                }
 
                 // Block being valid guarantees its parent was found.
                 assert(parent_data_it != block_data.end());
@@ -274,7 +298,11 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions,
                     rev, blob_gas_limit, {.block_reward = mining_reward(rev)});
 
-                ASSERT_FALSE(res.requests_error);
+                if (res.requests_error)
+                {
+                    report.fail("requests", res.requests_error.message());
+                    return;
+                }
 
                 block_hashes[test_block.expected_block_header.block_number] =
                     test_block.expected_block_header.hash;
@@ -297,32 +325,37 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                     max_total_difficulty = inserted_it->second.total_difficulty;
                 }
 
-                EXPECT_TRUE(res.rejected.empty())
-                    << "Invalid transaction in block expected to be valid";
-                EXPECT_EQ(blob_gas_limit - res.blob_gas_left,
-                    static_cast<int64_t>(bi.blob_gas_used.value_or(0)))
-                    << "Transactions used more or less blob gas than expected in block header";
+                if (!res.rejected.empty())
+                {
+                    report.fail("transactions in a valid block",
+                        "invalid transaction: " + res.rejected.front().error.message());
+                }
 
-                EXPECT_EQ(state_root, test_block.expected_block_header.state_root);
+                report.check_eq("blob gas used", blob_gas_limit - res.blob_gas_left,
+                    static_cast<int64_t>(bi.blob_gas_used.value_or(0)));
+                report.check_eq(
+                    "state root", state_root, test_block.expected_block_header.state_root);
 
                 if (rev >= EVMC_SHANGHAI)
                 {
-                    EXPECT_EQ(state::mpt_hash(test_block.block_info.withdrawals),
+                    report.check_eq("withdrawals root",
+                        state::mpt_hash(test_block.block_info.withdrawals),
                         test_block.expected_block_header.withdrawal_root);
                 }
 
-                EXPECT_EQ(state::mpt_hash(test_block.transactions),
+                report.check_eq("transactions root", state::mpt_hash(test_block.transactions),
                     test_block.expected_block_header.transactions_root);
-                EXPECT_EQ(
-                    state::mpt_hash(res.receipts), test_block.expected_block_header.receipts_root);
+                report.check_eq("receipts root", state::mpt_hash(res.receipts),
+                    test_block.expected_block_header.receipts_root);
                 if (rev >= EVMC_PRAGUE)
                 {
-                    EXPECT_EQ(calculate_requests_hash(res.requests),
+                    report.check_eq("requests hash", calculate_requests_hash(res.requests),
                         test_block.expected_block_header.requests_hash);
                 }
-                EXPECT_EQ(res.gas_used, test_block.expected_block_header.gas_used);
-                EXPECT_EQ(
-                    bytes_view{res.bloom}, bytes_view{test_block.expected_block_header.logs_bloom});
+                report.check_eq(
+                    "gas used", res.gas_used, test_block.expected_block_header.gas_used);
+                report.check_eq("logs bloom", bytes_view{res.bloom},
+                    bytes_view{test_block.expected_block_header.logs_bloom});
             }
             else
             {
@@ -330,10 +363,9 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 {
                     // Block correctly rejected at validation; verify the reason matches the
                     // fixture's expected exception.
-                    EXPECT_TRUE(
-                        is_expected_block_exception(block_error, test_block.expected_exception))
-                        << "Block invalidity reason mismatch: got " << block_error.message()
-                        << ", expected " << test_block.expected_exception;
+                    report.check(
+                        is_expected_block_exception(block_error, test_block.expected_exception),
+                        "block rejection reason", block_error, test_block.expected_exception);
                     continue;
                 }
 
@@ -363,11 +395,10 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                     const auto& rejected = res.rejected.front();
                     if (names_spec_exception && !sender_not_recovered)
                     {
-                        EXPECT_TRUE(
-                            is_expected_tx_exception(rejected.error, test_block.expected_exception))
-                            << "Transaction-level invalidity mismatch: got \""
-                            << rejected.error.message() << "\", expected "
-                            << test_block.expected_exception;
+                        report.check(
+                            is_expected_tx_exception(rejected.error, test_block.expected_exception),
+                            "transaction rejection reason", rejected.error,
+                            test_block.expected_exception);
                     }
                     continue;
                 }
@@ -375,11 +406,10 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 {
                     if (!sender_not_recovered)
                     {
-                        EXPECT_TRUE(is_expected_block_exception(
-                            res.requests_error, test_block.expected_exception))
-                            << "Block invalidity reason mismatch: got "
-                            << res.requests_error.message() << ", expected "
-                            << test_block.expected_exception;
+                        report.check(is_expected_block_exception(
+                                         res.requests_error, test_block.expected_exception),
+                            "block rejection reason", res.requests_error,
+                            test_block.expected_exception);
                     }
                     continue;
                 }
@@ -397,9 +427,8 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                 const auto expect_fixture_names = [&](std::string_view names) {
                     if (!names_spec_exception || ommers_not_validated || sender_not_recovered)
                         return;
-                    EXPECT_TRUE(contains_any(test_block.expected_exception, names))
-                        << "Block invalidity reason mismatch: the block failed the check for "
-                        << names << ", expected " << test_block.expected_exception;
+                    report.check(contains_any(test_block.expected_exception, names),
+                        "block rejection reason", names, test_block.expected_exception);
                 };
 
                 if (blob_gas_limit - res.blob_gas_left !=
@@ -454,11 +483,10 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
                     continue;
                 }
 
-                EXPECT_TRUE(false) << "Expected block to be invalid but resulted valid";
+                report.fail("block validity", "expected the block to be invalid");
             }
         }
-        EXPECT_EQ(canonical_tip_hash, c.expectation.last_block_hash)
-            << "Canonical chain tip differs from expected `lastblockhash`";
+        report.check_eq("canonical chain tip", canonical_tip_hash, c.expectation.last_block_hash);
 
         const auto expected_post_hash =
             std::holds_alternative<TestState>(c.expectation.post_state) ?
@@ -468,13 +496,15 @@ void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm)
         // Get the final state hash. In case none blocks have been applied, compute genesis one.
         const auto canonical_post_hash =
             canonical_state_root ? canonical_state_root : state::mpt_hash(c.pre_state);
-        EXPECT_EQ(canonical_post_hash, expected_post_hash)
-            << "Result state:\n"
-            << print_state(*canonical_state)
-            << (std::holds_alternative<TestState>(c.expectation.post_state) ?
-                       "\n\nExpected state:\n" +
-                           print_state(std::get<TestState>(c.expectation.post_state)) :
-                       "");
+        // The state dumps are a callable so that formatting the whole state only happens once
+        // the roots are already known to differ.
+        report.check_eq("post state root", canonical_post_hash, expected_post_hash, [&] {
+            return "Result state:\n" + print_state(*canonical_state) +
+                   (std::holds_alternative<TestState>(c.expectation.post_state) ?
+                           "\n\nExpected state:\n" +
+                               print_state(std::get<TestState>(c.expectation.post_state)) :
+                           "");
+        });
     }
 }
 
