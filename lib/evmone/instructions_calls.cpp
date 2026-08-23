@@ -297,11 +297,9 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     int64_t create_state_gas_charged = 0;
     if (state.rev >= EVMC_AMSTERDAM)
     {
-        const auto target_alive =
-            state.host.get_nonce(create_addr) != 0 ||
-            intx::be::load<uint256>(state.host.get_balance(create_addr)) != 0 ||
-            state.host.get_code_size(create_addr) != 0;
-        if (!target_alive)
+        // EIP-161 aliveness. account_exists() is the same predicate: its pre-Spurious-Dragon
+        // arm is unreachable under the Amsterdam gate, leaving `acc != nullptr && !is_empty()`.
+        if (!state.host.account_exists(create_addr))
         {
             create_state_gas_charged = NEW_ACCOUNT_STATE_GAS;
             if (!charge_state_gas(gas_left, state, create_state_gas_charged))
