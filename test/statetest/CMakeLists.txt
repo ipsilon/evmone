@@ -7,5 +7,4 @@ target_link_libraries(evmone-statetest PRIVATE evmone::testutils evmone evmone-b
 target_sources(
     evmone-statetest PRIVATE
     statetest.cpp
-    statetest_runner.cpp
 )
