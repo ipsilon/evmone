@@ -88,6 +88,17 @@ struct Transaction
 /// Handles the legacy RLP list and the EIP-2718 typed envelope (type byte followed by an RLP list).
 [[nodiscard]] std::optional<Transaction> decode_transaction(bytes_view data) noexcept;
 
+/// Returns the serialization of each transaction of the block @p block_rlp, delimited but not
+/// decoded, or std::nullopt if the block's structure is malformed.
+///
+/// A block is [header, transactions, ...]; only these two are read, whatever follows them is not
+/// validated. Inside the transaction list a legacy transaction is an RLP list and a typed one an
+/// RLP string wrapping the EIP-2718 envelope; the envelope alone is the transaction.
+///
+/// The returned views point into @p block_rlp, which must outlive them.
+[[nodiscard]] std::optional<std::vector<bytes_view>> split_block_transactions(
+    bytes_view block_rlp) noexcept;
+
 /// Recovers the sender (the signer) of the transaction @p tx decoded from @p txbytes,
 /// or std::nullopt if the signature is invalid.
 ///

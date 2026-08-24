@@ -141,6 +141,33 @@ std::optional<Transaction> decode_transaction(bytes_view data) noexcept
     return tx;
 }
 
+std::optional<std::vector<bytes_view>> split_block_transactions(bytes_view block_rlp) noexcept
+{
+    bytes_view body;
+    if (!rlp::take_list_payload(block_rlp, body) || !block_rlp.empty())
+        return std::nullopt;
+
+    bytes_view block_header;
+    bytes_view txs;
+    if (!rlp::take_list_payload(body, block_header) || !rlp::take_list_payload(body, txs))
+        return std::nullopt;
+
+    std::vector<bytes_view> transactions;
+    while (!txs.empty())
+    {
+        const auto item = txs;
+        rlp::Header h;
+        if (!rlp::decode_header(txs, h))  // Advances txs to the item's payload.
+            return std::nullopt;
+        const auto header_size = item.size() - txs.size();
+        txs.remove_prefix(h.payload_length);
+
+        transactions.push_back(h.is_list ? item.substr(0, header_size + h.payload_length) :
+                                           item.substr(header_size, h.payload_length));
+    }
+    return transactions;
+}
+
 std::optional<address> recover_sender(const Transaction& tx, bytes_view txbytes) noexcept
 {
     // The signing preimage is the transaction's encoding without the trailing (v, r, s).
