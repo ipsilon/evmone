@@ -321,6 +321,9 @@ inline const char* to_string(evmc_revision rev) noexcept
 /// Alias for evmc_make_result().
 constexpr auto make_result = evmc_make_result;
 
+/// @copydoc evmc_state_gas
+using StateGas = evmc_state_gas;
+
 /// @copydoc evmc_result
 ///
 /// This is a RAII wrapper for evmc_result and objects of this type
@@ -332,6 +335,7 @@ public:
     using evmc_result::gas_refund;
     using evmc_result::output_data;
     using evmc_result::output_size;
+    using evmc_result::state_gas;
     using evmc_result::status_code;
 
     /// Creates the result from the provided arguments.
@@ -344,23 +348,39 @@ public:
     /// @param _gas_refund   The amount of refunded gas.
     /// @param _output_data  The pointer to the output.
     /// @param _output_size  The output size.
+    /// @param _state_gas    The state-gas fields.
     explicit Result(evmc_status_code _status_code,
                     int64_t _gas_left,
                     int64_t _gas_refund,
                     const uint8_t* _output_data,
-                    size_t _output_size) noexcept
+                    size_t _output_size,
+                    StateGas _state_gas = {}) noexcept
       : evmc_result{make_result(_status_code, _gas_left, _gas_refund, _output_data, _output_size)}
-    {}
+    {
+        state_gas = _state_gas;
+    }
 
     /// Creates the result without output.
     ///
     /// @param _status_code  The status code.
     /// @param _gas_left     The amount of gas left.
     /// @param _gas_refund   The amount of refunded gas.
+    /// @param _state_gas    The state-gas fields.
     explicit Result(evmc_status_code _status_code = EVMC_INTERNAL_ERROR,
                     int64_t _gas_left = 0,
-                    int64_t _gas_refund = 0) noexcept
+                    int64_t _gas_refund = 0,
+                    StateGas _state_gas = {}) noexcept
       : evmc_result{make_result(_status_code, _gas_left, _gas_refund, nullptr, 0)}
+    {
+        state_gas = _state_gas;
+    }
+
+    /// Creates the result without output and without gas left.
+    ///
+    /// @param _status_code  The status code.
+    /// @param _state_gas    The state-gas fields.
+    explicit Result(evmc_status_code _status_code, StateGas _state_gas) noexcept
+      : Result{_status_code, 0, 0, _state_gas}
     {}
 
     /// Converting constructor from raw evmc_result.

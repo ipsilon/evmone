@@ -6,6 +6,7 @@
 #include "precompiles.hpp"
 #include "system_contracts.hpp"
 #include <evmone/constants.hpp>
+#include <evmone/state_gas.hpp>
 
 namespace evmone::state
 {
@@ -190,8 +191,9 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     }
     else
     {
+        // TODO: Add EVMC errors for creation failures.
         if (is_create_collision(*new_acc))
-            return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
+            return evmc::Result{EVMC_FAILURE, {.left = msg.state_gas}};
         m_state.journal_create(msg.recipient);
     }
 
@@ -229,20 +231,33 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     const size_t max_code_size = m_rev >= EVMC_AMSTERDAM ? MAX_CODE_SIZE_AMSTERDAM : MAX_CODE_SIZE;
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > max_code_size)
-        return evmc::Result{EVMC_FAILURE};
+        return evmc::Result{EVMC_FAILURE, {.left = msg.state_gas}};
 
     // Reject new contract code starting with the 0xEF byte (EIP-3541).
     if (m_rev >= EVMC_LONDON && code.starts_with(0xEF))
-        return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+        return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE, {.left = msg.state_gas}};
 
-    // Code deployment cost.
-    const auto cost = std::ssize(code) * 200;
-    gas_left -= cost;
-    if (gas_left < 0)
+    StateGas state_gas{result.state_gas};  // The initcode's state-gas for code deposit.
+    if (m_rev >= EVMC_AMSTERDAM)
     {
-        return (m_rev == EVMC_FRONTIER) ?
-                   evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund} :
-                   evmc::Result{EVMC_FAILURE};
+        // The code deposit splits into an execution-gas and a state-gas component (EIP-8037).
+        const auto execution_cost = 6 * ((std::ssize(code) + 31) / 32);
+        const auto state_cost = std::ssize(code) * COST_PER_STATE_BYTE;
+        gas_left -= execution_cost;
+        if (gas_left < 0 || !state_gas.charge(gas_left, state_cost))
+            return evmc::Result{EVMC_FAILURE, {.left = msg.state_gas}};
+    }
+    else
+    {
+        // Code deployment cost.
+        const auto cost = std::ssize(code) * 200;
+        gas_left -= cost;
+        if (gas_left < 0)
+        {
+            return (m_rev == EVMC_FRONTIER) ?
+                       evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund} :
+                       evmc::Result{EVMC_FAILURE, {.left = msg.state_gas}};
+        }
     }
 
     if (!code.empty())
@@ -252,7 +267,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         new_acc->code_changed = true;
     }
 
-    return evmc::Result{result.status_code, gas_left, result.gas_refund};
+    return evmc::Result{result.status_code, gas_left, result.gas_refund, state_gas};
 }
 
 evmc::Result Host::execute_message(const evmc_message& msg) noexcept
@@ -300,8 +315,8 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
     const auto code = m_state.get_code(msg.code_address);
-    if (code.empty())
-        return evmc::Result{EVMC_SUCCESS, msg.gas};  // Skip trivial execution.
+    if (code.empty())  // Skip trivial execution.
+        return evmc::Result{EVMC_SUCCESS, msg.gas, 0, {.left = msg.state_gas}};
 
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
@@ -317,13 +332,34 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
         ++sender_acc.nonce;
     }
 
+    auto exec_msg = msg;
+    StateGas state_gas{{.left = msg.state_gas}};  // State-gas for top-level account creation cost.
+    if (msg.depth == 0 && m_rev >= EVMC_AMSTERDAM &&
+        (msg.kind == EVMC_CREATE || !evmc::is_zero(msg.value)) && !account_exists(msg.recipient))
+    {
+        if (!state_gas.charge(exec_msg.gas, NEW_ACCOUNT_STATE_GAS))
+            return evmc::Result{EVMC_OUT_OF_GAS, {.left = msg.state_gas}};
+        exec_msg.state_gas = state_gas.left;
+    }
+
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();
 
-    auto result = execute_message(msg);
+    auto result = execute_message(exec_msg);
 
-    if (result.status_code != EVMC_SUCCESS)
+    if (result.status_code == EVMC_SUCCESS)
     {
+        result.state_gas.spilled += state_gas.spilled;  // Commit the top-level new account cost.
+    }
+    else
+    {
+        // Rollback state-gas costs.
+        assert(result.state_gas.left == exec_msg.state_gas);
+        assert(result.state_gas.spilled == 0);
+        if (result.status_code == EVMC_REVERT)
+            result.gas_left += state_gas.spilled;
+        result.state_gas.left = msg.state_gas;
+
         // The 0x03 (RIPEMD-160) touch quirk: a touch on this address is
         // never reverted. It only matters when the account is empty, so gate it by rev range.
         static constexpr auto ADDR_03 = 0x03_address;

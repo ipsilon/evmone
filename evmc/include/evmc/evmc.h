@@ -45,7 +45,7 @@ enum
      *
      * @see @ref versioning
      */
-    EVMC_ABI_VERSION = 18
+    EVMC_ABI_VERSION = 19
 };
 
 
@@ -119,6 +119,11 @@ struct evmc_message
      * Defined as `g` in the Yellow Paper.
      */
     int64_t gas;
+
+    /**
+     * The amount of state gas available (EIP-8037).
+     */
+    int64_t state_gas;
 
     /**
      * The recipient of the message.
@@ -392,6 +397,16 @@ struct evmc_result;
  */
 typedef void (*evmc_release_result_fn)(const struct evmc_result* result);
 
+/** The state-gas counters of an execution (EIP-8037). */
+struct evmc_state_gas
+{
+    /** The amount of state gas left. */
+    int64_t left = 0;
+
+    /** The portion of the consumed state gas taken from evmc_result::gas_left. */
+    int64_t spilled = 0;
+};
+
 /** The EVM code execution result. */
 struct evmc_result
 {
@@ -413,6 +428,15 @@ struct evmc_result
      * If evmc_result::status_code is other than ::EVMC_SUCCESS the value MUST be 0.
      */
     int64_t gas_refund;
+
+    /**
+     * The state-gas counters after execution (EIP-8037).
+     *
+     * If evmc_result::status_code is other than ::EVMC_SUCCESS, evmc_state_gas::left MUST equal
+     * ::evmc_message::state_gas and evmc_state_gas::spilled MUST be 0. The VM returns the spill
+     * to evmc_result::gas_left for ::EVMC_REVERT; any other failure consumes it with gas_left.
+     */
+    struct evmc_state_gas state_gas;
 
     /**
      * The reference to output data.

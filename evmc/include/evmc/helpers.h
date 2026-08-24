@@ -120,8 +120,7 @@ static inline struct evmc_result evmc_make_result(enum evmc_status_code status_c
                                                   const uint8_t* output_data,
                                                   size_t output_size)
 {
-    struct evmc_result result;
-    memset(&result, 0, sizeof(result));
+    struct evmc_result result = {};
 
     if (output_size != 0)
     {

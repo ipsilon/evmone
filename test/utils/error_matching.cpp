@@ -43,6 +43,7 @@ constexpr AlternativeExceptions ALTERNATIVE_TX_EXCEPTIONS[]{
     // decode_transaction() reports one code for every malformed encoding, so this accepts more
     // than the v rule; narrowing it needs the decoder to report the v domain separately.
     {state::INVALID_ENCODING, "TransactionException.INVALID_SIGNATURE_VRS"},
+
 };
 
 /// The same, for the rules evmone checks on the block rather than the transaction.

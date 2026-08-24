@@ -42,7 +42,8 @@ constexpr auto storage_cost_spec = []() noexcept {
     tbl[EVMC_PRAGUE] = tbl[EVMC_LONDON];
     tbl[EVMC_OSAKA] = tbl[EVMC_LONDON];
     tbl[EVMC_AMSTERDAM] = tbl[EVMC_LONDON];
-    tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_LONDON];
+    tbl[EVMC_AMSTERDAM].set = tbl[EVMC_AMSTERDAM].reset;  // Only execution cost (EIP-8037).
+    tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_AMSTERDAM];
     return tbl;
 }();
 
@@ -138,6 +139,18 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     const auto gas_cost = gas_cost_warm + gas_cost_cold;
     if ((gas_left -= gas_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
+
+    if (state.rev >= EVMC_AMSTERDAM)
+    {
+        // The refill part can be done here because gas_left check always succeeds in this case.
+        static_assert(cold_sload_cost + warm_storage_read_cost <= CALL_STIPEND);
+        if (status == EVMC_STORAGE_ADDED_DELETED)
+            state.state_gas.refill(gas_left, STORAGE_SET_STATE_GAS);
+        else if (status == EVMC_STORAGE_ADDED &&
+                 !state.state_gas.charge(gas_left, STORAGE_SET_STATE_GAS))
+            return {EVMC_OUT_OF_GAS, gas_left};
+    }
+
     state.gas_refund += gas_refund;
     return {EVMC_SUCCESS, gas_left};
 }

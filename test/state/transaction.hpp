@@ -104,6 +104,9 @@ struct TransactionProperties
     /// The amount of gas provided to the EVM for the transaction execution.
     int64_t execution_gas_limit = 0;
 
+    /// The amount of state-gas spendable by EVM on state increase (since EIP-8037).
+    int64_t state_gas_limit = 0;
+
     /// The minimal amount of gas the transaction must use.
     int64_t min_gas_cost = 0;
 };
@@ -134,6 +137,10 @@ struct TransactionReceipt
 
     /// Amount of gas counted against the block gas limit by this transaction (EIP-7778).
     int64_t block_gas_used = 0;
+
+    /// The amount of state-gas used by this transaction (since EIP-8037).
+    /// It is the state-gas part of #block_gas_used; the rest is the execution-gas part.
+    int64_t state_gas_used = 0;
 
     /// Amount of gas used by this and previous transactions in the block.
     int64_t cumulative_gas_used = 0;

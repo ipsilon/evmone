@@ -4,6 +4,7 @@
 #pragma once
 
 #include "baseline.hpp"
+#include "constants.hpp"
 #include "execution_state.hpp"
 #include "instructions_traits.hpp"
 #include "instructions_xmacro.hpp"
@@ -1081,8 +1082,16 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
             // sending value to a non-existing account.
             if (!state.host.account_exists(beneficiary))
             {
-                if ((gas_left -= 25000) < 0)
-                    return {EVMC_OUT_OF_GAS, gas_left};
+                if (state.rev >= EVMC_AMSTERDAM)
+                {
+                    if (!state.state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
+                else
+                {
+                    if ((gas_left -= 25000) < 0)
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
             }
         }
     }

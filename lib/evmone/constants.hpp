@@ -27,4 +27,13 @@ constexpr auto MAX_NONCE = 0xffff'ffff'ffff'ffff;
 
 /// The gas given back to a value-transferring CALL, the Yellow Paper's G_callstipend.
 constexpr auto CALL_STIPEND = 2300;
+
+/// The fixed cost per state byte (EIP-8037).
+constexpr auto COST_PER_STATE_BYTE = 1530;
+
+/// State-gas cost of creating a new account (EIP-8037).
+constexpr auto NEW_ACCOUNT_STATE_GAS = 120 * COST_PER_STATE_BYTE;
+
+/// State-gas cost of allocating a storage slot (EIP-8037).
+constexpr auto STORAGE_SET_STATE_GAS = 64 * COST_PER_STATE_BYTE;
 }  // namespace evmone

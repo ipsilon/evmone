@@ -39,6 +39,30 @@ inline std::variant<evmc::address, Result> get_target_address(
 
     return *delegate_addr;
 }
+
+/// Absorbs a child's state-gas back to the parent (EIP-8037).
+inline void absorb_child_state_gas(
+    int64_t& gas_left, ExecutionState& state, const evmc::Result& result) noexcept
+{
+    assert(result.state_gas.left >= 0);
+    assert(result.state_gas.spilled >= 0);
+
+    // At most one of the two pools is ever non-empty.
+    assert(state.state_gas.left == 0 || state.state_gas.spilled == 0);
+    assert(result.state_gas.left == 0 || result.state_gas.spilled == 0);
+
+    // In a non-successful result, all is returned back.
+    assert(result.status_code == EVMC_SUCCESS ||
+           (result.state_gas.left == state.state_gas.left && result.state_gas.spilled == 0));
+
+    // Accumulate the spilled state-gas.
+    state.state_gas.spilled += result.state_gas.spilled;
+
+    // Rebalance the state-gas refills: the caller must move callee's refills to gas_left up to the
+    // caller's spilled counter. Do this by refilling all returned state-gas to zeroed `left`.
+    state.state_gas.left = 0;
+    state.state_gas.refill(gas_left, result.state_gas.left);
+}
 }  // namespace
 
 /// Converts an opcode to matching EVMC call kind.
@@ -119,11 +143,18 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     const auto& code_addr = std::get<evmc::address>(target_addr_or_result);
 
+    bool new_account_charged = false;  // NOLINT(*-const-correctness)
     if constexpr (Op == OP_CALL)
     {
         if ((has_value || state.rev < EVMC_SPURIOUS_DRAGON) && !state.host.account_exists(dst))
         {
-            if ((gas_left -= ACCOUNT_CREATION_COST) < 0)
+            if (state.rev >= EVMC_AMSTERDAM)
+            {
+                if (!state.state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
+                    return {EVMC_OUT_OF_GAS, gas_left};
+                new_account_charged = true;
+            }
+            else if ((gas_left -= ACCOUNT_CREATION_COST) < 0)
                 return {EVMC_OUT_OF_GAS, gas_left};
         }
     }
@@ -135,6 +166,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     else
         msg.flags &= ~std::underlying_type_t<evmc_flags>{EVMC_DELEGATED};
     msg.depth = state.msg->depth + 1;
+    msg.state_gas = state.state_gas.left;
     msg.recipient = (Op == OP_CALL || Op == OP_STATICCALL) ? dst : state.msg->recipient;
     msg.code_address = code_addr;
     msg.sender = (Op == OP_DELEGATECALL) ? state.msg->sender : state.msg->recipient;
@@ -171,7 +203,11 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
             msg.gas += CALL_STIPEND;
             gas_left += CALL_STIPEND;
             if (intx::be::load<uint256>(state.host.get_balance(state.msg->recipient)) < value)
+            {
+                if (new_account_charged)
+                    state.state_gas.refill(gas_left, NEW_ACCOUNT_STATE_GAS);
                 return {EVMC_SUCCESS, gas_left};  // "Light" failure.
+            }
         }
     }
 
@@ -188,6 +224,14 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     const auto gas_used = msg.gas - result.gas_left;
     gas_left -= gas_used;
     state.gas_refund += result.gas_refund;
+    absorb_child_state_gas(gas_left, state, result);
+
+    if constexpr (Op == OP_CALL)
+    {
+        if (new_account_charged && result.status_code != EVMC_SUCCESS)
+            state.state_gas.refill(gas_left, NEW_ACCOUNT_STATE_GAS);
+    }
+
     return {EVMC_SUCCESS, gas_left};
 }
 
@@ -257,10 +301,19 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     if (state.rev >= EVMC_BERLIN)
         state.host.access_account(msg.recipient);
 
+    bool new_account_charged = false;
+    if (state.rev >= EVMC_AMSTERDAM && !state.host.account_exists(msg.recipient))
+    {
+        if (!state.state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
+            return {EVMC_OUT_OF_GAS, gas_left};
+        new_account_charged = true;
+    }
+
     msg.gas = gas_left;
     if (state.rev >= EVMC_TANGERINE_WHISTLE)
         msg.gas -= msg.gas / 64;
 
+    msg.state_gas = state.state_gas.left;
     msg.input_data = init_code.data();
     msg.input_size = init_code.size();
     msg.sender = sender;
@@ -270,6 +323,9 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     const auto result = state.host.call(msg);
     gas_left -= msg.gas - result.gas_left;
     state.gas_refund += result.gas_refund;
+    absorb_child_state_gas(gas_left, state, result);
+    if (new_account_charged && result.status_code != EVMC_SUCCESS)
+        state.state_gas.refill(gas_left, NEW_ACCOUNT_STATE_GAS);
 
     state.return_data.assign(result.output_data, result.output_size);
     if (result.status_code == EVMC_SUCCESS)
