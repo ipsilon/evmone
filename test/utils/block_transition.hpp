@@ -39,6 +39,10 @@ struct BlockTransitionOptions
     /// (t8n pre-state-only mode). The transaction loop and finalization still run.
     bool skip_system_calls = false;
 
+    /// Recover each transaction's sender from its signature instead of using the one supplied,
+    /// rejecting the transaction if the signature does not recover.
+    bool recover_senders = false;
+
     /// Called once per transaction (just before execution) to obtain a per-tx
     /// trace sink; std::clog is redirected to the returned stream for the
     /// duration of that transaction. Unset = tracing disabled.
