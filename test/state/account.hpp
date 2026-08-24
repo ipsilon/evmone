@@ -97,4 +97,11 @@ struct Account
         return nonce == 0 && balance == 0 && code_hash == EMPTY_CODE_HASH;
     }
 };
+
+/// Whether a looked-up account is alive, i.e. has a state leaf: it exists and is not empty
+/// (EIP-161). A null pointer is a non-existent account.
+[[nodiscard]] inline bool is_alive(const Account* account) noexcept
+{
+    return account != nullptr && !account->is_empty();
+}
 }  // namespace evmone::state

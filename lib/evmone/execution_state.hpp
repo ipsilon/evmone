@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include "state_gas.hpp"
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
 #include <cassert>
@@ -154,6 +155,13 @@ public:
         const advanced::AdvancedCodeAnalysis* advanced;
     } analysis{};
 
+    /// The frame's state-gas reservoir + spill; used is derived (EIP-8037).
+    ///
+    /// Declared in the cold tail: inserting it earlier shifts `status` and `host` past the
+    /// x86-64 disp8 window, which costs 3 bytes of encoding on every one of the ~195 `status`
+    /// accesses in each dispatch loop.
+    StateGas state_gas;
+
     /// Stack space allocation.
     ///
     /// This is the last field to make other fields' offsets of reasonable values.
@@ -164,7 +172,11 @@ public:
     ExecutionState(const evmc_message& message, evmc_revision revision,
         const evmc_host_interface& host_interface, evmc_host_context* host_ctx,
         bytes_view _code) noexcept
-      : msg{&message}, host{host_interface, host_ctx}, rev{revision}, original_code{_code}
+      : msg{&message},
+        host{host_interface, host_ctx},
+        rev{revision},
+        original_code{_code},
+        state_gas{.left = message.state_gas}
     {}
 
     /// Resets the contents of the ExecutionState so that it could be reused.
@@ -173,6 +185,7 @@ public:
         bytes_view _code) noexcept
     {
         gas_refund = 0;
+        state_gas = {.left = message.state_gas};
         memory.clear();
         msg = &message;
         host = {host_interface, host_ctx};
@@ -202,13 +215,30 @@ public:
 /// success, and the output is the memory range recorded in the state.
 inline evmc_result make_execution_result(ExecutionState& state, int64_t gas_left) noexcept
 {
+    // A rolled-back frame created no state, so its net state gas used is zero: the reservoir is
+    // restored to the frame's budget and the spilled portion returns to `gas_left`, kept on a
+    // revert and consumed by the halt's gas_left = 0 below (EIP-8037).
+    if (state.rev >= EVMC_AMSTERDAM && state.status != EVMC_SUCCESS)
+    {
+        gas_left += state.state_gas.spilled;
+        state.state_gas.left = state.msg->state_gas;
+        state.state_gas.spilled = 0;
+    }
+
     // An exceptional halt consumes all gas; only a success or revert keeps gas_left.
     if (state.status != EVMC_SUCCESS && state.status != EVMC_REVERT)
         gas_left = 0;
     const auto gas_refund = (state.status == EVMC_SUCCESS) ? state.gas_refund : 0;
 
     assert(state.output_size != 0 || state.output_offset == 0);
-    return evmc::make_result(state.status, gas_left, gas_refund,
+    auto result = evmc::make_result(state.status, gas_left, gas_refund,
         state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size);
+
+    // Return the leftover reservoir and spill; the caller derives the net used as
+    // `initial - state_gas_left + state_gas_spilled` (EIP-8037).
+    assert(state.state_gas.left >= 0);
+    result.state_gas_left = state.state_gas.left;
+    result.state_gas_spilled = state.state_gas.spilled;
+    return result;
 }
 }  // namespace evmone
