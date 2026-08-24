@@ -61,7 +61,8 @@ void state_transition::TearDown()
     // After EVMC_PRAGUE, get_blob_params will not work like that without a blob schedule.
     // TODO: add a blob schedule to use with state_transition tests, should they be added.
     const auto res = test::transition(state, block, block_hashes, tx, rev, selected_vm,
-        block.gas_limit, static_cast<int64_t>(state::max_blob_gas_per_block(get_blob_params(rev))));
+        block.gas_limit, static_cast<int64_t>(state::max_blob_gas_per_block(get_blob_params(rev))),
+        block.gas_limit);
     test::finalize(state, rev, block.coinbase, block_reward, block.ommers, block.withdrawals);
     const auto& post = state;
 
@@ -100,6 +101,10 @@ void state_transition::TearDown()
                 EXPECT_EQ(receipt.logs[i].topics, (*expect.logs)[i].topics)
                     << "log " << i << " topics";
             }
+        }
+        if (expect.state_gas.has_value())
+        {
+            EXPECT_EQ(receipt.state_block_gas, *expect.state_gas);
         }
         // Update default expectations - valid transaction means coinbase exists unless explicitly
         // requested otherwise

@@ -409,7 +409,12 @@ public:
                 call_msg.input_data = input_copy.data();
             }
         }
-        return Result{call_result};
+        auto result = Result{call_result};
+        // A zero state_gas_left means "the callee consumed the caller's whole reservoir".
+        // The mock runs no code, so echo the reservoir it was handed unless a test set one.
+        if (result.state_gas_left == 0)
+            result.state_gas_left = msg.state_gas;
+        return result;
     }
 
     /// Get transaction context (EVMC host method).

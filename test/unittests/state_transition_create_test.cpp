@@ -431,7 +431,8 @@ TEST_F(state_transition, eip7954_create_tx_at_max_code_size)
     // A create transaction deploying code of exactly the new limit succeeds.
     rev = EVMC_AMSTERDAM;
     static constexpr auto code_size = 0x10000;  // MAX_CODE_SIZE_AMSTERDAM.
-    tx.gas_limit = 16'000'000;                  // Covers the ~13.1M code-deposit gas (200/byte).
+    // Covers the ~100M code-deposit state gas (COST_PER_STATE_BYTE per byte, EIP-8037).
+    tx.gas_limit = 110'000'000;
     block.gas_limit = tx.gas_limit;
     pre[Sender].balance = tx.gas_limit * tx.max_gas_price;
     tx.data = ret(0, code_size);  // Init code returns `code_size` zero bytes as the deployed code.
@@ -445,7 +446,8 @@ TEST_F(state_transition, eip7954_create_tx_above_max_code_size)
     // Code one byte above the new 0x10000 limit is still rejected on Amsterdam (EIP-7954).
     rev = EVMC_AMSTERDAM;
     static constexpr auto code_size = 0x10000 + 1;
-    tx.gas_limit = 16'000'000;  // Enough to deposit the code, so only the limit can reject it.
+    // Enough to deposit the code, so only the limit can reject it.
+    tx.gas_limit = 110'000'000;
     block.gas_limit = tx.gas_limit;
     pre[Sender].balance = tx.gas_limit * tx.max_gas_price;
     tx.data = ret(0, code_size);  // Init code returns code one byte over the limit.

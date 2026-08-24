@@ -4,6 +4,7 @@
 #pragma once
 
 #include "baseline.hpp"
+#include "constants.hpp"
 #include "execution_state.hpp"
 #include "instructions_traits.hpp"
 #include "instructions_xmacro.hpp"
@@ -112,6 +113,21 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
 {
     constexpr auto WordCopyCost = 3;
     return num_words(size_in_bytes) * WordCopyCost;
+}
+
+
+/// Threads a child frame's state gas back to the parent: take its leftover reservoir and
+/// accumulate its spill. A failed child already rolled itself back at its boundary, so success
+/// and failure are handled identically. With the child's reservoir merged in, a successful child
+/// also repays the frame's outstanding spill from it, so a refill the child credited to the
+/// reservoir reaches the `gas_left` that funded the matching charge (EIP-8037).
+inline void accumulate_child_state_gas(
+    int64_t& gas_left, ExecutionState& state, const evmc::Result& result) noexcept
+{
+    state.state_gas.left = result.state_gas_left;
+    state.state_gas.spilled += result.state_gas_spilled;
+    if (result.status_code == EVMC_SUCCESS)
+        state.state_gas.repay_spill(gas_left);
 }
 
 /// Grows EVM memory and checks its cost.
@@ -1081,8 +1097,17 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
             // sending value to a non-existing account.
             if (!state.host.account_exists(beneficiary))
             {
-                if ((gas_left -= 25000) < 0)
-                    return {EVMC_OUT_OF_GAS, gas_left};
+                if (state.rev >= EVMC_AMSTERDAM)
+                {
+                    // The new account leaf is paid in state gas (EIP-8037).
+                    if (!state.state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
+                else
+                {
+                    if ((gas_left -= 25000) < 0)
+                        return {EVMC_OUT_OF_GAS, gas_left};
+                }
             }
         }
     }

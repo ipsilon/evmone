@@ -69,10 +69,15 @@ public:
 };
 
 /// Wrapping of state::transition() which operates on TestState.
+///
+/// @param state_block_gas_left  Pre-Amsterdam: ignored. Amsterdam+: remaining
+///                              block state-gas budget (EIP-8037). For single-tx
+///                              callers (statetests / state-transition unit
+///                              tests) pass `block_gas_left` to mirror it.
 [[nodiscard]] std::variant<state::TransactionReceipt, std::error_code> transition(TestState& state,
     const state::BlockInfo& block, const state::BlockHashes& block_hashes,
     const state::Transaction& tx, evmc_revision rev, evmc::VM& vm, int64_t block_gas_left,
-    int64_t blob_gas_left);
+    int64_t blob_gas_left, int64_t state_block_gas_left);
 
 /// Wrapping of state::finalize() which operates on TestState.
 void finalize(TestState& state, evmc_revision rev, const address& coinbase,
