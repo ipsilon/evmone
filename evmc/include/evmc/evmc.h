@@ -45,7 +45,7 @@ enum
      *
      * @see @ref versioning
      */
-    EVMC_ABI_VERSION = 18
+    EVMC_ABI_VERSION = 19
 };
 
 
@@ -189,6 +189,13 @@ struct evmc_message
      * The length of the code to be executed.
      */
     size_t code_size;
+
+    /**
+     * The amount of state gas available (EIP-8037).
+     *
+     * It draws from a reservoir allocated at transaction level.
+     */
+    int64_t state_gas;
 };
 
 /** The transaction and block data for execution. */
@@ -455,6 +462,17 @@ struct evmc_result
      * function to the result itself allows VM composition.
      */
     evmc_release_result_fn release;
+
+    /**
+     * The amount of state gas left after execution (EIP-8037).
+     */
+    // FIXME: Move after gas_refund.
+    int64_t state_gas_left;
+
+    /**
+     * The portion of consumed state gas taken from gas_left (EIP-8037).
+     */
+    int64_t state_gas_spilled;
 };
 
 

@@ -72,7 +72,7 @@ public:
 [[nodiscard]] std::variant<state::TransactionReceipt, std::error_code> transition(TestState& state,
     const state::BlockInfo& block, const state::BlockHashes& block_hashes,
     const state::Transaction& tx, evmc_revision rev, evmc::VM& vm, int64_t block_gas_left,
-    int64_t blob_gas_left);
+    int64_t block_state_gas_left, int64_t blob_gas_left);
 
 /// Wrapping of state::finalize() which operates on TestState.
 void finalize(TestState& state, evmc_revision rev, const address& coinbase,
