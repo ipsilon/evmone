@@ -4,6 +4,7 @@
 #pragma once
 
 #include "blob_schedule.hpp"
+#include "utils.hpp"
 #include <nlohmann/json.hpp>
 #include <test/state/block.hpp>
 #include <test/state/errors.hpp>
@@ -166,20 +167,6 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_su
 /// Computes the hash of the RLP-encoded list of transaction logs.
 /// This method is only used in tests.
 hash256 logs_hash(const std::vector<state::Log>& logs);
-
-/// Converts an integer to hex string representation with 0x prefix.
-///
-/// This handles also builtin types like uint64_t. Not optimal but works for now.
-inline std::string hex0x(const intx::uint256& v)
-{
-    return "0x" + intx::hex(v);
-}
-
-/// Encodes bytes as hex with 0x prefix.
-inline std::string hex0x(bytes_view v)
-{
-    return "0x" + evmc::hex(v);
-}
 }  // namespace evmone::test
 
 inline std::ostream& operator<<(std::ostream& out, const evmone::address& a)

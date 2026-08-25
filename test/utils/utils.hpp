@@ -5,6 +5,7 @@
 
 #include <evmc/evmc.hpp>
 #include <evmc/hex.hpp>
+#include <intx/intx.hpp>
 #include <algorithm>
 
 namespace evmone::test
@@ -39,6 +40,20 @@ evmc_revision to_rev(std::string_view s);
 
 /// Translates tests fork name to the EVM revision schedule.
 RevisionSchedule to_rev_schedule(std::string_view s);
+
+/// Converts an integer to hex string representation with 0x prefix.
+///
+/// This handles also builtin types like uint64_t. Not optimal but works for now.
+inline std::string hex0x(const intx::uint256& v)
+{
+    return "0x" + intx::hex(v);
+}
+
+/// Encodes bytes as hex with 0x prefix.
+inline std::string hex0x(bytes_view v)
+{
+    return "0x" + evmc::hex(v);
+}
 
 /// Converts a string to bytes by casting individual characters.
 inline bytes to_bytes(std::string_view s)
