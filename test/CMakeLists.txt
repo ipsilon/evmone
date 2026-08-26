@@ -95,20 +95,19 @@ foreach(base ${EVMONE_SPEC_TESTS})
             continue()
         endif()
         file(RELATIVE_PATH name "${base}" "${file}")
-        # Classify by the top-level (shallowest) test-type directory. A blockchain
-        # test may contain a nested state_tests/ subdirectory (imported static
-        # tests), so match the first type directory in the path rather than any
-        # occurrence, which would misclassify such a test as a state test. The
-        # leading and trailing slashes keep blockchain_tests_engine, _sync and
-        # transaction_tests (which are not run here) out.
-        string(FIND "/${name}" "/state_tests/" state_pos)
-        string(FIND "/${name}" "/blockchain_tests/" bc_pos)
-        if(NOT bc_pos EQUAL -1 AND (state_pos EQUAL -1 OR bc_pos LESS state_pos))
-            set(runner evmone-blockchaintest)
-            set(type blockchain_tests)
-        elseif(NOT state_pos EQUAL -1)
+        # The fixture type is the directory right below `fixtures/`. Matching any
+        # `state_tests/` in the path instead would misclassify the engine fixtures,
+        # which carry a nested state_tests/ subdirectory of imported static tests.
+        # Unknown types (blockchain_tests_engine*, _sync, transaction_tests, ...)
+        # are not run here.
+        if(NOT "${name}" MATCHES "(^|/)fixtures/([^/]+)/")
+            continue()
+        endif()
+        set(type ${CMAKE_MATCH_2})
+        if(type STREQUAL "state_tests")
             set(runner evmone-statetest)
-            set(type state_tests)
+        elseif(type STREQUAL "blockchain_tests")
+            set(runner evmone-blockchaintest)
         else()
             continue()
         endif()
