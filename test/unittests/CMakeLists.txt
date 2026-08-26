@@ -9,6 +9,7 @@ target_sources(
     analysis_test.cpp
     baseline_analysis_test.cpp
     blockchaintest_loader_test.cpp
+    blockchaintest_runner_test.cpp
     bytecode_test.cpp
     create_address_test.cpp
     evm_fixture.cpp
@@ -82,6 +83,7 @@ target_sources(
     statetest_loader_test.cpp
     statetest_loader_tx_test.cpp
     statetest_logs_hash_test.cpp
+    statetest_runner_test.cpp
     statetest_withdrawals_test.cpp
     test_report_test.cpp
     tooling_run_test.cpp

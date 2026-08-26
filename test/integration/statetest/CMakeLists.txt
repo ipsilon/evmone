@@ -108,15 +108,6 @@ set_tests_properties(
 )
 
 add_test(
-    NAME ${PREFIX}/tx_invalid_nonce
-    COMMAND evmone-statetest ${TESTS_TX}/invalid_nonce.json
-)
-set_tests_properties(
-    ${PREFIX}/tx_invalid_nonce PROPERTIES
-    PASS_REGULAR_EXPRESSION "unexpected invalid transaction: TransactionException.NONCE_MISMATCH_TOO_HIGH"
-)
-
-add_test(
     NAME ${PREFIX}/tx_invalid_signature
     COMMAND evmone-statetest ${TESTS_TX}/invalid_signature.json
 )
