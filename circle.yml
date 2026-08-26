@@ -573,10 +573,39 @@ jobs:
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 16
       CMAKE_GENERATOR: Ninja
-      CMAKE_OPTIONS: -DCMAKE_CXX_CLANG_TIDY=clang-tidy
+      CMAKE_OPTIONS: -DCMAKE_CXX_CLANG_TIDY=clang-tidy-cache;clang-tidy
       BUILD_TYPE: None
+      CTCACHE_DIR: /tmp/ctcache
+      # Hash comments too, otherwise editing a NOLINT reuses the old result.
+      CTCACHE_KEEP_COMMENTS: 1
     steps:
+      - run:
+          name: "Check clang-tidy version"
+          # The version is part of the cache key: ctcache does not hash the analyzer itself.
+          command: clang-tidy --version | tee /tmp/clang-tidy-version
+      - restore_cache:
+          name: "Restore clang-tidy cache"
+          key: clang-tidy-cache-{{checksum "/tmp/clang-tidy-version"}}
+      - run:
+          name: "Setup clang-tidy-cache"
+          command: |
+            mkdir -p /tmp/ctcache
+            find /tmp/ctcache -type f -mtime +7 -delete
+            # ctcache 1.2.0, pinned by commit because tags are mutable.
+            curl -L --fail --retry 3 -o /tmp/clang-tidy-cache https://raw.githubusercontent.com/matus-chochlik/ctcache/e33c063ca6e52b48bcefbc45d46d8c150ffa81ca/src/ctcache/clang_tidy_cache.py
+            sudo install -m 0755 /tmp/clang-tidy-cache /usr/local/bin/clang-tidy-cache
+            clang-tidy-cache --zero-stats
       - build
+      - run:
+          name: "clang-tidy cache stats"
+          when: always
+          command: clang-tidy-cache --print-stats
+      - save_cache:
+          name: "Save clang-tidy cache"
+          when: always
+          key: clang-tidy-cache-{{checksum "/tmp/clang-tidy-version"}}-{{epoch}}
+          paths:
+            - /tmp/ctcache
 
   clang-latest-coverage:
     executor: linux-clang-latest
