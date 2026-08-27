@@ -169,9 +169,13 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
             requests = std::move(res.requests);
 
         receipts = std::move(res.receipts);
-        // Block gas used reported as the cumulative transaction gas (refunds excluded),
-        // preserving the prior t8n output.
-        gas_used = receipts.empty() ? 0 : receipts.back().cumulative_gas_used;
+        // EIP-8037/7778: header gasUsed = max(sum_regular, sum_state) for Amsterdam+
+        // (`res.gas_used` carries that block-level value). Pre-Amsterdam, preserve the
+        // legacy cumulative transaction gas (refunds excluded).
+        if (rev >= EVMC_AMSTERDAM)
+            gas_used = res.gas_used;
+        else if (!receipts.empty())
+            gas_used = receipts.back().cumulative_gas_used;
         bloom = res.bloom;
         blob_gas_left = res.blob_gas_left;
         post_state = std::move(res.block_state);

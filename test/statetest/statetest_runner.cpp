@@ -61,7 +61,8 @@ void run_state_test(
             const auto res =
                 error ? error :
                         transition(state, block, test.block_hashes, *tx, rev, vm, block.gas_limit,
-                            static_cast<int64_t>(state::max_blob_gas_per_block(blob_params)));
+                            static_cast<int64_t>(state::max_blob_gas_per_block(blob_params)),
+                            block.gas_limit);
 
             if (holds_alternative<state::TransactionReceipt>(res))
             {
