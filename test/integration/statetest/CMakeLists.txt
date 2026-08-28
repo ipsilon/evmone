@@ -19,6 +19,8 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "path is required"
 )
 
+# SuiteA also holds an index.json and a notes.txt, neither of which is a test. They sort before
+# test1.json, so collecting either would show up inside the SuiteA block below.
 add_test(
     NAME ${PREFIX}/tests1_list
     COMMAND evmone-statetest ${TESTS1} --gtest_list_tests
@@ -131,6 +133,19 @@ add_test(
 )
 set_tests_properties(
     ${PREFIX}/filter PROPERTIES
+    FAIL_REGULAR_EXPRESSION "failing_test_case"
+)
+
+# Over a directory the filter is applied per case inside the file's test, not at registration as
+# it is above. The summary line is what proves a case ran: forbidding the other name alone would
+# hold just as well if the filter dropped every case.
+add_test(
+    NAME ${PREFIX}/filter_directory
+    COMMAND evmone-statetest ${TESTS_FILTER} -k passing_test_case --trace-summary
+)
+set_tests_properties(
+    ${PREFIX}/filter_directory PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"pass\":true"
     FAIL_REGULAR_EXPRESSION "failing_test_case"
 )
 
