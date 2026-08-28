@@ -103,7 +103,7 @@ TEST(statetest_runner, unexpected_invalid_transactions)
         "unexpected invalid transaction: TransactionException.NONCE_MISMATCH_TOO_HIGH");
 }
 
-TEST(statetest_runner, not_rejected_trsansaction)
+TEST(statetest_runner, not_rejected_transaction)
 {
     const auto failures = run(UNEXPECTEDLY_VALID);
 
