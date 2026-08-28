@@ -185,8 +185,49 @@ commands:
             LLVM_PROFILE_FILE=blockchain_tests.profraw
             bin/evmone-blockchaintest --gtest_filter='<<parameters.filter>>' ~/spec-tests/fixtures/blockchain_tests
 
+  configure:
+    description: "Configure"
+    parameters:
+      testing:
+        description: "Build the tests and the test tools"
+        type: boolean
+        default: true
+    steps:
+      - run:
+          name: "Configure (testing << parameters.testing >>)"
+          working_directory: ~/build
+          command: |
+            if [ "$TOOLCHAIN" ]; then
+              export toolchain_option="-DTOOLCHAIN=$TOOLCHAIN"
+            fi
+            cmake ../project $toolchain_option -DCMAKE_INSTALL_PREFIX=~/install -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_COMPILE_WARNING_AS_ERROR=TRUE -DEVMONE_TESTING=<< parameters.testing >> $CMAKE_OPTIONS
+
+  compile:
+    description: "Compile"
+    steps:
+      - run:
+          name: "Build"
+          command: cmake --build ~/build
+
+  smoke_test:
+    description: "Run the tool once to check the build works"
+    steps:
+      - run:
+          name: "Smoke test the tool"
+          working_directory: ~/build
+          command: |
+            bin/evmone --version
+            bin/evmone run 600160005260206000f3 | tee out.txt
+            grep -q "Result: *success" out.txt
+            grep -q "Output: *0\{63\}1" out.txt
+
   build:
     description: "Build"
+    parameters:
+      tools_only_first:
+        description: "Build with testing off first and smoke-test the tool, then reconfigure"
+        type: boolean
+        default: false
     steps:
       - checkout
       - checkout_submodules
@@ -212,22 +253,22 @@ commands:
       - restore_cache:
           name: "Restore Hunter cache"
           key: &hunter-cache-key hunter-{{arch}}-{{checksum "build.info"}}-{{checksum "cmake/Hunter/init.cmake"}}-{{checksum "cmake/Hunter/config.cmake"}}
-      - run:
-          name: "Configure"
-          working_directory: ~/build
-          command: |
-            if [ "$TOOLCHAIN" ]; then
-              export toolchain_option="-DTOOLCHAIN=$TOOLCHAIN"
-            fi
-            cmake ../project $toolchain_option -DCMAKE_INSTALL_PREFIX=~/install -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_COMPILE_WARNING_AS_ERROR=TRUE -DEVMONE_TESTING=ON $CMAKE_OPTIONS
+      # Testing off is the only configuration that never fetches GTest. It goes first because the
+      # Hunter cache is saved after the configure below, which is the one that has GTest in it.
+      - when:
+          condition: << parameters.tools_only_first >>
+          steps:
+            - configure:
+                testing: false
+            - compile
+            - smoke_test
+      - configure
       - save_cache:
           name: "Save Hunter cache"
           key: *hunter-cache-key
           paths:
             - ~/.hunter/_Base/Cache
-      - run:
-          name: "Build"
-          command: cmake --build ~/build
+      - compile
       - run:
           name: "Install"
           command: cmake --build ~/build --target install
@@ -523,7 +564,8 @@ jobs:
   gcc-min:
     executor: linux-gcc-min
     steps:
-      - build
+      - build:
+          tools_only_first: true
       - test
 
   clang-min:
@@ -531,7 +573,8 @@ jobs:
     environment:
       CMAKE_OPTIONS=-DEVMONE_X86_64_ARCH_LEVEL=3
     steps:
-      - build
+      - build:
+          tools_only_first: true
       - test
 
   gcc-latest-memcheck:
