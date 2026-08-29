@@ -162,9 +162,10 @@ commands:
       fixtures_suffix:
         type: string
         default: ""
-      filter:
+      ignore:
+        description: "--ignore flags for the paths not to collect"
         type: string
-        default: "*"
+        default: ""
     steps:
       - download_execution_spec_tests:
           repo: <<parameters.repo>>
@@ -176,14 +177,14 @@ commands:
           working_directory: ~/build
           command: >
             LLVM_PROFILE_FILE=state_tests.profraw
-            bin/evmone-statetest --gtest_filter='<<parameters.filter>>' ~/spec-tests/fixtures/state_tests
+            bin/evmone-statetest <<parameters.ignore>> ~/spec-tests/fixtures/state_tests
       - run:
           name: "Execution spec tests (<<parameters.release>>, blockchain_tests)"
           # Tests for in-development EVM revision currently passing.
           working_directory: ~/build
           command: >
             LLVM_PROFILE_FILE=blockchain_tests.profraw
-            bin/evmone-blockchaintest --gtest_filter='<<parameters.filter>>' ~/spec-tests/fixtures/blockchain_tests
+            bin/evmone-blockchaintest <<parameters.ignore>> ~/spec-tests/fixtures/blockchain_tests
 
   configure:
     description: "Configure"
@@ -467,7 +468,7 @@ jobs:
       - run_execution_spec_tests:
           release: tests-glamsterdam-devnet@v8.1.2
           fixtures_suffix: _glamsterdam-devnet
-          filter: "-for_amsterdam/*:for_bpo2toamsterdamattime15k/*"
+          ignore: "--ignore for_amsterdam --ignore for_bpo2toamsterdamattime15k"
       - collect_coverage_clang:
           flags: eest-develop
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
@@ -517,7 +518,9 @@ jobs:
           command: >
             LLVM_PROFILE_FILE=blockchain_tests_invalid.profraw
             bin/evmone-blockchaintest
-            --gtest_filter='-bc4895-withdrawals.shanghaiWithoutWithdrawalsRLP:bcInvalidHeaderTest.*:bcUncleHeaderValidity.gasLimitTooLowExactBound'
+            --ignore bc4895-withdrawals/shanghaiWithoutWithdrawalsRLP.json
+            --ignore bcInvalidHeaderTest
+            --ignore bcUncleHeaderValidity/gasLimitTooLowExactBound.json
             ~/tests/BlockchainTests/InvalidBlocks
             ~/tests/LegacyTests/Cancun/BlockchainTests/InvalidBlocks
       - collect_coverage_clang:

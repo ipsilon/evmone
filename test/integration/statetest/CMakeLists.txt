@@ -19,52 +19,37 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "path is required"
 )
 
-# SuiteA also holds an index.json and a notes.txt, neither of which is a test. They sort before
-# test1.json, so collecting either would show up inside the SuiteA block below.
+# A test collected from a directory is listed as its file. SuiteA also holds an index.json and a
+# notes.txt, neither of which is a test; both sort before test1.json, so collecting either would
+# show up in the listing.
 add_test(
     NAME ${PREFIX}/tests1_list
-    COMMAND evmone-statetest ${TESTS1} --gtest_list_tests
+    COMMAND evmone-statetest ${TESTS1} --collect-only
 )
 set_tests_properties(
     ${PREFIX}/tests1_list PROPERTIES
-    PASS_REGULAR_EXPRESSION [[
-B\.
-  T
-SuiteA\.
-  test1
-  test2_multi
-]]
+    PASS_REGULAR_EXPRESSION "tests1[^\n]*T\\.json\n[^\n]*tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json"
 )
 
+# Given the file directly, each test case in it is listed on its own.
 add_test(
     NAME ${PREFIX}/single_file_list
-    COMMAND evmone-statetest ${TESTS1}/SuiteA/test1.json --gtest_list_tests
+    COMMAND evmone-statetest ${TESTS1}/SuiteA/test2_multi.json --collect-only
 )
 set_tests_properties(
     ${PREFIX}/single_file_list PROPERTIES
-    PASS_REGULAR_EXPRESSION [[
-.*test/integration/statetest/tests1/SuiteA/test1\.json\.
-  test1
-]]
+    PASS_REGULAR_EXPRESSION "test2_multi\\.json::test_case_1\n[^\n]*test2_multi\\.json::test_case_2"
 )
 
+# Several roots are collected in the order given, not regrouped by suite as gtest listed them.
+# T.json holds no test cases, so naming it directly contributes no line.
 add_test(
     NAME ${PREFIX}/multiple_args_list
-    COMMAND evmone-statetest ${TESTS1} ${TESTS2} ${TESTS1}/B/T.json ${TESTS1}/SuiteA --gtest_list_tests
+    COMMAND evmone-statetest ${TESTS1} ${TESTS2} ${TESTS1}/B/T.json ${TESTS1}/SuiteA --collect-only
 )
 set_tests_properties(
     ${PREFIX}/multiple_args_list PROPERTIES
-    PASS_REGULAR_EXPRESSION [[
-B\.
-  T
-SuiteA\.
-  test1
-  test2_multi
-  test1
-\.
-  test1
-  test2_multi
-]]
+    PASS_REGULAR_EXPRESSION "tests1[^\n]*T\\.json\n[^\n]*tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json\n[^\n]*tests2[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json"
 )
 
 add_test(
@@ -149,27 +134,16 @@ set_tests_properties(
     FAIL_REGULAR_EXPRESSION "failing_test_case"
 )
 
-# --collect-only lists what would run instead of running it, and --ignore drops a path from that
-# list. Over a directory a test is listed as its file. The flags come first, as they do in CI: an
-# --ignore that swallowed a positional path would leave the roots after it uncollected.
+# --ignore drops a path from the collection. The flags come first, as they do in CI: an --ignore
+# that swallowed a positional path would leave the roots after it uncollected.
 add_test(
-    NAME ${PREFIX}/collect_only_directory
+    NAME ${PREFIX}/ignore
     COMMAND evmone-statetest --ignore B ${TESTS1} ${TESTS2} --collect-only
 )
 set_tests_properties(
-    ${PREFIX}/collect_only_directory PROPERTIES
+    ${PREFIX}/ignore PROPERTIES
     PASS_REGULAR_EXPRESSION "tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json\n[^\n]*tests2[^\n]*test1\\.json"
     FAIL_REGULAR_EXPRESSION "T\\.json"
-)
-
-# Given the file directly, each test case in it is listed on its own.
-add_test(
-    NAME ${PREFIX}/collect_only_file
-    COMMAND evmone-statetest ${TESTS1}/SuiteA/test2_multi.json --collect-only
-)
-set_tests_properties(
-    ${PREFIX}/collect_only_file PROPERTIES
-    PASS_REGULAR_EXPRESSION "test2_multi\\.json::test_case_1\n[^\n]*test2_multi\\.json::test_case_2"
 )
 
 get_directory_property(ALL_TESTS TESTS)
