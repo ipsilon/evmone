@@ -465,7 +465,7 @@ jobs:
     steps:
       - build
       - run_execution_spec_tests:
-          release: tests-glamsterdam-devnet@v6.1.1
+          release: tests-glamsterdam-devnet@v8.1.2
           fixtures_suffix: _glamsterdam-devnet
           filter: "-for_amsterdam/*:for_bpo2toamsterdamattime15k/*"
       - collect_coverage_clang:
@@ -473,7 +473,7 @@ jobs:
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
           binaries: evmone-statetest evmone-blockchaintest
       - run_execution_spec_tests:
-          release: tests@v20.0.1
+          release: tests@v20.0.2
       - collect_coverage_clang:
           flags: eest-stable
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
@@ -509,7 +509,6 @@ jobs:
           command: >
             LLVM_PROFILE_FILE=blockchain_tests_valid.profraw
             bin/evmone-blockchaintest
-            --gtest_filter='-bcValidBlockTest.SimpleTx3LowS'
             ~/tests/BlockchainTests/ValidBlocks
             ~/tests/LegacyTests/Cancun/BlockchainTests/ValidBlocks
       - run:
@@ -532,7 +531,7 @@ jobs:
     steps:
       - build
       - download_execution_spec_tests:
-          release: tests@v20.0.1
+          release: tests@v20.0.2
       - run:
           name: "Execution spec tests (state_tests)"
           working_directory: ~/build
@@ -552,7 +551,7 @@ jobs:
           command: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
       - build
       - download_execution_spec_tests:
-          release: tests@v20.0.1
+          release: tests@v20.0.2
       - run:
           name: "Execution spec tests (state_tests)"
           working_directory: ~/build
@@ -609,7 +608,7 @@ jobs:
       - build
       - test
       - run_execution_spec_tests:
-          release: tests@v20.0.1
+          release: tests@v20.0.2
 
   clang-tidy:
     executor: linux-clang-selfhosted
