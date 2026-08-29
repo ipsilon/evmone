@@ -92,13 +92,21 @@ public:
     }
 };
 
-void register_test_files(
-    const fs::path& root, const std::optional<std::string>& filter, evmc::VM& vm, bool trace)
+/// Registers every test under @p root, or prints its path if @p collect_only.
+void register_test_files(const fs::path& root, const std::optional<std::string>& filter,
+    std::span<const fs::path> ignored, bool collect_only, evmc::VM& vm, bool trace)
 {
     if (is_directory(root))
     {
-        for (const auto& [path, suite_name] : evmone::test::collect_test_files(root))
-            StateTestFile::register_one(suite_name, path, filter, vm, trace);
+        auto files = evmone::test::collect_test_files(root);
+        evmone::test::ignore_test_files(files, ignored);
+        for (const auto& [path, suite_name] : files)
+        {
+            if (collect_only)
+                std::cout << path.string() << '\n';
+            else
+                StateTestFile::register_one(suite_name, path, filter, vm, trace);
+        }
     }
     else  // Treat as a file.
     {
@@ -108,7 +116,10 @@ void register_test_files(
         {
             if (filter.has_value() && test.name.find(*filter) == std::string::npos)
                 continue;
-            StateTest::register_one(test, root.string(), test.name, root, vm, trace);
+            if (collect_only)
+                std::cout << root.string() << "::" << test.name << '\n';
+            else
+                StateTest::register_one(test, root.string(), test.name, root, vm, trace);
         }
     }
 }
@@ -148,6 +159,18 @@ int main(int argc, char* argv[])
         app.add_option("-k", filter,
             "Test name filter. Run only tests with names containing the specified string.");
 
+        std::vector<fs::path> ignored;
+        app.add_option("--ignore", ignored,
+               "Path, relative to a test directory, not to collect tests from. May be given more "
+               "than once. Whole path components are matched, so --ignore bc4895 keeps "
+               "bc4895-withdrawals.")
+            // Without this the option is variadic and swallows the positional paths after it.
+            ->allow_extra_args(false);
+
+        bool collect_only = false;
+        app.add_flag("--collect-only", collect_only,
+            "List the path of each collected test, one per line, and exit.");
+
         bool trace = false;
         bool trace_summary = false;
         const auto trace_opt = app.add_flag("--trace", trace, "Enable EVM tracing");
@@ -165,9 +188,9 @@ int main(int argc, char* argv[])
         }
 
         for (const auto& p : paths)
-            register_test_files(p, filter, vm, trace || trace_summary);
+            register_test_files(p, filter, ignored, collect_only, vm, trace || trace_summary);
 
-        return RUN_ALL_TESTS();
+        return collect_only ? 0 : RUN_ALL_TESTS();
     }
     catch (const std::exception& ex)
     {

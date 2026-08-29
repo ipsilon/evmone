@@ -31,4 +31,27 @@ std::vector<TestFile> collect_test_files(const fs::path& root)
     std::ranges::sort(files);
     return files;
 }
+
+void ignore_test_files(std::vector<TestFile>& files, std::span<const fs::path> ignored)
+{
+    // Whether the path begins with every component of the prefix.
+    static constexpr auto is_under = [](const fs::path& path, const fs::path& prefix) {
+        // "./B" has to name what "B" names, and a trailing separator, which tab completion adds,
+        // is an empty final component of its own.
+        auto p = prefix.lexically_normal();
+        if (p.filename().empty())
+            p = p.parent_path();
+        // An empty prefix, which an unset variable expands to, names nothing rather than
+        // everything.
+        return !p.empty() && std::ranges::mismatch(p, path).in1 == p.end();
+    };
+
+    std::erase_if(files, [ignored](const TestFile& file) {
+        // The suite name is the file's directory relative to the root, which is what the ignored
+        // paths are relative to as well.
+        const auto relative = fs::path{file.suite_name} / file.path.filename();
+        return std::ranges::any_of(
+            ignored, [&relative](const fs::path& prefix) { return is_under(relative, prefix); });
+    });
+}
 }  // namespace evmone::test

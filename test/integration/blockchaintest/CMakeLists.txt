@@ -55,5 +55,27 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "SKIPPED \\] \\.unsupported_rlp"
 )
 
+# --collect-only lists what would run instead of running it, and --ignore drops a path from that
+# list. Over a directory a test is listed as its file.
+add_test(
+    NAME ${PREFIX}/collect_only_directory
+    COMMAND evmone-blockchaintest ${TESTS1} --collect-only --ignore unsupported_rlp.json
+)
+set_tests_properties(
+    ${PREFIX}/collect_only_directory PROPERTIES
+    PASS_REGULAR_EXPRESSION "eip7778_block_gas\\.json"
+    FAIL_REGULAR_EXPRESSION "unsupported_rlp"
+)
+
+# Given the file directly, each test case in it is listed on its own.
+add_test(
+    NAME ${PREFIX}/collect_only_file
+    COMMAND evmone-blockchaintest ${TESTS1}/test.json --collect-only
+)
+set_tests_properties(
+    ${PREFIX}/collect_only_file PROPERTIES
+    PASS_REGULAR_EXPRESSION "test\\.json::[^\n]*-call\\]\n[^\n]*test\\.json::[^\n]*-callcode\\]"
+)
+
 get_directory_property(ALL_TESTS TESTS)
 set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)

@@ -88,12 +88,21 @@ public:
     }
 };
 
-void register_test_files(const fs::path& root, evmc::VM& vm)
+/// Registers every test under @p root, or prints its path if @p collect_only.
+void register_test_files(
+    const fs::path& root, std::span<const fs::path> ignored, bool collect_only, evmc::VM& vm)
 {
     if (is_directory(root))
     {
-        for (const auto& [path, suite_name] : evmone::test::collect_test_files(root))
-            BlockchainGTestFile::register_one(suite_name, path, vm);
+        auto files = evmone::test::collect_test_files(root);
+        evmone::test::ignore_test_files(files, ignored);
+        for (const auto& [path, suite_name] : files)
+        {
+            if (collect_only)
+                std::cout << path.string() << '\n';
+            else
+                BlockchainGTestFile::register_one(suite_name, path, vm);
+        }
     }
     else  // Treat as a file.
     {
@@ -102,7 +111,12 @@ void register_test_files(const fs::path& root, evmc::VM& vm)
         {
             const auto tests = evmone::test::load_blockchain_tests(f);
             for (const auto& test : tests)
-                BlockchainGTest::register_one(test, root.string(), test.name, root, vm);
+            {
+                if (collect_only)
+                    std::cout << root.string() << "::" << test.name << '\n';
+                else
+                    BlockchainGTest::register_one(test, root.string(), test.name, root, vm);
+            }
         }
         catch (const evmone::test::UnsupportedTestFeature& ex)
         {
@@ -131,6 +145,18 @@ int main(int argc, char* argv[])
             ->required()
             ->check(CLI::ExistingPath);
 
+        std::vector<fs::path> ignored;
+        app.add_option("--ignore", ignored,
+               "Path, relative to a test directory, not to collect tests from. May be given more "
+               "than once. Whole path components are matched, so --ignore bc4895 keeps "
+               "bc4895-withdrawals.")
+            // Without this the option is variadic and swallows the positional paths after it.
+            ->allow_extra_args(false);
+
+        bool collect_only = false;
+        app.add_flag("--collect-only", collect_only,
+            "List the path of each collected test, one per line, and exit.");
+
         bool trace_flag = false;
         app.add_flag("--trace", trace_flag, "Enable EVM tracing");
 
@@ -142,9 +168,9 @@ int main(int argc, char* argv[])
             vm.set_option("trace", "1");
 
         for (const auto& p : paths)
-            register_test_files(p, vm);
+            register_test_files(p, ignored, collect_only, vm);
 
-        return RUN_ALL_TESTS();
+        return collect_only ? 0 : RUN_ALL_TESTS();
     }
     catch (const std::exception& ex)
     {

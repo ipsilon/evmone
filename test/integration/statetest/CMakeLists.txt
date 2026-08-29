@@ -149,5 +149,28 @@ set_tests_properties(
     FAIL_REGULAR_EXPRESSION "failing_test_case"
 )
 
+# --collect-only lists what would run instead of running it, and --ignore drops a path from that
+# list. Over a directory a test is listed as its file. The flags come first, as they do in CI: an
+# --ignore that swallowed a positional path would leave the roots after it uncollected.
+add_test(
+    NAME ${PREFIX}/collect_only_directory
+    COMMAND evmone-statetest --ignore B ${TESTS1} ${TESTS2} --collect-only
+)
+set_tests_properties(
+    ${PREFIX}/collect_only_directory PROPERTIES
+    PASS_REGULAR_EXPRESSION "tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json\n[^\n]*tests2[^\n]*test1\\.json"
+    FAIL_REGULAR_EXPRESSION "T\\.json"
+)
+
+# Given the file directly, each test case in it is listed on its own.
+add_test(
+    NAME ${PREFIX}/collect_only_file
+    COMMAND evmone-statetest ${TESTS1}/SuiteA/test2_multi.json --collect-only
+)
+set_tests_properties(
+    ${PREFIX}/collect_only_file PROPERTIES
+    PASS_REGULAR_EXPRESSION "test2_multi\\.json::test_case_1\n[^\n]*test2_multi\\.json::test_case_2"
+)
+
 get_directory_property(ALL_TESTS TESTS)
 set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)
