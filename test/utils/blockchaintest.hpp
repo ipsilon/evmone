@@ -15,11 +15,6 @@
 
 namespace evmone::test
 {
-struct UnsupportedTestFeature : std::runtime_error
-{
-    using runtime_error::runtime_error;
-};
-
 // https://ethereum.org/en/developers/docs/blocks/
 struct BlockHeader
 {

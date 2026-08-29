@@ -118,6 +118,11 @@ add_test(
 )
 set_tests_properties(
     ${PREFIX}/filter PROPERTIES
+    # The whole summary is what proves a case ran and passed: a count alone would hold just as
+    # well if the filter selected nothing, and ctest stops checking the exit code once a
+    # PASS_REGULAR_EXPRESSION is set. The summary names failures first, so this matches only a
+    # run with none.
+    PASS_REGULAR_EXPRESSION "= 1 passed in"
     FAIL_REGULAR_EXPRESSION "failing_test_case"
 )
 
@@ -145,6 +150,21 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json\n[^\n]*tests2[^\n]*test1\\.json"
     FAIL_REGULAR_EXPRESSION "T\\.json"
 )
+
+# Selecting nothing fails rather than passing vacuously. WILL_FAIL only asserts a nonzero exit;
+# the driver unit tests pin the code itself.
+add_test(
+    NAME ${PREFIX}/nothing_collected
+    COMMAND evmone-statetest ${TESTS1} --ignore B --ignore SuiteA
+)
+set_tests_properties(${PREFIX}/nothing_collected PROPERTIES WILL_FAIL TRUE)
+
+# A file which cannot be loaded is a failure of the listing too, not a name in it.
+add_test(
+    NAME ${PREFIX}/collect_only_unloadable
+    COMMAND evmone-statetest ${CMAKE_CURRENT_SOURCE_DIR}/tests1/SuiteA/notes.txt --collect-only
+)
+set_tests_properties(${PREFIX}/collect_only_unloadable PROPERTIES WILL_FAIL TRUE)
 
 get_directory_property(ALL_TESTS TESTS)
 set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)

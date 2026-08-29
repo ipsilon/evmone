@@ -18,6 +18,12 @@
 
 namespace evmone::test
 {
+/// A test cannot be run at all. Skipped rather than failed.
+struct UnsupportedTestFeature : std::runtime_error
+{
+    using runtime_error::runtime_error;
+};
+
 namespace detail
 {
 /// Writes @p value the way a report shows it: byte sequences as hex, error codes as their
@@ -67,16 +73,12 @@ struct Failure
     std::string detail;
 };
 
-/// Where a runner records what did not hold.
-///
-/// A runner takes it by reference; each failure reaches the driver's sink as it happens and is
-/// not kept, so a run that dies part-way has still reported what it found. Nothing is global:
-/// two runs can happen at once, each with its own report.
+/// Records what did not hold in one test case. Each failure goes to the sink as it happens.
+/// Holds no global state, so reports are independent of each other.
 class TestReport
 {
 public:
-    /// Called with each failure as it is recorded, and the only place a failure goes. Type-erased
-    /// so that testutils, which is built without gtest, need not know what the driver reports to.
+    /// Called with each failure as it is recorded, and the only place a failure goes.
     using Sink = std::function<void(const Failure&)>;
 
     explicit TestReport(Sink sink) : m_sink{std::move(sink)}

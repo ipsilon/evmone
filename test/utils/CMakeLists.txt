@@ -40,6 +40,8 @@ target_sources(
     statetest_runner.cpp
     t8n.hpp
     t8n.cpp
+    test_driver.hpp
+    test_driver.cpp
     test_files.hpp
     test_files.cpp
     test_report.hpp

@@ -5,123 +5,77 @@
 #include <CLI/CLI.hpp>
 #include <evmone/evmone.h>
 #include <evmone/version.h>
-#include <gtest/gtest.h>
 #include <test/utils/statetest.hpp>
+#include <test/utils/test_driver.hpp>
 #include <test/utils/test_files.hpp>
-#include <test/utils/test_report.hpp>
 #include <iostream>
 
 namespace fs = std::filesystem;
+using evmone::test::TestCase;
 
 namespace
 {
-/// Reports each failure to gtest the moment the runner records it, so a run that dies part-way
-/// still shows what it found.
-///
-/// TODO: Bridge for as long as gtest drives these tests. Once the test driver replaces it the
-///   report is the verdict directly and this goes away.
-evmone::test::TestReport make_report()
+/// Adds to @p cases every test under @p root: one per file for a directory, one per test case in
+/// the file when the file itself is named. Returns whether every test was collected.
+bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
+    const std::optional<std::string>& filter, std::span<const fs::path> ignored, evmc::VM& vm,
+    bool trace)
 {
-    return evmone::test::TestReport{
-        [](const evmone::test::Failure& failure) { ADD_FAILURE() << failure; }};
-}
+    // Which cases -k keeps. Over a directory it selects within the file's test, because
+    // naming the cases up front would mean loading the whole tree.
+    const auto selected = [&filter](const evmone::test::StateTransitionTest& test) {
+        return !filter.has_value() || test.name.find(*filter) != std::string::npos;
+    };
 
-/// Implementation of a gtest Test which runs all state tests from a given file.
-class StateTestFile : public testing::Test
-{
-    fs::path m_json_test_file;
-    std::optional<std::string> m_filter;
-    evmc::VM& m_vm;
-    bool m_trace = false;
-
-public:
-    explicit StateTestFile(fs::path json_test_file, const std::optional<std::string>& filter,
-        evmc::VM& vm, bool trace) noexcept
-      : m_json_test_file{std::move(json_test_file)}, m_filter{filter}, m_vm{vm}, m_trace{trace}
-    {}
-
-    void TestBody() final
-    {
-        auto report = make_report();
-        std::ifstream f{m_json_test_file};
-        const auto tests = evmone::test::load_state_tests(f);
-        for (const auto& test : tests)
-        {
-            if (m_filter.has_value() && test.name.find(*m_filter) == std::string::npos)
-                continue;
-            evmone::test::run_state_test(test, m_vm, m_trace, report);
-        }
-    }
-
-    static void register_one(const std::string& suite_name, const fs::path& file,
-        const std::optional<std::string>& filter, evmc::VM& vm, bool trace)
-    {
-        testing::RegisterTest(suite_name.c_str(), file.stem().string().c_str(), nullptr, nullptr,
-            file.string().c_str(), 0, [file, filter, &vm, trace]() -> testing::Test* {
-                return new StateTestFile(file, filter, vm, trace);
-            });
-    }
-};
-
-/// Implementation of a gtest Test which runs a single state test.
-class StateTest : public testing::Test
-{
-    evmone::test::StateTransitionTest m_state_transition_test;
-    evmc::VM& m_vm;
-    bool m_trace = false;
-
-public:
-    explicit StateTest(
-        evmone::test::StateTransitionTest state_transition_test, evmc::VM& vm, bool trace) noexcept
-      : m_state_transition_test{std::move(state_transition_test)}, m_vm{vm}, m_trace{trace}
-    {}
-
-    void TestBody() final
-    {
-        auto report = make_report();
-        evmone::test::run_state_test(m_state_transition_test, m_vm, m_trace, report);
-    }
-
-    static void register_one(const evmone::test::StateTransitionTest& test,
-        const std::string& suite_name, const std::string& test_name, const fs::path& file,
-        evmc::VM& vm, bool trace)
-    {
-        testing::RegisterTest(suite_name.c_str(), test_name.c_str(), nullptr, nullptr,
-            file.string().c_str(), 0,
-            [test, &vm, trace]() -> testing::Test* { return new StateTest(test, vm, trace); });
-    }
-};
-
-/// Registers every test under @p root, or prints its path if @p collect_only.
-void register_test_files(const fs::path& root, const std::optional<std::string>& filter,
-    std::span<const fs::path> ignored, bool collect_only, evmc::VM& vm, bool trace)
-{
     if (is_directory(root))
     {
         auto files = evmone::test::collect_test_files(root);
         evmone::test::ignore_test_files(files, ignored);
-        for (const auto& [path, suite_name] : files)
+        cases.reserve(cases.size() + files.size());
+        for (const auto& file : files)
         {
-            if (collect_only)
-                std::cout << path.string() << '\n';
-            else
-                StateTestFile::register_one(suite_name, path, filter, vm, trace);
+            // Loaded when the test runs: loading a whole tree up front costs far more.
+            cases.push_back({file.path.string(),
+                [path = file.path, selected, &vm, trace](evmone::test::TestReport& report) {
+                    std::ifstream f{path};
+                    for (const auto& test : evmone::test::load_state_tests(f))
+                    {
+                        if (selected(test))
+                            evmone::test::run_state_test(test, vm, trace, report);
+                    }
+                }});
         }
     }
     else  // Treat as a file.
     {
-        std::ifstream f{root};
-        const auto tests = evmone::test::load_state_tests(f);
+        // Naming a file loads it now, to name the test cases in it. One which cannot be
+        // loaded becomes a single test reporting why.
+        std::vector<evmone::test::StateTransitionTest> tests;
+        try
+        {
+            std::ifstream f{root};
+            tests = evmone::test::load_state_tests(f);
+        }
+        catch (const std::exception& ex)
+        {
+            // Also reported here: --collect-only never runs the test.
+            std::cerr << root.string() << ": " << ex.what() << '\n';
+            cases.push_back({root.string(),
+                [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
+            return false;
+        }
+
         for (const auto& test : tests)
         {
-            if (filter.has_value() && test.name.find(*filter) == std::string::npos)
+            if (!selected(test))
                 continue;
-            if (collect_only)
-                std::cout << root.string() << "::" << test.name << '\n';
-            else
-                StateTest::register_one(test, root.string(), test.name, root, vm, trace);
+            cases.push_back({root.string() + "::" + test.name,
+                [test, &vm, trace](evmone::test::TestReport& report) {
+                    evmone::test::run_state_test(test, vm, trace, report);
+                }});
         }
     }
+    return true;
 }
 }  // namespace
 
@@ -130,8 +84,6 @@ int main(int argc, char* argv[])
 {
     try
     {
-        testing::InitGoogleTest(&argc, argv);  // Process GoogleTest flags.
-
         CLI::App app{"evmone state test runner"};
 
         app.set_version_flag("--version", "evmone-statetest " EVMONE_VERSION);
@@ -176,10 +128,16 @@ int main(int argc, char* argv[])
             vm.set_option("trace", "1");
         }
 
+        std::vector<TestCase> cases;
+        bool all_collected = true;
         for (const auto& p : paths)
-            register_test_files(p, filter, ignored, collect_only, vm, trace || trace_summary);
+            all_collected &= collect_tests(cases, p, filter, ignored, vm, trace || trace_summary);
 
-        return collect_only ? 0 : RUN_ALL_TESTS();
+        const evmone::test::RunOptions options{
+            .collect_only = collect_only, .progress = !(trace || trace_summary)};
+        const auto exit_code = evmone::test::run_tests(cases, std::cout, options);
+        // A file which could not be loaded fails the listing too, not only a run of it.
+        return all_collected ? exit_code : evmone::test::TESTS_FAILED;
     }
     catch (const std::exception& ex)
     {

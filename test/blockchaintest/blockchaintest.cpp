@@ -5,124 +5,73 @@
 #include <CLI/CLI.hpp>
 #include <evmone/evmone.h>
 #include <evmone/version.h>
-#include <gtest/gtest.h>
 #include <test/utils/blockchaintest.hpp>
+#include <test/utils/test_driver.hpp>
 #include <test/utils/test_files.hpp>
-#include <test/utils/test_report.hpp>
 #include <iostream>
 
 namespace fs = std::filesystem;
+using evmone::test::TestCase;
 
 namespace
 {
-/// Reports each failure to gtest the moment the runner records it, so a run that dies part-way
-/// still shows what it found.
-///
-/// TODO: Bridge for as long as gtest drives these tests. Once the test driver replaces it the
-///   report is the verdict directly and this goes away.
-evmone::test::TestReport make_report()
-{
-    return evmone::test::TestReport{
-        [](const evmone::test::Failure& failure) { ADD_FAILURE() << failure; }};
-}
-
-/// Implementation of a gtest Test which runs all blockchain tests from a given file.
-class BlockchainGTestFile : public testing::Test
-{
-    fs::path m_json_test_file;
-    evmc::VM& m_vm;
-
-public:
-    explicit BlockchainGTestFile(fs::path json_test_file, evmc::VM& vm) noexcept
-      : m_json_test_file{std::move(json_test_file)}, m_vm{vm}
-    {}
-
-    void TestBody() final
-    {
-        auto report = make_report();
-        std::ifstream f{m_json_test_file};
-
-        try
-        {
-            evmone::test::run_blockchain_tests(
-                evmone::test::load_blockchain_tests(f), m_vm, report);
-        }
-        catch (const evmone::test::UnsupportedTestFeature& ex)
-        {
-            GTEST_SKIP() << ex.what();
-        }
-    }
-
-    static void register_one(const std::string& suite_name, const fs::path& file, evmc::VM& vm)
-    {
-        testing::RegisterTest(suite_name.c_str(), file.stem().string().c_str(), nullptr, nullptr,
-            file.string().c_str(), 0,
-            [file, &vm]() -> testing::Test* { return new BlockchainGTestFile(file, vm); });
-    }
-};
-
-/// Implementation of a gtest Test which runs a single blockchain test.
-class BlockchainGTest : public testing::Test
-{
-    const evmone::test::BlockchainTest m_blockchain_test;
-    evmc::VM& m_vm;
-
-public:
-    explicit BlockchainGTest(evmone::test::BlockchainTest blockchain_test, evmc::VM& vm) noexcept
-      : m_blockchain_test{std::move(blockchain_test)}, m_vm{vm}
-    {}
-
-    void TestBody() final
-    {
-        auto report = make_report();
-        evmone::test::run_blockchain_tests(std::array{m_blockchain_test}, m_vm, report);
-    }
-
-    static void register_one(const evmone::test::BlockchainTest& test,
-        const std::string& suite_name, const std::string& test_name, const fs::path& file,
-        evmc::VM& vm)
-    {
-        testing::RegisterTest(suite_name.c_str(), test_name.c_str(), nullptr, nullptr,
-            file.string().c_str(), 0,
-            [test, &vm]() -> testing::Test* { return new BlockchainGTest(test, vm); });
-    }
-};
-
-/// Registers every test under @p root, or prints its path if @p collect_only.
-void register_test_files(
-    const fs::path& root, std::span<const fs::path> ignored, bool collect_only, evmc::VM& vm)
+/// Adds to @p cases every test under @p root: one per file for a directory, one per test case in
+/// the file when the file itself is named. Returns whether every test was collected.
+bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
+    std::span<const fs::path> ignored, evmc::VM& vm)
 {
     if (is_directory(root))
     {
         auto files = evmone::test::collect_test_files(root);
         evmone::test::ignore_test_files(files, ignored);
-        for (const auto& [path, suite_name] : files)
+        cases.reserve(cases.size() + files.size());
+        for (const auto& file : files)
         {
-            if (collect_only)
-                std::cout << path.string() << '\n';
-            else
-                BlockchainGTestFile::register_one(suite_name, path, vm);
+            // Loaded when the test runs: loading a whole tree up front costs far more. A
+            // load which throws over an unsupported fixture reaches the driver, which skips.
+            cases.push_back(
+                {file.path.string(), [path = file.path, &vm](evmone::test::TestReport& report) {
+                     std::ifstream f{path};
+                     evmone::test::run_blockchain_tests(
+                         evmone::test::load_blockchain_tests(f), vm, report);
+                 }});
         }
     }
     else  // Treat as a file.
     {
-        std::ifstream f{root};
+        // Naming a file loads it now, to name the test cases in it. One which cannot be
+        // loaded becomes a single test the driver skips or fails.
+        std::vector<evmone::test::BlockchainTest> tests;
         try
         {
-            const auto tests = evmone::test::load_blockchain_tests(f);
-            for (const auto& test : tests)
-            {
-                if (collect_only)
-                    std::cout << root.string() << "::" << test.name << '\n';
-                else
-                    BlockchainGTest::register_one(test, root.string(), test.name, root, vm);
-            }
+            std::ifstream f{root};
+            tests = evmone::test::load_blockchain_tests(f);
         }
-        catch (const evmone::test::UnsupportedTestFeature& ex)
+        catch (const evmone::test::UnsupportedTestFeature&)
         {
-            std::cerr << ex.what() << ": " << root.string() << '\n';
+            // An unsupported fixture is a skip, not a broken collection.
+            cases.push_back({root.string(),
+                [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
+            return true;
+        }
+        catch (const std::exception& ex)
+        {
+            // Also reported here: --collect-only never runs the test.
+            std::cerr << root.string() << ": " << ex.what() << '\n';
+            cases.push_back({root.string(),
+                [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
+            return false;
+        }
+
+        for (const auto& test : tests)
+        {
+            cases.push_back(
+                {root.string() + "::" + test.name, [test, &vm](evmone::test::TestReport& report) {
+                     evmone::test::run_blockchain_tests({&test, 1}, vm, report);
+                 }});
         }
     }
+    return true;
 }
 }  // namespace
 
@@ -131,8 +80,6 @@ int main(int argc, char* argv[])
 {
     try
     {
-        testing::InitGoogleTest(&argc, argv);  // Process GoogleTest flags.
-
         CLI::App app{"evmone blockchain test runner"};
 
         app.set_version_flag("--version", "evmone-blockchaintest " EVMONE_VERSION);
@@ -167,10 +114,16 @@ int main(int argc, char* argv[])
         if (trace_flag)
             vm.set_option("trace", "1");
 
+        std::vector<TestCase> cases;
+        bool all_collected = true;
         for (const auto& p : paths)
-            register_test_files(p, ignored, collect_only, vm);
+            all_collected &= collect_tests(cases, p, ignored, vm);
 
-        return collect_only ? 0 : RUN_ALL_TESTS();
+        const evmone::test::RunOptions options{
+            .collect_only = collect_only, .progress = !trace_flag};
+        const auto exit_code = evmone::test::run_tests(cases, std::cout, options);
+        // A file which could not be loaded fails the listing too, not only a run of it.
+        return all_collected ? exit_code : evmone::test::TESTS_FAILED;
     }
     catch (const std::exception& ex)
     {
