@@ -23,10 +23,9 @@ constexpr auto GENESIS_HASH = 0x9e11_bytes32;
 constexpr int64_t GAS_LIMIT = 0x100000;
 
 /// A fixture with one block that validate_block() accepts, for a test to then break in one way.
-/// BlockHeader has no default member initializers, hence the value-initialization.
 BlockchainTest one_block_fixture()
 {
-    BlockchainTest t{};
+    BlockchainTest t;
     t.name = "unit";
     t.network = "Prague";
 
@@ -37,7 +36,7 @@ BlockchainTest one_block_fixture()
     g.withdrawal_root = state::EMPTY_MPT_HASH;
     g.hash = GENESIS_HASH;
 
-    TestBlock b{};
+    TestBlock b;
     b.block_info.number = g.block_number + 1;
     b.block_info.parent_hash = g.hash;
     b.block_info.gas_limit = g.gas_limit;
