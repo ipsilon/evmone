@@ -128,17 +128,6 @@ void register_test_files(const fs::path& root, const std::optional<std::string>&
 
 int main(int argc, char* argv[])
 {
-    // The default test filter. To enable all tests use `--gtest_filter=*`.
-    testing::FLAGS_gtest_filter =
-        "-"
-        // Slow tests:
-        "stCreateTest.CreateOOGafterMaxCodesize:"      // pass
-        "stQuadraticComplexityTest.Call50000_sha256:"  // pass
-        "stTimeConsuming.static_Call50000_sha256:"     // pass
-        "stTimeConsuming.CALLBlake2f_MaxRounds:"       // pass
-        "VMTests/vmPerformance.*:"                     // pass
-        ;
-
     try
     {
         testing::InitGoogleTest(&argc, argv);  // Process GoogleTest flags.
