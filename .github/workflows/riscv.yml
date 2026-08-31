@@ -26,6 +26,8 @@ jobs:
     # They are 64-bit only, so the riscv32 build stays cross-compiled and emulated on CircleCI.
     runs-on: ubuntu-24.04-riscv
     timeout-minutes: 120
+    permissions:
+      contents: read  # required for actions/checkout
 
     steps:
       - uses: actions/checkout@v5
@@ -33,8 +35,8 @@ jobs:
           submodules: recursive
 
       - name: Environment
-        # Nothing sets a parallel level: ninja and ctest take the CPU count themselves, so report
-        # what they see. A container is where that count stops being the machine's.
+        # Nothing pins a parallel level: ninja takes the CPU count itself and ctest is handed it,
+        # so report what they see. A container is where that count stops being the machine's.
         run: |
           uname -srm
           echo "nproc: $(nproc)"
@@ -51,7 +53,7 @@ jobs:
       - name: Configure
         run: >
           cmake -S . -B $BUILD_DIR -G Ninja
-          -DCMAKE_INSTALL_PREFIX=install
+          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_COMPILE_WARNING_AS_ERROR=TRUE
           -DEVMONE_TESTING=ON
@@ -65,7 +67,9 @@ jobs:
       - name: Test
         # ctest takes the job count without an argument only from CMake 3.29; the runner's
         # 3.28 accepts the bare flag and silently runs the tests one at a time.
-        run: ctest --test-dir $BUILD_DIR --schedule-random --output-on-failure --parallel $(nproc)
+        run: >
+          ctest --test-dir $BUILD_DIR --schedule-random --output-on-failure
+          --no-tests=error --parallel $(nproc)
 
       - name: Package
         run: cmake --build $BUILD_DIR --target package
@@ -74,3 +78,4 @@ jobs:
         with:
           name: riscv64
           path: ${{ env.BUILD_DIR }}/evmone-*.*
+          if-no-files-found: error
