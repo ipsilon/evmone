@@ -156,6 +156,9 @@ json::json to_state_test(std::string_view test_name, const state::BlockInfo& blo
 
 std::vector<StateTransitionTest> load_state_tests(std::istream& input);
 
+/// Builds the test named @p name in a fixture file from its JSON value @p j.
+StateTransitionTest make_state_test(const std::string& name, const json::json& j);
+
 /// Validates the invariants of the Ethereum state (e.g. no zero-value storage entries).
 /// Throws std::invalid_argument exception.
 void validate_state(const TestState& state, evmc_revision rev);

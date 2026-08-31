@@ -4,6 +4,7 @@
 #pragma once
 
 #include <evmc/evmc.hpp>
+#include <nlohmann/json.hpp>
 #include <test/state/block.hpp>
 #include <test/state/bloom_filter.hpp>
 #include <test/state/transaction.hpp>
@@ -12,6 +13,8 @@
 #include <test/utils/test_state.hpp>
 #include <test/utils/utils.hpp>
 #include <vector>
+
+namespace json = nlohmann;
 
 namespace evmone::test
 {
@@ -73,6 +76,9 @@ struct BlockchainTest
 };
 
 std::vector<BlockchainTest> load_blockchain_tests(std::istream& input);
+
+/// Builds the test named @p name in a fixture file from its JSON value @p j.
+BlockchainTest make_blockchain_test(const std::string& name, const json::json& j);
 
 /// Execute the blockchain @p tests using the @p vm, recording what does not match into @p report.
 void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm, TestReport& report);

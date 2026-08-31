@@ -118,9 +118,7 @@ static TestBlock load_test_block(
     return tb;
 }
 
-namespace
-{
-BlockchainTest load_blockchain_test_case(const std::string& name, const json::json& j)
+BlockchainTest make_blockchain_test(const std::string& name, const json::json& j)
 {
     using namespace state;
 
@@ -175,12 +173,11 @@ BlockchainTest load_blockchain_test_case(const std::string& name, const json::js
 
     return bt;
 }
-}  // namespace
 
 static void from_json(const json::json& j, std::vector<BlockchainTest>& o)
 {
     for (const auto& elem_it : j.items())
-        o.emplace_back(load_blockchain_test_case(elem_it.key(), elem_it.value()));
+        o.emplace_back(make_blockchain_test(elem_it.key(), elem_it.value()));
 }
 
 std::vector<BlockchainTest> load_blockchain_tests(std::istream& input)
