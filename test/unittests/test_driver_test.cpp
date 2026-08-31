@@ -26,10 +26,9 @@ Run run(std::span<const TestCase> cases, const RunOptions& options = {})
 
 TEST(test_driver, nothing_collected)
 {
-    // pytest's exit code for a run which selected nothing, which is rarely what was meant.
     const auto [exit_code, output] = run({});
-    EXPECT_EQ(NO_TESTS_COLLECTED, 5);  // The value pytest uses, not just whatever we declared.
-    EXPECT_EQ(exit_code, NO_TESTS_COLLECTED);
+    EXPECT_EQ(NOTHING_VERIFIED, 5);  // pytest's value, not just whatever we declared.
+    EXPECT_EQ(exit_code, NOTHING_VERIFIED);
     EXPECT_NE(output.find("collected 0 tests"), std::string::npos);
 }
 
@@ -47,7 +46,7 @@ TEST(test_driver, collect_only_lists_without_running)
 TEST(test_driver, collect_only_nothing_collected)
 {
     const auto [exit_code, output] = run({}, {.collect_only = true});
-    EXPECT_EQ(exit_code, NO_TESTS_COLLECTED);
+    EXPECT_EQ(exit_code, NOTHING_VERIFIED);
     EXPECT_EQ(output, "");
 }
 
@@ -80,6 +79,16 @@ TEST(test_driver, unsupported_feature_skips)
     EXPECT_EQ(exit_code, 0);  // A skip does not fail the run.
     EXPECT_NE(output.find("1 passed, 1 skipped"), std::string::npos);
     EXPECT_NE(output.find("SKIPPED skipped - no support for it"), std::string::npos);
+}
+
+TEST(test_driver, everything_skipped_verifies_nothing)
+{
+    const std::vector<TestCase> cases{
+        {"skipped", [](TestReport&) { throw UnsupportedTestFeature{"no support for it"}; }}};
+
+    const auto [exit_code, output] = run(cases);
+    EXPECT_EQ(exit_code, NOTHING_VERIFIED);
+    EXPECT_NE(output.find("0 passed, 1 skipped"), std::string::npos);
 }
 
 TEST(test_driver, summary_names_the_check_which_failed)

@@ -73,7 +73,7 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     {
         for (const auto& test : cases)
             out << test.name << '\n';
-        return cases.empty() ? NO_TESTS_COLLECTED : SUCCESS;
+        return cases.empty() ? NOTHING_VERIFIED : SUCCESS;
     }
 
     const auto started = std::chrono::steady_clock::now();
@@ -196,6 +196,8 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
 
     if (failed != 0)
         return TESTS_FAILED;
-    return cases.empty() ? NO_TESTS_COLLECTED : SUCCESS;
+    // No test passed: nothing was collected, or every test was skipped. A test which holds no
+    // case of its own still counts as passed, which this does not change.
+    return passed == 0 ? NOTHING_VERIFIED : SUCCESS;
 }
 }  // namespace evmone::test

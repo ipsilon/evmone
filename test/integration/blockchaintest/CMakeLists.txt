@@ -33,16 +33,24 @@ add_test(
     COMMAND evmone-blockchaintest ${TESTS1}/unrecovered_sender_deposit_log.json
 )
 
-# A block with expectException but no rlp_decoded is a shape the loader does not support. As a
-# single file it is reported and nothing is registered.
+# A block with expectException but no rlp_decoded is a shape the loader does not support, so the
+# only test in this file is skipped and the run verifies nothing.
 add_test(
     NAME ${PREFIX}/unsupported_rlp
     COMMAND evmone-blockchaintest ${TESTS1}/unsupported_rlp.json
 )
 set_tests_properties(
     ${PREFIX}/unsupported_rlp PROPERTIES
-    PASS_REGULAR_EXPRESSION "tests with invalidly rlp-encoded blocks are not supported"
+    PASS_REGULAR_EXPRESSION
+    "tests with invalidly rlp-encoded blocks are not supported.*0 passed, 1 skipped"
 )
+
+# A PASS_REGULAR_EXPRESSION makes CTest ignore the exit code, so run it again for that alone.
+add_test(
+    NAME ${PREFIX}/unsupported_rlp_exit_code
+    COMMAND evmone-blockchaintest ${TESTS1}/unsupported_rlp.json
+)
+set_tests_properties(${PREFIX}/unsupported_rlp_exit_code PROPERTIES WILL_FAIL TRUE)
 
 # The directory form registers one test per file, which none of the tests above reach, and skips
 # the unsupported one rather than failing on it.

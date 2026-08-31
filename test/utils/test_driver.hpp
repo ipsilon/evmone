@@ -7,10 +7,15 @@
 
 namespace evmone::test
 {
-/// The process exit codes, following pytest.
+/// Nothing failed and something passed.
 constexpr int SUCCESS = 0;
+
+/// At least one test failed.
 constexpr int TESTS_FAILED = 1;
-constexpr int NO_TESTS_COLLECTED = 5;
+
+/// No test passed, whether none was collected or every one was skipped. pytest returns this
+/// value for the first of those; a test skipped has verified no more than a missing one.
+constexpr int NOTHING_VERIFIED = 5;
 
 /// A single test: its name and how to run it.
 struct TestCase
