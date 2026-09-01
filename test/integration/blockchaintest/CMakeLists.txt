@@ -73,6 +73,8 @@ set_tests_properties(
     ${PREFIX}/stops_at_one_test PROPERTIES
     PASS_REGULAR_EXPRESSION
     "a_stops_early:.*block validity.*b_still_runs:.*post state root"
+    # Every failure repeats the test name, so a second one means it did not stop.
+    FAIL_REGULAR_EXPRESSION "a_stops_early:.*a_stops_early:"
 )
 
 # --collect-only lists what would run instead of running it, and --ignore drops a path from that
