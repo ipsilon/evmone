@@ -173,6 +173,7 @@ int main(int argc, const char* const* argv) noexcept
         VM vm{evmc_create_evmone()};
 
         CLI::App app{"evmone EVM tool"};
+        app.require_subcommand(0, 1);  // Forbid multiple subcommands: run would hijack the rest.
         app.set_version_flag(
             "--version", [&vm] { return std::string{vm.name()} + " " + vm.version(); });
         app.add_flag("--trace", trace, "Enable execution trace");
