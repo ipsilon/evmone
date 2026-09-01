@@ -56,7 +56,7 @@ std::vector<Failure> run(const BlockchainTest& t)
     std::vector<Failure> failures;
     TestReport report{[&](const Failure& failure) { failures.push_back(failure); }};
     evmc::VM vm{evmc_create_evmone()};
-    run_blockchain_tests({&t, 1}, vm, report);
+    run_blockchain_test(t, vm, report);
     return failures;
 }
 }  // namespace

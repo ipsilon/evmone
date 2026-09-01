@@ -63,6 +63,18 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "SKIPPED [^\n]*unsupported_rlp\\.json - tests with invalidly"
 )
 
+# A test which gives up gives up only itself. Collected from a directory the whole file is one
+# test, so the test after the one which stopped has to report too.
+add_test(
+    NAME ${PREFIX}/stops_at_one_test
+    COMMAND evmone-blockchaintest ${TESTS1}
+)
+set_tests_properties(
+    ${PREFIX}/stops_at_one_test PROPERTIES
+    PASS_REGULAR_EXPRESSION
+    "a_stops_early:.*block validity.*b_still_runs:.*post state root"
+)
+
 # --collect-only lists what would run instead of running it, and --ignore drops a path from that
 # list. Over a directory a test is listed as its file.
 add_test(

@@ -32,8 +32,8 @@ bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
             cases.push_back(
                 {file.path.string(), [path = file.path, &vm](evmone::test::TestReport& report) {
                      std::ifstream f{path};
-                     evmone::test::run_blockchain_tests(
-                         evmone::test::load_blockchain_tests(f), vm, report);
+                     for (const auto& test : evmone::test::load_blockchain_tests(f))
+                         evmone::test::run_blockchain_test(test, vm, report);
                  }});
         }
     }
@@ -67,7 +67,7 @@ bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
         {
             cases.push_back(
                 {root.string() + "::" + test.name, [test, &vm](evmone::test::TestReport& report) {
-                     evmone::test::run_blockchain_tests({&test, 1}, vm, report);
+                     evmone::test::run_blockchain_test(test, vm, report);
                  }});
         }
     }

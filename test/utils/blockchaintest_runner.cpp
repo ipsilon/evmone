@@ -212,300 +212,291 @@ std::string print_state(const TestState& s)
 }
 }  // namespace
 
-void run_blockchain_tests(std::span<const BlockchainTest> tests, evmc::VM& vm, TestReport& report)
+void run_blockchain_test(const BlockchainTest& test, evmc::VM& vm, TestReport& report)
 {
-    for (size_t case_index = 0; case_index != tests.size(); ++case_index)
+    const auto rev_schedule = to_rev_schedule(test.network);
+    report.start_case(test.name);
+    // The network names the whole schedule, so a fork transition shows at the test level and a
+    // block needs only its index. The block number would not do: an invalid block does not
+    // advance it, so two of them can share one.
+    const auto in_test = report.at(test.network);
+
+    // Validate the genesis block header.
+    report.check_eq("genesis block number", test.genesis_block_header.block_number, 0);
+    report.check_eq("genesis gas used", test.genesis_block_header.gas_used, 0);
+    report.check_eq("genesis transactions root", test.genesis_block_header.transactions_root,
+        state::EMPTY_MPT_HASH);
+    report.check_eq(
+        "genesis receipts root", test.genesis_block_header.receipts_root, state::EMPTY_MPT_HASH);
+    report.check_eq("genesis withdrawals root", test.genesis_block_header.withdrawal_root,
+        rev_schedule.get_revision(test.genesis_block_header.timestamp) >= EVMC_SHANGHAI ?
+            state::EMPTY_MPT_HASH :
+            bytes32{});
+    report.check_eq("genesis logs bloom", bytes_view{test.genesis_block_header.logs_bloom},
+        bytes_view{state::BloomFilter{}});
+
+    TestBlockHashes block_hashes{
+        {test.genesis_block_header.block_number, test.genesis_block_header.hash}};
+
+    struct BlockData
     {
-        const auto& c = tests[case_index];
-        const auto rev_schedule = to_rev_schedule(c.network);
-        report.start_case(c.name);
-        // The network names the whole schedule, so a fork transition shows at the case level and
-        // a block needs only its index. The block number would not do: an invalid block does not
-        // advance it, so two of them can share one.
-        const auto in_case = report.at(c.network, '/', case_index);
+        const BlockHeader* header;
+        bool has_ommers = false;
+        TestState post_state;
+        intx::uint256 total_difficulty;
+    };
+    std::unordered_map<hash256, BlockData> block_data{
+        {{test.genesis_block_header.hash, {&test.genesis_block_header, false, test.pre_state,
+                                              test.genesis_block_header.difficulty}}}};
+    const auto* canonical_state = &test.pre_state;
+    hash256 canonical_state_root;  // Skip pre-state root hash computation (maybe not needed).
+    auto canonical_tip_hash = test.genesis_block_header.hash;
+    intx::uint256 max_total_difficulty = test.genesis_block_header.difficulty;
 
-        // Validate the genesis block header.
-        report.check_eq("genesis block number", c.genesis_block_header.block_number, 0);
-        report.check_eq("genesis gas used", c.genesis_block_header.gas_used, 0);
-        report.check_eq("genesis transactions root", c.genesis_block_header.transactions_root,
-            state::EMPTY_MPT_HASH);
-        report.check_eq(
-            "genesis receipts root", c.genesis_block_header.receipts_root, state::EMPTY_MPT_HASH);
-        report.check_eq("genesis withdrawals root", c.genesis_block_header.withdrawal_root,
-            rev_schedule.get_revision(c.genesis_block_header.timestamp) >= EVMC_SHANGHAI ?
-                state::EMPTY_MPT_HASH :
-                bytes32{});
-        report.check_eq("genesis logs bloom", bytes_view{c.genesis_block_header.logs_bloom},
-            bytes_view{state::BloomFilter{}});
+    for (size_t i = 0; i < test.test_blocks.size(); ++i)
+    {
+        const auto& test_block = test.test_blocks[i];
+        const auto& bi = test_block.block_info;
 
-        TestBlockHashes block_hashes{
-            {c.genesis_block_header.block_number, c.genesis_block_header.hash}};
+        const auto parent_data_it = block_data.find(test_block.block_info.parent_hash);
+        const auto* parent_header =
+            parent_data_it != block_data.end() ? parent_data_it->second.header : nullptr;
+        const auto parent_has_ommers =
+            parent_data_it != block_data.end() && parent_data_it->second.has_ommers;
 
-        struct BlockData
+        const auto rev = rev_schedule.get_revision(bi.timestamp);
+        const auto blob_params = get_blob_params(test.network, test.blob_schedule, bi.timestamp);
+        const auto blob_gas_limit =
+            static_cast<int64_t>(state::max_blob_gas_per_block(blob_params));
+
+        const auto in_block = report.at(i);
+
+        // Invalid blocks are skipped: they may carry transactions that do not even decode.
+        if (test_block.expected_exception.empty())
+            check_transactions_round_trip(test_block.rlp, report);
+
+        const auto block_error =
+            validate_block(rev, blob_params, test_block, parent_header, parent_has_ommers);
+
+        if (test_block.expected_exception.empty())
         {
-            const BlockHeader* header;
-            bool has_ommers = false;
-            TestState post_state;
-            intx::uint256 total_difficulty;
-        };
-        std::unordered_map<hash256, BlockData> block_data{{{c.genesis_block_header.hash,
-            {&c.genesis_block_header, false, c.pre_state, c.genesis_block_header.difficulty}}}};
-        const auto* canonical_state = &c.pre_state;
-        hash256 canonical_state_root;  // Skip pre-state root hash computation (maybe not needed).
-        auto canonical_tip_hash = c.genesis_block_header.hash;
-        intx::uint256 max_total_difficulty = c.genesis_block_header.difficulty;
-
-        for (size_t i = 0; i < c.test_blocks.size(); ++i)
-        {
-            const auto& test_block = c.test_blocks[i];
-            const auto& bi = test_block.block_info;
-
-            const auto parent_data_it = block_data.find(test_block.block_info.parent_hash);
-            const auto* parent_header =
-                parent_data_it != block_data.end() ? parent_data_it->second.header : nullptr;
-            const auto parent_has_ommers =
-                parent_data_it != block_data.end() && parent_data_it->second.has_ommers;
-
-            const auto rev = rev_schedule.get_revision(bi.timestamp);
-            const auto blob_params = get_blob_params(c.network, c.blob_schedule, bi.timestamp);
-            const auto blob_gas_limit =
-                static_cast<int64_t>(state::max_blob_gas_per_block(blob_params));
-
-            const auto in_block = report.at(i);
-
-            // Invalid blocks are skipped: they may carry transactions that do not even decode.
-            if (test_block.expected_exception.empty())
-                check_transactions_round_trip(test_block.rlp, report);
-
-            const auto block_error =
-                validate_block(rev, blob_params, test_block, parent_header, parent_has_ommers);
-
-            if (test_block.expected_exception.empty())
+            if (block_error)
             {
-                if (block_error)
-                {
-                    report.fail("block validity",
-                        "expected the block to be valid: " + block_error.message());
-                    // TODO: This and the requests failure below abandon the whole file, not
-                    //   just this case. Give each case its own run so only that case stops.
-                    return;
-                }
-
-                // Block being valid guarantees its parent was found.
-                assert(parent_data_it != block_data.end());
-                const auto& pre_state = parent_data_it->second.post_state;
-
-                auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions,
-                    rev, blob_gas_limit, {.block_reward = mining_reward(rev)});
-
-                if (res.requests_error)
-                {
-                    report.fail("requests", res.requests_error.message());
-                    return;
-                }
-
-                block_hashes[test_block.expected_block_header.block_number] =
-                    test_block.expected_block_header.hash;
-                const auto [inserted_it, _] = block_data.insert({test_block.block_info.hash,
-                    {
-                        .header = &test_block.expected_block_header,
-                        .has_ommers = !test_block.block_info.ommers.empty(),
-                        .post_state = std::move(res.block_state),
-                        .total_difficulty = parent_data_it->second.total_difficulty +
-                                            test_block.block_info.difficulty,
-                    }});
-
-                const auto state_root = state::mpt_hash(inserted_it->second.post_state);
-
-                if (inserted_it->second.total_difficulty >= max_total_difficulty)
-                {
-                    canonical_state = &inserted_it->second.post_state;
-                    canonical_state_root = state_root;
-                    canonical_tip_hash = test_block.expected_block_header.hash;
-                    max_total_difficulty = inserted_it->second.total_difficulty;
-                }
-
-                if (!res.rejected.empty())
-                {
-                    report.fail("transactions in a valid block",
-                        "invalid transaction: " + res.rejected.front().error.message());
-                }
-
-                report.check_eq("blob gas used", blob_gas_limit - res.blob_gas_left,
-                    static_cast<int64_t>(bi.blob_gas_used.value_or(0)));
-                report.check_eq(
-                    "state root", state_root, test_block.expected_block_header.state_root);
-
-                if (rev >= EVMC_SHANGHAI)
-                {
-                    report.check_eq("withdrawals root",
-                        state::mpt_hash(test_block.block_info.withdrawals),
-                        test_block.expected_block_header.withdrawal_root);
-                }
-
-                report.check_eq("transactions root", state::mpt_hash(test_block.transactions),
-                    test_block.expected_block_header.transactions_root);
-                report.check_eq("receipts root", state::mpt_hash(res.receipts),
-                    test_block.expected_block_header.receipts_root);
-                if (rev >= EVMC_PRAGUE)
-                {
-                    report.check_eq("requests hash", calculate_requests_hash(res.requests),
-                        test_block.expected_block_header.requests_hash);
-                }
-                report.check_eq(
-                    "gas used", res.gas_used, test_block.expected_block_header.gas_used);
-                report.check_eq("logs bloom", bytes_view{res.bloom},
-                    bytes_view{test_block.expected_block_header.logs_bloom});
+                report.fail(
+                    "block validity", "expected the block to be valid: " + block_error.message());
+                return;
             }
-            else
+
+            // Block being valid guarantees its parent was found.
+            assert(parent_data_it != block_data.end());
+            const auto& pre_state = parent_data_it->second.post_state;
+
+            auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
+                blob_gas_limit, {.block_reward = mining_reward(rev)});
+
+            if (res.requests_error)
             {
-                if (block_error)
-                {
-                    // Block correctly rejected at validation; verify the reason matches the
-                    // fixture's expected exception.
-                    report.check(
-                        is_expected_block_exception(block_error, test_block.expected_exception),
-                        "block rejection reason", block_error, test_block.expected_exception);
-                    continue;
-                }
-
-                // Block being valid guarantees its parent was found.
-                assert(parent_data_it != block_data.end());
-                const auto& pre_state = parent_data_it->second.post_state;
-
-                // Legacy fixtures name the broken rule in vocabulary evmone does not speak
-                // (InvalidStateRoot, TooManyUncles); only the spec names can be compared.
-                const auto names_spec_exception =
-                    test_block.expected_exception.find("Exception.") != std::string::npos;
-
-                // TODO: The transaction senders come from the fixture instead of being recovered
-                //   from the signatures, so evmone never sees the signature the test broke. Such a
-                //   transaction executes as the sender the fixture names and the block is rejected
-                //   by whatever rule that sender happens to break, or by its state root alone.
-                const auto sender_not_recovered = contains_any(
-                    test_block.expected_exception, "TransactionException.INVALID_SIGNATURE_VRS");
-
-                const auto res =
-                    apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
-                        blob_gas_limit, {.block_reward = mining_reward(rev)});
-                if (!res.rejected.empty())
-                {
-                    // A transaction was rejected: the fixture must name that reason, not merely
-                    // some rejection.
-                    const auto& rejected = res.rejected.front();
-                    if (names_spec_exception && !sender_not_recovered)
-                    {
-                        report.check(
-                            is_expected_tx_exception(rejected.error, test_block.expected_exception),
-                            "transaction rejection reason", rejected.error,
-                            test_block.expected_exception);
-                    }
-                    continue;
-                }
-                if (res.requests_error)
-                {
-                    if (!sender_not_recovered)
-                    {
-                        report.check(is_expected_block_exception(
-                                         res.requests_error, test_block.expected_exception),
-                            "block rejection reason", res.requests_error,
-                            test_block.expected_exception);
-                    }
-                    continue;
-                }
-                // The block executed, so it is invalid only if it computes something other than
-                // its header claims. Each difference below is the symptom of one BlockException:
-                // a block failing a check other than the one the fixture names breaks a different
-                // rule than the test is about.
-                // TODO: Of the ommers only the count and the distance to their nephew are
-                //   validated, not the ommer headers themselves, so a fixture that breaks an
-                //   ommer's gas limit, number or timestamp reaches execution and lands here.
-                const auto ommers_not_validated = !test_block.block_info.ommers.empty();
-
-                // Asserts the fixture names one of @p names, the exceptions the check that just
-                // fired is the symptom of. Silent where the reason cannot be compared.
-                const auto expect_fixture_names = [&](std::string_view names) {
-                    if (!names_spec_exception || ommers_not_validated || sender_not_recovered)
-                        return;
-                    report.check(contains_any(test_block.expected_exception, names),
-                        "block rejection reason", names, test_block.expected_exception);
-                };
-
-                if (blob_gas_limit - res.blob_gas_left !=
-                    static_cast<int64_t>(bi.blob_gas_used.value_or(0)))
-                {
-                    expect_fixture_names(
-                        "BlockException.INCORRECT_BLOB_GAS_USED|"
-                        "BlockException.BLOB_GAS_USED_ABOVE_LIMIT");
-                    continue;
-                }
-
-                if (state::mpt_hash(res.block_state) != test_block.expected_block_header.state_root)
-                {
-                    expect_fixture_names("BlockException.INVALID_STATE_ROOT");
-                    continue;
-                }
-
-                if (rev >= EVMC_SHANGHAI && state::mpt_hash(test_block.block_info.withdrawals) !=
-                                                test_block.expected_block_header.withdrawal_root)
-                {
-                    expect_fixture_names("BlockException.INVALID_WITHDRAWALS_ROOT");
-                    continue;
-                }
-                if (state::mpt_hash(test_block.transactions) !=
-                    test_block.expected_block_header.transactions_root)
-                {
-                    expect_fixture_names("BlockException.INVALID_TRANSACTIONS_ROOT");
-                    continue;
-                }
-                if (state::mpt_hash(res.receipts) != test_block.expected_block_header.receipts_root)
-                {
-                    expect_fixture_names("BlockException.INVALID_RECEIPTS_ROOT");
-                    continue;
-                }
-                if (rev >= EVMC_PRAGUE && calculate_requests_hash(res.requests) !=
-                                              test_block.expected_block_header.requests_hash)
-                {
-                    expect_fixture_names("BlockException.INVALID_REQUESTS");
-                    continue;
-                }
-                if (res.gas_used != test_block.expected_block_header.gas_used)
-                {
-                    expect_fixture_names(
-                        "BlockException.INVALID_GAS_USED|"
-                        "BlockException.GAS_USED_OVERFLOW");
-                    continue;
-                }
-                if (bytes_view{res.bloom} !=
-                    bytes_view{test_block.expected_block_header.logs_bloom})
-                {
-                    expect_fixture_names("BlockException.INVALID_LOG_BLOOM");
-                    continue;
-                }
-
-                report.fail("block validity", "expected the block to be invalid");
+                report.fail("requests", res.requests_error.message());
+                return;
             }
+
+            block_hashes[test_block.expected_block_header.block_number] =
+                test_block.expected_block_header.hash;
+            const auto [inserted_it, _] = block_data.insert({test_block.block_info.hash,
+                {
+                    .header = &test_block.expected_block_header,
+                    .has_ommers = !test_block.block_info.ommers.empty(),
+                    .post_state = std::move(res.block_state),
+                    .total_difficulty =
+                        parent_data_it->second.total_difficulty + test_block.block_info.difficulty,
+                }});
+
+            const auto state_root = state::mpt_hash(inserted_it->second.post_state);
+
+            if (inserted_it->second.total_difficulty >= max_total_difficulty)
+            {
+                canonical_state = &inserted_it->second.post_state;
+                canonical_state_root = state_root;
+                canonical_tip_hash = test_block.expected_block_header.hash;
+                max_total_difficulty = inserted_it->second.total_difficulty;
+            }
+
+            if (!res.rejected.empty())
+            {
+                report.fail("transactions in a valid block",
+                    "invalid transaction: " + res.rejected.front().error.message());
+            }
+
+            report.check_eq("blob gas used", blob_gas_limit - res.blob_gas_left,
+                static_cast<int64_t>(bi.blob_gas_used.value_or(0)));
+            report.check_eq("state root", state_root, test_block.expected_block_header.state_root);
+
+            if (rev >= EVMC_SHANGHAI)
+            {
+                report.check_eq("withdrawals root",
+                    state::mpt_hash(test_block.block_info.withdrawals),
+                    test_block.expected_block_header.withdrawal_root);
+            }
+
+            report.check_eq("transactions root", state::mpt_hash(test_block.transactions),
+                test_block.expected_block_header.transactions_root);
+            report.check_eq("receipts root", state::mpt_hash(res.receipts),
+                test_block.expected_block_header.receipts_root);
+            if (rev >= EVMC_PRAGUE)
+            {
+                report.check_eq("requests hash", calculate_requests_hash(res.requests),
+                    test_block.expected_block_header.requests_hash);
+            }
+            report.check_eq("gas used", res.gas_used, test_block.expected_block_header.gas_used);
+            report.check_eq("logs bloom", bytes_view{res.bloom},
+                bytes_view{test_block.expected_block_header.logs_bloom});
         }
-        report.check_eq("canonical chain tip", canonical_tip_hash, c.expectation.last_block_hash);
+        else
+        {
+            if (block_error)
+            {
+                // Block correctly rejected at validation; verify the reason matches the
+                // fixture's expected exception.
+                report.check(
+                    is_expected_block_exception(block_error, test_block.expected_exception),
+                    "block rejection reason", block_error, test_block.expected_exception);
+                continue;
+            }
 
-        const auto expected_post_hash =
-            std::holds_alternative<TestState>(c.expectation.post_state) ?
-                state::mpt_hash(std::get<TestState>(c.expectation.post_state)) :
-                std::get<hash256>(c.expectation.post_state);
+            // Block being valid guarantees its parent was found.
+            assert(parent_data_it != block_data.end());
+            const auto& pre_state = parent_data_it->second.post_state;
 
-        // Get the final state hash. In case none blocks have been applied, compute genesis one.
-        const auto canonical_post_hash =
-            canonical_state_root ? canonical_state_root : state::mpt_hash(c.pre_state);
-        // The state dumps are a callable so that formatting the whole state only happens once
-        // the roots are already known to differ.
-        report.check_eq("post state root", canonical_post_hash, expected_post_hash, [&] {
-            return "Result state:\n" + print_state(*canonical_state) +
-                   (std::holds_alternative<TestState>(c.expectation.post_state) ?
-                           "\n\nExpected state:\n" +
-                               print_state(std::get<TestState>(c.expectation.post_state)) :
-                           "");
-        });
+            // Legacy fixtures name the broken rule in vocabulary evmone does not speak
+            // (InvalidStateRoot, TooManyUncles); only the spec names can be compared.
+            const auto names_spec_exception =
+                test_block.expected_exception.find("Exception.") != std::string::npos;
+
+            // TODO: The transaction senders come from the fixture instead of being recovered
+            //   from the signatures, so evmone never sees the signature the test broke. Such a
+            //   transaction executes as the sender the fixture names and the block is rejected
+            //   by whatever rule that sender happens to break, or by its state root alone.
+            const auto sender_not_recovered = contains_any(
+                test_block.expected_exception, "TransactionException.INVALID_SIGNATURE_VRS");
+
+            const auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions,
+                rev, blob_gas_limit, {.block_reward = mining_reward(rev)});
+            if (!res.rejected.empty())
+            {
+                // A transaction was rejected: the fixture must name that reason, not merely
+                // some rejection.
+                const auto& rejected = res.rejected.front();
+                if (names_spec_exception && !sender_not_recovered)
+                {
+                    report.check(
+                        is_expected_tx_exception(rejected.error, test_block.expected_exception),
+                        "transaction rejection reason", rejected.error,
+                        test_block.expected_exception);
+                }
+                continue;
+            }
+            if (res.requests_error)
+            {
+                if (!sender_not_recovered)
+                {
+                    report.check(is_expected_block_exception(
+                                     res.requests_error, test_block.expected_exception),
+                        "block rejection reason", res.requests_error,
+                        test_block.expected_exception);
+                }
+                continue;
+            }
+            // The block executed, so it is invalid only if it computes something other than
+            // its header claims. Each difference below is the symptom of one BlockException:
+            // a block failing a check other than the one the fixture names breaks a different
+            // rule than the test is about.
+            // TODO: Of the ommers only the count and the distance to their nephew are
+            //   validated, not the ommer headers themselves, so a fixture that breaks an
+            //   ommer's gas limit, number or timestamp reaches execution and lands here.
+            const auto ommers_not_validated = !test_block.block_info.ommers.empty();
+
+            // Asserts the fixture names one of @p names, the exceptions the check that just
+            // fired is the symptom of. Silent where the reason cannot be compared.
+            const auto expect_fixture_names = [&](std::string_view names) {
+                if (!names_spec_exception || ommers_not_validated || sender_not_recovered)
+                    return;
+                report.check(contains_any(test_block.expected_exception, names),
+                    "block rejection reason", names, test_block.expected_exception);
+            };
+
+            if (blob_gas_limit - res.blob_gas_left !=
+                static_cast<int64_t>(bi.blob_gas_used.value_or(0)))
+            {
+                expect_fixture_names(
+                    "BlockException.INCORRECT_BLOB_GAS_USED|"
+                    "BlockException.BLOB_GAS_USED_ABOVE_LIMIT");
+                continue;
+            }
+
+            if (state::mpt_hash(res.block_state) != test_block.expected_block_header.state_root)
+            {
+                expect_fixture_names("BlockException.INVALID_STATE_ROOT");
+                continue;
+            }
+
+            if (rev >= EVMC_SHANGHAI && state::mpt_hash(test_block.block_info.withdrawals) !=
+                                            test_block.expected_block_header.withdrawal_root)
+            {
+                expect_fixture_names("BlockException.INVALID_WITHDRAWALS_ROOT");
+                continue;
+            }
+            if (state::mpt_hash(test_block.transactions) !=
+                test_block.expected_block_header.transactions_root)
+            {
+                expect_fixture_names("BlockException.INVALID_TRANSACTIONS_ROOT");
+                continue;
+            }
+            if (state::mpt_hash(res.receipts) != test_block.expected_block_header.receipts_root)
+            {
+                expect_fixture_names("BlockException.INVALID_RECEIPTS_ROOT");
+                continue;
+            }
+            if (rev >= EVMC_PRAGUE && calculate_requests_hash(res.requests) !=
+                                          test_block.expected_block_header.requests_hash)
+            {
+                expect_fixture_names("BlockException.INVALID_REQUESTS");
+                continue;
+            }
+            if (res.gas_used != test_block.expected_block_header.gas_used)
+            {
+                expect_fixture_names(
+                    "BlockException.INVALID_GAS_USED|"
+                    "BlockException.GAS_USED_OVERFLOW");
+                continue;
+            }
+            if (bytes_view{res.bloom} != bytes_view{test_block.expected_block_header.logs_bloom})
+            {
+                expect_fixture_names("BlockException.INVALID_LOG_BLOOM");
+                continue;
+            }
+
+            report.fail("block validity", "expected the block to be invalid");
+        }
     }
+    report.check_eq("canonical chain tip", canonical_tip_hash, test.expectation.last_block_hash);
+
+    const auto expected_post_hash =
+        std::holds_alternative<TestState>(test.expectation.post_state) ?
+            state::mpt_hash(std::get<TestState>(test.expectation.post_state)) :
+            std::get<hash256>(test.expectation.post_state);
+
+    // Get the final state hash. In case none blocks have been applied, compute genesis one.
+    const auto canonical_post_hash =
+        canonical_state_root ? canonical_state_root : state::mpt_hash(test.pre_state);
+    // The state dumps are a callable so that formatting the whole state only happens once
+    // the roots are already known to differ.
+    report.check_eq("post state root", canonical_post_hash, expected_post_hash, [&] {
+        return "Result state:\n" + print_state(*canonical_state) +
+               (std::holds_alternative<TestState>(test.expectation.post_state) ?
+                       "\n\nExpected state:\n" +
+                           print_state(std::get<TestState>(test.expectation.post_state)) :
+                       "");
+    });
 }
 
 }  // namespace evmone::test
