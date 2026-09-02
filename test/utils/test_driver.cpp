@@ -270,8 +270,13 @@ void run_fixture_file(
         catch (const std::exception& ex)
         {
             // The fixture is a test and it went wrong, which is this file's verdict but not the
-            // end of it: the fixtures after it are still worth running.
-            report.fail(concat("exception: ", ex.what()));
+            // end of it: the fixtures after it are still worth running. Reported as run_tests
+            // reports one, so a what() of several lines keeps the indent of the rest.
+            report.fail("exception", ex.what());
+        }
+        catch (...)
+        {
+            report.fail("exception", "not derived from std::exception");
         }
         any_ran = true;
     }
