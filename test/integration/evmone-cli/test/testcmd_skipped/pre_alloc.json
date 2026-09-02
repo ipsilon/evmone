@@ -23,5 +23,5 @@
    "storage": {}
   }
  },
- "comment": "EEST keeps the pre-allocation its fixtures share beside them, 35715 files of it in one release, and none of it is a test. Several entries, so the reason the file is skipped for is recorded once rather than per entry."
+ "comment": "EEST keeps the pre-allocation its fixtures share beside them, and none of it is a test. Several entries, none of which names a format or carries a shape."
 }
