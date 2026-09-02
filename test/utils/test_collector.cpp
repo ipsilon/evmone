@@ -5,6 +5,7 @@
 #include "test_collector.hpp"
 #include <algorithm>
 #include <iostream>
+#include <memory>
 #include <ranges>
 
 namespace evmone::test
@@ -98,13 +99,16 @@ bool collect_tests(
         return false;
     }
 
-    for (const auto& [name, fixture] : file.items())
+    // One document shared by every test of it. Capturing the fixture itself would copy its
+    // subtree into each test, which a listing pays for in full to read nothing but the name.
+    const auto doc = std::make_shared<const json::json>(std::move(file));
+    for (const auto& [name, fixture] : doc->items())
     {
         if (!settings.selects(name))
             continue;
         cases.push_back(
-            {root.string() + "::" + name, [name, fixture, &settings, &vm](TestReport& report) {
-                 run_fixture(name, fixture, settings, vm, report);
+            {root.string() + "::" + name, [doc, name = name, &settings, &vm](TestReport& report) {
+                 run_fixture(name, doc->at(name), settings, vm, report);
              }});
     }
     return true;
