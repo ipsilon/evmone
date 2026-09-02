@@ -26,9 +26,11 @@ set_tests_properties(
 
 # Over a directory a test is a whole file, so a case the loader refuses must not take the
 # rest of the file with it: the file passes on the case beside it, the refused one first.
+# The file's own verdict says nothing about what it declined, so each declined case is named.
 add_test(NAME ${PREFIX}/test_dir_declined COMMAND evmone-cli test ${DATA}/testcmd)
 set_tests_properties(
-    ${PREFIX}/test_dir_declined PROPERTIES PASS_REGULAR_EXPRESSION "= 1 passed in")
+    ${PREFIX}/test_dir_declined PROPERTIES PASS_REGULAR_EXPRESSION
+    "a_bad_rlp: tests with invalidly rlp-encoded blocks.*c_engine: unsupported fixture format.*= 1 passed in")
 
 # A PASS_REGULAR_EXPRESSION makes CTest ignore the exit code, so these two assert on nothing
 # else: a sound fixture directory succeeds, and a fault in one fails.

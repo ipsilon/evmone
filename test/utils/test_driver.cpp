@@ -250,7 +250,7 @@ void run_fixture_file(
     // Named, because items() only borrows: iterating a temporary dangles.
     const auto contents = load_fixture_file(path);
 
-    std::optional<std::string> declined;  // The reason for the first fixture this tool declined.
+    std::vector<std::pair<std::string, std::string>> declined;  // Fixture name and reason.
     bool any_ran = false;
     for (const auto& [name, fixture] : contents.items())
     {
@@ -263,8 +263,7 @@ void run_fixture_file(
         catch (const UnsupportedTestFeature& ex)
         {
             // This tool's own limit: a format it does not run, or a fixture its loader refuses.
-            if (!declined)
-                declined = ex.what();
+            declined.emplace_back(name, ex.what());
             continue;
         }
         catch (const std::exception& ex)
@@ -285,8 +284,13 @@ void run_fixture_file(
     // TODO: A file whose cases -k all deselected still passes, as it did before this command
     //   existed, so a filter which matches nothing turns a failing tree green. Skip it instead,
     //   and an empty selection reaches NOTHING_VERIFIED on its own.
-    if (!any_ran && declined)
-        throw UnsupportedTestFeature{*declined};
+    if (!any_ran && !declined.empty())
+        throw UnsupportedTestFeature{declined.front().second};
+
+    // The file ran, so its own verdict says nothing about what it declined. Name those, or a
+    // fixture this tool stops running disappears from a passing run rather than being missed.
+    for (const auto& [name, reason] : declined)
+        std::cerr << path.string() << "::" << name << ": " << reason << '\n';
 }
 
 void run_fixture(const std::string& name, const json::json& fixture, const TestSettings& settings,
