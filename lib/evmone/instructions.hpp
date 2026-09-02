@@ -1087,11 +1087,11 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
         }
     }
 
-    if (state.host.selfdestruct(state.msg->recipient, beneficiary))
-    {
-        if (state.rev < EVMC_LONDON)
-            state.gas_refund += 24000;
-    }
+    const auto first_time = state.host.selfdestruct(state.msg->recipient, beneficiary);
+
+    if (first_time && state.rev < EVMC_LONDON)
+        state.gas_refund += 24000;
+
     return {EVMC_SUCCESS, gas_left};
 }
 
