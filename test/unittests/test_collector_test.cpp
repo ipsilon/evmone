@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <gtest/gtest.h>
-#include <test/utils/test_files.hpp>
+#include <test/utils/test_collector.hpp>
 
 using namespace evmone::test;
 namespace fs = std::filesystem;
@@ -32,7 +32,7 @@ std::vector<std::string> names(const std::vector<TestFile>& files)
 }
 }  // namespace
 
-TEST(test_files, ignore_nothing)
+TEST(test_collector, ignore_nothing)
 {
     const std::vector<std::string> all{"a.json", "c.json", "b.json", "top.json"};
 
@@ -47,7 +47,7 @@ TEST(test_files, ignore_nothing)
     EXPECT_EQ(names(files), all);
 }
 
-TEST(test_files, ignore_directory)
+TEST(test_collector, ignore_directory)
 {
     // The sibling shares the prefix as text, but not as a path component.
     auto files = collected();
@@ -56,7 +56,7 @@ TEST(test_files, ignore_directory)
     EXPECT_EQ(names(files), (std::vector<std::string>{"b.json", "top.json"}));
 }
 
-TEST(test_files, ignore_directory_other_spellings)
+TEST(test_collector, ignore_directory_other_spellings)
 {
     for (const auto& spelling : {"bc4895/", "./bc4895"})
     {
@@ -67,7 +67,7 @@ TEST(test_files, ignore_directory_other_spellings)
     }
 }
 
-TEST(test_files, ignore_files)
+TEST(test_collector, ignore_files)
 {
     auto files = collected();
     const std::vector<fs::path> ignored{"bc4895/nested/c.json", "top.json"};

@@ -85,8 +85,8 @@ target_sources(
     statetest_logs_hash_test.cpp
     statetest_runner_test.cpp
     statetest_withdrawals_test.cpp
+    test_collector_test.cpp
     test_driver_test.cpp
-    test_files_test.cpp
     test_report_test.cpp
     tooling_run_test.cpp
     tooling_t8n_test.cpp

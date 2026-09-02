@@ -2,7 +2,7 @@
 // Copyright 2026 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-#include "test_files.hpp"
+#include "test_collector.hpp"
 #include <algorithm>
 #include <ranges>
 

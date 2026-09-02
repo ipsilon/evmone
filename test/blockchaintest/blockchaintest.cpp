@@ -6,8 +6,8 @@
 #include <evmone/evmone.h>
 #include <evmone/version.h>
 #include <test/utils/blockchaintest.hpp>
+#include <test/utils/test_collector.hpp>
 #include <test/utils/test_driver.hpp>
-#include <test/utils/test_files.hpp>
 #include <iostream>
 
 namespace fs = std::filesystem;
