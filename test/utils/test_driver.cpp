@@ -234,19 +234,23 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     return passed == 0 ? NOTHING_VERIFIED : SUCCESS;
 }
 
-bool is_fixture_file(const json::json& contents)
+json::json load_fixture_file(const fs::path& path)
 {
-    return std::ranges::any_of(
-        contents.items(), [](const auto& item) { return classify(item.value()).is_fixture; });
+    std::ifstream f{path};
+    auto contents = json::json::parse(f);
+    // Not one fixture in it: EEST keeps its shared pre-allocation and an index of the fixtures
+    // beside them, and neither is a test.
+    if (std::ranges::none_of(
+            contents.items(), [](const auto& item) { return classify(item.value()).is_fixture; }))
+        throw UnsupportedTestFeature{"not a test"};
+    return contents;
 }
 
 void run_fixture_file(
     const fs::path& path, const TestSettings& settings, evmc::VM& vm, TestReport& report)
 {
-    std::ifstream f{path};
     // Named, because items() only borrows: iterating a temporary dangles.
-    const auto contents = json::json::parse(f);
-    const auto file_holds_fixtures = is_fixture_file(contents);
+    const auto contents = load_fixture_file(path);
 
     std::optional<std::string> declined;  // The reason for the first fixture this tool declined.
     bool any_ran = false;
@@ -256,12 +260,11 @@ void run_fixture_file(
             continue;
         try
         {
-            run_fixture(name, fixture, file_holds_fixtures, settings, vm, report);
+            run_fixture(name, fixture, settings, vm, report);
         }
         catch (const UnsupportedTestFeature& ex)
         {
-            // This tool's own limit, whether the fixture declared a format it does not run or
-            // the file holds no test for its shape to be read against.
+            // This tool's own limit: a format it does not run, or a fixture its loader refuses.
             if (!declined)
                 declined = ex.what();
             continue;
@@ -279,17 +282,12 @@ void run_fixture_file(
     // TODO: A file whose cases -k all deselected still passes, as it did before this command
     //   existed, so a filter which matches nothing reports a tree of passing tests. Skip it
     //   instead, and an empty selection reaches NOTHING_VERIFIED on its own.
-    if (!any_ran)
-    {
-        if (declined)
-            throw UnsupportedTestFeature{*declined};
-        if (!file_holds_fixtures)
-            throw UnsupportedTestFeature{"no test cases"};
-    }
+    if (!any_ran && declined)
+        throw UnsupportedTestFeature{*declined};
 }
 
-void run_fixture(const std::string& name, const json::json& fixture, bool file_holds_fixtures,
-    const TestSettings& settings, evmc::VM& vm, TestReport& report)
+void run_fixture(const std::string& name, const json::json& fixture, const TestSettings& settings,
+    evmc::VM& vm, TestReport& report)
 {
     report.start_case(name);  // Names whatever the load itself reports.
     const auto [format, is_fixture, reason] = classify(fixture);
@@ -297,11 +295,9 @@ void run_fixture(const std::string& name, const json::json& fixture, bool file_h
         run_state_test(make_state_test(name, fixture), vm, settings.trace_summary, report);
     else if (format == Format::blockchain_test)
         run_blockchain_test(make_blockchain_test(name, fixture), vm, report);
-    // Not recognising a fixture at all is a fault in the file, once the rest of it shows the
-    // file to be a fixture file. Anything else is this tool's own limit.
-    else if (file_holds_fixtures && !is_fixture)
-        report.fail(reason);
+    else if (is_fixture)
+        throw UnsupportedTestFeature{reason};  // A format this tool does not run.
     else
-        throw UnsupportedTestFeature{reason};
+        report.fail(reason);  // The rest of the file holds fixtures, so this one is broken.
 }
 }  // namespace evmone::test

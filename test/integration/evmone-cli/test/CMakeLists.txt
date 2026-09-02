@@ -14,12 +14,12 @@ set_tests_properties(
     ${PREFIX}/test_both_formats PROPERTIES PASS_REGULAR_EXPRESSION "= 2 passed in")
 
 # JSON which is not a test at all, as fixture directories hold beside their fixtures, is
-# skipped rather than guessed at.
+# skipped whole rather than guessed at, even named on its own.
 add_test(NAME ${PREFIX}/test_not_a_fixture COMMAND evmone-cli test
     ${CMAKE_CURRENT_SOURCE_DIR}/statetest/tests1/SuiteA/index.json)
 set_tests_properties(
     ${PREFIX}/test_not_a_fixture PROPERTIES PASS_REGULAR_EXPRESSION
-    "index\\.json::[^\n]* - not a test.*0 passed, 2 skipped in")
+    "SKIPPED[^\n]*index\\.json - not a test.*0 passed, 1 skipped in")
 
 # Over a directory a test is a whole file, so a case the loader refuses must not take the
 # rest of the file with it: the file passes on the case beside it, the refused one first.
@@ -64,13 +64,13 @@ set_tests_properties(
     "collected 1 test.*a_load_error:\n    exception.*b_wrong_state_root:.*state root")
 
 # Collected from a directory a file is one test, so a file with nothing to run is skipped
-# whole, named by the first reason which explains it. All three reasons live here.
+# whole, named by the first reason which explains it. Both reasons live here.
 add_test(NAME ${PREFIX}/test_directory_skips_whole_files COMMAND evmone-cli test
     ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_skipped)
 set_tests_properties(
     ${PREFIX}/test_directory_skips_whole_files PROPERTIES
     PASS_REGULAR_EXPRESSION
-    "all_unsupported\\.json - unsupported fixture format[^\n]*\nSKIPPED[^\n]*empty\\.json - no test cases.*pre_alloc\\.json - not a test.*0 passed, 4 skipped in")
+    "all_unsupported\\.json - unsupported fixture format[^\n]*\nSKIPPED[^\n]*empty\\.json - not a test.*pre_alloc\\.json - not a test.*0 passed, 4 skipped in")
 
 # Nothing to run is not nothing to report: the run fails rather than passing empty.
 add_test(NAME ${PREFIX}/test_directory_skips_whole_files_exit_code COMMAND evmone-cli test

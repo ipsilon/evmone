@@ -4,7 +4,6 @@
 
 #include "test_collector.hpp"
 #include <algorithm>
-#include <fstream>
 #include <iostream>
 #include <ranges>
 
@@ -76,13 +75,19 @@ bool collect_tests(
         return true;
     }
 
-    // Naming a file loads it now, to name the fixtures in it. One which cannot be loaded
-    // becomes a single test reporting why.
+    // Naming a file loads it now, to name the fixtures in it. One which cannot be loaded, or
+    // which is not a test, becomes a single test reporting why.
     json::json file;
     try
     {
-        std::ifstream f{root};
-        file = json::json::parse(f);
+        file = load_fixture_file(root);
+    }
+    catch (const UnsupportedTestFeature&)
+    {
+        // A skip, as when collected from a directory, not a broken collection.
+        cases.push_back({root.string(),
+            [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
+        return true;
     }
     catch (const std::exception& ex)
     {
@@ -93,18 +98,14 @@ bool collect_tests(
         return false;
     }
 
-    // Whether the file is a fixture file at all decides what an unrecognised fixture in it means,
-    // exactly as it does for a whole file collected from a directory.
-    const auto file_holds_fixtures = is_fixture_file(file);
-
     for (const auto& [name, fixture] : file.items())
     {
         if (!settings.selects(name))
             continue;
-        cases.push_back({root.string() + "::" + name,
-            [name, fixture, file_holds_fixtures, &settings, &vm](TestReport& report) {
-                run_fixture(name, fixture, file_holds_fixtures, settings, vm, report);
-            }});
+        cases.push_back(
+            {root.string() + "::" + name, [name, fixture, &settings, &vm](TestReport& report) {
+                 run_fixture(name, fixture, settings, vm, report);
+             }});
     }
     return true;
 }
