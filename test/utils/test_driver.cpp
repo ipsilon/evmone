@@ -82,9 +82,6 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     out << "collected " << cases.size() << (cases.size() == 1 ? " test\n\n" : " tests\n\n");
 
     std::vector<Note> notes;
-    size_t passed = 0;
-    size_t failed = 0;
-    size_t skipped = 0;
     Progress row{out, cases.size()};
 
     for (const auto& test : cases)
@@ -97,7 +94,6 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
         auto outcome = Outcome::passed;
         std::string reason;
         std::string exception_reason;
-        std::string skip_reason;
         if (!options.progress)
             out << test.name << '\n';  // The only thing naming what the test prints next.
         out << std::flush;
@@ -108,7 +104,7 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
         catch (const UnsupportedTestFeature& ex)
         {
             outcome = Outcome::skipped;
-            skip_reason = ex.what();
+            reason = ex.what();
         }
         catch (const std::exception& ex)
         {
@@ -133,28 +129,17 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
                          std::move(exception_reason) :
                          failures.front().what;
         }
-        else if (outcome == Outcome::skipped)
-        {
-            reason = std::move(skip_reason);
-        }
         if (outcome != Outcome::passed)
             notes.push_back({outcome, test.name, std::move(reason), std::move(failures)});
 
-        switch (outcome)
-        {
-        case Outcome::passed:
-            ++passed;
-            break;
-        case Outcome::failed:
-            ++failed;
-            break;
-        case Outcome::skipped:
-            ++skipped;
-            break;
-        }
         if (options.progress)
             row.advance(outcome);
     }
+
+    // Every test which did not pass left exactly one note, so the counts follow from them.
+    const auto failed = std::ranges::count(notes, Outcome::failed, &Note::outcome);
+    const auto skipped = std::ranges::count(notes, Outcome::skipped, &Note::outcome);
+    const auto passed = cases.size() - notes.size();
 
     if (failed != 0)
     {
