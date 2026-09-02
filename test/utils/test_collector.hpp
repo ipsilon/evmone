@@ -36,7 +36,7 @@ void ignore_test_files(
 
 /// Adds to @p cases every test under @p root: one per file for a directory, one per fixture for
 /// a named file, or one for a named file holding no fixture. Returns whether every test was
-/// collected.
-bool collect_tests(std::vector<TestCase>& cases, const std::filesystem::path& root,
+/// collected. The tests hold @p settings and @p vm by reference, so both must outlive them.
+[[nodiscard]] bool collect_tests(std::vector<TestCase>& cases, const std::filesystem::path& root,
     const TestSettings& settings, evmc::VM& vm);
 }  // namespace evmone::test
