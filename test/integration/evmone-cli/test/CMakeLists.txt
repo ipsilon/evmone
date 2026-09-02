@@ -71,7 +71,7 @@ add_test(NAME ${PREFIX}/test_dir_skipped COMMAND evmone-cli test ${DATA}/testcmd
 set_tests_properties(
     ${PREFIX}/test_dir_skipped PROPERTIES
     PASS_REGULAR_EXPRESSION
-    "all_unsupported\\.json - unsupported fixture format: \"blockchain_test_engine\"\nSKIPPED[^\n]*empty\\.json - not a test.*pre_alloc\\.json - not a test.*0 passed, 4 skipped in")
+    "all_unsupported\\.json - unsupported fixture format: \"blockchain_test_engine\"\nSKIPPED[^\n]*empty\\.json - not a test.*pre_alloc\\.json - not a test.*0 passed, 5 skipped in")
 
 # Nothing to run is not nothing to report: the run fails rather than passing empty.
 add_test(NAME ${PREFIX}/test_dir_skipped_exit COMMAND evmone-cli test ${DATA}/testcmd_skipped)

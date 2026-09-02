@@ -165,8 +165,9 @@ const CLI::App& setup_test_cmd(CLI::App& app, TestOptions& opts)
 {
     auto& cmd = *app.add_subcommand("test", "Run Ethereum tests")->fallthrough();
     cmd.add_option("path", opts.paths,
-           "Test file or directory. Every .json file under a directory, except index.json, is a "
-           "test; naming a file makes each test case in it a test of its own.")
+           "Test file or directory. Under a directory every .json file except index.json is "
+           "one test. A named file gives one test per fixture, or one for the file when it holds "
+           "no fixture.")
         ->required()
         ->check(CLI::ExistingPath);
     cmd.add_option(

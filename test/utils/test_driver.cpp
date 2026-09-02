@@ -229,11 +229,17 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
 json::json load_fixture_file(const fs::path& path)
 {
     std::ifstream f{path};
-    auto contents = json::json::parse(f);
+    // A stream which never opened reads as EOF, which parses as a syntax error in a file which
+    // has none.
+    if (!f)
+        throw std::runtime_error{"cannot open the file"};
+    const auto contents = json::json::parse(f);
     // Not one fixture in it: EEST keeps its shared pre-allocation and an index of the fixtures
-    // beside them, and neither is a test.
-    if (std::ranges::none_of(contents.items(),
-            [](const auto& i) { return classify(i.value()) != Format::not_a_test; }))
+    // beside them, and neither is a test. Nor is a document which is not an object at all:
+    // items() would walk an array by index, naming its elements "0", "1", ...
+    if (!contents.is_object() || std::ranges::none_of(contents.items(), [](const auto& i) {
+            return classify(i.value()) != Format::not_a_test;
+        }))
         throw UnsupportedTestFeature{"not a test"};
     return contents;
 }
