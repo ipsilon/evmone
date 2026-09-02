@@ -71,46 +71,38 @@ public:
     }
 };
 
-/// The fixture formats this tool runs. EEST names the format in each fixture's "_info", and a
+/// What this tool makes of one fixture. EEST names the format in each fixture's "_info", and a
 /// heuristic covers the hand-written and pre-EEST files which have no "_info" at all.
 enum class Format
 {
     state_test,
     blockchain_test,
+    unsupported,  ///< A fixture, in a format this tool does not run.
+    not_a_test,   ///< Not a fixture at all.
 };
 
-/// What this tool makes of one fixture.
-struct Classification
-{
-    /// How to run it, when this tool runs it.
-    std::optional<Format> format;
-    /// A fixture, whether or not this tool runs it.
-    bool is_fixture = false;
-    /// Why it is not run, when it is not.
-    std::string reason;
-};
-
-Classification classify(const json::json& fixture)
+Format classify(const json::json& fixture)
 {
     if (const auto info = fixture.find("_info"); info != fixture.end())
     {
         if (const auto format = info->find("fixture-format"); format != info->end())
         {
             if (*format == "state_test")
-                return {.format = Format::state_test, .is_fixture = true};
+                return Format::state_test;
             if (*format == "blockchain_test")
-                return {.format = Format::blockchain_test, .is_fixture = true};
-            return {.is_fixture = true, .reason = "unsupported fixture format: " + format->dump()};
+                return Format::blockchain_test;
+            return Format::unsupported;
         }
     }
     // Nothing declares the format: a hand-written or pre-EEST file, or an "_info" without one.
-    // Each shape is named by what only it carries; anything else is not a test at all, as EEST's
-    // shared pre-allocation kept beside the fixtures is not.
-    if (fixture.contains("blocks"))
-        return {.format = Format::blockchain_test, .is_fixture = true};
-    if (fixture.contains("transaction") && fixture.contains("post"))
-        return {.format = Format::state_test, .is_fixture = true};
-    return {.reason = "not a test"};
+    // Each shape is named by the state it starts from and what is applied to it, never by what
+    // it expects, so a fixture whose expectations are missing is still a test and is run.
+    // Anything else is not a test at all, as EEST's shared pre-allocation is not.
+    if (fixture.contains("pre") && fixture.contains("blocks"))
+        return Format::blockchain_test;
+    if (fixture.contains("pre") && fixture.contains("transaction"))
+        return Format::state_test;
+    return Format::not_a_test;
 }
 
 }  // namespace
@@ -240,8 +232,8 @@ json::json load_fixture_file(const fs::path& path)
     auto contents = json::json::parse(f);
     // Not one fixture in it: EEST keeps its shared pre-allocation and an index of the fixtures
     // beside them, and neither is a test.
-    if (std::ranges::none_of(
-            contents.items(), [](const auto& item) { return classify(item.value()).is_fixture; }))
+    if (std::ranges::none_of(contents.items(),
+            [](const auto& i) { return classify(i.value()) != Format::not_a_test; }))
         throw UnsupportedTestFeature{"not a test"};
     return contents;
 }
@@ -290,14 +282,21 @@ void run_fixture(const std::string& name, const json::json& fixture, const TestS
     evmc::VM& vm, TestReport& report)
 {
     report.start_case(name);  // Names whatever the load itself reports.
-    const auto [format, is_fixture, reason] = classify(fixture);
-    if (format == Format::state_test)
+    switch (classify(fixture))
+    {
+    case Format::state_test:
         run_state_test(make_state_test(name, fixture), vm, settings.trace_summary, report);
-    else if (format == Format::blockchain_test)
+        break;
+    case Format::blockchain_test:
         run_blockchain_test(make_blockchain_test(name, fixture), vm, report);
-    else if (is_fixture)
-        throw UnsupportedTestFeature{reason};  // A format this tool does not run.
-    else
-        report.fail(reason);  // The rest of the file holds fixtures, so this one is broken.
+        break;
+    case Format::unsupported:
+        throw UnsupportedTestFeature{
+            "unsupported fixture format: " + fixture.at("_info").at("fixture-format").dump()};
+    case Format::not_a_test:
+        // The rest of the file holds fixtures, so this one is broken.
+        report.fail("not a test");
+        break;
+    }
 }
 }  // namespace evmone::test

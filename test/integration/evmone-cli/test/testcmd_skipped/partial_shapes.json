@@ -1,0 +1,24 @@
+{
+ "a_blocks_no_pre": {
+  "comment": "Carries one of the two keys a blockchain test is named by, so the shape does not name it and nothing else does either.",
+  "blocks": []
+ },
+ "b_tx_no_pre": {
+  "comment": "The same for a state test: a transaction to apply, but no state to apply it to.",
+  "transaction": {
+   "data": [
+    "0x"
+   ],
+   "gasLimit": [
+    "0x061a80"
+   ],
+   "gasPrice": "0x0a",
+   "nonce": "0x00",
+   "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+   "to": "0x095e7baea6a6c7c4c2dfeb977efac326af552d87",
+   "value": [
+    "0x0186a0"
+   ]
+  }
+ }
+}

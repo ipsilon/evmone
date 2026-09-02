@@ -8,11 +8,13 @@ set(PREFIX ${PREFIX}/test)
 
 set(DATA ${CMAKE_CURRENT_SOURCE_DIR})
 
-# One command runs both fixture formats, deciding per test case which one it is.
+# One command runs both fixture formats, deciding per test case which one it is: the state
+# test and the last one by shape, the blockchain test by the format its "_info" declares.
 add_test(NAME ${PREFIX}/test_both_formats COMMAND evmone-cli test
-    ${DATA}/statetest/tests1/SuiteA/test1.json ${DATA}/blockchaintest/eip7778_block_gas.json)
+    ${DATA}/statetest/tests1/SuiteA/test1.json ${DATA}/blockchaintest/eip7778_block_gas.json
+    ${DATA}/blockchaintest/unrecovered_sender_blob_gas.json)
 set_tests_properties(
-    ${PREFIX}/test_both_formats PROPERTIES PASS_REGULAR_EXPRESSION "= 2 passed in")
+    ${PREFIX}/test_both_formats PROPERTIES PASS_REGULAR_EXPRESSION "= 3 passed in")
 
 # JSON which is not a test at all, as fixture directories hold beside their fixtures, is
 # skipped whole rather than guessed at, even named on its own.
