@@ -1,5 +1,5 @@
 {
- "a_transaction_without_post": {
+ "a_no_post": {
   "comment": "Carries one of the two fields a state test is recognised by, so the shape does not name it and nothing else does either.",
   "transaction": {
    "data": [

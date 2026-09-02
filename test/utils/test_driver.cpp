@@ -280,8 +280,8 @@ void run_fixture_file(
 
     // A file in which this tool ran nothing it was asked for is skipped, not passed.
     // TODO: A file whose cases -k all deselected still passes, as it did before this command
-    //   existed, so a filter which matches nothing reports a tree of passing tests. Skip it
-    //   instead, and an empty selection reaches NOTHING_VERIFIED on its own.
+    //   existed, so a filter which matches nothing turns a failing tree green. Skip it instead,
+    //   and an empty selection reaches NOTHING_VERIFIED on its own.
     if (!any_ran && declined)
         throw UnsupportedTestFeature{*declined};
 }

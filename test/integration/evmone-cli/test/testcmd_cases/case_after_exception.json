@@ -5,7 +5,7 @@
    "comment": "A state test with no pre state, so loading it throws."
   }
  },
- "b_wrong_state_root": {
+ "b_bad_root": {
   "_info": {
    "comment": "Runs and fails on the state root. Only reported if the case before it did not abandon the file."
   },

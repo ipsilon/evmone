@@ -59,7 +59,7 @@
    ]
   }
  },
- "b_not_a_fixture": {
+ "b_not_a_test": {
   "_info": {
    "comment": "Not a test: no fixture fields at all. Beside a case which runs, so this is unmistakably a fixture file with one broken case in it."
   }

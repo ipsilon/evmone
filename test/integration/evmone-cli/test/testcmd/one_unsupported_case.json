@@ -1,5 +1,5 @@
 {
- "a_unsupported_unsupported_rlp": {
+ "a_bad_rlp": {
   "_info": {
    "comment": "Declines to load: expectException without rlp_decoded. Nothing of this case runs, so the case beside it is what the file reports."
   },
@@ -44,7 +44,7 @@
    }
   }
  },
- "b_runs_state_test": {
+ "b_state": {
   "_info": {
    "comment": "A state test beside blockchain ones, which is the whole point of deciding the format per case."
   },
@@ -106,7 +106,7 @@
    ]
   }
  },
- "c_declared_format_wins": {
+ "c_engine": {
   "_info": {
    "fixture-format": "blockchain_test_engine",
    "comment": "Carries blocks, so the shape alone would run it; the declared format is what decides, and this tool does not run that one."
