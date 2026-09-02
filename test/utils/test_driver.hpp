@@ -3,10 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <evmc/evmc.hpp>
+#include <nlohmann/json.hpp>
 #include <test/utils/test_report.hpp>
+#include <filesystem>
+#include <optional>
 
 namespace evmone::test
 {
+namespace json = nlohmann;
+
 /// Nothing failed and something passed.
 constexpr int SUCCESS = 0;
 
@@ -43,4 +49,37 @@ struct RunOptions
 /// got.
 [[nodiscard]] int run_tests(
     std::span<const TestCase> cases, std::ostream& out, const RunOptions& options = {});
+
+/// What the tests are run with.
+struct TestSettings
+{
+    /// Run only the fixtures whose name contains this.
+    std::optional<std::string> name_filter;
+
+    /// Paths, relative to a test directory, not to collect tests from.
+    std::vector<std::filesystem::path> ignored;
+
+    /// Report each test's execution summary on the trace stream.
+    bool trace_summary = false;
+
+    /// Whether the name filter, if any, keeps the fixture called @p name.
+    [[nodiscard]] bool selects(const std::string& name) const noexcept
+    {
+        return !name_filter.has_value() || name.find(*name_filter) != std::string::npos;
+    }
+};
+
+/// Whether the file holds fixtures at all. A property of the file, never of what the name
+/// filter selected out of it, so both ways of naming a test agree.
+[[nodiscard]] bool is_fixture_file(const json::json& contents);
+
+/// Runs every selected fixture of one fixture file, which together are one test. Throws
+/// UnsupportedTestFeature for a file this tool has nothing to run in.
+void run_fixture_file(const std::filesystem::path& path, const TestSettings& settings, evmc::VM& vm,
+    TestReport& report);
+
+/// Runs one fixture of a file named on its own. Whether the file holds fixtures at all decides
+/// what an unrecognised one in it means, so @p file_holds_fixtures is asked of the whole file.
+void run_fixture(const std::string& name, const json::json& fixture, bool file_holds_fixtures,
+    const TestSettings& settings, evmc::VM& vm, TestReport& report);
 }  // namespace evmone::test

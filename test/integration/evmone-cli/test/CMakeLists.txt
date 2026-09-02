@@ -6,37 +6,114 @@
 
 set(PREFIX ${PREFIX}/test)
 
-# A file holding a case which is not a fixture at all, beside one which runs.
-add_test(NAME ${PREFIX}/fixture_fault COMMAND evmone-statetest
-    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault)
-set_tests_properties(${PREFIX}/fixture_fault PROPERTIES WILL_FAIL TRUE)
+# One command runs both fixture formats, deciding per test case which one it is.
+add_test(NAME ${PREFIX}/test_both_formats COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/statetest/tests1/SuiteA/test1.json
+    ${CMAKE_CURRENT_SOURCE_DIR}/blockchaintest/eip7778_block_gas.json)
+set_tests_properties(
+    ${PREFIX}/test_both_formats PROPERTIES PASS_REGULAR_EXPRESSION "= 2 passed in")
 
-# WILL_FAIL above accepts any non-zero exit, and a fault downgraded to a skip exits non-zero too,
-# so the counts are what distinguish the two.
-add_test(NAME ${PREFIX}/fixture_fault_is_not_a_skip COMMAND evmone-statetest
+# JSON which is not a test at all, as fixture directories hold beside their fixtures, is
+# skipped rather than guessed at.
+add_test(NAME ${PREFIX}/test_not_a_fixture COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/statetest/tests1/SuiteA/index.json)
+set_tests_properties(
+    ${PREFIX}/test_not_a_fixture PROPERTIES PASS_REGULAR_EXPRESSION
+    "index\\.json::[^\n]* - not a test.*0 passed, 2 skipped in")
+
+# Over a directory a test is a whole file, so a case the loader refuses must not take the
+# rest of the file with it: the file passes on the case beside it, the refused one first.
+add_test(NAME ${PREFIX}/test_directory_with_unsupported_case COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd)
+set_tests_properties(
+    ${PREFIX}/test_directory_with_unsupported_case PROPERTIES
+    PASS_REGULAR_EXPRESSION "= 1 passed in")
+
+# A PASS_REGULAR_EXPRESSION makes CTest ignore the exit code, so these two assert on nothing
+# else: a sound fixture directory succeeds, and a fault in one fails.
+add_test(NAME ${PREFIX}/test_exit_code_success COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd)
+
+add_test(NAME ${PREFIX}/test_exit_code_failure COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault)
+set_tests_properties(${PREFIX}/test_exit_code_failure PROPERTIES WILL_FAIL TRUE)
+
+# WILL_FAIL above accepts any non-zero exit, and a fault downgraded to a skip exits non-zero
+# too, so the counts are what distinguish the two.
+add_test(NAME ${PREFIX}/test_fault_is_not_a_skip COMMAND evmone-cli test
     ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault)
 set_tests_properties(
-    ${PREFIX}/fixture_fault_is_not_a_skip PROPERTIES PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
+    ${PREFIX}/test_fault_is_not_a_skip PROPERTIES PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
 
-# Selecting only the case which is not a fixture must still fault.
-add_test(NAME ${PREFIX}/fixture_fault_survives_filter COMMAND evmone-statetest
+# Whether a file is a fixture file is a property of the file, not of what -k selected from
+# it: selecting only the case which is not a fixture must still fault.
+add_test(NAME ${PREFIX}/test_fault_survives_filter COMMAND evmone-cli test
     ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault -k b_not_a_fixture)
 set_tests_properties(
-    ${PREFIX}/fixture_fault_survives_filter PROPERTIES
+    ${PREFIX}/test_fault_survives_filter PROPERTIES
     PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
 
-# A case whose load throws takes the rest of the file with it: the whole file is loaded before
-# any of it runs, so the case after it is never reached and the failure is named after the file
-# rather than the case it came from. FAILED pins that as a failure: a PASS_REGULAR_EXPRESSION
-# makes CTest ignore the exit code, and a fault downgraded to a skip names the file too.
-add_test(NAME ${PREFIX}/case_after_exception COMMAND evmone-statetest
+# A case whose load throws must not abandon the cases after it, so both faults are reported.
+add_test(NAME ${PREFIX}/test_case_after_exception COMMAND evmone-cli test
     ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_cases)
 set_tests_properties(
-    ${PREFIX}/case_after_exception PROPERTIES
+    ${PREFIX}/test_case_after_exception PROPERTIES
+    # "collected 1 test" keeps this on the directory form, where the whole file is one test
+    # and the per-case catch is what keeps the second fault reachable.
     PASS_REGULAR_EXPRESSION
-    "collected 1 test.*FAILED[^\n]*case_after_exception\\.json[^\n]*exception"
-    FAIL_REGULAR_EXPRESSION "b_wrong_state_root"
-)
+    "collected 1 test.*a_load_error:\n    exception.*b_wrong_state_root:.*state root")
+
+# Collected from a directory a file is one test, so a file with nothing to run is skipped
+# whole, named by the first reason which explains it. All three reasons live here.
+add_test(NAME ${PREFIX}/test_directory_skips_whole_files COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_skipped)
+set_tests_properties(
+    ${PREFIX}/test_directory_skips_whole_files PROPERTIES
+    PASS_REGULAR_EXPRESSION
+    "all_unsupported\\.json - unsupported fixture format[^\n]*\nSKIPPED[^\n]*empty\\.json - no test cases.*pre_alloc\\.json - not a test.*0 passed, 4 skipped in")
+
+# Nothing to run is not nothing to report: the run fails rather than passing empty.
+add_test(NAME ${PREFIX}/test_directory_skips_whole_files_exit_code COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_skipped)
+set_tests_properties(
+    ${PREFIX}/test_directory_skips_whole_files_exit_code PROPERTIES WILL_FAIL TRUE)
+
+# Naming the file instead of the directory makes each case its own test, and a fault in one
+# is still a fault: the case beside it runs.
+add_test(NAME ${PREFIX}/test_file_fault COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault/unrecognised_case.json)
+set_tests_properties(
+    ${PREFIX}/test_file_fault PROPERTIES PASS_REGULAR_EXPRESSION
+    "FAILED[^\n]*unrecognised_case\\.json::b_not_a_fixture.*1 failed, 1 passed in")
+
+# -k selects among the cases of a named file too.
+add_test(NAME ${PREFIX}/test_file_filter COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault/unrecognised_case.json -k a_runs)
+set_tests_properties(
+    ${PREFIX}/test_file_filter PROPERTIES PASS_REGULAR_EXPRESSION "= 1 passed in")
+
+# Naming a file whose cases this tool does not run skips them one by one, where collecting
+# the same file from a directory would skip it whole.
+add_test(NAME ${PREFIX}/test_file_declined_cases COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd/one_unsupported_case.json)
+set_tests_properties(
+    ${PREFIX}/test_file_declined_cases PROPERTIES PASS_REGULAR_EXPRESSION
+    "SKIPPED[^\n]*c_declared_format_wins - unsupported fixture format.*= 1 passed, 2 skipped in")
+
+# --trace reaches the runner through the app-level flag, and turns the progress row into a
+# line naming each test so the trace which follows it can be told apart.
+add_test(NAME ${PREFIX}/test_trace COMMAND evmone-cli test --trace
+    ${CMAKE_CURRENT_SOURCE_DIR}/statetest/tests1/SuiteA/test1.json)
+set_tests_properties(
+    ${PREFIX}/test_trace PROPERTIES PASS_REGULAR_EXPRESSION
+    "test1\\.json::test1\n\\{\"pc\":0,[^\n]*\"opName\":\"PUSH1\"\\}.*= 1 passed in")
+
+# A named file which does not parse names itself, because no case in it can be.
+add_test(NAME ${PREFIX}/test_file_does_not_parse COMMAND evmone-cli test
+    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_broken/truncated.json)
+set_tests_properties(
+    ${PREFIX}/test_file_does_not_parse PROPERTIES PASS_REGULAR_EXPRESSION
+    "FAILED[^\n]*truncated\\.json - exception[^\n]*parse error.*1 failed, 0 passed in")
 
 
 get_directory_property(ALL_TESTS TESTS)

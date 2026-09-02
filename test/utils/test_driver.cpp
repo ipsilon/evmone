@@ -3,13 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "test_driver.hpp"
+#include <test/utils/blockchaintest.hpp>
+#include <test/utils/statetest.hpp>
 #include <chrono>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <vector>
 
 namespace evmone::test
 {
+namespace fs = std::filesystem;
+
 namespace
 {
 /// The report is laid out like pytest's.
@@ -65,6 +70,49 @@ public:
         m_column = 0;
     }
 };
+
+/// The fixture formats this tool runs. EEST names the format in each fixture's "_info", and a
+/// heuristic covers the hand-written and pre-EEST files which have no "_info" at all.
+enum class Format
+{
+    state_test,
+    blockchain_test,
+};
+
+/// What this tool makes of one fixture.
+struct Classification
+{
+    /// How to run it, when this tool runs it.
+    std::optional<Format> format;
+    /// A fixture, whether or not this tool runs it.
+    bool is_fixture = false;
+    /// Why it is not run, when it is not.
+    std::string reason;
+};
+
+Classification classify(const json::json& fixture)
+{
+    if (const auto info = fixture.find("_info"); info != fixture.end())
+    {
+        if (const auto format = info->find("fixture-format"); format != info->end())
+        {
+            if (*format == "state_test")
+                return {.format = Format::state_test, .is_fixture = true};
+            if (*format == "blockchain_test")
+                return {.format = Format::blockchain_test, .is_fixture = true};
+            return {.is_fixture = true, .reason = "unsupported fixture format: " + format->dump()};
+        }
+    }
+    // Nothing declares the format: a hand-written or pre-EEST file, or an "_info" without one.
+    // Each shape is named by what only it carries; anything else is not a test at all, as EEST's
+    // shared pre-allocation kept beside the fixtures is not.
+    if (fixture.contains("blocks"))
+        return {.format = Format::blockchain_test, .is_fixture = true};
+    if (fixture.contains("transaction") && fixture.contains("post"))
+        return {.format = Format::state_test, .is_fixture = true};
+    return {.reason = "not a test"};
+}
+
 }  // namespace
 
 int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptions& options)
@@ -184,5 +232,76 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     // No test passed: nothing was collected, or every test was skipped. A test which holds no
     // case of its own still counts as passed, which this does not change.
     return passed == 0 ? NOTHING_VERIFIED : SUCCESS;
+}
+
+bool is_fixture_file(const json::json& contents)
+{
+    return std::ranges::any_of(
+        contents.items(), [](const auto& item) { return classify(item.value()).is_fixture; });
+}
+
+void run_fixture_file(
+    const fs::path& path, const TestSettings& settings, evmc::VM& vm, TestReport& report)
+{
+    std::ifstream f{path};
+    // Named, because items() only borrows: iterating a temporary dangles.
+    const auto contents = json::json::parse(f);
+    const auto file_holds_fixtures = is_fixture_file(contents);
+
+    std::optional<std::string> declined;  // The reason for the first fixture this tool declined.
+    bool any_ran = false;
+    for (const auto& [name, fixture] : contents.items())
+    {
+        if (!settings.selects(name))
+            continue;
+        try
+        {
+            run_fixture(name, fixture, file_holds_fixtures, settings, vm, report);
+        }
+        catch (const UnsupportedTestFeature& ex)
+        {
+            // This tool's own limit, whether the fixture declared a format it does not run or
+            // the file holds no test for its shape to be read against.
+            if (!declined)
+                declined = ex.what();
+            continue;
+        }
+        catch (const std::exception& ex)
+        {
+            // The fixture is a test and it went wrong, which is this file's verdict but not the
+            // end of it: the fixtures after it are still worth running.
+            report.fail(concat("exception: ", ex.what()));
+        }
+        any_ran = true;
+    }
+
+    // A file in which this tool ran nothing it was asked for is skipped, not passed.
+    // TODO: A file whose cases -k all deselected still passes, as it did before this command
+    //   existed, so a filter which matches nothing reports a tree of passing tests. Skip it
+    //   instead, and an empty selection reaches NOTHING_VERIFIED on its own.
+    if (!any_ran)
+    {
+        if (declined)
+            throw UnsupportedTestFeature{*declined};
+        if (!file_holds_fixtures)
+            throw UnsupportedTestFeature{"no test cases"};
+    }
+}
+
+void run_fixture(const std::string& name, const json::json& fixture, bool file_holds_fixtures,
+    const TestSettings& settings, evmc::VM& vm, TestReport& report)
+{
+    report.start_case(name);  // Names whatever the load itself reports.
+    const auto [format, is_fixture, reason] = classify(fixture);
+    if (format == Format::state_test)
+        run_state_test(make_state_test(name, fixture), vm, settings.trace_summary, report);
+    else if (format == Format::blockchain_test)
+        run_blockchain_test(make_blockchain_test(name, fixture), vm, report);
+    // Not recognising a fixture at all is a fault in the file, once the rest of it shows the
+    // file to be a fixture file. Anything else is this tool's own limit.
+    else if (file_holds_fixtures && !is_fixture)
+        report.fail(reason);
+    else
+        throw UnsupportedTestFeature{reason};
 }
 }  // namespace evmone::test

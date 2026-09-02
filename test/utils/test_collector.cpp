@@ -4,6 +4,8 @@
 
 #include "test_collector.hpp"
 #include <algorithm>
+#include <fstream>
+#include <iostream>
 #include <ranges>
 
 namespace evmone::test
@@ -53,5 +55,57 @@ void ignore_test_files(std::vector<TestFile>& files, std::span<const fs::path> i
         return std::ranges::any_of(
             ignored, [&relative](const fs::path& prefix) { return is_under(relative, prefix); });
     });
+}
+
+bool collect_tests(
+    std::vector<TestCase>& cases, const fs::path& root, const TestSettings& settings, evmc::VM& vm)
+{
+    if (is_directory(root))
+    {
+        auto files = collect_test_files(root);
+        ignore_test_files(files, settings.ignored);
+        cases.reserve(cases.size() + files.size());
+        for (const auto& file : files)
+        {
+            // Loaded when the test runs: loading a whole tree up front costs far more.
+            cases.push_back(
+                {file.path.string(), [path = file.path, &settings, &vm](TestReport& report) {
+                     run_fixture_file(path, settings, vm, report);
+                 }});
+        }
+        return true;
+    }
+
+    // Naming a file loads it now, to name the fixtures in it. One which cannot be loaded
+    // becomes a single test reporting why.
+    json::json file;
+    try
+    {
+        std::ifstream f{root};
+        file = json::json::parse(f);
+    }
+    catch (const std::exception& ex)
+    {
+        // Also reported here: --collect-only never runs the test.
+        std::cerr << root.string() << ": " << ex.what() << '\n';
+        cases.push_back({root.string(),
+            [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
+        return false;
+    }
+
+    // Whether the file is a fixture file at all decides what an unrecognised fixture in it means,
+    // exactly as it does for a whole file collected from a directory.
+    const auto file_holds_fixtures = is_fixture_file(file);
+
+    for (const auto& [name, fixture] : file.items())
+    {
+        if (!settings.selects(name))
+            continue;
+        cases.push_back({root.string() + "::" + name,
+            [name, fixture, file_holds_fixtures, &settings, &vm](TestReport& report) {
+                run_fixture(name, fixture, file_holds_fixtures, settings, vm, report);
+            }});
+    }
+    return true;
 }
 }  // namespace evmone::test

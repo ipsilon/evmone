@@ -130,6 +130,9 @@
         },
         "genesisRLP": "0x",
         "sealEngine": "NoProof",
-        "_info": {}
+        "_info": {
+            "fixture-format": "blockchain_test",
+            "comment": "The format every EEST blockchain fixture declares."
+        }
     }
 }

@@ -7,6 +7,7 @@
 #include <evmone/evmone.h>
 #include <test/utils/run.hpp>
 #include <test/utils/t8n.hpp>
+#include <test/utils/test_collector.hpp>
 #include <test/utils/utils.hpp>
 #include <filesystem>
 #include <fstream>
@@ -151,6 +152,57 @@ int exec_t8n_cmd(evmc::VM& vm, const T8nOptions& opts)
     evmone::tooling::t8n(vm, args);
     return 0;
 }
+
+/// The options of the "test" command.
+struct TestOptions
+{
+    std::vector<fs::path> paths;
+    evmone::test::TestSettings settings;
+    evmone::test::RunOptions run;
+};
+
+const CLI::App& setup_test_cmd(CLI::App& app, TestOptions& opts)
+{
+    auto& cmd = *app.add_subcommand("test", "Run Ethereum tests")->fallthrough();
+    cmd.add_option("path", opts.paths,
+           "Test file or directory. Every .json file under a directory, except index.json, is a "
+           "test; naming a file makes each test case in it a test of its own.")
+        ->required()
+        ->check(CLI::ExistingPath);
+    cmd.add_option(
+        "-k", opts.settings.name_filter, "Run only the test cases whose name contains this.");
+    cmd.add_option("--ignore", opts.settings.ignored,
+           "Path, relative to a test directory, not to collect tests from. May be given more than "
+           "once. Whole path components are matched, so --ignore bc4895 keeps bc4895-withdrawals.")
+        // Without this the option is variadic and swallows the positional paths after it.
+        ->allow_extra_args(false);
+    cmd.add_flag("--collect-only", opts.run.collect_only,
+        "List each collected test, one per line, and exit.");
+    cmd.add_flag("--trace-summary", opts.settings.trace_summary,
+        "Report each state test's execution summary, as --trace also does. Blockchain tests "
+        "have no summary to report.");
+    return cmd;
+}
+
+int exec_test_cmd(evmc::VM& vm, TestOptions opts, bool trace)
+{
+    // main() has switched the tracer on already. Its line per instruction is worth
+    // unsynchronising the streams for, and would run into the progress row, as a summary would.
+    if (trace)
+        std::ios::sync_with_stdio(false);
+    opts.settings.trace_summary |= trace;
+    opts.run.progress = !opts.settings.trace_summary;
+
+    std::vector<evmone::test::TestCase> cases;
+    bool all_collected = true;
+    for (const auto& p : opts.paths)
+        all_collected &= collect_tests(cases, p, opts.settings, vm);
+
+    const auto exit_code = evmone::test::run_tests(cases, std::cout, opts.run);
+    // A file which could not be loaded fails the listing too, not only a run of it.
+    return all_collected ? exit_code : evmone::test::TESTS_FAILED;
+}
+
 }  // namespace
 
 int main(int argc, const char* const* argv) noexcept
@@ -198,6 +250,9 @@ int main(int argc, const char* const* argv) noexcept
         T8nOptions t8n_opts;
         const auto& t8n_cmd = setup_t8n_cmd(app, t8n_opts);
 
+        TestOptions test_opts;
+        const auto& test_cmd = setup_test_cmd(app, test_opts);
+
         try
         {
             app.parse(argc, argv);
@@ -217,6 +272,9 @@ int main(int argc, const char* const* argv) noexcept
 
             if (t8n_cmd)
                 return exec_t8n_cmd(vm, t8n_opts);
+
+            if (test_cmd)
+                return exec_test_cmd(vm, test_opts, trace);
 
             return 0;
         }

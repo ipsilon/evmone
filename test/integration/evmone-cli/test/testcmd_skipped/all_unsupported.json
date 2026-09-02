@@ -1,0 +1,9 @@
+{
+ "a_only_case_declines": {
+  "_info": {
+   "fixture-format": "blockchain_test_engine",
+   "comment": "The only case, in a format this tool does not run, so the file has nothing left to run and is skipped rather than passed."
+  },
+  "blocks": []
+ }
+}
