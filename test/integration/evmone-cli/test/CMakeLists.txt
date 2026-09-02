@@ -99,8 +99,15 @@ set_tests_properties(
     ${PREFIX}/test_file_declined PROPERTIES PASS_REGULAR_EXPRESSION
     "SKIPPED[^\n]*c_engine - unsupported fixture format.*= 1 passed, 2 skipped in")
 
-# --trace reaches the runner through the app-level flag, and turns the progress row into a
-# line naming each test so the trace which follows it can be told apart.
+# --trace and --histogram reach the runner through the app-level flags, and turn the progress
+# row into a line naming each test so what each writes can be told apart.
+add_test(NAME ${PREFIX}/test_histogram COMMAND evmone-cli test --histogram
+    ${DATA}/statetest/tests1/SuiteA/test1.json)
+set_tests_properties(
+    ${PREFIX}/test_histogram PROPERTIES PASS_REGULAR_EXPRESSION
+    "test1\\.json::test1
+--- # HISTOGRAM.*= 1 passed in")
+
 add_test(NAME ${PREFIX}/test_trace COMMAND evmone-cli test --trace
     ${DATA}/statetest/tests1/SuiteA/test1.json)
 set_tests_properties(

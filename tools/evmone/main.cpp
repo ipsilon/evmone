@@ -185,14 +185,15 @@ const CLI::App& setup_test_cmd(CLI::App& app, TestOptions& opts)
     return cmd;
 }
 
-int exec_test_cmd(evmc::VM& vm, TestOptions opts, bool trace)
+int exec_test_cmd(evmc::VM& vm, TestOptions opts, bool trace, bool histogram)
 {
     // main() has switched the tracer on already. Its line per instruction is worth
-    // unsynchronising the streams for, and would run into the progress row, as a summary would.
+    // unsynchronising the streams for, and anything it writes per test would run into the
+    // progress row, as a summary would.
     if (trace)
         std::ios::sync_with_stdio(false);
     opts.settings.trace_summary |= trace;
-    opts.run.progress = !opts.settings.trace_summary;
+    opts.run.progress = !(opts.settings.trace_summary || histogram);
 
     std::vector<evmone::test::TestCase> cases;
     bool all_collected = true;
@@ -275,7 +276,7 @@ int main(int argc, const char* const* argv) noexcept
                 return exec_t8n_cmd(vm, t8n_opts);
 
             if (test_cmd)
-                return exec_test_cmd(vm, test_opts, trace);
+                return exec_test_cmd(vm, test_opts, trace, histogram);
 
             return 0;
         }
