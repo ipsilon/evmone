@@ -6,6 +6,8 @@
 
 set(PREFIX ${PREFIX}/test)
 
+# FIXME: move `evmone-cli test` tests to subdir: integration/test (sibling to integration/t8n).
+#        we can add one more dir: integration/evmone-cli/{t8n,test,run}.
 set(DATA ${CMAKE_CURRENT_SOURCE_DIR})
 
 # One command runs both fixture formats, deciding the fixture format on the go:
@@ -23,41 +25,32 @@ set_tests_properties(
     ${PREFIX}/test_not_a_test PROPERTIES PASS_REGULAR_EXPRESSION
     "SKIPPED[^\n]*index\\.json - not a test.*0 passed, 1 skipped in")
 
-# A PASS_REGULAR_EXPRESSION makes CTest ignore the exit code, so these three assert on nothing
-# else: a sound directory succeeds, one holding a fault fails, and so does one with nothing to
-# run. Every test below pins what distinguishes them, which the exit code alone does not.
+# Check exit code for: passed, failed, skipped (PASS_REGULAR_EXPRESSION ignores exit code).
 add_test(NAME ${PREFIX}/test_exit_ok COMMAND evmone-cli test ${DATA}/testcmd)
-
 add_test(NAME ${PREFIX}/test_exit_fail COMMAND evmone-cli test ${DATA}/testcmd_fault)
 set_tests_properties(${PREFIX}/test_exit_fail PROPERTIES WILL_FAIL TRUE)
-
 add_test(NAME ${PREFIX}/test_exit_skipped COMMAND evmone-cli test ${DATA}/testcmd_skipped)
 set_tests_properties(${PREFIX}/test_exit_skipped PROPERTIES WILL_FAIL TRUE)
 
-# A fixture the loader refuses must not take the rest of the file with it: the file passes on
-# the one fixture beside the two it declined. Its own verdict says nothing about those, so
-# each is named in the summary, where a count of files alone would lose them.
+# A declined fixture should not kill the whole file.
 add_test(NAME ${PREFIX}/test_dir_declined COMMAND evmone-cli test ${DATA}/testcmd)
 set_tests_properties(
     ${PREFIX}/test_dir_declined PROPERTIES PASS_REGULAR_EXPRESSION
     "SKIPPED[^\n]*::a_bad_rlp - tests with invalidly rlp-encoded blocks[^\n]*\nSKIPPED[^\n]*::c_engine - unsupported fixture format.*= 1 passed in")
 
-# Whether a file holds fixtures is a property of the file, not of what -k selected: the
-# fixture which is not a test faults even when it is the only one left.
+# The -k filter should not filter out a "not a test".
 add_test(NAME ${PREFIX}/test_dir_fault COMMAND evmone-cli test
     ${DATA}/testcmd_fault -k b_not_a_test)
 set_tests_properties(
     ${PREFIX}/test_dir_fault PROPERTIES PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
 
-# A fixture whose load throws must not abandon the fixtures after it, and the file counts
-# once for all three of them.
+# A failed fixture should not kill the whole file.
 add_test(NAME ${PREFIX}/test_after_exception COMMAND evmone-cli test ${DATA}/testcmd_fault)
 set_tests_properties(
     ${PREFIX}/test_after_exception PROPERTIES PASS_REGULAR_EXPRESSION
     "collected 1 file\n.*c_load_error:\n    exception.*d_bad_root:.*state root.*1 failed, 0 passed in")
 
-# Over a directory -k selects within the file's test, so the summary is what proves a fixture
-# ran: a count alone would hold just as well if the filter had dropped every one of them.
+# The -k filter should filter out the failing fixture.
 add_test(NAME ${PREFIX}/test_dir_filter COMMAND evmone-cli test
     ${DATA}/statetest/filter -k passing_test_case --trace-summary)
 set_tests_properties(
@@ -72,8 +65,8 @@ set_tests_properties(
     ${PREFIX}/test_dir_skipped PROPERTIES PASS_REGULAR_EXPRESSION
     "all_unsupported\\.json::a_engine - unsupported fixture format: \"blockchain_test_engine\"\nSKIPPED[^\n]*::b_engine_x - .*empty\\.json - not a test.*pre_alloc\\.json - not a test.*0 passed, 5 skipped in")
 
-# --trace and --histogram reach the runner through the app-level flags, and each turns the
-# progress row into a line naming the test so what it writes can be told apart.
+# The --histogram enables also test name printing.
+# FIXME: This should print the fixture name, not the test file. This can be fixed later when we will add --verbosity flag. If so, remove file printing now.
 add_test(NAME ${PREFIX}/test_histogram COMMAND evmone-cli test --histogram
     ${DATA}/statetest/tests1/SuiteA/test1.json)
 set_tests_properties(
@@ -81,14 +74,14 @@ set_tests_properties(
     "test1\\.json
 --- # HISTOGRAM.*= 1 passed in")
 
+# The --trace enables also test name printing.
 add_test(NAME ${PREFIX}/test_trace COMMAND evmone-cli test --trace
     ${DATA}/statetest/tests1/SuiteA/test1.json)
 set_tests_properties(
     ${PREFIX}/test_trace PROPERTIES PASS_REGULAR_EXPRESSION
     "test1\\.json\n\\{\"pc\":0,[^\n]*\"opName\":\"PUSH1\"\\}.*= 1 passed in")
 
-# A named file is read whatever its extension, and one which does not parse names itself,
-# because no fixture in it can be.
+# A named file is loaded whatever its extension.
 add_test(NAME ${PREFIX}/test_file_unparsed COMMAND evmone-cli test
     ${DATA}/statetest/tests1/SuiteA/notes.txt)
 set_tests_properties(
