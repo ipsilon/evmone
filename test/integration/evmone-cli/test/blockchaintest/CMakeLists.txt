@@ -9,7 +9,7 @@ set(TESTS1 ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(
     NAME ${PREFIX}/json_test
-    COMMAND evmone-blockchaintest ${TESTS1}/test.json
+    COMMAND evmone-cli test ${TESTS1}/test.json
 )
 set_tests_properties(
     ${PREFIX}/json_test PROPERTIES
