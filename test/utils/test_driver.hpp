@@ -23,14 +23,41 @@ constexpr int TESTS_FAILED = 1;
 /// value for the first of those; a test skipped has verified no more than a missing one.
 constexpr int NOTHING_VERIFIED = 5;
 
+/// How one fixture ended, spelled as the character the progress row marks it with.
+enum class Outcome : char
+{
+    passed = '.',
+    failed = 'F',
+    skipped = 's',
+};
+
+/// What running one fixture produced.
+struct Result
+{
+    /// The fixture, as "<file>::<name>", or the file alone when it never got as far as one.
+    std::string name;
+
+    Outcome outcome = Outcome::passed;
+
+    /// Why it did not pass. Empty when it did.
+    std::string reason;
+
+    std::vector<Failure> failures;
+};
+
 /// A single test: its name and how to run it.
 struct TestCase
 {
     std::string name;
 
-    /// Executes the test, recording what did not hold in the report.
-    std::function<void(TestReport&)> run;
+    /// Executes the test, returning what each of its fixtures produced. A test which never got
+    /// as far as a fixture returns the one result which says so, rather than throwing.
+    std::function<std::vector<Result>()> run;
 };
+
+/// Runs @p run under a report of its own and says what it produced. What the run recorded
+/// outranks how it ended: an exception is the reason only when nothing failed before it threw.
+[[nodiscard]] Result run_one(std::string name, const std::function<void(TestReport&)>& run);
 
 /// How to run and what to report.
 struct RunOptions
@@ -69,9 +96,9 @@ struct TestSettings
     }
 };
 
-/// Runs every selected fixture of one fixture file, which together are one test. Throws
-/// UnsupportedTestFeature for a file this tool has nothing to run in.
-void run_fixture_file(const std::filesystem::path& path, const TestSettings& settings, evmc::VM& vm,
-    TestReport& report);
+/// Runs every selected fixture of one fixture file, which together are one test, and returns
+/// what each produced. A file which holds no fixture, or does not parse, is the one result.
+[[nodiscard]] std::vector<Result> run_fixture_file(
+    const std::filesystem::path& path, const TestSettings& settings, evmc::VM& vm);
 
 }  // namespace evmone::test

@@ -34,13 +34,13 @@ set_tests_properties(${PREFIX}/test_exit_fail PROPERTIES WILL_FAIL TRUE)
 add_test(NAME ${PREFIX}/test_exit_skipped COMMAND evmone-cli test ${DATA}/testcmd_skipped)
 set_tests_properties(${PREFIX}/test_exit_skipped PROPERTIES WILL_FAIL TRUE)
 
-# Over a directory a test is a whole file, so a fixture the loader refuses must not take the
-# rest of the file with it: the file passes on the one fixture beside the two it declined.
-# Its own verdict says nothing about those, so each is named.
+# A fixture the loader refuses must not take the rest of the file with it: the file passes on
+# the one fixture beside the two it declined. Its own verdict says nothing about those, so
+# each is named in the summary, where a count of files alone would lose them.
 add_test(NAME ${PREFIX}/test_dir_declined COMMAND evmone-cli test ${DATA}/testcmd)
 set_tests_properties(
     ${PREFIX}/test_dir_declined PROPERTIES PASS_REGULAR_EXPRESSION
-    "a_bad_rlp: tests with invalidly rlp-encoded blocks.*c_engine: unsupported fixture format.*= 1 passed in")
+    "SKIPPED[^\n]*::a_bad_rlp - tests with invalidly rlp-encoded blocks[^\n]*\nSKIPPED[^\n]*::c_engine - unsupported fixture format.*= 1 passed in")
 
 # Whether a file holds fixtures is a property of the file, not of what -k selected: the
 # fixture which is not a test faults even when it is the only one left.
@@ -49,13 +49,12 @@ add_test(NAME ${PREFIX}/test_dir_fault COMMAND evmone-cli test
 set_tests_properties(
     ${PREFIX}/test_dir_fault PROPERTIES PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
 
-# A fixture whose load throws must not abandon the fixtures after it. "collected 1 test" keeps
-# this on the directory form, where the whole file is one test and the per-fixture catch is
-# what keeps the later faults reachable.
+# A fixture whose load throws must not abandon the fixtures after it, and the file counts
+# once for all three of them.
 add_test(NAME ${PREFIX}/test_after_exception COMMAND evmone-cli test ${DATA}/testcmd_fault)
 set_tests_properties(
     ${PREFIX}/test_after_exception PROPERTIES PASS_REGULAR_EXPRESSION
-    "collected 1 test.*c_load_error:\n    exception.*d_bad_root:.*state root")
+    "collected 1 file\n.*c_load_error:\n    exception.*d_bad_root:.*state root.*1 failed, 0 passed in")
 
 # Over a directory -k selects within the file's test, so the summary is what proves a fixture
 # ran: a count alone would hold just as well if the filter had dropped every one of them.
@@ -66,13 +65,12 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "\"pass\":true"
     FAIL_REGULAR_EXPRESSION "failing_test_case")
 
-# Collected from a directory a file is one test, so a file with nothing to run is skipped
-# whole, named by the first reason which explains it: all_unsupported declines twice, and the
-# format named is the first one's.
+# A file is one test, so a file with nothing to run counts once as skipped however many
+# fixtures it declined: all_unsupported declines twice and both are named.
 add_test(NAME ${PREFIX}/test_dir_skipped COMMAND evmone-cli test ${DATA}/testcmd_skipped)
 set_tests_properties(
     ${PREFIX}/test_dir_skipped PROPERTIES PASS_REGULAR_EXPRESSION
-    "all_unsupported\\.json - unsupported fixture format: \"blockchain_test_engine\"\nSKIPPED[^\n]*empty\\.json - not a test.*pre_alloc\\.json - not a test.*0 passed, 5 skipped in")
+    "all_unsupported\\.json::a_engine - unsupported fixture format: \"blockchain_test_engine\"\nSKIPPED[^\n]*::b_engine_x - .*empty\\.json - not a test.*pre_alloc\\.json - not a test.*0 passed, 5 skipped in")
 
 # --trace and --histogram reach the runner through the app-level flags, and each turns the
 # progress row into a line naming the test so what it writes can be told apart.

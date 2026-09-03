@@ -15,6 +15,13 @@ using evmone::test::TestCase;
 
 namespace
 {
+/// A test which is one case: the driver takes an array of results, and this is the one.
+TestCase one_case(std::string name, std::function<void(evmone::test::TestReport&)> run)
+{
+    return {name,
+        [name, run = std::move(run)] { return std::vector{evmone::test::run_one(name, run)}; }};
+}
+
 /// Adds to @p cases one test per fixture file under @p root, which is that file itself when it
 /// is not a directory.
 void collect_tests(std::vector<TestCase>& cases, const fs::path& root,
@@ -35,13 +42,14 @@ void collect_tests(std::vector<TestCase>& cases, const fs::path& root,
     {
         // Loaded when the test runs: loading a whole tree up front costs far more. A
         // load which throws over an unsupported fixture reaches the driver, which skips.
-        cases.push_back(
-            {file.path.string(), [path = file.path, &vm](evmone::test::TestReport& report) {
-                 std::ifstream f{path};
-                 for (const auto& test : evmone::test::load_blockchain_tests(f))
-                     evmone::test::run_blockchain_test(test, vm, report);
-             }});
-    }
+        cases.push_back(one_case(
+            file.path.string(), [path = file.path, &vm](evmone::test::TestReport& report) {
+            std::ifstream f{path};
+            for (const auto& test : evmone::test::load_blockchain_tests(f))
+                evmone::test::run_blockchain_test(test, vm, report);
+             }
+    }));
+}
 }
 }  // namespace
 

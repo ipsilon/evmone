@@ -21,14 +21,6 @@ namespace
 constexpr int LINE_WIDTH = 72;
 constexpr int PROGRESS_WIDTH = 60;
 
-/// The outcome of one test, spelled as the progress character for it.
-enum class Outcome : char
-{
-    passed = '.',
-    failed = 'F',
-    skipped = 's',
-};
-
 void banner(std::ostream& out, std::string_view title, char fill = '=')
 {
     const auto padding = LINE_WIDTH - static_cast<int>(title.size()) - 2;
@@ -37,13 +29,12 @@ void banner(std::ostream& out, std::string_view title, char fill = '=')
         << std::string(static_cast<size_t>(std::max(padding - left, 1)), fill) << '\n';
 }
 
-/// A test which did not pass: what the summary says about it and what it recorded.
+/// A file with something to report: how it counts, and every fixture of it which did not pass.
 struct Note
 {
-    Outcome outcome;
     std::string name;
-    std::string reason;
-    std::vector<Failure> failures;
+    Outcome outcome;
+    std::vector<Result> results;
 };
 
 /// One progress character per test, wrapped, each line ending in the percentage done.
@@ -151,6 +142,46 @@ void run_fixture(const std::string& name, const json::json& fixture, const TestS
 
 }  // namespace
 
+Result run_one(std::string name, const std::function<void(TestReport&)>& run)
+{
+    Result result{.name = std::move(name)};
+    TestReport report{[&result](const Failure& failure) { result.failures.push_back(failure); }};
+    report.start_case(result.name);  // Names whatever the run itself reports.
+
+    std::string exception_reason;
+    try
+    {
+        run(report);
+    }
+    catch (const UnsupportedTestFeature& ex)
+    {
+        result.outcome = Outcome::skipped;
+        result.reason = ex.what();
+    }
+    catch (const std::exception& ex)
+    {
+        // One unloadable fixture in a tree of thousands fails its own test, not the run.
+        report.fail("exception", ex.what());
+        exception_reason = concat("exception: ", ex.what());
+    }
+    catch (...)
+    {
+        report.fail("exception", "not derived from std::exception");
+        exception_reason = "exception not derived from std::exception";
+    }
+
+    // A recorded failure outranks giving up afterwards, in the summary too: the exception is
+    // the reason only when nothing failed before it threw.
+    if (!result.failures.empty())
+    {
+        result.outcome = Outcome::failed;
+        result.reason = result.failures.size() == 1 && !exception_reason.empty() ?
+                            std::move(exception_reason) :
+                            result.failures.front().what;
+    }
+    return result;
+}
+
 int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptions& options)
 {
     if (options.collect_only)
@@ -163,67 +194,58 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     const auto started = std::chrono::steady_clock::now();
 
     banner(out, "test session starts");
-    out << "collected " << cases.size() << (cases.size() == 1 ? " test\n\n" : " tests\n\n");
+    out << "collected " << cases.size() << (cases.size() == 1 ? " file\n\n" : " files\n\n");
 
     std::vector<Note> notes;
     Progress row{out, cases.size()};
+    size_t failed = 0;
+    size_t skipped = 0;
+    size_t passed = 0;
 
     for (const auto& test : cases)
     {
-        // Held until the run ends, as pytest holds them, so nothing interleaves.
-        std::vector<Failure> failures;
-        TestReport report{[&failures](const Failure& failure) { failures.push_back(failure); }};
-        report.start_case(test.name);
-
-        auto outcome = Outcome::passed;
-        std::string reason;
-        std::string exception_reason;
         if (!options.progress)
             out << test.name << '\n';  // The only thing naming what the test prints next.
         out << std::flush;
+
+        // Held until the run ends, as pytest holds them, so nothing interleaves.
+        std::vector<Result> results;
         try
         {
-            test.run(report);
-        }
-        catch (const UnsupportedTestFeature& ex)
-        {
-            outcome = Outcome::skipped;
-            reason = ex.what();
-        }
-        catch (const std::exception& ex)
-        {
-            // One unloadable fixture in a tree of thousands fails its own test, not the run.
-            report.fail("exception", ex.what());
-            exception_reason = concat("exception: ", ex.what());
+            results = test.run();
         }
         catch (...)
         {
-            report.fail("exception", "not derived from std::exception");
-            exception_reason = "exception not derived from std::exception";
+            // A test which throws rather than reporting is the one result which says so.
+            const auto error = std::current_exception();
+            results.push_back(
+                run_one(test.name, [&error](TestReport&) { std::rethrow_exception(error); }));
         }
         // A test writes its own output, an EVM trace above all, to another stream.
         std::clog << std::flush;
 
-        // A recorded failure outranks giving up afterwards, in the summary too: the exception
-        // is the reason only when nothing failed before it threw.
-        if (!failures.empty())
-        {
+        // The file counts once, for the worst its fixtures reached. It is skipped only when
+        // nothing in it ran at all, so one fixture running is enough to give it a verdict.
+        static constexpr auto is = [](Outcome outcome) {
+            return [outcome](const Result& result) { return result.outcome == outcome; };
+        };
+        auto outcome = Outcome::passed;
+        if (std::ranges::any_of(results, is(Outcome::failed)))
             outcome = Outcome::failed;
-            reason = failures.size() == 1 && !exception_reason.empty() ?
-                         std::move(exception_reason) :
-                         failures.front().what;
-        }
-        if (outcome != Outcome::passed)
-            notes.push_back({outcome, test.name, std::move(reason), std::move(failures)});
+        else if (!results.empty() && std::ranges::none_of(results, is(Outcome::passed)))
+            outcome = Outcome::skipped;
+
+        ++(outcome == Outcome::failed ? failed : outcome == Outcome::skipped ? skipped : passed);
+
+        // Every fixture which did not pass is named, including one declined by a file which
+        // passed on the fixtures beside it. Otherwise it would vanish from a green run.
+        std::erase_if(results, is(Outcome::passed));
+        if (!results.empty())
+            notes.push_back({test.name, outcome, std::move(results)});
 
         if (options.progress)
             row.advance(outcome);
     }
-
-    // Every test which did not pass left exactly one note, so the counts follow from them.
-    const auto failed = std::ranges::count(notes, Outcome::failed, &Note::outcome);
-    const auto skipped = std::ranges::count(notes, Outcome::skipped, &Note::outcome);
-    const auto passed = cases.size() - notes.size();
 
     if (failed != 0)
     {
@@ -234,8 +256,11 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
             if (note.outcome != Outcome::failed)
                 continue;
             banner(out, note.name, '_');
-            for (const auto& failure : note.failures)
-                out << failure << '\n';
+            for (const auto& result : note.results)
+            {
+                for (const auto& failure : result.failures)
+                    out << failure << '\n';
+            }
         }
     }
 
@@ -245,10 +270,13 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
         banner(out, "short test summary info");
         for (const auto& note : notes)
         {
-            out << (note.outcome == Outcome::failed ? "FAILED  " : "SKIPPED ") << note.name;
-            if (!note.reason.empty())
-                out << " - " << note.reason;
-            out << '\n';
+            for (const auto& result : note.results)
+            {
+                out << (result.outcome == Outcome::failed ? "FAILED  " : "SKIPPED ") << result.name;
+                if (!result.reason.empty())
+                    out << " - " << result.reason;
+                out << '\n';
+            }
         }
     }
 
@@ -270,53 +298,27 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     return passed == 0 ? NOTHING_VERIFIED : SUCCESS;
 }
 
-void run_fixture_file(
-    const fs::path& path, const TestSettings& settings, evmc::VM& vm, TestReport& report)
+std::vector<Result> run_fixture_file(
+    const fs::path& path, const TestSettings& settings, evmc::VM& vm)
 {
     // Named, because items() only borrows: iterating a temporary dangles.
-    const auto contents = load_fixture_file(path);
+    json::json contents;
+    // A file which does not parse, or holds no fixture at all, never gets as far as one: it is
+    // itself the only result there is to report.
+    if (auto loaded =
+            run_one(path.string(), [&](TestReport&) { contents = load_fixture_file(path); });
+        loaded.outcome != Outcome::passed)
+        return {std::move(loaded)};
 
-    std::vector<std::pair<std::string, std::string>> declined;  // Fixture name and reason.
-    bool any_ran = false;
+    std::vector<Result> results;
     for (const auto& [name, fixture] : contents.items())
     {
         if (!settings.selects(name))
             continue;
-        try
-        {
-            run_fixture(name, fixture, settings, vm, report);
-        }
-        catch (const UnsupportedTestFeature& ex)
-        {
-            // This tool's own limit: a format it does not run, or a fixture its loader refuses.
-            declined.emplace_back(name, ex.what());
-            continue;
-        }
-        catch (const std::exception& ex)
-        {
-            // The fixture is a test and it went wrong, which is this file's verdict but not the
-            // end of it: the fixtures after it are still worth running. Reported as run_tests
-            // reports one, so a what() of several lines keeps the indent of the rest.
-            report.fail("exception", ex.what());
-        }
-        catch (...)
-        {
-            report.fail("exception", "not derived from std::exception");
-        }
-        any_ran = true;
+        results.push_back(run_one(path.string() + "::" + name,
+            [&](TestReport& report) { run_fixture(name, fixture, settings, vm, report); }));
     }
-
-    // A file in which this tool ran nothing it was asked for is skipped, not passed.
-    // TODO: A file whose cases -k all deselected still passes, as it did before this command
-    //   existed, so a filter which matches nothing turns a failing tree green. Skip it instead,
-    //   and an empty selection reaches NOTHING_VERIFIED on its own.
-    if (!any_ran && !declined.empty())
-        throw UnsupportedTestFeature{declined.front().second};
-
-    // The file ran, so its own verdict says nothing about what it declined. Name those, or a
-    // fixture this tool stops running disappears from a passing run rather than being missed.
-    for (const auto& [name, reason] : declined)
-        std::cerr << path.string() << "::" << name << ": " << reason << '\n';
+    return results;
 }
 
 }  // namespace evmone::test

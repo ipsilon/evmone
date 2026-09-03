@@ -73,10 +73,8 @@ void collect_tests(
     for (const auto& file : files)
     {
         // Loaded when the test runs: loading a whole tree up front costs far more.
-        cases.push_back(
-            {file.path.string(), [path = file.path, &settings, &vm](TestReport& report) {
-                 run_fixture_file(path, settings, vm, report);
-             }});
+        cases.push_back({file.path.string(),
+            [path = file.path, &settings, &vm] { return run_fixture_file(path, settings, vm); }});
     }
 }
 }  // namespace evmone::test
