@@ -74,41 +74,20 @@ set_tests_properties(
     ${PREFIX}/test_dir_skipped PROPERTIES PASS_REGULAR_EXPRESSION
     "all_unsupported\\.json - unsupported fixture format: \"blockchain_test_engine\"\nSKIPPED[^\n]*empty\\.json - not a test.*pre_alloc\\.json - not a test.*0 passed, 5 skipped in")
 
-# Naming the file instead of the directory makes each fixture its own test, so a fault leaves
-# the fixtures beside it running, and -k selects among them.
-add_test(NAME ${PREFIX}/test_file_fault COMMAND evmone-cli test
-    ${DATA}/testcmd_fault/faults.json)
-set_tests_properties(
-    ${PREFIX}/test_file_fault PROPERTIES PASS_REGULAR_EXPRESSION
-    "FAILED[^\n]*faults\\.json::b_not_a_test.*3 failed, 1 passed in")
-
-add_test(NAME ${PREFIX}/test_file_filter COMMAND evmone-cli test
-    ${DATA}/testcmd_fault/faults.json -k a_runs)
-set_tests_properties(
-    ${PREFIX}/test_file_filter PROPERTIES PASS_REGULAR_EXPRESSION "= 1 passed in")
-
-# Naming a file whose fixtures this tool does not run skips them one by one, where collecting
-# the same file from a directory would skip it whole.
-add_test(NAME ${PREFIX}/test_file_declined COMMAND evmone-cli test
-    ${DATA}/testcmd/declined.json)
-set_tests_properties(
-    ${PREFIX}/test_file_declined PROPERTIES PASS_REGULAR_EXPRESSION
-    "SKIPPED[^\n]*c_engine - unsupported fixture format.*= 1 passed, 2 skipped in")
-
 # --trace and --histogram reach the runner through the app-level flags, and each turns the
 # progress row into a line naming the test so what it writes can be told apart.
 add_test(NAME ${PREFIX}/test_histogram COMMAND evmone-cli test --histogram
     ${DATA}/statetest/tests1/SuiteA/test1.json)
 set_tests_properties(
     ${PREFIX}/test_histogram PROPERTIES PASS_REGULAR_EXPRESSION
-    "test1\\.json::test1
+    "test1\\.json
 --- # HISTOGRAM.*= 1 passed in")
 
 add_test(NAME ${PREFIX}/test_trace COMMAND evmone-cli test --trace
     ${DATA}/statetest/tests1/SuiteA/test1.json)
 set_tests_properties(
     ${PREFIX}/test_trace PROPERTIES PASS_REGULAR_EXPRESSION
-    "test1\\.json::test1\n\\{\"pc\":0,[^\n]*\"opName\":\"PUSH1\"\\}.*= 1 passed in")
+    "test1\\.json\n\\{\"pc\":0,[^\n]*\"opName\":\"PUSH1\"\\}.*= 1 passed in")
 
 # A named file is read whatever its extension, and one which does not parse names itself,
 # because no fixture in it can be.

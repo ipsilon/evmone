@@ -105,6 +105,50 @@ Format classify(const json::json& fixture)
     return Format::not_a_test;
 }
 
+/// Parses the fixture file at @p path. Throws UnsupportedTestFeature for a file with no fixture
+/// in it, which is nothing to run: fixture directories hold other JSON beside the fixtures.
+json::json load_fixture_file(const fs::path& path)
+{
+    std::ifstream f{path};
+    // A stream which never opened reads as EOF, which parses as a syntax error in a file which
+    // has none.
+    if (!f)
+        throw std::runtime_error{"cannot open the file"};
+    const auto contents = json::json::parse(f);
+    // Not one fixture in it: EEST keeps its shared pre-allocation and an index of the fixtures
+    // beside them, and neither is a test. Nor is a document which is not an object at all:
+    // items() would walk an array by index, naming its elements "0", "1", ...
+    if (!contents.is_object() || std::ranges::none_of(contents.items(), [](const auto& i) {
+            return classify(i.value()) != Format::not_a_test;
+        }))
+        throw UnsupportedTestFeature{"not a test"};
+    return contents;
+}
+
+/// Runs one fixture of a fixture file. One this tool does not recognise is a fault in the file;
+/// one in a format it does not run is skipped.
+void run_fixture(const std::string& name, const json::json& fixture, const TestSettings& settings,
+    evmc::VM& vm, TestReport& report)
+{
+    report.start_case(name);  // Names whatever the load itself reports.
+    switch (classify(fixture))
+    {
+    case Format::state_test:
+        run_state_test(make_state_test(name, fixture), vm, settings.trace_summary, report);
+        break;
+    case Format::blockchain_test:
+        run_blockchain_test(make_blockchain_test(name, fixture), vm, report);
+        break;
+    case Format::unsupported:
+        throw UnsupportedTestFeature{
+            "unsupported fixture format: " + fixture.at("_info").at("fixture-format").dump()};
+    case Format::not_a_test:
+        // The rest of the file holds fixtures, so this one is broken.
+        report.fail("not a test");
+        break;
+    }
+}
+
 }  // namespace
 
 int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptions& options)
@@ -226,24 +270,6 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     return passed == 0 ? NOTHING_VERIFIED : SUCCESS;
 }
 
-json::json load_fixture_file(const fs::path& path)
-{
-    std::ifstream f{path};
-    // A stream which never opened reads as EOF, which parses as a syntax error in a file which
-    // has none.
-    if (!f)
-        throw std::runtime_error{"cannot open the file"};
-    const auto contents = json::json::parse(f);
-    // Not one fixture in it: EEST keeps its shared pre-allocation and an index of the fixtures
-    // beside them, and neither is a test. Nor is a document which is not an object at all:
-    // items() would walk an array by index, naming its elements "0", "1", ...
-    if (!contents.is_object() || std::ranges::none_of(contents.items(), [](const auto& i) {
-            return classify(i.value()) != Format::not_a_test;
-        }))
-        throw UnsupportedTestFeature{"not a test"};
-    return contents;
-}
-
 void run_fixture_file(
     const fs::path& path, const TestSettings& settings, evmc::VM& vm, TestReport& report)
 {
@@ -293,25 +319,4 @@ void run_fixture_file(
         std::cerr << path.string() << "::" << name << ": " << reason << '\n';
 }
 
-void run_fixture(const std::string& name, const json::json& fixture, const TestSettings& settings,
-    evmc::VM& vm, TestReport& report)
-{
-    report.start_case(name);  // Names whatever the load itself reports.
-    switch (classify(fixture))
-    {
-    case Format::state_test:
-        run_state_test(make_state_test(name, fixture), vm, settings.trace_summary, report);
-        break;
-    case Format::blockchain_test:
-        run_blockchain_test(make_blockchain_test(name, fixture), vm, report);
-        break;
-    case Format::unsupported:
-        throw UnsupportedTestFeature{
-            "unsupported fixture format: " + fixture.at("_info").at("fixture-format").dump()};
-    case Format::not_a_test:
-        // The rest of the file holds fixtures, so this one is broken.
-        report.fail("not a test");
-        break;
-    }
-}
 }  // namespace evmone::test

@@ -4,8 +4,6 @@
 
 #include "test_collector.hpp"
 #include <algorithm>
-#include <iostream>
-#include <memory>
 #include <ranges>
 
 namespace evmone::test
@@ -57,60 +55,28 @@ void ignore_test_files(std::vector<TestFile>& files, std::span<const fs::path> i
     });
 }
 
-bool collect_tests(
+void collect_tests(
     std::vector<TestCase>& cases, const fs::path& root, const TestSettings& settings, evmc::VM& vm)
 {
+    // A file is one test, whether it was named or found under a directory. Naming the fixtures
+    // in it instead would mean loading every file to collect, which a whole tree cannot afford.
+    std::vector<TestFile> files;
     if (is_directory(root))
     {
-        auto files = collect_test_files(root);
+        files = collect_test_files(root);
         ignore_test_files(files, settings.ignored);
-        cases.reserve(cases.size() + files.size());
-        for (const auto& file : files)
-        {
-            // Loaded when the test runs: loading a whole tree up front costs far more.
-            cases.push_back(
-                {file.path.string(), [path = file.path, &settings, &vm](TestReport& report) {
-                     run_fixture_file(path, settings, vm, report);
-                 }});
-        }
-        return true;
     }
+    else
+        files.push_back({root, {}});
 
-    // Naming a file loads it now, to name the fixtures in it. One which cannot be loaded, or
-    // which is not a test, becomes a single test reporting why.
-    json::json file;
-    try
+    cases.reserve(cases.size() + files.size());
+    for (const auto& file : files)
     {
-        file = load_fixture_file(root);
-    }
-    catch (const UnsupportedTestFeature&)
-    {
-        // A skip, as when collected from a directory, not a broken collection.
-        cases.push_back({root.string(),
-            [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
-        return true;
-    }
-    catch (const std::exception& ex)
-    {
-        // Also reported here: --collect-only never runs the test.
-        std::cerr << root.string() << ": " << ex.what() << '\n';
-        cases.push_back({root.string(),
-            [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
-        return false;
-    }
-
-    // One document shared by every test of it. Capturing the fixture itself would copy its
-    // subtree into each test, which a listing pays for in full to read nothing but the name.
-    const auto doc = std::make_shared<const json::json>(std::move(file));
-    for (const auto& [name, fixture] : doc->items())
-    {
-        if (!settings.selects(name))
-            continue;
+        // Loaded when the test runs: loading a whole tree up front costs far more.
         cases.push_back(
-            {root.string() + "::" + name, [doc, name = name, &settings, &vm](TestReport& report) {
-                 run_fixture(name, doc->at(name), settings, vm, report);
+            {file.path.string(), [path = file.path, &settings, &vm](TestReport& report) {
+                 run_fixture_file(path, settings, vm, report);
              }});
     }
-    return true;
 }
 }  // namespace evmone::test

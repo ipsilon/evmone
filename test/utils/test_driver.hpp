@@ -69,17 +69,9 @@ struct TestSettings
     }
 };
 
-/// Parses the fixture file at @p path. Throws UnsupportedTestFeature for a file with no fixture
-/// in it, which is nothing to run: fixture directories hold other JSON beside the fixtures.
-[[nodiscard]] json::json load_fixture_file(const std::filesystem::path& path);
-
 /// Runs every selected fixture of one fixture file, which together are one test. Throws
 /// UnsupportedTestFeature for a file this tool has nothing to run in.
 void run_fixture_file(const std::filesystem::path& path, const TestSettings& settings, evmc::VM& vm,
     TestReport& report);
 
-/// Runs one fixture of a fixture file. One this tool does not recognise is a fault in the file;
-/// one in a format it does not run is skipped.
-void run_fixture(const std::string& name, const json::json& fixture, const TestSettings& settings,
-    evmc::VM& vm, TestReport& report);
 }  // namespace evmone::test

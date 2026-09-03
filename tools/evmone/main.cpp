@@ -165,9 +165,8 @@ const CLI::App& setup_test_cmd(CLI::App& app, TestOptions& opts)
 {
     auto& cmd = *app.add_subcommand("test", "Run Ethereum tests")->fallthrough();
     cmd.add_option("path", opts.paths,
-           "Test file or directory. Under a directory every .json file except index.json is "
-           "one test. A named file gives one test per fixture, or one for the file when it holds "
-           "no fixture.")
+           "Test file or directory. Every fixture file is one test: under a directory, each "
+           ".json file except index.json.")
         ->required()
         ->check(CLI::ExistingPath);
     cmd.add_option(
@@ -196,13 +195,10 @@ int exec_test_cmd(evmc::VM& vm, TestOptions opts, bool trace, bool histogram)
     opts.run.progress = !(opts.settings.trace_summary || histogram);
 
     std::vector<evmone::test::TestCase> cases;
-    bool all_collected = true;
     for (const auto& p : opts.paths)
-        all_collected &= collect_tests(cases, p, opts.settings, vm);
+        collect_tests(cases, p, opts.settings, vm);
 
-    const auto exit_code = evmone::test::run_tests(cases, std::cout, opts.run);
-    // A file which could not be loaded fails the listing too, not only a run of it.
-    return all_collected ? exit_code : evmone::test::TESTS_FAILED;
+    return evmone::test::run_tests(cases, std::cout, opts.run);
 }
 
 }  // namespace
