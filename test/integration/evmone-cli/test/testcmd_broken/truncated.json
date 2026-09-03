@@ -1,3 +1,0 @@
-{
- "a_case": {
-  "_info": {"comment": "The file ends here, mid-object, so it does not parse at all."}

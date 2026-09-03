@@ -116,12 +116,13 @@ set_tests_properties(
     ${PREFIX}/test_trace PROPERTIES PASS_REGULAR_EXPRESSION
     "test1\\.json::test1\n\\{\"pc\":0,[^\n]*\"opName\":\"PUSH1\"\\}.*= 1 passed in")
 
-# A named file which does not parse names itself, because no case in it can be.
+# A named file is read whatever its extension, and one which does not parse names itself,
+# because no fixture in it can be.
 add_test(NAME ${PREFIX}/test_file_unparsed COMMAND evmone-cli test
-    ${DATA}/testcmd_broken/truncated.json)
+    ${DATA}/statetest/tests1/SuiteA/notes.txt)
 set_tests_properties(
     ${PREFIX}/test_file_unparsed PROPERTIES PASS_REGULAR_EXPRESSION
-    "FAILED[^\n]*truncated\\.json - exception[^\n]*parse error.*1 failed, 0 passed in")
+    "FAILED[^\n]*notes\\.txt - exception[^\n]*parse error.*1 failed, 0 passed in")
 
 
 get_directory_property(ALL_TESTS TESTS)
