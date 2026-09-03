@@ -37,7 +37,7 @@ constexpr auto ALLOC_JSON = R"({
 
 // Single legacy CREATE transaction; init code is `PUSH1 0x01 PUSH0 RETURN`,
 // which deploys a one-byte runtime `0x01`. Three opcodes => three trace lines.
-// Matches test/integration/t8n/cancun_create_tx/txs.json[0]; the tx hash is
+// Matches test/integration/evmone-cli/t8n/cancun_create_tx/txs.json[0]; the tx hash is
 // well-known and used below.
 constexpr auto TX_JSON = R"([{
     "to": null,

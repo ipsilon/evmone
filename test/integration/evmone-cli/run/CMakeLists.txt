@@ -1,0 +1,51 @@
+# evmone: Fast Ethereum Virtual Machine implementation
+# Copyright 2021 The evmone Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+# Integration tests for the `evmone run` subcommand.
+
+set(PREFIX ${PREFIX}/run)
+
+add_test(NAME ${PREFIX}/run COMMAND evmone-cli run 6000)
+set_tests_properties(
+    ${PREFIX}/run PROPERTIES PASS_REGULAR_EXPRESSION
+    "Result:   success\nGas used: 3\n")
+
+add_test(NAME ${PREFIX}/run_rev COMMAND evmone-cli run --rev TangerineWhistle 00)
+set_tests_properties(
+    ${PREFIX}/run_rev PROPERTIES PASS_REGULAR_EXPRESSION
+    "Executing on TangerineWhistle")
+
+add_test(NAME ${PREFIX}/run_bad_rev COMMAND evmone-cli run --rev NoSuchRev 00)
+set_tests_properties(
+    ${PREFIX}/run_bad_rev PROPERTIES PASS_REGULAR_EXPRESSION
+    "unknown revision: NoSuchRev")
+
+# Code read from a file rather than the command line, which the @ prefix asks for. The file is
+# checked in beside the test, so it is read and edited like every other fixture here.
+add_test(NAME ${PREFIX}/file_input COMMAND evmone-cli run @${CMAKE_CURRENT_SOURCE_DIR}/code.hex)
+set_tests_properties(
+    ${PREFIX}/file_input PROPERTIES PASS_REGULAR_EXPRESSION
+    "Result:   success\n")
+
+add_test(NAME ${PREFIX}/histogram COMMAND evmone-cli --histogram run 6000808080800101010200)
+set_tests_properties(
+    ${PREFIX}/histogram PROPERTIES PASS_REGULAR_EXPRESSION
+    "--- # HISTOGRAM depth=0
+opcode,count
+STOP,1
+ADD,3
+MUL,1
+PUSH1,1
+DUP1,4
+")
+
+add_test(NAME ${PREFIX}/trace COMMAND evmone-cli --trace run 60006002800103)
+set_tests_properties(
+    ${PREFIX}/trace PROPERTIES PASS_REGULAR_EXPRESSION
+    "\"pc\":0,\"op\":96,\"gas\":\"0xf4240\",\"gasCost\":\"0x3\",\"memSize\":0,\"stack\":\\[\\],\"depth\":1,\"refund\":0,\"opName\":\"PUSH1\"}
+{\"pc\":2,\"op\":96,\"gas\":\"0xf423d\",\"gasCost\":\"0x3\",\"memSize\":0,\"stack\":\\[\"0x0\"\\],\"depth\":1,\"refund\":0,\"opName\":\"PUSH1\"}
+{\"pc\":4,\"op\":128,\"gas\":\"0xf423a\",\"gasCost\":\"0x3\",\"memSize\":0,\"stack\":\\[\"0x0\",\"0x2\"\\],\"depth\":1,\"refund\":0,\"opName\":\"DUP1\"}
+{\"pc\":5,\"op\":1,\"gas\":\"0xf4237\",\"gasCost\":\"0x3\",\"memSize\":0,\"stack\":\\[\"0x0\",\"0x2\",\"0x2\"\\],\"depth\":1,\"refund\":0,\"opName\":\"ADD\"}
+{\"pc\":6,\"op\":3,\"gas\":\"0xf4234\",\"gasCost\":\"0x3\",\"memSize\":0,\"stack\":\\[\"0x0\",\"0x4\"\\],\"depth\":1,\"refund\":0,\"opName\":\"SUB\"}
+")
