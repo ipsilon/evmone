@@ -106,7 +106,91 @@ std::string run_call_to(std::string_view callee_code, evmc_revision rev)
     })";
     return run_t8n(alloc, TX_TO_CALLEE, rev);
 }
+/// A block env carrying the parent's fee market, which is what a base fee is computed from.
+constexpr auto ENV_WITH_PARENT_JSON = R"({
+    "currentCoinbase": "0x8888f1f195afa192cfee860698584c030f4c9db1",
+    "currentNumber": "0x01",
+    "currentTimestamp": "0x54c99069",
+    "currentGasLimit": "15000000",
+    "parentBaseFee": "7",
+    "parentGasLimit": "5000000",
+    "parentGasUsed": "5000000"
+})";
+
+/// Runs t8n over an empty state with no transaction, for what the block env alone decides.
+std::string run_t8n_env(std::string_view env_json, evmc_revision rev)
+{
+    evmc::VM vm{evmc_create_evmone()};
+
+    std::istringstream env{std::string{env_json}};
+    std::istringstream alloc{"{}"};
+    std::istringstream txs{"[]"};
+    std::ostringstream out_result;
+
+    tooling::T8NArgs args;
+    args.rev = rev;
+    args.alloc = &alloc;
+    args.env = &env;
+    args.txs = &txs;
+    args.out_result = &out_result;
+
+    tooling::t8n(vm, args);
+    return out_result.str();
+}
 }  // namespace
+
+TEST(tooling_t8n, base_fee_is_computed_from_the_parent_block)
+{
+    // The parent used its whole gas target, so the fee rises by an eighth: 7 + 7/8 rounds to 8.
+    EXPECT_THAT(
+        run_t8n_env(ENV_WITH_PARENT_JSON, EVMC_LONDON), HasSubstr(R"("currentBaseFee": "0x8")"));
+}
+
+TEST(tooling_t8n, no_base_fee_before_london)
+{
+    // The same env, one revision earlier: there is no fee market to report.
+    const auto result = run_t8n_env(ENV_WITH_PARENT_JSON, EVMC_BERLIN);
+    EXPECT_THAT(result, HasSubstr(R"("gasUsed")"));  // Not an empty result which says nothing.
+    EXPECT_THAT(result, Not(HasSubstr("currentBaseFee")));
+}
+
+TEST(tooling_t8n, blob_transaction_creating_a_contract_is_rejected)
+{
+    // A type-3 transaction has no create form, so this one is rejected rather than executed.
+    static constexpr auto BLOB_CREATE_TX = R"([{
+        "input": "0x00",
+        "gas": "0x3d0900",
+        "nonce": "0x0",
+        "value": "0x186a0",
+        "v": "0x0",
+        "r": "0xfc12b67159a3567f8bdbc49e0be369a2e20e09d57a51c41310543a4128409464",
+        "s": "0x2de0cfe5495c4f58ff60645ceda0afd67a4c90a70bc89fe207269435b35e5b67",
+        "chainId": "0x1",
+        "type": "0x3",
+        "maxFeePerGas": "0x12a05f200",
+        "maxPriorityFeePerGas": "0x2",
+        "maxFeePerBlobGas": "0xa",
+        "blobVersionedHashes": [
+            "0x01a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8"
+        ],
+        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+    }])";
+
+    EXPECT_THAT(run_t8n(ALLOC_JSON, BLOB_CREATE_TX, EVMC_CANCUN),
+        HasSubstr("TransactionException.TYPE_3_TX_CONTRACT_CREATION"));
+}
+
+TEST(tooling_t8n, a_block_requesting_nothing_reports_the_empty_requests_hash)
+{
+    const auto result = run_t8n(ALLOC_JSON, TX_JSON, EVMC_PRAGUE);
+    EXPECT_THAT(result, HasSubstr(R"("requests": [])"));
+    // keccak256 of nothing at all.
+    EXPECT_THAT(
+        result, HasSubstr("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+}
+
+namespace
+{}  // namespace
 
 TEST(tooling_t8n, no_inputs_no_outputs)
 {
