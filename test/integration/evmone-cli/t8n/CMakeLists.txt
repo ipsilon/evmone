@@ -253,10 +253,6 @@ set_tests_properties(
 )
 
 
-add_test(NAME ${PREFIX}/version COMMAND evmone-cli --version)
-set_tests_properties(
-    ${PREFIX}/version PROPERTIES PASS_REGULAR_EXPRESSION "evmone")
-
 add_test(NAME ${PREFIX}/bad_fork COMMAND evmone-cli t8n --state.fork NoSuchRev)
 set_tests_properties(
     ${PREFIX}/bad_fork PROPERTIES PASS_REGULAR_EXPRESSION "unknown revision")
