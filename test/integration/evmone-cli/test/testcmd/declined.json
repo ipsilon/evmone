@@ -1,7 +1,7 @@
 {
  "a_bad_rlp": {
   "_info": {
-   "comment": "Declines to load: expectException without rlp_decoded. Nothing of this case runs, so the case beside it is what the file reports."
+   "comment": "Declines to load: expectException without rlp_decoded, which the loader refuses before reading anything after the blocks."
   },
   "network": "Cancun",
   "genesisBlockHeader": {
@@ -16,33 +16,15 @@
    "gasUsed": "0x00",
    "timestamp": "0x00",
    "extraData": "0x00",
-   "baseFeePerGas": "0x10",
-   "withdrawalsRoot": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-   "blobGasUsed": "0x00",
-   "excessBlobGas": "0x00",
    "hash": "0x0000000000000000000000000000000000000000000000000000000000000001"
   },
-  "pre": {
-   "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
-    "code": "0x",
-    "nonce": "0x00",
-    "balance": "0x02540be400"
-   }
-  },
+  "pre": {},
   "blocks": [
    {
     "expectException": "TransactionException.INVALID_SIGNATURE_VRS",
     "rlp": "0x"
    }
-  ],
-  "lastblockhash": "0x0000000000000000000000000000000000000000000000000000000000000001",
-  "postState": {
-   "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
-    "code": "0x",
-    "nonce": "0x00",
-    "balance": "0x02540be400"
-   }
-  }
+  ]
  },
  "b_state": {
   "_info": {
