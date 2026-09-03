@@ -56,14 +56,15 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "\"pass\":true"
     FAIL_REGULAR_EXPRESSION "failing_test_case")
 
-# A case whose load throws must not abandon the cases after it, so both faults are reported.
-add_test(NAME ${PREFIX}/test_after_exception COMMAND evmone-cli test ${DATA}/testcmd_cases)
+# A fixture whose load throws must not abandon the fixtures after it, so all three faults
+# are reported.
+add_test(NAME ${PREFIX}/test_after_exception COMMAND evmone-cli test ${DATA}/testcmd_fault)
 set_tests_properties(
     ${PREFIX}/test_after_exception PROPERTIES
     # "collected 1 test" keeps this on the directory form, where the whole file is one test
-    # and the per-case catch is what keeps the second fault reachable.
+    # and the per-fixture catch is what keeps the later faults reachable.
     PASS_REGULAR_EXPRESSION
-    "collected 1 test.*a_load_error:\n    exception.*b_bad_root:.*state root")
+    "collected 1 test.*c_load_error:\n    exception.*d_bad_root:.*state root")
 
 # Collected from a directory a file is one test, so a file with nothing to run is skipped
 # whole, named by the first reason which explains it: all_unsupported declines twice, and
@@ -78,17 +79,17 @@ set_tests_properties(
 add_test(NAME ${PREFIX}/test_dir_skipped_exit COMMAND evmone-cli test ${DATA}/testcmd_skipped)
 set_tests_properties(${PREFIX}/test_dir_skipped_exit PROPERTIES WILL_FAIL TRUE)
 
-# Naming the file instead of the directory makes each case its own test, and a fault in one
-# is still a fault: the case beside it runs.
+# Naming the file instead of the directory makes each fixture its own test, so a fault leaves
+# the fixtures beside it running.
 add_test(NAME ${PREFIX}/test_file_fault COMMAND evmone-cli test
-    ${DATA}/testcmd_fault/unrecognised_case.json)
+    ${DATA}/testcmd_fault/faults.json)
 set_tests_properties(
     ${PREFIX}/test_file_fault PROPERTIES PASS_REGULAR_EXPRESSION
-    "FAILED[^\n]*unrecognised_case\\.json::b_not_a_test.*1 failed, 1 passed in")
+    "FAILED[^\n]*faults\\.json::b_not_a_test.*3 failed, 1 passed in")
 
-# -k selects among the cases of a named file too.
+# -k selects among the fixtures of a named file too.
 add_test(NAME ${PREFIX}/test_file_filter COMMAND evmone-cli test
-    ${DATA}/testcmd_fault/unrecognised_case.json -k a_runs)
+    ${DATA}/testcmd_fault/faults.json -k a_runs)
 set_tests_properties(
     ${PREFIX}/test_file_filter PROPERTIES PASS_REGULAR_EXPRESSION "= 1 passed in")
 
