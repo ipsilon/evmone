@@ -13,6 +13,10 @@ on:
   # performance analysis in order to generate initial data.
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   BUILD_DIR: build
   CMAKE_BUILD_PARALLEL_LEVEL: 4
@@ -22,10 +26,16 @@ env:
 
 jobs:
   benchmark:
-    name: Benchmark
+    # The instrument is picked when the harness is compiled, so each one needs a build of its own.
+    name: ${{ matrix.mode }}
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [simulation, memory]
     # CodSpeed ships its instrumented Valgrind for Ubuntu 22.04, Ubuntu 24.04 and Debian 12 only,
     # and bails out with "Unsupported system" anywhere else, so the image cannot be `latest`.
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     permissions:
       contents: read # required for actions/checkout
       id-token: write # required for OIDC authentication with CodSpeed
@@ -36,6 +46,12 @@ jobs:
 
       - name: Install GMP
         run: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
+
+      - name: Restore the Hunter cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.hunter/_Base/Cache
+          key: hunter-codspeed-${{ hashFiles('cmake/Hunter/*.cmake') }}
 
       - name: Configure
         # The Release build type keeps the -O3 optimizations on, -g adds the debug information
@@ -50,7 +66,7 @@ jobs:
           -DEVMONE_TESTING=ON
           -DEVMONE_PRECOMPILES_GMP=ON
           -DEVMONE_PRECOMPILES_LIBSECP256K1=ON
-          -DCODSPEED_MODE=simulation
+          -DCODSPEED_MODE=${{ matrix.mode }}
 
       - name: Build
         run: cmake --build $BUILD_DIR --target evmone-bench evmone-precompiles-bench
@@ -59,7 +75,7 @@ jobs:
       - name: Benchmark the baseline VM
         uses: CodSpeedHQ/action@v5
         with:
-          mode: simulation
+          mode: ${{ matrix.mode }}
           run: ${{ env.BUILD_DIR }}/bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter='baseline/(analyse|execute)'
 
       # Both the mainnet inputs and the modexp parameter sweep: the mainnet moduli are all odd
@@ -67,5 +83,5 @@ jobs:
       - name: Benchmark the precompiles
         uses: CodSpeedHQ/action@v5
         with:
-          mode: simulation
+          mode: ${{ matrix.mode }}
           run: ${{ env.BUILD_DIR }}/bin/evmone-precompiles-bench
