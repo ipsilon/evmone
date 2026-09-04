@@ -15,67 +15,42 @@ using evmone::test::TestCase;
 
 namespace
 {
-/// Adds to @p cases every test under @p root: one per file for a directory, one per test case in
-/// the file when the file itself is named. Returns whether every test was collected.
-bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
+/// Adds to @p cases one test per fixture file under @p root, which is that file itself when it
+/// is not a directory.
+void collect_tests(std::vector<TestCase>& cases, const fs::path& root,
     const std::optional<std::string>& filter, std::span<const fs::path> ignored, evmc::VM& vm,
     bool trace)
 {
-    // Which cases -k keeps. Over a directory it selects within the file's test, because
-    // naming the cases up front would mean loading the whole tree.
+    // Which cases -k keeps. It selects within the file's test, because naming the cases up front
+    // would mean loading the whole tree.
     const auto selected = [&filter](const evmone::test::StateTransitionTest& test) {
         return !filter.has_value() || test.name.find(*filter) != std::string::npos;
     };
 
+    // A file is one test, whether it was named or found under a directory.
+    std::vector<evmone::test::TestFile> files;
     if (is_directory(root))
     {
-        auto files = evmone::test::collect_test_files(root);
+        files = evmone::test::collect_test_files(root);
         evmone::test::ignore_test_files(files, ignored);
-        cases.reserve(cases.size() + files.size());
-        for (const auto& file : files)
-        {
-            // Loaded when the test runs: loading a whole tree up front costs far more.
-            cases.push_back({file.path.string(),
-                [path = file.path, selected, &vm, trace](evmone::test::TestReport& report) {
-                    std::ifstream f{path};
-                    for (const auto& test : evmone::test::load_state_tests(f))
-                    {
-                        if (selected(test))
-                            evmone::test::run_state_test(test, vm, trace, report);
-                    }
-                }});
-        }
     }
-    else  // Treat as a file.
-    {
-        // Naming a file loads it now, to name the test cases in it. One which cannot be
-        // loaded becomes a single test reporting why.
-        std::vector<evmone::test::StateTransitionTest> tests;
-        try
-        {
-            std::ifstream f{root};
-            tests = evmone::test::load_state_tests(f);
-        }
-        catch (const std::exception& ex)
-        {
-            // Also reported here: --collect-only never runs the test.
-            std::cerr << root.string() << ": " << ex.what() << '\n';
-            cases.push_back({root.string(),
-                [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
-            return false;
-        }
+    else
+        files.push_back({root, {}});
 
-        for (const auto& test : tests)
-        {
-            if (!selected(test))
-                continue;
-            cases.push_back({root.string() + "::" + test.name,
-                [test, &vm, trace](evmone::test::TestReport& report) {
-                    evmone::test::run_state_test(test, vm, trace, report);
-                }});
-        }
+    cases.reserve(cases.size() + files.size());
+    for (const auto& file : files)
+    {
+        // Loaded when the test runs: loading a whole tree up front costs far more.
+        cases.push_back({file.path.string(),
+            [path = file.path, selected, &vm, trace](evmone::test::TestReport& report) {
+                std::ifstream f{path};
+                for (const auto& test : evmone::test::load_state_tests(f))
+                {
+                    if (selected(test))
+                        evmone::test::run_state_test(test, vm, trace, report);
+                }
+            }});
     }
-    return true;
 }
 }  // namespace
 
@@ -129,15 +104,12 @@ int main(int argc, char* argv[])
         }
 
         std::vector<TestCase> cases;
-        bool all_collected = true;
         for (const auto& p : paths)
-            all_collected &= collect_tests(cases, p, filter, ignored, vm, trace || trace_summary);
+            collect_tests(cases, p, filter, ignored, vm, trace || trace_summary);
 
         const evmone::test::RunOptions options{
             .collect_only = collect_only, .progress = !(trace || trace_summary)};
-        const auto exit_code = evmone::test::run_tests(cases, std::cout, options);
-        // A file which could not be loaded fails the listing too, not only a run of it.
-        return all_collected ? exit_code : evmone::test::TESTS_FAILED;
+        return evmone::test::run_tests(cases, std::cout, options);
     }
     catch (const std::exception& ex)
     {

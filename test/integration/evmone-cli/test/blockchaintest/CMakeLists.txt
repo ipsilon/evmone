@@ -13,8 +13,8 @@ add_test(
 )
 set_tests_properties(
     ${PREFIX}/json_test PROPERTIES
-    # Make sure both tests in the file are executed (both should fail).
-    PASS_REGULAR_EXPRESSION "2 failed, 0 passed"
+    # Both fixtures of the file run and both fail; the file itself counts once.
+    PASS_REGULAR_EXPRESSION "-call\\]:.*-callcode\\]:.*1 failed, 0 passed"
 )
 
 # Exercise block-level gas accounting (EIP-7778), with tracing on so that flag is covered too.
@@ -93,23 +93,6 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "eip7778_block_gas\\.json"
     FAIL_REGULAR_EXPRESSION "unsupported_rlp"
 )
-
-# Given the file directly, each test case in it is listed on its own.
-add_test(
-    NAME ${PREFIX}/collect_only_file
-    COMMAND evmone-blockchaintest ${TESTS1}/test.json --collect-only
-)
-set_tests_properties(
-    ${PREFIX}/collect_only_file PROPERTIES
-    PASS_REGULAR_EXPRESSION "test\\.json::[^\n]*-call\\]\n[^\n]*test\\.json::[^\n]*-callcode\\]"
-)
-
-# A file which cannot be loaded is a failure of the listing too, not a name in it.
-add_test(
-    NAME ${PREFIX}/collect_only_unloadable
-    COMMAND evmone-blockchaintest ${TESTS1}/not_json.txt --collect-only
-)
-set_tests_properties(${PREFIX}/collect_only_unloadable PROPERTIES WILL_FAIL TRUE)
 
 get_directory_property(ALL_TESTS TESTS)
 set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)
