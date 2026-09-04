@@ -38,3 +38,6 @@ set_tests_properties(
 add_test(NAME ${PREFIX}/trace COMMAND evmone-cli --trace run 60006002800103)
 set_tests_properties(
     ${PREFIX}/trace PROPERTIES PASS_REGULAR_EXPRESSION "\"opName\":\"PUSH1\"")
+
+get_directory_property(ALL_TESTS TESTS)
+set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)

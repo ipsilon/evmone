@@ -40,6 +40,10 @@ add_test(NAME ${PREFIX}/version COMMAND evmone-cli --version)
 set_tests_properties(
     ${PREFIX}/version PROPERTIES PASS_REGULAR_EXPRESSION "evmone")
 
+
+get_directory_property(ALL_TESTS TESTS)
+set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)
+
 add_subdirectory(run)
 add_subdirectory(t8n)
 add_subdirectory(test)

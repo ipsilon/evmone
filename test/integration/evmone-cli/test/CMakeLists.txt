@@ -38,5 +38,9 @@ set_tests_properties(
     FAIL_REGULAR_EXPRESSION "b_wrong_state_root"
 )
 
+
+get_directory_property(ALL_TESTS TESTS)
+set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)
+
 add_subdirectory(blockchaintest)
 add_subdirectory(statetest)
