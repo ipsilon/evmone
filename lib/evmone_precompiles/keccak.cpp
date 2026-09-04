@@ -4,23 +4,9 @@
 
 #include "keccak.h"
 
-// Provide __has_attribute macro if not defined.
-#ifndef __has_attribute
-#define __has_attribute(name) 0
-#endif
-
 // Provide __has_builtin macro if not defined.
 #ifndef __has_builtin
 #define __has_builtin(x) 0
-#endif
-
-// [[always_inline]]
-#if defined(_MSC_VER)
-#define ALWAYS_INLINE __forceinline
-#elif __has_attribute(always_inline)
-#define ALWAYS_INLINE __attribute__((always_inline))
-#else
-#define ALWAYS_INLINE
 #endif
 
 #if !__has_builtin(__builtin_memcpy) && !defined(__GNUC__)
@@ -34,27 +20,29 @@
 #define to_le64(X) X
 #endif
 
+namespace
+{
 /// Loads 64-bit integer from given memory location as little-endian number.
-static inline ALWAYS_INLINE uint64_t load_le(const uint8_t* data)
+[[gnu::always_inline]] inline uint64_t load_le(const uint8_t* data)
 {
     /* memcpy is the best way of expressing the intention. Every compiler will
        optimize is to single load instruction if the target architecture
        supports unaligned memory access (GCC and clang even in O0).
        This is great trick because we are violating C/C++ memory alignment
        restrictions with no performance penalty. */
-    uint64_t word;
+    uint64_t word = 0;
     __builtin_memcpy(&word, data, sizeof(word));
     return to_le64(word);
 }
 
 /// Rotates the bits of x left by the count value specified by s.
 /// The s must be in range <0, 64> exclusively, otherwise the result is undefined.
-static inline uint64_t rol(uint64_t x, unsigned s)
+inline uint64_t rol(uint64_t x, unsigned s)
 {
     return (x << s) | (x >> (64 - s));
 }
 
-static const uint64_t round_constants[24] = {  //
+constexpr uint64_t ROUND_CONSTANTS[24] = {  //
     0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
     0x000000000000808b, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
     0x000000000000008a, 0x0000000000000088, 0x0000000080008009, 0x000000008000000a,
@@ -73,82 +61,64 @@ static const uint64_t round_constants[24] = {  //
 /// The implementation based on:
 /// - "simple" implementation by Ronny Van Keer, included in "Reference and optimized code in C",
 ///   https://keccak.team/archives.html, CC0-1.0 / Public Domain.
-static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
+[[gnu::always_inline]] inline void keccakf1600_implementation(uint64_t state[25])
 {
-    uint64_t Aba, Abe, Abi, Abo, Abu;
-    uint64_t Aga, Age, Agi, Ago, Agu;
-    uint64_t Aka, Ake, Aki, Ako, Aku;
-    uint64_t Ama, Ame, Ami, Amo, Amu;
-    uint64_t Asa, Ase, Asi, Aso, Asu;
+    auto Aba = state[0];
+    auto Abe = state[1];
+    auto Abi = state[2];
+    auto Abo = state[3];
+    auto Abu = state[4];
+    auto Aga = state[5];
+    auto Age = state[6];
+    auto Agi = state[7];
+    auto Ago = state[8];
+    auto Agu = state[9];
+    auto Aka = state[10];
+    auto Ake = state[11];
+    auto Aki = state[12];
+    auto Ako = state[13];
+    auto Aku = state[14];
+    auto Ama = state[15];
+    auto Ame = state[16];
+    auto Ami = state[17];
+    auto Amo = state[18];
+    auto Amu = state[19];
+    auto Asa = state[20];
+    auto Ase = state[21];
+    auto Asi = state[22];
+    auto Aso = state[23];
+    auto Asu = state[24];
 
-    uint64_t Eba, Ebe, Ebi, Ebo, Ebu;
-    uint64_t Ega, Ege, Egi, Ego, Egu;
-    uint64_t Eka, Eke, Eki, Eko, Eku;
-    uint64_t Ema, Eme, Emi, Emo, Emu;
-    uint64_t Esa, Ese, Esi, Eso, Esu;
-
-    uint64_t Ba, Be, Bi, Bo, Bu;
-
-    uint64_t Ca, Ce, Ci, Co, Cu;
-
-    uint64_t Da, De, Di, Do, Du;
-
-    Aba = state[0];
-    Abe = state[1];
-    Abi = state[2];
-    Abo = state[3];
-    Abu = state[4];
-    Aga = state[5];
-    Age = state[6];
-    Agi = state[7];
-    Ago = state[8];
-    Agu = state[9];
-    Aka = state[10];
-    Ake = state[11];
-    Aki = state[12];
-    Ako = state[13];
-    Aku = state[14];
-    Ama = state[15];
-    Ame = state[16];
-    Ami = state[17];
-    Amo = state[18];
-    Amu = state[19];
-    Asa = state[20];
-    Ase = state[21];
-    Asi = state[22];
-    Aso = state[23];
-    Asu = state[24];
-
-    Ca = Aba ^ Aga ^ Aka ^ Ama ^ Asa;
-    Ce = Abe ^ Age ^ Ake ^ Ame ^ Ase;
-    Ci = Abi ^ Agi ^ Aki ^ Ami ^ Asi;
-    Co = Abo ^ Ago ^ Ako ^ Amo ^ Aso;
-    Cu = Abu ^ Agu ^ Aku ^ Amu ^ Asu;
+    auto Ca = Aba ^ Aga ^ Aka ^ Ama ^ Asa;
+    auto Ce = Abe ^ Age ^ Ake ^ Ame ^ Ase;
+    auto Ci = Abi ^ Agi ^ Aki ^ Ami ^ Asi;
+    auto Co = Abo ^ Ago ^ Ako ^ Amo ^ Aso;
+    auto Cu = Abu ^ Agu ^ Aku ^ Amu ^ Asu;
 
     for (size_t n = 0; n < 24; n += 2)
     {
         // Round (n + 0): Axx -> Exx
 
-        Da = Cu ^ rol(Ce, 1);
-        De = Ca ^ rol(Ci, 1);
-        Di = Ce ^ rol(Co, 1);
-        Do = Ci ^ rol(Cu, 1);
-        Du = Co ^ rol(Ca, 1);
+        auto Da = Cu ^ rol(Ce, 1);
+        auto De = Ca ^ rol(Ci, 1);
+        auto Di = Ce ^ rol(Co, 1);
+        auto Do = Ci ^ rol(Cu, 1);
+        auto Du = Co ^ rol(Ca, 1);
 
-        Ba = Aba ^ Da;
-        Be = rol(Age ^ De, 44);
-        Bi = rol(Aki ^ Di, 43);
-        Bo = rol(Amo ^ Do, 21);
-        Bu = rol(Asu ^ Du, 14);
-        Eba = Ba ^ (~Be & Bi) ^ round_constants[n];
+        auto Ba = Aba ^ Da;
+        auto Be = rol(Age ^ De, 44);
+        auto Bi = rol(Aki ^ Di, 43);
+        auto Bo = rol(Amo ^ Do, 21);
+        auto Bu = rol(Asu ^ Du, 14);
+        const auto Eba = Ba ^ (~Be & Bi) ^ ROUND_CONSTANTS[n];
         Ca = Eba;
-        Ebe = Be ^ (~Bi & Bo);
+        const auto Ebe = Be ^ (~Bi & Bo);
         Ce = Ebe;
-        Ebi = Bi ^ (~Bo & Bu);
+        const auto Ebi = Bi ^ (~Bo & Bu);
         Ci = Ebi;
-        Ebo = Bo ^ (~Bu & Ba);
+        const auto Ebo = Bo ^ (~Bu & Ba);
         Co = Ebo;
-        Ebu = Bu ^ (~Ba & Be);
+        const auto Ebu = Bu ^ (~Ba & Be);
         Cu = Ebu;
 
         Ba = rol(Abo ^ Do, 28);
@@ -156,15 +126,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bi = rol(Aka ^ Da, 3);
         Bo = rol(Ame ^ De, 45);
         Bu = rol(Asi ^ Di, 61);
-        Ega = Ba ^ (~Be & Bi);
+        const auto Ega = Ba ^ (~Be & Bi);
         Ca ^= Ega;
-        Ege = Be ^ (~Bi & Bo);
+        const auto Ege = Be ^ (~Bi & Bo);
         Ce ^= Ege;
-        Egi = Bi ^ (~Bo & Bu);
+        const auto Egi = Bi ^ (~Bo & Bu);
         Ci ^= Egi;
-        Ego = Bo ^ (~Bu & Ba);
+        const auto Ego = Bo ^ (~Bu & Ba);
         Co ^= Ego;
-        Egu = Bu ^ (~Ba & Be);
+        const auto Egu = Bu ^ (~Ba & Be);
         Cu ^= Egu;
 
         Ba = rol(Abe ^ De, 1);
@@ -172,15 +142,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bi = rol(Ako ^ Do, 25);
         Bo = rol(Amu ^ Du, 8);
         Bu = rol(Asa ^ Da, 18);
-        Eka = Ba ^ (~Be & Bi);
+        const auto Eka = Ba ^ (~Be & Bi);
         Ca ^= Eka;
-        Eke = Be ^ (~Bi & Bo);
+        const auto Eke = Be ^ (~Bi & Bo);
         Ce ^= Eke;
-        Eki = Bi ^ (~Bo & Bu);
+        const auto Eki = Bi ^ (~Bo & Bu);
         Ci ^= Eki;
-        Eko = Bo ^ (~Bu & Ba);
+        const auto Eko = Bo ^ (~Bu & Ba);
         Co ^= Eko;
-        Eku = Bu ^ (~Ba & Be);
+        const auto Eku = Bu ^ (~Ba & Be);
         Cu ^= Eku;
 
         Ba = rol(Abu ^ Du, 27);
@@ -188,15 +158,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bi = rol(Ake ^ De, 10);
         Bo = rol(Ami ^ Di, 15);
         Bu = rol(Aso ^ Do, 56);
-        Ema = Ba ^ (~Be & Bi);
+        const auto Ema = Ba ^ (~Be & Bi);
         Ca ^= Ema;
-        Eme = Be ^ (~Bi & Bo);
+        const auto Eme = Be ^ (~Bi & Bo);
         Ce ^= Eme;
-        Emi = Bi ^ (~Bo & Bu);
+        const auto Emi = Bi ^ (~Bo & Bu);
         Ci ^= Emi;
-        Emo = Bo ^ (~Bu & Ba);
+        const auto Emo = Bo ^ (~Bu & Ba);
         Co ^= Emo;
-        Emu = Bu ^ (~Ba & Be);
+        const auto Emu = Bu ^ (~Ba & Be);
         Cu ^= Emu;
 
         Ba = rol(Abi ^ Di, 62);
@@ -204,15 +174,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bi = rol(Aku ^ Du, 39);
         Bo = rol(Ama ^ Da, 41);
         Bu = rol(Ase ^ De, 2);
-        Esa = Ba ^ (~Be & Bi);
+        const auto Esa = Ba ^ (~Be & Bi);
         Ca ^= Esa;
-        Ese = Be ^ (~Bi & Bo);
+        const auto Ese = Be ^ (~Bi & Bo);
         Ce ^= Ese;
-        Esi = Bi ^ (~Bo & Bu);
+        const auto Esi = Bi ^ (~Bo & Bu);
         Ci ^= Esi;
-        Eso = Bo ^ (~Bu & Ba);
+        const auto Eso = Bo ^ (~Bu & Ba);
         Co ^= Eso;
-        Esu = Bu ^ (~Ba & Be);
+        const auto Esu = Bu ^ (~Ba & Be);
         Cu ^= Esu;
 
 
@@ -229,7 +199,7 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bi = rol(Eki ^ Di, 43);
         Bo = rol(Emo ^ Do, 21);
         Bu = rol(Esu ^ Du, 14);
-        Aba = Ba ^ (~Be & Bi) ^ round_constants[n + 1];
+        Aba = Ba ^ (~Be & Bi) ^ ROUND_CONSTANTS[n + 1];
         Ca = Aba;
         Abe = Be ^ (~Bi & Bo);
         Ce = Abe;
@@ -332,23 +302,23 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
     state[24] = Asu;
 }
 
-static void keccakf1600_generic(uint64_t state[25])
+void keccakf1600_generic(uint64_t state[25])
 {
     keccakf1600_implementation(state);
 }
 
 /// The pointer to the best Keccak-f[1600] function implementation,
 /// selected during runtime initialization.
-static void (*keccakf1600_best)(uint64_t[25]) = keccakf1600_generic;
+auto keccakf1600_best = keccakf1600_generic;
 
 
-#if !defined(_MSC_VER) && defined(__x86_64__) && __has_attribute(target)
-__attribute__((target("bmi,bmi2"))) static void keccakf1600_bmi(uint64_t state[25])
+#if !defined(_MSC_VER) && defined(__x86_64__) && __has_cpp_attribute(gnu::target)
+[[gnu::target("bmi,bmi2")]] void keccakf1600_bmi(uint64_t state[25])
 {
     keccakf1600_implementation(state);
 }
 
-__attribute__((constructor)) static void select_keccakf1600_implementation(void)
+[[gnu::constructor]] void select_keccakf1600_implementation()
 {
     // Init CPU information.
     // This is needed on macOS because of the bug: https://bugs.llvm.org/show_bug.cgi?id=48459.
@@ -362,21 +332,21 @@ __attribute__((constructor)) static void select_keccakf1600_implementation(void)
 #endif
 
 
-static inline ALWAYS_INLINE void keccak(
+[[gnu::always_inline]] inline void keccak(
     uint64_t* out, size_t bits, const uint8_t* data, size_t size)
 {
-    static const size_t word_size = sizeof(uint64_t);
-    const size_t hash_size = bits / 8;
-    const size_t block_size = (1600 - bits * 2) / 8;
+    constexpr auto WORD_SIZE = sizeof(uint64_t);
+    const auto hash_size = bits / 8;
+    const auto block_size = (1600 - bits * 2) / 8;
 
-    uint64_t state[25] = {0};
+    uint64_t state[25] = {};
 
     while (size >= block_size)
     {
-        for (size_t i = 0; i < (block_size / word_size); ++i)
+        for (size_t i = 0; i < (block_size / WORD_SIZE); ++i)
         {
             state[i] ^= load_le(data);
-            data += word_size;
+            data += WORD_SIZE;
         }
 
         keccakf1600_best(state);
@@ -384,33 +354,34 @@ static inline ALWAYS_INLINE void keccak(
         size -= block_size;
     }
 
-    uint64_t* state_iter = state;
+    auto* state_iter = state;
 
-    while (size >= word_size)
+    while (size >= WORD_SIZE)
     {
         *state_iter ^= load_le(data);
         ++state_iter;
-        data += word_size;
-        size -= word_size;
+        data += WORD_SIZE;
+        size -= WORD_SIZE;
     }
 
     // Absorb last 0–7 bytes of input + the padding byte.
-    uint64_t last_word = (uint64_t)0x01 << (size * 8);
+    auto last_word = uint64_t{0x01} << (size * 8);
     for (size_t i = 0; i < size; ++i)
-        last_word |= (uint64_t)data[i] << (i * 8);
+        last_word |= uint64_t{data[i]} << (i * 8);
     *state_iter ^= last_word;
 
-    state[(block_size / word_size) - 1] ^= 0x8000000000000000;  // Last block bit flip.
+    state[(block_size / WORD_SIZE) - 1] ^= 0x8000000000000000;  // Last block bit flip.
 
     keccakf1600_best(state);
 
-    for (size_t i = 0; i < (hash_size / word_size); ++i)
+    for (size_t i = 0; i < (hash_size / WORD_SIZE); ++i)
         out[i] = to_le64(state[i]);
 }
+}  // namespace
 
-union ethash_hash256 ethash_keccak256(const uint8_t* data, size_t size)
+ethash_hash256 ethash_keccak256(const uint8_t* data, size_t size) noexcept
 {
-    union ethash_hash256 hash;
+    ethash_hash256 hash = {};
     keccak(hash.word64s, 256, data, size);
     return hash;
 }
