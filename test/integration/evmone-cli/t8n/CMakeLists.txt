@@ -199,6 +199,9 @@ set_tests_properties(
     ${PREFIX}/${TEST_CASE}/out.json PROPERTIES
     FIXTURES_CLEANUP ${TEST_CASE}
     PASS_REGULAR_EXPRESSION ${EXPECTED_OUT}
+    # The alloc holds both request contracts, so the gas is a valid block's rather than a
+    # rejected one's.
+    FAIL_REGULAR_EXPRESSION blockException
 )
 
 set(TEST_CASE cancun_create_tx_trace)
