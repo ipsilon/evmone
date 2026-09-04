@@ -485,3 +485,35 @@ TEST(tooling_t8n, receipt_status_reports_failure)
     EXPECT_THAT(run_call_to("0xfe", EVMC_SHANGHAI), HasSubstr("\"status\": \"0x0\""));
     EXPECT_THAT(run_call_to("0x00", EVMC_SHANGHAI), HasSubstr("\"status\": \"0x1\""));
 }
+
+TEST(tooling_t8n, block_gas_used_is_pre_refund_from_amsterdam)
+{
+    // The block gas is the pre-refund transaction gas from Amsterdam on (EIP-7778), while a
+    // receipt reports what the sender paid. The callee clears a storage slot, so the transaction
+    // earns a refund and the two must differ; before Amsterdam they must stay equal.
+    static constexpr auto ALLOC_REFUNDING_CALLEE = R"({
+        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+            "code": "", "nonce": "0x00", "balance": "0x02540be400"
+        },
+        "0x000000000000000000000000000000000000c0de": {
+            "code": "0x5f5f55", "nonce": "0x00", "balance": "0x00",
+            "storage": {"0x00": "0x01"}
+        }
+    })";
+
+    const auto run = [](evmc_revision rev) {
+        const auto j = json::parse(run_t8n(ALLOC_REFUNDING_CALLEE, TX_TO_CALLEE, rev));
+        const auto hex_value = [](const json& v) {
+            return std::stoll(v.get<std::string>(), nullptr, 16);
+        };
+        return std::pair{
+            hex_value(j.at("gasUsed")), hex_value(j.at("receipts").at(0).at("cumulativeGasUsed"))};
+    };
+
+    const auto [osaka_block_gas, osaka_cumulative] = run(EVMC_OSAKA);
+    EXPECT_EQ(osaka_block_gas, osaka_cumulative);
+
+    // The whole of the difference is the refund for clearing the slot (EIP-3529).
+    const auto [block_gas, cumulative] = run(EVMC_AMSTERDAM);
+    EXPECT_EQ(block_gas - cumulative, 4800);
+}
