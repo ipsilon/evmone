@@ -22,6 +22,11 @@ add_test(
     NAME ${PREFIX}/eip7778_block_gas
     COMMAND evmone-blockchaintest ${TESTS1}/eip7778_block_gas.json --trace
 )
+set_tests_properties(
+    ${PREFIX}/eip7778_block_gas PROPERTIES
+    # The trace is --trace reaching the VM; the count stands in for the exit code the regex hides.
+    PASS_REGULAR_EXPRESSION "\"opName\":\"SSTORE\".*= 1 passed in"
+)
 
 # A block invalid by its signature must not be judged by another check.
 add_test(

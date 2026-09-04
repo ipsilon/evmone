@@ -26,7 +26,8 @@ set_tests_properties(
 add_test(NAME ${PREFIX}/file_input COMMAND evmone-cli run @${CMAKE_CURRENT_SOURCE_DIR}/code.hex)
 set_tests_properties(
     ${PREFIX}/file_input PROPERTIES PASS_REGULAR_EXPRESSION
-    "Result:   success\n")
+    # An unread file runs as empty code, which succeeds too; the gas is the file's code running.
+    "Result:   success\nGas used: 29\n")
 
 # What each tracer writes is pinned by the tracing unit tests, which drive them directly. These
 # two are the app-level flags reaching the VM, which only a run of the command shows.

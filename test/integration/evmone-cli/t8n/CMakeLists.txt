@@ -261,7 +261,7 @@ set(TEST_CASE prague_pre_state_only)
 
 add_test(
     NAME ${PREFIX}/${TEST_CASE}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/prague_empty_requests
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_CASE}
     COMMAND
     evmone-cli t8n
     --state.fork Prague
@@ -275,6 +275,18 @@ add_test(
     --output.body body.rlp
 )
 set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
+
+add_test(
+    NAME ${PREFIX}/${TEST_CASE}/out.json
+    COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}/out.json
+)
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE}/out.json PROPERTIES
+    # The pre-state holds no request contract, so only the skipped system calls keep the block
+    # valid: this is what tells the mode apart from a reward of zero.
+    PASS_REGULAR_EXPRESSION [=["stateRoot"]=]
+    FAIL_REGULAR_EXPRESSION blockException
+)
 
 add_test(
     NAME ${PREFIX}/${TEST_CASE}/body.rlp
