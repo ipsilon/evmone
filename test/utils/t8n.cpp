@@ -169,9 +169,7 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
             requests = std::move(res.requests);
 
         receipts = std::move(res.receipts);
-        // Block gas used reported as the cumulative transaction gas (refunds excluded),
-        // preserving the prior t8n output.
-        gas_used = receipts.empty() ? 0 : receipts.back().cumulative_gas_used;
+        gas_used = res.gas_used;
         bloom = res.bloom;
         blob_gas_left = res.blob_gas_left;
         post_state = std::move(res.block_state);
