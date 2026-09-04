@@ -15,6 +15,13 @@ using evmone::test::TestCase;
 
 namespace
 {
+/// A test which is one case: the driver takes an array of results, and this is the one.
+TestCase one_case(std::string name, std::function<void(evmone::test::TestReport&)> run)
+{
+    return {name,
+        [name, run = std::move(run)] { return std::vector{evmone::test::run_one(name, run)}; }};
+}
+
 /// Adds to @p cases every test under @p root: one per file for a directory, one per test case in
 /// the file when the file itself is named. Returns whether every test was collected.
 bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
@@ -35,15 +42,31 @@ bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
         for (const auto& file : files)
         {
             // Loaded when the test runs: loading a whole tree up front costs far more.
-            cases.push_back({file.path.string(),
-                [path = file.path, selected, &vm, trace](evmone::test::TestReport& report) {
-                    std::ifstream f{path};
-                    for (const auto& test : evmone::test::load_state_tests(f))
-                    {
-                        if (selected(test))
-                            evmone::test::run_state_test(test, vm, trace, report);
-                    }
-                }});
+            cases.push_back(
+                {file.path.string(), [path = file.path, selected, &vm, trace] {
+                     std::vector<evmone::test::StateTransitionTest> tests;
+                     // The whole file is loaded before any of it runs, so a load
+                     // which throws is all the file has to report.
+                     if (auto loaded = evmone::test::run_one(path.string(),
+                             [&](auto&) {
+                                 std::ifstream f{path};
+                                 tests = evmone::test::load_state_tests(f);
+                             });
+                         loaded.outcome != evmone::test::Outcome::passed)
+                         return std::vector{std::move(loaded)};
+
+                     std::vector<evmone::test::Result> results;
+                     for (const auto& test : tests)
+                     {
+                         if (!selected(test))
+                             continue;
+                         results.push_back(evmone::test::run_one(path.string() + "::" + test.name,
+                             [&](evmone::test::TestReport& report) {
+                                 evmone::test::run_state_test(test, vm, trace, report);
+                             }));
+                     }
+                     return results;
+                 }});
         }
     }
     else  // Treat as a file.
@@ -60,8 +83,8 @@ bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
         {
             // Also reported here: --collect-only never runs the test.
             std::cerr << root.string() << ": " << ex.what() << '\n';
-            cases.push_back({root.string(),
-                [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
+            cases.push_back(one_case(root.string(),
+                [error = std::current_exception()](auto&) { std::rethrow_exception(error); }));
             return false;
         }
 
@@ -69,10 +92,10 @@ bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
         {
             if (!selected(test))
                 continue;
-            cases.push_back({root.string() + "::" + test.name,
+            cases.push_back(one_case(root.string() + "::" + test.name,
                 [test, &vm, trace](evmone::test::TestReport& report) {
                     evmone::test::run_state_test(test, vm, trace, report);
-                }});
+                }));
         }
     }
     return true;

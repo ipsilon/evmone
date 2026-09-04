@@ -15,6 +15,13 @@ using evmone::test::TestCase;
 
 namespace
 {
+/// A test which is one case: the driver takes an array of results, and this is the one.
+TestCase one_case(std::string name, std::function<void(evmone::test::TestReport&)> run)
+{
+    return {name,
+        [name, run = std::move(run)] { return std::vector{evmone::test::run_one(name, run)}; }};
+}
+
 /// Adds to @p cases every test under @p root: one per file for a directory, one per test case in
 /// the file when the file itself is named. Returns whether every test was collected.
 bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
@@ -28,12 +35,28 @@ bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
         for (const auto& file : files)
         {
             // Loaded when the test runs: loading a whole tree up front costs far more. A
-            // load which throws over an unsupported fixture reaches the driver, which skips.
+            // load which throws over an unsupported fixture is the file's one result, which
+            // the driver reads as a skip.
             cases.push_back(
-                {file.path.string(), [path = file.path, &vm](evmone::test::TestReport& report) {
-                     std::ifstream f{path};
-                     for (const auto& test : evmone::test::load_blockchain_tests(f))
-                         evmone::test::run_blockchain_test(test, vm, report);
+                {file.path.string(), [path = file.path, &vm] {
+                     std::vector<evmone::test::BlockchainTest> tests;
+                     if (auto loaded = evmone::test::run_one(path.string(),
+                             [&](auto&) {
+                                 std::ifstream f{path};
+                                 tests = evmone::test::load_blockchain_tests(f);
+                             });
+                         loaded.outcome != evmone::test::Outcome::passed)
+                         return std::vector{std::move(loaded)};
+
+                     std::vector<evmone::test::Result> results;
+                     for (const auto& test : tests)
+                     {
+                         results.push_back(evmone::test::run_one(path.string() + "::" + test.name,
+                             [&](evmone::test::TestReport& report) {
+                                 evmone::test::run_blockchain_test(test, vm, report);
+                             }));
+                     }
+                     return results;
                  }});
         }
     }
@@ -50,25 +73,25 @@ bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
         catch (const evmone::test::UnsupportedTestFeature&)
         {
             // An unsupported fixture is a skip, not a broken collection.
-            cases.push_back({root.string(),
-                [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
+            cases.push_back(one_case(root.string(),
+                [error = std::current_exception()](auto&) { std::rethrow_exception(error); }));
             return true;
         }
         catch (const std::exception& ex)
         {
             // Also reported here: --collect-only never runs the test.
             std::cerr << root.string() << ": " << ex.what() << '\n';
-            cases.push_back({root.string(),
-                [error = std::current_exception()](auto&) { std::rethrow_exception(error); }});
+            cases.push_back(one_case(root.string(),
+                [error = std::current_exception()](auto&) { std::rethrow_exception(error); }));
             return false;
         }
 
         for (const auto& test : tests)
         {
-            cases.push_back(
-                {root.string() + "::" + test.name, [test, &vm](evmone::test::TestReport& report) {
-                     evmone::test::run_blockchain_test(test, vm, report);
-                 }});
+            cases.push_back(one_case(
+                root.string() + "::" + test.name, [test, &vm](evmone::test::TestReport& report) {
+                    evmone::test::run_blockchain_test(test, vm, report);
+                }));
         }
     }
     return true;

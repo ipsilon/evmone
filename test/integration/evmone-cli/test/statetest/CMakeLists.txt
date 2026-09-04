@@ -70,6 +70,18 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "test_case_1.*test_case_2"
 )
 
+# A file collected from a directory reports each of its fixtures, where the file alone would say
+# only that something in it failed.
+add_test(
+    NAME ${PREFIX}/directory_names_each_case
+    COMMAND evmone-statetest ${TESTS1}/SuiteA
+)
+set_tests_properties(
+    ${PREFIX}/directory_names_each_case PROPERTIES
+    PASS_REGULAR_EXPRESSION
+    "test2_multi\\.json::test_case_1 - state root\n[^\n]*test2_multi\\.json::test_case_2 - state root"
+)
+
 add_test(
     NAME ${PREFIX}/trace
     COMMAND evmone-statetest ${TESTS1}/SuiteA/test1.json --trace
