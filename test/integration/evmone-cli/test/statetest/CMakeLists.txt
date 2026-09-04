@@ -77,7 +77,7 @@ add_test(
 set_tests_properties(
     ${PREFIX}/trace PROPERTIES
     # The instruction trace is pinned by the tracing unit tests, which drive the tracer directly.
-    # This last line is the runner's own summary of the test, which nothing else reports.
+    # What --trace adds to it is the runner's summary of the test, so that line is what is checked.
     PASS_REGULAR_EXPRESSION
     "\"pass\":true,\"gasUsed\":\"0xa868\",\"stateRoot\":\"0xe8010ce590f401c9d61fef8ab05bea9bcec24281b795e5868809bc4e515aa530\""
 )

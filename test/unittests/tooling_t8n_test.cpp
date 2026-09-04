@@ -4,11 +4,13 @@
 
 #include <evmone/evmone.h>
 #include <gmock/gmock.h>
+#include <nlohmann/json.hpp>
 #include <test/utils/t8n.hpp>
 #include <sstream>
 
 using namespace evmone;
 using namespace testing;
+using nlohmann::json;
 
 namespace
 {
@@ -36,7 +38,7 @@ constexpr auto ALLOC_JSON = R"({
 })";
 
 // Single legacy CREATE transaction; init code is `PUSH1 0x01 PUSH0 RETURN`,
-// which deploys a one-byte runtime `0x01`. Three opcodes => three trace lines.
+// which deploys a one-byte runtime `0x00`. Three opcodes => three trace lines.
 // Matches test/integration/evmone-cli/t8n/cancun_create_tx/txs.json[0]; the tx hash is
 // well-known and used below.
 constexpr auto TX_JSON = R"([{
@@ -139,17 +141,13 @@ std::string run_t8n_env(std::string_view env_json, evmc_revision rev)
     return out_result.str();
 }
 
-/// Pre-state for the CREATE tx below, with the beacon-roots system contract preloaded so its
-/// post-block system call has an account to write into.
-/// Matches test/integration/evmone-cli/t8n/cancun_create_tx/alloc.json.
+/// ALLOC_JSON's sender beside the beacon-roots contract: without its code the block-start system
+/// call is skipped (EIP-4788).
 constexpr auto ALLOC_WITH_BEACON_ROOTS_JSON = R"({
     "0x000f3df6d732807ef1319fb7b8bb8522d0beac02": {
         "code": "0x3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500",
         "nonce": "0x01",
-        "balance": "0x00",
-        "storage": {
-            "0x12e2": "0x54c98c81"
-        }
+        "balance": "0x00"
     },
     "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
         "code": "",
@@ -158,45 +156,49 @@ constexpr auto ALLOC_WITH_BEACON_ROOTS_JSON = R"({
     }
 })";
 
-/// Cancun block env, matching test/integration/evmone-cli/t8n/cancun_create_tx/env.json.
-constexpr auto ENV_CANCUN_JSON = R"({
-    "currentCoinbase": "0x8888f1f195afa192cfee860698584c030f4c9db1",
-    "currentNumber": "0x01",
-    "currentTimestamp": "0x54c99069",
-    "currentGasLimit": "0x2fefd8"
+/// Stubs of both request contracts, each returning nothing. Without their code the block-end
+/// system calls fail the block instead (EIP-7002, EIP-7251).
+constexpr auto ALLOC_WITH_REQUEST_STUBS_JSON = R"({
+    "0x00000961ef480eb55e80d19ad83579a64c007002": {
+        "code": "0x00",
+        "nonce": "0x01",
+        "balance": "0x00"
+    },
+    "0x0000bbddc7ce488642fb579f8b00f3a590007251": {
+        "code": "0x00",
+        "nonce": "0x01",
+        "balance": "0x00"
+    }
 })";
 }  // namespace
 
 TEST(tooling_t8n, base_fee_is_computed_from_the_parent_block)
 {
-    // The parent ran at twice its gas target. An eighth of a base fee of 7 truncates to
-    // zero, so the fee rises by the smallest step there is instead.
-    EXPECT_THAT(
-        run_t8n_env(ENV_WITH_PARENT_JSON, EVMC_LONDON), HasSubstr(R"("currentBaseFee": "0x8")"));
+    // The parent used twice its gas target, so the fee rises by max(7 / 8, 1) = 1 (EIP-1559).
+    const auto result = json::parse(run_t8n_env(ENV_WITH_PARENT_JSON, EVMC_LONDON));
+    EXPECT_EQ(result.at("currentBaseFee"), "0x8");
 }
 
 TEST(tooling_t8n, no_base_fee_before_london)
 {
-    // The same env, one revision earlier: there is no fee market to report.
-    const auto result = run_t8n_env(ENV_WITH_PARENT_JSON, EVMC_BERLIN);
-    EXPECT_THAT(result, HasSubstr(R"("gasUsed")"));  // Not an empty result which says nothing.
-    EXPECT_THAT(result, Not(HasSubstr("currentBaseFee")));
+    const auto result = json::parse(run_t8n_env(ENV_WITH_PARENT_JSON, EVMC_BERLIN));
+    EXPECT_TRUE(result.contains("gasUsed"));  // Not an empty result which says nothing.
+    EXPECT_FALSE(result.contains("currentBaseFee"));
 }
 
 TEST(tooling_t8n, blob_transaction_creating_a_contract_is_rejected)
 {
-    // A type-3 transaction has no create form, so this one is rejected rather than executed.
+    // A blob transaction has no create form (EIP-4844). This one is valid in every other respect,
+    // so the missing `to` is its only fault.
     static constexpr auto BLOB_CREATE_TX = R"([{
-        "input": "0x00",
-        "gas": "0x3d0900",
+        "input": "0x",
+        "gas": "0x186a0",
         "nonce": "0x0",
-        "value": "0x186a0",
+        "value": "0x0",
         "v": "0x0",
         "r": "0xfc12b67159a3567f8bdbc49e0be369a2e20e09d57a51c41310543a4128409464",
         "s": "0x2de0cfe5495c4f58ff60645ceda0afd67a4c90a70bc89fe207269435b35e5b67",
-        "chainId": "0x1",
-        "type": "0x3",
-        "maxFeePerGas": "0x12a05f200",
+        "maxFeePerGas": "0x32",
         "maxPriorityFeePerGas": "0x2",
         "maxFeePerBlobGas": "0xa",
         "blobVersionedHashes": [
@@ -205,17 +207,21 @@ TEST(tooling_t8n, blob_transaction_creating_a_contract_is_rejected)
         "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b"
     }])";
 
-    EXPECT_THAT(run_t8n(ALLOC_JSON, BLOB_CREATE_TX, EVMC_CANCUN),
-        HasSubstr("TransactionException.TYPE_3_TX_CONTRACT_CREATION"));
+    const auto result = json::parse(run_t8n(ALLOC_JSON, BLOB_CREATE_TX, EVMC_CANCUN));
+    EXPECT_EQ(result.at("receipts"), json::array());
+    ASSERT_EQ(result.at("rejected").size(), 1u);
+    EXPECT_EQ(
+        result.at("rejected")[0].at("error"), "TransactionException.TYPE_3_TX_CONTRACT_CREATION");
 }
 
 TEST(tooling_t8n, a_block_requesting_nothing_reports_the_empty_requests_hash)
 {
-    const auto result = run_t8n(ALLOC_JSON, TX_JSON, EVMC_PRAGUE);
-    EXPECT_THAT(result, HasSubstr(R"("requests": [])"));
-    // keccak256 of nothing at all.
-    EXPECT_THAT(
-        result, HasSubstr("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
+    const auto result = json::parse(run_t8n(ALLOC_WITH_REQUEST_STUBS_JSON, "[]", EVMC_PRAGUE));
+    EXPECT_FALSE(result.contains("blockException"));
+    EXPECT_EQ(result.at("requests"), json::array());
+    // sha256 of nothing at all (EIP-7685).
+    EXPECT_EQ(result.at("requestsHash"),
+        "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
 }
 
 TEST(tooling_t8n, no_inputs_no_outputs)
@@ -251,14 +257,11 @@ TEST(tooling_t8n, result_written_to_out_streams)
 
 TEST(tooling_t8n, out_alloc_reports_the_beacon_root_write_and_the_created_account)
 {
-    // TX_JSON's CREATE runs as the block's only transaction, so the post-block system call
-    // to the beacon-roots contract and the new contract's deployment are the only state changes.
     evmc::VM vm{evmc_create_evmone()};
 
-    std::istringstream env{ENV_CANCUN_JSON};
+    std::istringstream env{ENV_JSON};
     std::istringstream alloc{ALLOC_WITH_BEACON_ROOTS_JSON};
     std::istringstream txs{TX_JSON};
-    std::ostringstream out_result;
     std::ostringstream out_alloc;
 
     tooling::T8NArgs args;
@@ -267,19 +270,17 @@ TEST(tooling_t8n, out_alloc_reports_the_beacon_root_write_and_the_created_accoun
     args.alloc = &alloc;
     args.env = &env;
     args.txs = &txs;
-    args.out_result = &out_result;
     args.out_alloc = &out_alloc;
 
     tooling::t8n(vm, args);
 
-    // Beacon-roots contract: a new storage entry keyed by block number, holding the timestamp.
-    EXPECT_THAT(out_alloc.str(), HasSubstr(R"("0x000f3df6d732807ef1319fb7b8bb8522d0beac02": {)"));
-    EXPECT_THAT(out_alloc.str(),
-        HasSubstr(R"("0x00000000000000000000000000000000000000000000000000000000000016ca": )"
-                  R"("0x0000000000000000000000000000000000000000000000000000000054c99069")"));
-    // The CREATE deployed a one-byte runtime (0x00) at the address computed from sender+nonce.
-    EXPECT_THAT(out_alloc.str(), HasSubstr(R"("0x6295ee1b4f6dd65047762f924ecd367c17eabf8f": {)"));
-    EXPECT_THAT(out_alloc.str(), HasSubstr(R"("code": "0x00")"));
+    const auto post = json::parse(out_alloc.str());
+    // Slot timestamp % 8191 holds the timestamp (EIP-4788).
+    EXPECT_EQ(post.at("0x000f3df6d732807ef1319fb7b8bb8522d0beac02")
+                  .at("storage")
+                  .at("0x00000000000000000000000000000000000000000000000000000000000016ca"),
+        "0x0000000000000000000000000000000000000000000000000000000054c99069");
+    EXPECT_EQ(post.at("0x6295ee1b4f6dd65047762f924ecd367c17eabf8f").at("code"), "0x00");
 }
 
 TEST(tooling_t8n, open_trace_called_per_tx)

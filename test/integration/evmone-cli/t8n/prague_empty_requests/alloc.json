@@ -3,5 +3,15 @@
     "code": "",
     "nonce": "0x00",
     "balance": "0x02540be400"
+  },
+  "0x00000961ef480eb55e80d19ad83579a64c007002": {
+    "code": "0x00",
+    "nonce": "0x01",
+    "balance": "0x00"
+  },
+  "0x0000bbddc7ce488642fb579f8b00f3a590007251": {
+    "code": "0x00",
+    "nonce": "0x01",
+    "balance": "0x00"
   }
 }

@@ -77,65 +77,36 @@ constexpr std::string_view UNEXPECTEDLY_VALID = R"({"valid_tx": {
     }
 }})";
 
-/// A transaction given as raw txbytes beside the `transaction` field; its signature `s` is the
-/// secp256k1 group order itself, where every valid one is below it.
-constexpr std::string_view TXBYTES_INVALID_SIGNATURE = R"({"invalid_signature": {
-    "env": {
-        "currentBaseFee": "0x0a",
-        "currentCoinbase": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
-        "currentDifficulty": "0x020000",
-        "currentGasLimit": "0xff112233445566",
-        "currentNumber": "0x01",
-        "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
-        "currentTimestamp": "0x03e8"
-    },
-    "post": {"Shanghai": [{
-        "hash": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-        "indexes": {"data": 0, "gas": 0, "value": 0},
-        "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
-        "txbytes": "0xeb800a8252088080801b01a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"
-    }]},
-    "pre": {},
-    "transaction": {
-        "data": ["0x"],
-        "gasLimit": ["0x5208"],
-        "gasPrice": "0x0a",
-        "nonce": "0x00",
-        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
-        "to": "",
-        "value": ["0x00"]
-    }
-}})";
+/// A case given as raw txbytes, which the runner decodes and recovers the sender of, in a fixture
+/// that expects it to succeed. The `transaction` beside it is what the loader wants, not what runs.
+std::string txbytes_case(std::string_view txbytes)
+{
+    return R"({"txbytes_case": {
+        "env": {
+            "currentCoinbase": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+            "currentGasLimit": "0xff112233445566",
+            "currentNumber": "0x01",
+            "currentTimestamp": "0x03e8"
+        },
+        "post": {"Shanghai": [{
+            "hash": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
+            "indexes": {"data": 0, "gas": 0, "value": 0},
+            "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
+            "txbytes": ")" +
+           std::string{txbytes} + R"("
+        }]},
+        "pre": {},
+        "transaction": {
+            "data": ["0x"], "gasLimit": ["0x5208"], "gasPrice": "0x0a", "nonce": "0x00",
+            "value": ["0x00"]
+        }
+    }})";
+}
 
-/// A transaction given as txbytes that is not valid RLP at all (a single byte 0xc0, an empty
-/// list, where a 9-element transaction list is expected).
-constexpr std::string_view TXBYTES_INVALID_ENCODING = R"({"invalid_encoding": {
-    "env": {
-        "currentBaseFee": "0x0a",
-        "currentCoinbase": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
-        "currentDifficulty": "0x020000",
-        "currentGasLimit": "0xff112233445566",
-        "currentNumber": "0x01",
-        "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000020000",
-        "currentTimestamp": "0x03e8"
-    },
-    "post": {"Shanghai": [{
-        "hash": "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421",
-        "indexes": {"data": 0, "gas": 0, "value": 0},
-        "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347",
-        "txbytes": "0xc0"
-    }]},
-    "pre": {},
-    "transaction": {
-        "data": ["0x"],
-        "gasLimit": ["0x5208"],
-        "gasPrice": "0x0a",
-        "nonce": "0x00",
-        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
-        "to": "",
-        "value": ["0x00"]
-    }
-}})";
+/// A legacy transaction whose signature `s` is the secp256k1 group order itself, where every
+/// valid one is below it.
+constexpr auto TXBYTES_INVALID_SIGNATURE =
+    "0xeb800a8252088080801b01a0fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141";
 
 std::vector<Failure> run(std::string_view fixture)
 {
@@ -174,7 +145,7 @@ TEST(statetest_runner, not_rejected_transaction)
 
 TEST(statetest_runner, txbytes_invalid_signature)
 {
-    const auto failures = run(TXBYTES_INVALID_SIGNATURE);
+    const auto failures = run(txbytes_case(TXBYTES_INVALID_SIGNATURE));
 
     ASSERT_EQ(failures.size(), 1u);
     EXPECT_EQ(failures[0].detail,
@@ -183,7 +154,8 @@ TEST(statetest_runner, txbytes_invalid_signature)
 
 TEST(statetest_runner, txbytes_invalid_encoding)
 {
-    const auto failures = run(TXBYTES_INVALID_ENCODING);
+    // An empty list, where a legacy transaction is a list of nine items.
+    const auto failures = run(txbytes_case("0xc0"));
 
     ASSERT_EQ(failures.size(), 1u);
     EXPECT_EQ(failures[0].detail, "unexpected invalid transaction: invalid transaction encoding");

@@ -474,8 +474,8 @@ TEST(json_loader, blockchain_test_slot_number_absent_differs_from_zero)
 /// build the invalid block from, so it refuses the whole test rather than the one block.
 TEST(json_loader, blockchain_test_unsupported_rlp)
 {
-    // A fresh stream is built inside the lambda: ThrowsMessage() may re-invoke it while
-    // explaining a failure, and an already-consumed istringstream would report a false one.
+    // The stream is built inside the lambda: on a failure EXPECT_THAT reruns the matcher for its
+    // explanation, and a stream consumed by the first run would then report a false one.
     constexpr std::string_view fixture = R"({
         "unsupported_rlp": {
             "network": "Cancun",
@@ -490,7 +490,7 @@ TEST(json_loader, blockchain_test_unsupported_rlp)
                 "gasLimit": "0x01000000",
                 "gasUsed": "0x00",
                 "timestamp": "0x00",
-                "extraData": "0x00",
+                "extraData": "0x",
                 "hash": "0x0000000000000000000000000000000000000000000000000000000000000001"
             },
             "pre": {},

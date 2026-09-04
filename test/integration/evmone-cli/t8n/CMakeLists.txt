@@ -62,6 +62,8 @@ set_tests_properties(
     ${PREFIX}/${TEST_CASE}/out.json PROPERTIES
     FIXTURES_CLEANUP ${TEST_CASE}
     PASS_REGULAR_EXPRESSION [=["gasUsed"]=]
+    # Only a run shows that --state.fork Berlin reaches t8n as a revision before London.
+    FAIL_REGULAR_EXPRESSION currentBaseFee
 )
 
 
@@ -160,6 +162,9 @@ set_tests_properties(
     ${PREFIX}/${TEST_CASE}/out.json PROPERTIES
     FIXTURES_CLEANUP ${TEST_CASE}
     PASS_REGULAR_EXPRESSION [=["requestsHash"]=]
+    # The alloc holds both request contracts, so the hash is of no requests rather than of a
+    # collection which failed.
+    FAIL_REGULAR_EXPRESSION blockException
 )
 
 set(TEST_CASE osaka_blob_schedule)
