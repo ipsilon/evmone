@@ -6,6 +6,19 @@
 
 set(PREFIX ${PREFIX}/t8n)
 
+# Nothing removes what a case writes, so a run which wrote nothing would be checked against the
+# output of the last one. Every case waits for this.
+add_test(NAME ${PREFIX}/clean_output_dirs COMMAND ${CMAKE_COMMAND} -E rm -rf
+    ${CMAKE_CURRENT_BINARY_DIR}/london_base_fee
+    ${CMAKE_CURRENT_BINARY_DIR}/berlin_base_fee
+    ${CMAKE_CURRENT_BINARY_DIR}/cancun_create_tx
+    ${CMAKE_CURRENT_BINARY_DIR}/cancun_create_tx_trace
+    ${CMAKE_CURRENT_BINARY_DIR}/prague_empty_requests
+    ${CMAKE_CURRENT_BINARY_DIR}/prague_pre_state_only
+    ${CMAKE_CURRENT_BINARY_DIR}/osaka_blob_schedule
+    ${CMAKE_CURRENT_BINARY_DIR}/chainid_hex_max)
+set_tests_properties(${PREFIX}/clean_output_dirs PROPERTIES FIXTURES_SETUP outputs)
+
 set(TEST_CASE london_base_fee)
 
 add_test(
@@ -22,7 +35,8 @@ add_test(
     --output.basedir ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}
     --output.result out.json
 )
-set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED "${TEST_CASE};outputs")
 
 add_test(
     NAME ${PREFIX}/${TEST_CASE}/out.json
@@ -52,7 +66,8 @@ add_test(
     --output.basedir ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}
     --output.result out.json
 )
-set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED "${TEST_CASE};outputs")
 
 add_test(
     NAME ${PREFIX}/${TEST_CASE}/out.json
@@ -85,7 +100,8 @@ add_test(
     --output.alloc outAlloc.json
     --opcode.count opcodes.json
 )
-set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED "${TEST_CASE};outputs")
 
 add_test(
     NAME ${PREFIX}/${TEST_CASE}/out.json
@@ -152,7 +168,8 @@ add_test(
     --output.basedir ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}
     --output.result out.json
 )
-set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED "${TEST_CASE};outputs")
 
 add_test(
     NAME ${PREFIX}/${TEST_CASE}/out.json
@@ -184,7 +201,8 @@ add_test(
     --output.basedir ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}
     --output.result out.json
 )
-set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED "${TEST_CASE};outputs")
 
 add_test(
     NAME ${PREFIX}/${TEST_CASE}/out.json
@@ -221,7 +239,8 @@ add_test(
     --output.result out.json
     --trace
 )
-set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED "${TEST_CASE};outputs")
 
 # The first tx in this fixture is a successful CREATE with bytecode 0x60015ff3
 # (PUSH1 0x01 PUSH0 RETURN). Its trace must be written to a per-tx file whose
@@ -274,7 +293,8 @@ add_test(
     --output.result out.json
     --output.body body.rlp
 )
-set_tests_properties(${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED ${TEST_CASE})
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED "${TEST_CASE};outputs")
 
 add_test(
     NAME ${PREFIX}/${TEST_CASE}/out.json
@@ -282,6 +302,7 @@ add_test(
 )
 set_tests_properties(
     ${PREFIX}/${TEST_CASE}/out.json PROPERTIES
+    FIXTURES_CLEANUP ${TEST_CASE}
     # The pre-state holds no request contract, so only the skipped system calls keep the block
     # valid: this is what tells the mode apart from a reward of zero.
     PASS_REGULAR_EXPRESSION [=["stateRoot"]=]
