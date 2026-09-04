@@ -2,7 +2,7 @@
 # Copyright 2022 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-# Integration tests for evmone-statetest.
+# Integration tests for `evmone test` over state test fixtures.
 
 set(PREFIX ${PREFIX}/statetest)
 set(TESTS1 ${CMAKE_CURRENT_SOURCE_DIR}/tests1)
@@ -11,7 +11,7 @@ set(TESTS_FILTER ${CMAKE_CURRENT_SOURCE_DIR}/filter)
 
 add_test(
     NAME ${PREFIX}/no_arguments
-    COMMAND evmone-statetest
+    COMMAND evmone-cli test
 )
 set_tests_properties(
     ${PREFIX}/no_arguments PROPERTIES
@@ -23,7 +23,7 @@ set_tests_properties(
 # show up in the listing.
 add_test(
     NAME ${PREFIX}/tests1_list
-    COMMAND evmone-statetest ${TESTS1} --collect-only
+    COMMAND evmone-cli test ${TESTS1} --collect-only
 )
 set_tests_properties(
     ${PREFIX}/tests1_list PROPERTIES
@@ -33,7 +33,7 @@ set_tests_properties(
 # A file named directly is listed as itself, whatever it holds.
 add_test(
     NAME ${PREFIX}/single_file_list
-    COMMAND evmone-statetest ${TESTS1}/SuiteA/test2_multi.json --collect-only
+    COMMAND evmone-cli test ${TESTS1}/SuiteA/test2_multi.json --collect-only
 )
 set_tests_properties(
     ${PREFIX}/single_file_list PROPERTIES
@@ -41,10 +41,10 @@ set_tests_properties(
 )
 
 # Several roots are collected in the order given, not regrouped by suite as gtest listed them.
-# T.json holds no test case, but naming it is naming a test, so it is listed like any other.
+# T.json holds no fixture, but naming it is naming a test, so it is listed like any other.
 add_test(
     NAME ${PREFIX}/multiple_args_list
-    COMMAND evmone-statetest ${TESTS1} ${TESTS2} ${TESTS1}/B/T.json ${TESTS1}/SuiteA --collect-only
+    COMMAND evmone-cli test ${TESTS1} ${TESTS2} ${TESTS1}/B/T.json ${TESTS1}/SuiteA --collect-only
 )
 set_tests_properties(
     ${PREFIX}/multiple_args_list PROPERTIES
@@ -53,7 +53,7 @@ set_tests_properties(
 
 add_test(
     NAME ${PREFIX}/invalid_path
-    COMMAND evmone-statetest invalid.json
+    COMMAND evmone-cli test invalid.json
 )
 set_tests_properties(
     ${PREFIX}/invalid_path PROPERTIES
@@ -62,7 +62,7 @@ set_tests_properties(
 
 add_test(
     NAME ${PREFIX}/multi_test
-    COMMAND evmone-statetest ${TESTS1}/SuiteA/test2_multi.json
+    COMMAND evmone-cli test ${TESTS1}/SuiteA/test2_multi.json
 )
 set_tests_properties(
     ${PREFIX}/multi_test PROPERTIES
@@ -72,7 +72,7 @@ set_tests_properties(
 
 add_test(
     NAME ${PREFIX}/trace
-    COMMAND evmone-statetest ${TESTS1}/SuiteA/test1.json --trace
+    COMMAND evmone-cli test ${TESTS1}/SuiteA/test1.json --trace
 )
 set_tests_properties(
     ${PREFIX}/trace PROPERTIES
@@ -84,7 +84,7 @@ set_tests_properties(
 
 add_test(
     NAME ${PREFIX}/filter
-    COMMAND evmone-statetest ${TESTS_FILTER}/one_failing_of_two.json -k passing_test_case
+    COMMAND evmone-cli test ${TESTS_FILTER}/one_failing_of_two.json -k passing_test_case
 )
 set_tests_properties(
     ${PREFIX}/filter PROPERTIES
@@ -101,7 +101,7 @@ set_tests_properties(
 # hold just as well if the filter dropped every case.
 add_test(
     NAME ${PREFIX}/filter_directory
-    COMMAND evmone-statetest ${TESTS_FILTER} -k passing_test_case --trace-summary
+    COMMAND evmone-cli test ${TESTS_FILTER} -k passing_test_case --trace-summary
 )
 set_tests_properties(
     ${PREFIX}/filter_directory PROPERTIES
@@ -113,7 +113,7 @@ set_tests_properties(
 # that swallowed a positional path would leave the roots after it uncollected.
 add_test(
     NAME ${PREFIX}/ignore
-    COMMAND evmone-statetest --ignore B ${TESTS1} ${TESTS2} --collect-only
+    COMMAND evmone-cli test --ignore B ${TESTS1} ${TESTS2} --collect-only
 )
 set_tests_properties(
     ${PREFIX}/ignore PROPERTIES
@@ -125,7 +125,7 @@ set_tests_properties(
 # the driver unit tests pin the code itself.
 add_test(
     NAME ${PREFIX}/nothing_collected
-    COMMAND evmone-statetest ${TESTS1} --ignore B --ignore SuiteA
+    COMMAND evmone-cli test ${TESTS1} --ignore B --ignore SuiteA
 )
 set_tests_properties(${PREFIX}/nothing_collected PROPERTIES WILL_FAIL TRUE)
 
