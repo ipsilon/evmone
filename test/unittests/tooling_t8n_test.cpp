@@ -106,6 +106,7 @@ std::string run_call_to(std::string_view callee_code, evmc_revision rev)
     })";
     return run_t8n(alloc, TX_TO_CALLEE, rev);
 }
+
 /// A block env carrying the parent's fee market, which is what a base fee is computed from.
 constexpr auto ENV_WITH_PARENT_JSON = R"({
     "currentCoinbase": "0x8888f1f195afa192cfee860698584c030f4c9db1",
@@ -168,7 +169,8 @@ constexpr auto ENV_CANCUN_JSON = R"({
 
 TEST(tooling_t8n, base_fee_is_computed_from_the_parent_block)
 {
-    // The parent used its whole gas target, so the fee rises by an eighth: 7 + 7/8 rounds to 8.
+    // The parent ran at twice its gas target. An eighth of a base fee of 7 truncates to
+    // zero, so the fee rises by the smallest step there is instead.
     EXPECT_THAT(
         run_t8n_env(ENV_WITH_PARENT_JSON, EVMC_LONDON), HasSubstr(R"("currentBaseFee": "0x8")"));
 }
