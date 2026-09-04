@@ -137,6 +137,33 @@ std::string run_t8n_env(std::string_view env_json, evmc_revision rev)
     tooling::t8n(vm, args);
     return out_result.str();
 }
+
+/// Pre-state for the CREATE tx below, with the beacon-roots system contract preloaded so its
+/// post-block system call has an account to write into.
+/// Matches test/integration/evmone-cli/t8n/cancun_create_tx/alloc.json.
+constexpr auto ALLOC_WITH_BEACON_ROOTS_JSON = R"({
+    "0x000f3df6d732807ef1319fb7b8bb8522d0beac02": {
+        "code": "0x3373fffffffffffffffffffffffffffffffffffffffe14604d57602036146024575f5ffd5b5f35801560495762001fff810690815414603c575f5ffd5b62001fff01545f5260205ff35b5f5ffd5b62001fff42064281555f359062001fff015500",
+        "nonce": "0x01",
+        "balance": "0x00",
+        "storage": {
+            "0x12e2": "0x54c98c81"
+        }
+    },
+    "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+        "code": "",
+        "nonce": "0x00",
+        "balance": "0x02540be400"
+    }
+})";
+
+/// Cancun block env, matching test/integration/evmone-cli/t8n/cancun_create_tx/env.json.
+constexpr auto ENV_CANCUN_JSON = R"({
+    "currentCoinbase": "0x8888f1f195afa192cfee860698584c030f4c9db1",
+    "currentNumber": "0x01",
+    "currentTimestamp": "0x54c99069",
+    "currentGasLimit": "0x2fefd8"
+})";
 }  // namespace
 
 TEST(tooling_t8n, base_fee_is_computed_from_the_parent_block)
@@ -189,9 +216,6 @@ TEST(tooling_t8n, a_block_requesting_nothing_reports_the_empty_requests_hash)
         result, HasSubstr("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"));
 }
 
-namespace
-{}  // namespace
-
 TEST(tooling_t8n, no_inputs_no_outputs)
 {
     // Smoke: t8n() with everything left at defaults must not throw or crash.
@@ -221,6 +245,39 @@ TEST(tooling_t8n, result_written_to_out_streams)
     EXPECT_THAT(out_result.str(), HasSubstr("\"receiptsRoot\""));
     EXPECT_THAT(out_result.str(), HasSubstr("\"logsBloom\""));
     EXPECT_THAT(out_alloc.str(), Eq("{}"));
+}
+
+TEST(tooling_t8n, out_alloc_reports_the_beacon_root_write_and_the_created_account)
+{
+    // TX_JSON's CREATE runs as the block's only transaction, so the post-block system call
+    // to the beacon-roots contract and the new contract's deployment are the only state changes.
+    evmc::VM vm{evmc_create_evmone()};
+
+    std::istringstream env{ENV_CANCUN_JSON};
+    std::istringstream alloc{ALLOC_WITH_BEACON_ROOTS_JSON};
+    std::istringstream txs{TX_JSON};
+    std::ostringstream out_result;
+    std::ostringstream out_alloc;
+
+    tooling::T8NArgs args;
+    args.rev = EVMC_CANCUN;
+    args.chain_id = 1;
+    args.alloc = &alloc;
+    args.env = &env;
+    args.txs = &txs;
+    args.out_result = &out_result;
+    args.out_alloc = &out_alloc;
+
+    tooling::t8n(vm, args);
+
+    // Beacon-roots contract: a new storage entry keyed by block number, holding the timestamp.
+    EXPECT_THAT(out_alloc.str(), HasSubstr(R"("0x000f3df6d732807ef1319fb7b8bb8522d0beac02": {)"));
+    EXPECT_THAT(out_alloc.str(),
+        HasSubstr(R"("0x00000000000000000000000000000000000000000000000000000000000016ca": )"
+                  R"("0x0000000000000000000000000000000000000000000000000000000054c99069")"));
+    // The CREATE deployed a one-byte runtime (0x00) at the address computed from sender+nonce.
+    EXPECT_THAT(out_alloc.str(), HasSubstr(R"("0x6295ee1b4f6dd65047762f924ecd367c17eabf8f": {)"));
+    EXPECT_THAT(out_alloc.str(), HasSubstr(R"("code": "0x00")"));
 }
 
 TEST(tooling_t8n, open_trace_called_per_tx)

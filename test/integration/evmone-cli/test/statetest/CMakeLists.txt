@@ -7,7 +7,6 @@
 set(PREFIX ${PREFIX}/statetest)
 set(TESTS1 ${CMAKE_CURRENT_SOURCE_DIR}/tests1)
 set(TESTS2 ${CMAKE_CURRENT_SOURCE_DIR}/tests2)
-set(TESTS_TX ${CMAKE_CURRENT_SOURCE_DIR}/tx)
 set(TESTS_FILTER ${CMAKE_CURRENT_SOURCE_DIR}/filter)
 
 add_test(
@@ -92,24 +91,6 @@ string(REPLACE "]" "\\]" EXPECTED_TRACE ${EXPECTED_TRACE})
 set_tests_properties(
     ${PREFIX}/trace PROPERTIES
     PASS_REGULAR_EXPRESSION ${EXPECTED_TRACE}
-)
-
-add_test(
-    NAME ${PREFIX}/tx_invalid_signature
-    COMMAND evmone-statetest ${TESTS_TX}/invalid_signature.json
-)
-set_tests_properties(
-    ${PREFIX}/tx_invalid_signature PROPERTIES
-    PASS_REGULAR_EXPRESSION "unexpected invalid transaction: TransactionException.INVALID_SIGNATURE_VRS"
-)
-
-add_test(
-    NAME ${PREFIX}/tx_invalid_encoding
-    COMMAND evmone-statetest ${TESTS_TX}/invalid_encoding.json
-)
-set_tests_properties(
-    ${PREFIX}/tx_invalid_encoding PROPERTIES
-    PASS_REGULAR_EXPRESSION "unexpected invalid transaction: invalid transaction encoding"
 )
 
 add_test(

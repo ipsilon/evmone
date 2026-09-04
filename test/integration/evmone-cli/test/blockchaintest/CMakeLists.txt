@@ -41,8 +41,8 @@ add_test(
 )
 set_tests_properties(
     ${PREFIX}/unsupported_rlp PROPERTIES
-    PASS_REGULAR_EXPRESSION
-    "tests with invalidly rlp-encoded blocks are not supported.*0 passed, 1 skipped"
+    # Why it is skipped is a loader unit test; this is the tool's whole-file skip verdict.
+    PASS_REGULAR_EXPRESSION "0 passed, 1 skipped"
 )
 
 # A PASS_REGULAR_EXPRESSION makes CTest ignore the exit code, so run it again for that alone.
