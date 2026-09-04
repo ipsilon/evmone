@@ -295,7 +295,10 @@ add_test(
 set_tests_properties(
     ${PREFIX}/${TEST_CASE}/body.rlp PROPERTIES
     FIXTURES_CLEANUP ${TEST_CASE}
-    PASS_REGULAR_EXPRESSION "^0x[0-9a-f]+"
+    # The whole encoding: an empty transaction list is hex too, and is what a run which never read
+    # --input.txs writes.
+    PASS_REGULAR_EXPRESSION
+    "^0xf84ef84c8032830186a08080801ba0468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665aea05cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc"
 )
 
 

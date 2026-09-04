@@ -29,8 +29,10 @@ add_test(NAME ${PREFIX}/one_command_per_invocation_exit_code COMMAND evmone-cli
 set_tests_properties(
     ${PREFIX}/one_command_per_invocation_exit_code PROPERTIES WILL_FAIL TRUE)
 
+# t8n is given its required option here: without one the second command exits non-zero by itself,
+# so the exit code would say nothing about whether it was taken as a command.
 add_test(NAME ${PREFIX}/one_command_per_invocation_reversed_exit_code COMMAND evmone-cli
-    run 6000 t8n)
+    run 6000 t8n --state.fork Cancun)
 set_tests_properties(
     ${PREFIX}/one_command_per_invocation_reversed_exit_code PROPERTIES WILL_FAIL TRUE)
 
