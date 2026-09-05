@@ -30,25 +30,25 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "tests1[^\n]*T\\.json\n[^\n]*tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json"
 )
 
-# Given the file directly, each test case in it is listed on its own.
+# A file named directly is listed as itself, whatever it holds.
 add_test(
     NAME ${PREFIX}/single_file_list
     COMMAND evmone-statetest ${TESTS1}/SuiteA/test2_multi.json --collect-only
 )
 set_tests_properties(
     ${PREFIX}/single_file_list PROPERTIES
-    PASS_REGULAR_EXPRESSION "test2_multi\\.json::test_case_1\n[^\n]*test2_multi\\.json::test_case_2"
+    PASS_REGULAR_EXPRESSION "^[^\n]*test2_multi\\.json\n$"
 )
 
 # Several roots are collected in the order given, not regrouped by suite as gtest listed them.
-# T.json holds no test cases, so naming it directly contributes no line.
+# T.json holds no test case, but naming it is naming a test, so it is listed like any other.
 add_test(
     NAME ${PREFIX}/multiple_args_list
     COMMAND evmone-statetest ${TESTS1} ${TESTS2} ${TESTS1}/B/T.json ${TESTS1}/SuiteA --collect-only
 )
 set_tests_properties(
     ${PREFIX}/multiple_args_list PROPERTIES
-    PASS_REGULAR_EXPRESSION "tests1[^\n]*T\\.json\n[^\n]*tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json\n[^\n]*tests2[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json"
+    PASS_REGULAR_EXPRESSION "tests1[^\n]*T\\.json\n[^\n]*tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json\n[^\n]*tests2[^\n]*test1\\.json\n[^\n]*tests1[^\n]*T\\.json\n[^\n]*tests1[^\n]*test1\\.json\n[^\n]*tests1[^\n]*test2_multi\\.json"
 )
 
 add_test(
@@ -66,8 +66,8 @@ add_test(
 )
 set_tests_properties(
     ${PREFIX}/multi_test PROPERTIES
-    # Make sure both tests in the file are executed (both should fail).
-    PASS_REGULAR_EXPRESSION "test_case_1.*test_case_2"
+    # Both cases of the file run and both fail; the file itself counts once.
+    PASS_REGULAR_EXPRESSION "test_case_1.*test_case_2.*1 failed, 0 passed"
 )
 
 add_test(
@@ -96,9 +96,8 @@ set_tests_properties(
     FAIL_REGULAR_EXPRESSION "failing_test_case"
 )
 
-# Over a directory the filter is applied per case inside the file's test, not at registration as
-# it is above. The summary line is what proves a case ran: forbidding the other name alone would
-# hold just as well if the filter dropped every case.
+# The filter is applied per case inside the file's test. The summary line is what proves a case
+# ran: forbidding the other name alone would hold just as well if the filter dropped every case.
 add_test(
     NAME ${PREFIX}/filter_directory
     COMMAND evmone-statetest ${TESTS_FILTER} -k passing_test_case --trace-summary
@@ -129,12 +128,26 @@ add_test(
 )
 set_tests_properties(${PREFIX}/nothing_collected PROPERTIES WILL_FAIL TRUE)
 
-# A file which cannot be loaded is a failure of the listing too, not a name in it.
+# Collection reads no file, so one which cannot be parsed is listed like any other. It fails
+# when it runs, which is the only time anything reads it.
 add_test(
     NAME ${PREFIX}/collect_only_unloadable
-    COMMAND evmone-statetest ${CMAKE_CURRENT_SOURCE_DIR}/tests1/SuiteA/notes.txt --collect-only
+    COMMAND evmone-statetest ${TESTS1}/SuiteA/notes.txt --collect-only
 )
-set_tests_properties(${PREFIX}/collect_only_unloadable PROPERTIES WILL_FAIL TRUE)
+set_tests_properties(
+    ${PREFIX}/collect_only_unloadable PROPERTIES
+    PASS_REGULAR_EXPRESSION "^[^\n]*notes\\.txt\n$"
+)
+
+add_test(
+    NAME ${PREFIX}/run_unloadable
+    COMMAND evmone-statetest ${TESTS1}/SuiteA/notes.txt
+)
+set_tests_properties(
+    ${PREFIX}/run_unloadable PROPERTIES
+    # The verdict, not just a non-zero exit: a file which was never collected exits non-zero too.
+    PASS_REGULAR_EXPRESSION "1 failed, 0 passed"
+)
 
 get_directory_property(ALL_TESTS TESTS)
 set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)

@@ -13,8 +13,8 @@ add_test(
 )
 set_tests_properties(
     ${PREFIX}/json_test PROPERTIES
-    # Make sure both tests in the file are executed (both should fail).
-    PASS_REGULAR_EXPRESSION "2 failed, 0 passed"
+    # Both fixtures of the file run and both fail; the file itself counts once.
+    PASS_REGULAR_EXPRESSION "-call\\]:.*-callcode\\]:.*1 failed, 0 passed"
 )
 
 # Exercise block-level gas accounting (EIP-7778), with tracing on so that flag is covered too.
@@ -94,22 +94,36 @@ set_tests_properties(
     FAIL_REGULAR_EXPRESSION "unsupported_rlp"
 )
 
-# Given the file directly, each test case in it is listed on its own.
+# A file named directly is listed as itself, once, whatever it holds.
 add_test(
     NAME ${PREFIX}/collect_only_file
     COMMAND evmone-blockchaintest ${TESTS1}/test.json --collect-only
 )
 set_tests_properties(
     ${PREFIX}/collect_only_file PROPERTIES
-    PASS_REGULAR_EXPRESSION "test\\.json::[^\n]*-call\\]\n[^\n]*test\\.json::[^\n]*-callcode\\]"
+    PASS_REGULAR_EXPRESSION "^[^\n]*test\\.json\n$"
 )
 
-# A file which cannot be loaded is a failure of the listing too, not a name in it.
+# Collection reads no file, so one which cannot be parsed is listed like any other. It fails
+# when it runs, which is the only time anything reads it.
 add_test(
     NAME ${PREFIX}/collect_only_unloadable
     COMMAND evmone-blockchaintest ${TESTS1}/not_json.txt --collect-only
 )
-set_tests_properties(${PREFIX}/collect_only_unloadable PROPERTIES WILL_FAIL TRUE)
+set_tests_properties(
+    ${PREFIX}/collect_only_unloadable PROPERTIES
+    PASS_REGULAR_EXPRESSION "^[^\n]*not_json\\.txt\n$"
+)
+
+add_test(
+    NAME ${PREFIX}/run_unloadable
+    COMMAND evmone-blockchaintest ${TESTS1}/not_json.txt
+)
+set_tests_properties(
+    ${PREFIX}/run_unloadable PROPERTIES
+    # The verdict, not just a non-zero exit: a file which was never collected exits non-zero too.
+    PASS_REGULAR_EXPRESSION "1 failed, 0 passed"
+)
 
 get_directory_property(ALL_TESTS TESTS)
 set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)
