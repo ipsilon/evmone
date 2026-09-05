@@ -65,6 +65,14 @@ inline void absorb_child_state_gas(
     // Accumulate the spilled state-gas.
     state.state_gas.spilled += result.state_gas.spilled;
 
+    // Fuzzer coverage probe (EIP-8037): the child returned reservoir that the parent's
+    // outstanding spill can absorb -- the exact condition the rebalance below acts on.
+    // Counted BEFORE it happens, so it measures inputs that REACH the rule rather than
+    // inputs that complete it. Lived in StateGas::repay_spill until upstream deleted that
+    // and moved the rule here; the predicate is unchanged.
+    if (std::min(result.state_gas.left, state.state_gas.spilled) > 0)
+        ++state_gas_probe.cross_frame_absorbable;
+
     // Rebalance the state-gas refills: the caller must move callee's refills to gas_left up to the
     // caller's spilled counter. Do this by refilling all returned state-gas to zeroed `left`.
     state.state_gas.left = 0;
