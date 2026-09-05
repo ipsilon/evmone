@@ -20,6 +20,34 @@ namespace evmone
 /// derived from the frame's initial reservoir: `used = initial - left + spilled`.
 /// This holds across nested calls because a child's initial reservoir is the
 /// parent's `left` at call time.
+/// EIP-8037 execution PROBE, for the differential fuzzer's coverage census.
+///
+/// The fuzzer needs to know whether an input actually REACHED the state-gas
+/// paths, not merely whether it looked like it might. Every static proxy for
+/// that has proved misleading: counting "the gas limit sits in a boundary
+/// table" reported a healthy 0.35% while not one such input had a reservoir at
+/// all, because they were all at a revision where EIP-8037 does not exist.
+/// Only execution can answer it, so these count the two events that matter.
+///
+/// thread_local because the fuzzer runs backends on separate threads; zero cost
+/// when unread, and nothing here feeds back into consensus behaviour.
+struct StateGasProbe
+{
+    /// A charge that could not be covered by the reservoir and drew from
+    /// `gas_left`. Non-zero means the input reached the dual-pool path.
+    int64_t spills = 0;
+
+    /// A child merged with state gas stranded in the reservoir that the
+    /// parent's spill can absorb -- the condition repay_spill acts on. Counted
+    /// BEFORE the repayment, so it measures inputs that reach the rule.
+    int64_t cross_frame_absorbable = 0;
+
+    void reset() noexcept { *this = {}; }
+};
+
+/// The active probe. Read/reset by the harness around an execution.
+inline thread_local StateGasProbe state_gas_probe;
+
 struct StateGas
 {
     int64_t left = 0;     ///< Remaining state-gas reservoir (`state_gas_reservoir`).
@@ -43,6 +71,7 @@ struct StateGas
         gas_left -= spill;
         spilled += spill;
         left = 0;
+        ++state_gas_probe.spills;
         return true;
     }
 
@@ -67,6 +96,8 @@ struct StateGas
     void repay_spill(int64_t& gas_left) noexcept
     {
         const auto amount = std::min(left, spilled);
+        if (amount > 0)
+            ++state_gas_probe.cross_frame_absorbable;
         gas_left += amount;
         left -= amount;
         spilled -= amount;
