@@ -38,16 +38,16 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     if (!is_on_curve(Q))
         return false;
 
-    const ModArith n{Curve::ORDER};
+    const MontgomeryArith n{Curve::ORDER};
 
     // 3. Let z be the Lₙ leftmost bits of e = HASH(m).
     static_assert(Curve::ORDER > 1_u256 << 255);
     const auto z = intx::be::load<uint256>(h.bytes);
 
     // 4. Calculate u₁ = zs⁻¹ mod n and u₂ = rs⁻¹ mod n.
-    const auto s_inv = n.inv(n.to_mont(s));
-    const auto u1 = n.from_mont(n.mul(n.to_mont(z), s_inv));
-    const auto u2 = n.from_mont(n.mul(n.to_mont(r), s_inv));
+    const auto s_inv = n.inv(n.to_internal(s));
+    const auto u1 = n.from_internal(n.mul(n.to_internal(z), s_inv));
+    const auto u2 = n.from_internal(n.mul(n.to_internal(r), s_inv));
 
     // 5. Calculate the curve point R = (x₁, y₁) = u₁×G + u₂×Q.
     const auto R = ecc::to_affine(msm(u1, G, u2, Q));
