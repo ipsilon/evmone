@@ -6,37 +6,87 @@
 
 set(PREFIX ${PREFIX}/test)
 
-# A file holding a case which is not a fixture at all, beside one which runs.
-add_test(NAME ${PREFIX}/fixture_fault COMMAND evmone-statetest
-    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault)
-set_tests_properties(${PREFIX}/fixture_fault PROPERTIES WILL_FAIL TRUE)
+# FIXME: move `evmone-cli test` tests to subdir: integration/test (sibling to integration/t8n).
+#        we can add one more dir: integration/evmone-cli/{t8n,test,run}.
+set(DATA ${CMAKE_CURRENT_SOURCE_DIR})
 
-# WILL_FAIL above accepts any non-zero exit, and a fault downgraded to a skip exits non-zero too,
-# so the counts are what distinguish the two.
-add_test(NAME ${PREFIX}/fixture_fault_is_not_a_skip COMMAND evmone-statetest
-    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault)
+# One command runs both fixture formats, deciding the fixture format on the go:
+# file 2 has _info.fixture-format, others are recognized by field names.
+add_test(NAME ${PREFIX}/test_mixed_formats COMMAND evmone-cli test
+    ${DATA}/statetest/tests1/SuiteA/test1.json ${DATA}/blockchaintest/eip7778_block_gas.json
+    ${DATA}/blockchaintest/unrecovered_sender_blob_gas.json)
 set_tests_properties(
-    ${PREFIX}/fixture_fault_is_not_a_skip PROPERTIES PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
+    ${PREFIX}/test_mixed_formats PROPERTIES PASS_REGULAR_EXPRESSION "= 3 passed in")
 
-# Selecting only the case which is not a fixture must still fault.
-add_test(NAME ${PREFIX}/fixture_fault_survives_filter COMMAND evmone-statetest
-    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault -k b_not_a_fixture)
+# A file recognized as "not a test" is skipped.
+add_test(NAME ${PREFIX}/test_not_a_test COMMAND evmone-cli test
+    ${DATA}/statetest/tests1/SuiteA/index.json)
 set_tests_properties(
-    ${PREFIX}/fixture_fault_survives_filter PROPERTIES
-    PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
+    ${PREFIX}/test_not_a_test PROPERTIES PASS_REGULAR_EXPRESSION
+    "SKIPPED[^\n]*index\\.json - not a test.*0 passed, 1 skipped in")
 
-# A case whose load throws takes the rest of the file with it: the whole file is loaded before
-# any of it runs, so the case after it is never reached and the failure is named after the file
-# rather than the case it came from. FAILED pins that as a failure: a PASS_REGULAR_EXPRESSION
-# makes CTest ignore the exit code, and a fault downgraded to a skip names the file too.
-add_test(NAME ${PREFIX}/case_after_exception COMMAND evmone-statetest
-    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_cases)
+# Check exit code for: passed, failed, skipped (PASS_REGULAR_EXPRESSION ignores exit code).
+add_test(NAME ${PREFIX}/test_exit_ok COMMAND evmone-cli test ${DATA}/testcmd)
+add_test(NAME ${PREFIX}/test_exit_fail COMMAND evmone-cli test ${DATA}/testcmd_fault)
+set_tests_properties(${PREFIX}/test_exit_fail PROPERTIES WILL_FAIL TRUE)
+add_test(NAME ${PREFIX}/test_exit_skipped COMMAND evmone-cli test ${DATA}/testcmd_skipped)
+set_tests_properties(${PREFIX}/test_exit_skipped PROPERTIES WILL_FAIL TRUE)
+
+# A declined fixture should not kill the whole file.
+add_test(NAME ${PREFIX}/test_dir_declined COMMAND evmone-cli test ${DATA}/testcmd)
 set_tests_properties(
-    ${PREFIX}/case_after_exception PROPERTIES
-    PASS_REGULAR_EXPRESSION
-    "collected 1 test.*FAILED[^\n]*case_after_exception\\.json[^\n]*exception"
-    FAIL_REGULAR_EXPRESSION "b_wrong_state_root"
-)
+    ${PREFIX}/test_dir_declined PROPERTIES PASS_REGULAR_EXPRESSION
+    "SKIPPED[^\n]*::a_bad_rlp - tests with invalidly rlp-encoded blocks[^\n]*\nSKIPPED[^\n]*::c_engine - unsupported fixture format.*= 1 passed in")
+
+# The -k filter should not filter out a "not a test".
+add_test(NAME ${PREFIX}/test_dir_fault COMMAND evmone-cli test
+    ${DATA}/testcmd_fault -k b_not_a_test)
+set_tests_properties(
+    ${PREFIX}/test_dir_fault PROPERTIES PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
+
+# A failed fixture should not kill the whole file.
+add_test(NAME ${PREFIX}/test_after_exception COMMAND evmone-cli test ${DATA}/testcmd_fault)
+set_tests_properties(
+    ${PREFIX}/test_after_exception PROPERTIES PASS_REGULAR_EXPRESSION
+    "collected 1 file\n.*c_load_error:\n    exception.*d_bad_root:.*state root.*1 failed, 0 passed in")
+
+# The -k filter should filter out the failing fixture.
+add_test(NAME ${PREFIX}/test_dir_filter COMMAND evmone-cli test
+    ${DATA}/statetest/filter -k passing_test_case --trace-summary)
+set_tests_properties(
+    ${PREFIX}/test_dir_filter PROPERTIES
+    PASS_REGULAR_EXPRESSION "\"pass\":true"
+    FAIL_REGULAR_EXPRESSION "failing_test_case")
+
+# A file is one test, so a file with nothing to run counts once as skipped however many
+# fixtures it declined: all_unsupported declines twice and both are named.
+add_test(NAME ${PREFIX}/test_dir_skipped COMMAND evmone-cli test ${DATA}/testcmd_skipped)
+set_tests_properties(
+    ${PREFIX}/test_dir_skipped PROPERTIES PASS_REGULAR_EXPRESSION
+    "all_unsupported\\.json::a_engine - unsupported fixture format: \"blockchain_test_engine\"\nSKIPPED[^\n]*::b_engine_x - .*empty\\.json - not a test.*pre_alloc\\.json - not a test.*0 passed, 5 skipped in")
+
+# The --histogram enables also test name printing.
+# FIXME: This should print the fixture name, not the test file. This can be fixed later when we will add --verbosity flag. If so, remove file printing now.
+add_test(NAME ${PREFIX}/test_histogram COMMAND evmone-cli test --histogram
+    ${DATA}/statetest/tests1/SuiteA/test1.json)
+set_tests_properties(
+    ${PREFIX}/test_histogram PROPERTIES PASS_REGULAR_EXPRESSION
+    "test1\\.json
+--- # HISTOGRAM.*= 1 passed in")
+
+# The --trace enables also test name printing.
+add_test(NAME ${PREFIX}/test_trace COMMAND evmone-cli test --trace
+    ${DATA}/statetest/tests1/SuiteA/test1.json)
+set_tests_properties(
+    ${PREFIX}/test_trace PROPERTIES PASS_REGULAR_EXPRESSION
+    "test1\\.json\n\\{\"pc\":0,[^\n]*\"opName\":\"PUSH1\"\\}.*= 1 passed in")
+
+# A named file is loaded whatever its extension.
+add_test(NAME ${PREFIX}/test_file_unparsed COMMAND evmone-cli test
+    ${DATA}/statetest/tests1/SuiteA/notes.txt)
+set_tests_properties(
+    ${PREFIX}/test_file_unparsed PROPERTIES PASS_REGULAR_EXPRESSION
+    "FAILED[^\n]*notes\\.txt - exception[^\n]*parse error.*1 failed, 0 passed in")
 
 
 get_directory_property(ALL_TESTS TESTS)

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <test/utils/test_driver.hpp>
 #include <filesystem>
 #include <span>
 #include <string>
@@ -32,4 +33,10 @@ struct TestFile
 /// "bc4895-withdrawals".
 void ignore_test_files(
     std::vector<TestFile>& files, std::span<const std::filesystem::path> ignored);
+
+/// Adds to @p cases one test per fixture file under @p root, which is that file itself when it
+/// is not a directory. The tests hold @p settings and @p vm by reference, so both must outlive
+/// them.
+void collect_tests(std::vector<TestCase>& cases, const std::filesystem::path& root,
+    const TestSettings& settings, evmc::VM& vm);
 }  // namespace evmone::test

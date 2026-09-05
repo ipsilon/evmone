@@ -54,4 +54,27 @@ void ignore_test_files(std::vector<TestFile>& files, std::span<const fs::path> i
             ignored, [&relative](const fs::path& prefix) { return is_under(relative, prefix); });
     });
 }
+
+void collect_tests(
+    std::vector<TestCase>& cases, const fs::path& root, const TestSettings& settings, evmc::VM& vm)
+{
+    // A file is one test, whether it was named or found under a directory. Naming the fixtures
+    // in it instead would mean loading every file to collect, which a whole tree cannot afford.
+    std::vector<TestFile> files;
+    if (is_directory(root))
+    {
+        files = collect_test_files(root);
+        ignore_test_files(files, settings.ignored);
+    }
+    else
+        files.push_back({root, {}});
+
+    cases.reserve(cases.size() + files.size());
+    for (const auto& file : files)
+    {
+        // Loaded when the test runs: loading a whole tree up front costs far more.
+        cases.push_back({file.path.string(),
+            [path = file.path, &settings, &vm] { return run_fixture_file(path, settings, vm); }});
+    }
+}
 }  // namespace evmone::test

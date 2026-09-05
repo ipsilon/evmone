@@ -1,0 +1,15 @@
+{
+ "a_engine": {
+  "_info": {
+   "fixture-format": "blockchain_test_engine",
+   "comment": "The file is named by this reason, the first collected, not the one below."
+  },
+  "blocks": []
+ },
+ "b_engine_x": {
+  "_info": {
+   "fixture-format": "blockchain_test_engine_x"
+  },
+  "blocks": []
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "testIds": [
+  "tests/ported_static/vmIOandFlowOperations/test_mload.py::test_mload[fork_Osaka-blockchain_test_engine_x]"
+ ],
+ "environment": {
+  "currentCoinbase": "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+  "currentGasLimit": "0xff112233445566",
+  "currentNumber": "0x01"
+ },
+ "network": "Osaka",
+ "chainId": 1,
+ "pre": {
+  "0x095e7baea6a6c7c4c2dfeb977efac326af552d87": {
+   "balance": "0x0de0b6b3a7640000",
+   "code": "0x600160010160005500",
+   "nonce": "0x00",
+   "storage": {}
+  },
+  "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+   "balance": "0x0de0b6b3a7640000",
+   "code": "0x",
+   "nonce": "0x00",
+   "storage": {}
+  }
+ },
+ "comment": "EEST keeps the pre-allocation its fixtures share beside them, and none of it is a test. Several entries, none of which names a format or carries a shape."
+}

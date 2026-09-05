@@ -2,25 +2,25 @@
 # Copyright 2022 The evmone Authors.
 # SPDX-License-Identifier: Apache-2.0
 
-# Integration tests for evmone-blockchaintest.
+# Integration tests for `evmone test` over blockchain test fixtures.
 
 set(PREFIX ${PREFIX}/blockchaintest)
 set(TESTS1 ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(
     NAME ${PREFIX}/json_test
-    COMMAND evmone-blockchaintest ${TESTS1}/test.json
+    COMMAND evmone-cli test ${TESTS1}/test.json
 )
 set_tests_properties(
     ${PREFIX}/json_test PROPERTIES
     # Both fixtures of the file run and both fail; the file itself counts once.
-    PASS_REGULAR_EXPRESSION "-call\\]:.*-callcode\\]:.*1 failed, 0 passed"
+    PASS_REGULAR_EXPRESSION "-call\\] - canonical.*-callcode\\] - canonical.*1 failed, 0 passed"
 )
 
 # Exercise block-level gas accounting (EIP-7778), with tracing on so that flag is covered too.
 add_test(
     NAME ${PREFIX}/eip7778_block_gas
-    COMMAND evmone-blockchaintest ${TESTS1}/eip7778_block_gas.json --trace
+    COMMAND evmone-cli test ${TESTS1}/eip7778_block_gas.json --trace
 )
 set_tests_properties(
     ${PREFIX}/eip7778_block_gas PROPERTIES
@@ -31,18 +31,18 @@ set_tests_properties(
 # A block invalid by its signature must not be judged by another check.
 add_test(
     NAME ${PREFIX}/unrecovered_sender_blob_gas
-    COMMAND evmone-blockchaintest ${TESTS1}/unrecovered_sender_blob_gas.json
+    COMMAND evmone-cli test ${TESTS1}/unrecovered_sender_blob_gas.json
 )
 add_test(
     NAME ${PREFIX}/unrecovered_sender_deposit_log
-    COMMAND evmone-blockchaintest ${TESTS1}/unrecovered_sender_deposit_log.json
+    COMMAND evmone-cli test ${TESTS1}/unrecovered_sender_deposit_log.json
 )
 
 # A block with expectException but no rlp_decoded is a shape the loader does not support, so the
 # only test in this file is skipped and the run verifies nothing.
 add_test(
     NAME ${PREFIX}/unsupported_rlp
-    COMMAND evmone-blockchaintest ${TESTS1}/unsupported_rlp.json
+    COMMAND evmone-cli test ${TESTS1}/unsupported_rlp.json
 )
 set_tests_properties(
     ${PREFIX}/unsupported_rlp PROPERTIES
@@ -53,7 +53,7 @@ set_tests_properties(
 # A PASS_REGULAR_EXPRESSION makes CTest ignore the exit code, so run it again for that alone.
 add_test(
     NAME ${PREFIX}/unsupported_rlp_exit_code
-    COMMAND evmone-blockchaintest ${TESTS1}/unsupported_rlp.json
+    COMMAND evmone-cli test ${TESTS1}/unsupported_rlp.json
 )
 set_tests_properties(${PREFIX}/unsupported_rlp_exit_code PROPERTIES WILL_FAIL TRUE)
 
@@ -61,18 +61,18 @@ set_tests_properties(${PREFIX}/unsupported_rlp_exit_code PROPERTIES WILL_FAIL TR
 # the unsupported one rather than failing on it.
 add_test(
     NAME ${PREFIX}/directory
-    COMMAND evmone-blockchaintest ${TESTS1}
+    COMMAND evmone-cli test ${TESTS1}
 )
 set_tests_properties(
     ${PREFIX}/directory PROPERTIES
-    PASS_REGULAR_EXPRESSION "SKIPPED [^\n]*unsupported_rlp\\.json - tests with invalidly"
+    PASS_REGULAR_EXPRESSION "SKIPPED [^\n]*unsupported_rlp\\.json::[^\n]* - tests with invalidly"
 )
 
 # A test which gives up gives up only itself. Collected from a directory the whole file is one
 # test, so the test after the one which stopped has to report too.
 add_test(
     NAME ${PREFIX}/stops_at_one_test
-    COMMAND evmone-blockchaintest ${TESTS1}
+    COMMAND evmone-cli test ${TESTS1}
 )
 set_tests_properties(
     ${PREFIX}/stops_at_one_test PROPERTIES
@@ -86,7 +86,7 @@ set_tests_properties(
 # list. Over a directory a test is listed as its file.
 add_test(
     NAME ${PREFIX}/collect_only_directory
-    COMMAND evmone-blockchaintest ${TESTS1} --collect-only --ignore unsupported_rlp.json
+    COMMAND evmone-cli test ${TESTS1} --collect-only --ignore unsupported_rlp.json
 )
 set_tests_properties(
     ${PREFIX}/collect_only_directory PROPERTIES
