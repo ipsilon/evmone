@@ -23,18 +23,17 @@ bool collect_tests(std::vector<TestCase>& cases, const fs::path& root,
     if (is_directory(root))
     {
         auto files = evmone::test::collect_test_files(root);
-        evmone::test::ignore_test_files(files, ignored);
+        evmone::test::ignore_test_files(files, root, ignored);
         cases.reserve(cases.size() + files.size());
-        for (const auto& file : files)
+        for (const auto& path : files)
         {
             // Loaded when the test runs: loading a whole tree up front costs far more. A
             // load which throws over an unsupported fixture reaches the driver, which skips.
-            cases.push_back(
-                {file.path.string(), [path = file.path, &vm](evmone::test::TestReport& report) {
-                     std::ifstream f{path};
-                     for (const auto& test : evmone::test::load_blockchain_tests(f))
-                         evmone::test::run_blockchain_test(test, vm, report);
-                 }});
+            cases.push_back({path.string(), [path, &vm](evmone::test::TestReport& report) {
+                                 std::ifstream f{path};
+                                 for (const auto& test : evmone::test::load_blockchain_tests(f))
+                                     evmone::test::run_blockchain_test(test, vm, report);
+                             }});
         }
     }
     else  // Treat as a file.

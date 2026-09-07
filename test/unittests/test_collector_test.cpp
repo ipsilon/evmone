@@ -4,6 +4,8 @@
 
 #include <gtest/gtest.h>
 #include <test/utils/test_collector.hpp>
+#include <algorithm>
+#include <ranges>
 
 using namespace evmone::test;
 namespace fs = std::filesystem;
@@ -12,22 +14,22 @@ namespace
 {
 /// A collection as collect_test_files() would return it, with a sibling directory whose name
 /// begins with another one's.
-std::vector<TestFile> collected()
+std::vector<fs::path> collected()
 {
     return {
-        {"root/bc4895/a.json", "bc4895"},
-        {"root/bc4895/nested/c.json", "bc4895/nested"},
-        {"root/bc4895-withdrawals/b.json", "bc4895-withdrawals"},
-        {"root/top.json", ""},
+        "root/bc4895/a.json",
+        "root/bc4895/nested/c.json",
+        "root/bc4895-withdrawals/b.json",
+        "root/top.json",
     };
 }
 
-std::vector<std::string> names(const std::vector<TestFile>& files)
+std::vector<std::string> names(const std::vector<fs::path>& files)
 {
     std::vector<std::string> result;
-    result.reserve(files.size());
-    for (const auto& f : files)
-        result.push_back(f.path.filename().string());
+    std::ranges::copy(
+        files | std::views::transform([](const auto& p) { return p.filename().string(); }),
+        std::back_inserter(result));
     return result;
 }
 }  // namespace
@@ -37,13 +39,13 @@ TEST(test_collector, ignore_nothing)
     const std::vector<std::string> all{"a.json", "c.json", "b.json", "top.json"};
 
     auto files = collected();
-    ignore_test_files(files, {});
+    ignore_test_files(files, "root", {});
     EXPECT_EQ(names(files), all);
 
     // An empty path, which an unset variable expands to, must not drop everything. Neither must
     // ".", which names the search root: pytest also collects it all for --ignore of the root.
     const std::vector<fs::path> ignored{"", ".", "./"};
-    ignore_test_files(files, ignored);
+    ignore_test_files(files, "root", ignored);
     EXPECT_EQ(names(files), all);
 }
 
@@ -52,7 +54,7 @@ TEST(test_collector, ignore_directory)
     // The sibling shares the prefix as text, but not as a path component.
     auto files = collected();
     const std::vector<fs::path> ignored{"bc4895"};
-    ignore_test_files(files, ignored);
+    ignore_test_files(files, "root", ignored);
     EXPECT_EQ(names(files), (std::vector<std::string>{"b.json", "top.json"}));
 }
 
@@ -62,7 +64,7 @@ TEST(test_collector, ignore_directory_other_spellings)
     {
         auto files = collected();
         const std::vector<fs::path> ignored{spelling};
-        ignore_test_files(files, ignored);
+        ignore_test_files(files, "root", ignored);
         EXPECT_EQ(names(files), (std::vector<std::string>{"b.json", "top.json"})) << spelling;
     }
 }
@@ -71,6 +73,6 @@ TEST(test_collector, ignore_files)
 {
     auto files = collected();
     const std::vector<fs::path> ignored{"bc4895/nested/c.json", "top.json"};
-    ignore_test_files(files, ignored);
+    ignore_test_files(files, "root", ignored);
     EXPECT_EQ(names(files), (std::vector<std::string>{"a.json", "b.json"}));
 }

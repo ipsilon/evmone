@@ -10,29 +10,27 @@ namespace evmone::test
 {
 namespace fs = std::filesystem;
 
-std::vector<TestFile> collect_test_files(const fs::path& root)
+std::vector<fs::path> collect_test_files(const fs::path& root)
 {
     static constexpr auto is_test_file = [](const fs::directory_entry& entry) {
         return entry.is_regular_file() && entry.path().extension() == ".json" &&
                entry.path().filename() != "index.json";
-    };
-    const auto as_test_file = [&root](const fs::directory_entry& entry) {
-        return TestFile{entry.path(), fs::relative(entry.path(), root).parent_path().string()};
     };
     // TODO(gcc-12): Pipe the temporary in directly. Adapting one needs owning_view, which C++20
     //   has but gcc-11's libstdc++ does not implement.
     const fs::recursive_directory_iterator entries{root};
 
     // TODO(C++23): std::ranges::to<std::vector>() replaces the vector and the copy.
-    std::vector<TestFile> files;
-    std::ranges::copy(
-        entries | std::views::filter(is_test_file) | std::views::transform(as_test_file),
+    std::vector<fs::path> files;
+    std::ranges::copy(entries | std::views::filter(is_test_file) |
+                          std::views::transform(&fs::directory_entry::path),
         std::back_inserter(files));
     std::ranges::sort(files);
     return files;
 }
 
-void ignore_test_files(std::vector<TestFile>& files, std::span<const fs::path> ignored)
+void ignore_test_files(
+    std::vector<fs::path>& files, const fs::path& root, std::span<const fs::path> ignored)
 {
     // Whether the path begins with every component of the prefix.
     static constexpr auto is_under = [](const fs::path& path, const fs::path& prefix) {
@@ -46,10 +44,8 @@ void ignore_test_files(std::vector<TestFile>& files, std::span<const fs::path> i
         return !p.empty() && std::ranges::mismatch(p, path).in1 == p.end();
     };
 
-    std::erase_if(files, [ignored](const TestFile& file) {
-        // The suite name is the file's directory relative to the root, which is what the ignored
-        // paths are relative to as well.
-        const auto relative = fs::path{file.suite_name} / file.path.filename();
+    std::erase_if(files, [&root, ignored](const fs::path& file) {
+        const auto relative = file.lexically_relative(root);
         return std::ranges::any_of(
             ignored, [&relative](const fs::path& prefix) { return is_under(relative, prefix); });
     });
