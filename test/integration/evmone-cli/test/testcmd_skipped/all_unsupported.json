@@ -1,0 +1,15 @@
+{
+ "a_engine": {
+  "_info": {
+   "fixture-format": "blockchain_test_engine",
+   "comment": "Both fixtures are named on their own, so neither reason is lost."
+  },
+  "blocks": []
+ },
+ "b_engine_x": {
+  "_info": {
+   "fixture-format": "blockchain_test_engine_x"
+  },
+  "blocks": []
+ }
+}

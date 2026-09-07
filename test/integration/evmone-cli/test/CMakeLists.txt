@@ -6,38 +6,78 @@
 
 set(PREFIX ${PREFIX}/test)
 
-# A file holding a case which is not a fixture at all, beside one which runs.
-add_test(NAME ${PREFIX}/fixture_fault COMMAND evmone-statetest
-    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault)
-set_tests_properties(${PREFIX}/fixture_fault PROPERTIES WILL_FAIL TRUE)
+set(DATA ${CMAKE_CURRENT_SOURCE_DIR})
 
-# WILL_FAIL above accepts any non-zero exit, and a fault downgraded to a skip exits non-zero too,
-# so the counts are what distinguish the two.
-add_test(NAME ${PREFIX}/fixture_fault_is_not_a_skip COMMAND evmone-statetest
-    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault)
+# One run takes both formats: eip7778_block_gas.json declares its format, the other two are
+# recognised by shape.
+add_test(NAME ${PREFIX}/test_mixed_formats COMMAND evmone-cli test
+    ${DATA}/statetest/tests1/SuiteA/test1.json ${DATA}/blockchaintest/eip7778_block_gas.json
+    ${DATA}/blockchaintest/unrecovered_sender_blob_gas.json)
 set_tests_properties(
-    ${PREFIX}/fixture_fault_is_not_a_skip PROPERTIES PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
+    ${PREFIX}/test_mixed_formats PROPERTIES PASS_REGULAR_EXPRESSION "= 3 passed in")
 
-# Selecting only the case which is not a fixture must still fault.
-add_test(NAME ${PREFIX}/fixture_fault_survives_filter COMMAND evmone-statetest
-    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_fault -k b_not_a_fixture)
+# A file recognised as "not a test" is skipped.
+add_test(NAME ${PREFIX}/test_not_a_test COMMAND evmone-cli test
+    ${DATA}/statetest/tests1/SuiteA/index.json)
 set_tests_properties(
-    ${PREFIX}/fixture_fault_survives_filter PROPERTIES
-    PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
+    ${PREFIX}/test_not_a_test PROPERTIES PASS_REGULAR_EXPRESSION
+    "SKIPPED[^\n]*index\\.json - not a test.*0 passed, 1 skipped in")
 
-# A case whose load throws takes the rest of the file with it: the whole file is loaded before
-# any of it runs, so the case after it is never reached and the failure is named after the file
-# rather than the case it came from. FAILED pins that as a failure: a PASS_REGULAR_EXPRESSION
-# makes CTest ignore the exit code, and a fault downgraded to a skip names the file too.
-add_test(NAME ${PREFIX}/case_after_exception COMMAND evmone-statetest
-    ${CMAKE_CURRENT_SOURCE_DIR}/testcmd_cases)
+# Check exit code for: passed, failed, skipped (PASS_REGULAR_EXPRESSION ignores exit code).
+add_test(NAME ${PREFIX}/test_exit_ok COMMAND evmone-cli test ${DATA}/testcmd)
+add_test(NAME ${PREFIX}/test_exit_fail COMMAND evmone-cli test ${DATA}/testcmd_fault)
+set_tests_properties(${PREFIX}/test_exit_fail PROPERTIES WILL_FAIL TRUE)
+add_test(NAME ${PREFIX}/test_exit_skipped COMMAND evmone-cli test ${DATA}/testcmd_skipped)
+set_tests_properties(${PREFIX}/test_exit_skipped PROPERTIES WILL_FAIL TRUE)
+
+# A file passes on the fixtures it ran; the two it declined are named with their reasons.
+add_test(NAME ${PREFIX}/test_dir_declined COMMAND evmone-cli test ${DATA}/testcmd)
 set_tests_properties(
-    ${PREFIX}/case_after_exception PROPERTIES
-    PASS_REGULAR_EXPRESSION
-    "collected 1 test.*FAILED[^\n]*case_after_exception\\.json[^\n]*exception"
-    FAIL_REGULAR_EXPRESSION "b_wrong_state_root"
-)
+    ${PREFIX}/test_dir_declined PROPERTIES PASS_REGULAR_EXPRESSION
+    "SKIPPED[^\n]*::a_bad_rlp - tests with invalidly rlp-encoded blocks[^\n]*\nSKIPPED[^\n]*::c_engine - unsupported fixture format.*= 1 passed in")
 
+# A selected "not a test" fails even when the runnable fixtures beside it are filtered out.
+add_test(NAME ${PREFIX}/test_dir_fault COMMAND evmone-cli test
+    ${DATA}/testcmd_fault -k b_not_a_test)
+set_tests_properties(
+    ${PREFIX}/test_dir_fault PROPERTIES PASS_REGULAR_EXPRESSION "1 failed, 0 passed")
+
+# A fixture whose load throws fails only itself; the one after it still runs.
+add_test(NAME ${PREFIX}/test_after_exception COMMAND evmone-cli test ${DATA}/testcmd_fault)
+set_tests_properties(
+    ${PREFIX}/test_after_exception PROPERTIES PASS_REGULAR_EXPRESSION
+    "collected 1 file\n.*c_load_error:\n    exception.*d_bad_root:.*state root.*1 failed, 0 passed in")
+
+# A file is one test, so a file with nothing to run counts once as skipped however many
+# fixtures it declined: all_unsupported declines twice and both are named.
+add_test(NAME ${PREFIX}/test_dir_skipped COMMAND evmone-cli test ${DATA}/testcmd_skipped)
+set_tests_properties(
+    ${PREFIX}/test_dir_skipped PROPERTIES PASS_REGULAR_EXPRESSION
+    "all_unsupported\\.json::a_engine - unsupported fixture format: \"blockchain_test_engine\"\nSKIPPED[^\n]*::b_engine_x - .*empty\\.json - not a test.*pre_alloc\\.json - not a test.*0 passed, 5 skipped in")
+
+# The --histogram output reaches the report, and the progress row keeps out of its way:
+# a run without it ends every line with the percentage done.
+add_test(NAME ${PREFIX}/test_histogram COMMAND evmone-cli test --histogram
+    ${DATA}/statetest/tests1/SuiteA/test1.json)
+set_tests_properties(
+    ${PREFIX}/test_histogram PROPERTIES
+    PASS_REGULAR_EXPRESSION "--- # HISTOGRAM.*= 1 passed in"
+    FAIL_REGULAR_EXPRESSION "\\[100%\\]")
+
+# The --trace output likewise.
+add_test(NAME ${PREFIX}/test_trace COMMAND evmone-cli test --trace
+    ${DATA}/statetest/tests1/SuiteA/test1.json)
+set_tests_properties(
+    ${PREFIX}/test_trace PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\{\"pc\":0,[^\n]*\"opName\":\"PUSH1\"\\}.*= 1 passed in"
+    FAIL_REGULAR_EXPRESSION "\\[100%\\]")
+
+# A named file is loaded whatever its extension.
+add_test(NAME ${PREFIX}/test_file_unparsed COMMAND evmone-cli test
+    ${DATA}/statetest/tests1/SuiteA/notes.txt)
+set_tests_properties(
+    ${PREFIX}/test_file_unparsed PROPERTIES PASS_REGULAR_EXPRESSION
+    "FAILED[^\n]*notes\\.txt - exception[^\n]*parse error.*1 failed, 0 passed in")
 
 get_directory_property(ALL_TESTS TESTS)
 set_tests_properties(${ALL_TESTS} PROPERTIES ENVIRONMENT LLVM_PROFILE_FILE=${CMAKE_BINARY_DIR}/integration-%p.profraw)
