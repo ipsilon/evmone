@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <test/utils/test_driver.hpp>
 #include <filesystem>
 #include <span>
 #include <vector>
@@ -18,4 +19,15 @@ namespace evmone::test
 /// @p root. Whole path components are matched, so ignoring "bc4895" keeps "bc4895-withdrawals".
 void ignore_test_files(std::vector<std::filesystem::path>& files, const std::filesystem::path& root,
     std::span<const std::filesystem::path> ignored);
+
+/// Adds to @p cases one test per fixture file under @p root, which is that file itself when it
+/// is not a directory. The tests hold @p options and @p vm by reference, so both must outlive
+/// them.
+void collect_tests(std::vector<TestCase>& cases, const std::filesystem::path& root,
+    const RunOptions& options, evmc::VM& vm);
+
+/// Runs the Ethereum tests collected under every path in @p roots, reporting to @p out.
+/// Returns the process exit code.
+[[nodiscard]] int test(evmc::VM& vm, std::span<const std::filesystem::path> roots,
+    const RunOptions& options, std::ostream& out);
 }  // namespace evmone::test

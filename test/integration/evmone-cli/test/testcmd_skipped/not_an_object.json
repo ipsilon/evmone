@@ -1,0 +1,7 @@
+[
+ {
+  "comment": "A top-level array, so it holds no named fixture. Its one element would be taken for a blockchain test if the array were walked by index.",
+  "pre": {},
+  "blocks": []
+ }
+]

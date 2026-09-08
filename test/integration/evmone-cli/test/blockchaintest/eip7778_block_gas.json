@@ -130,6 +130,9 @@
         },
         "genesisRLP": "0x",
         "sealEngine": "NoProof",
-        "_info": {}
+        "_info": {
+            "fixture-format": "blockchain_test",
+            "comment": "Declared as EEST does, so a run takes the declared-format path rather than the shape's."
+        }
     }
 }

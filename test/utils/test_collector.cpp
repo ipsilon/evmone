@@ -50,4 +50,31 @@ void ignore_test_files(
             ignored, [&relative](const fs::path& prefix) { return is_under(relative, prefix); });
     });
 }
+
+void collect_tests(
+    std::vector<TestCase>& cases, const fs::path& root, const RunOptions& options, evmc::VM& vm)
+{
+    // A file named directly is its own collection; the ignored paths are relative to the
+    // directory holding it, as they are to a directory named directly.
+    const auto is_dir = is_directory(root);
+    auto files = is_dir ? collect_test_files(root) : std::vector{root};
+    ignore_test_files(files, is_dir ? root : root.parent_path(), options.ignored);
+
+    cases.reserve(cases.size() + files.size());
+    for (const auto& path : files)
+    {
+        // Loaded when the test runs: loading a whole tree up front costs far more.
+        cases.push_back(
+            {path.string(), [path, &options, &vm] { return run_fixture_file(path, options, vm); }});
+    }
+}
+
+int test(
+    evmc::VM& vm, std::span<const fs::path> roots, const RunOptions& options, std::ostream& out)
+{
+    std::vector<TestCase> cases;
+    for (const auto& root : roots)
+        collect_tests(cases, root, options, vm);
+    return run_tests(cases, out, options);
+}
 }  // namespace evmone::test

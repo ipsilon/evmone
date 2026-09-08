@@ -19,10 +19,8 @@ component_management:
       paths:
         - tools/**
         - test/bench/**
-        - test/blockchaintest/**
         - test/eofparse/**
         - test/eoftest/**
-        - test/statetest/**
         - test/utils/**
     - component_id: tests
       name: tests

@@ -7,6 +7,7 @@
 #include <evmone/evmone.h>
 #include <test/utils/run.hpp>
 #include <test/utils/t8n.hpp>
+#include <test/utils/test_collector.hpp>
 #include <test/utils/utils.hpp>
 #include <filesystem>
 #include <fstream>
@@ -151,6 +152,45 @@ int exec_t8n_cmd(evmc::VM& vm, const T8nOptions& opts)
     evmone::tooling::t8n(vm, args);
     return 0;
 }
+
+const CLI::App& setup_test_cmd(
+    CLI::App& app, std::vector<fs::path>& paths, evmone::test::RunOptions& opts)
+{
+    auto& cmd = *app.add_subcommand("test", "Run Ethereum tests")->fallthrough();
+    cmd.add_option("path", paths,
+           "Test file or directory. Every fixture file is one test: under a directory, each "
+           ".json file except index.json.")
+        ->required()
+        ->check(CLI::ExistingPath);
+    cmd.add_option("-k", opts.name_filter, "Run only the fixtures whose name contains this.");
+    cmd.add_option("--ignore", opts.ignored,
+           "Path not to collect tests from, relative to each directory given, or to the "
+           "directory holding a file given. May be given more than once. Whole path components "
+           "are matched, so --ignore bc4895 keeps bc4895-withdrawals.")
+        // Without this the option is variadic and swallows the positional paths after it.
+        ->allow_extra_args(false);
+    cmd.add_flag(
+        "--collect-only", opts.collect_only, "List each collected test, one per line, and exit.");
+    cmd.add_flag("--trace-summary", opts.trace_summary,
+        "Report each state test's execution summary, as --trace also does. Blockchain tests "
+        "have no summary to report.");
+    return cmd;
+}
+
+int exec_test_cmd(evmc::VM& vm, std::span<const fs::path> paths, evmone::test::RunOptions opts,
+    bool trace, bool histogram)
+{
+    // main() has switched the tracer on already. Its line per instruction is worth
+    // unsynchronising the streams for, and anything it writes per test would run into the
+    // progress row, as a summary would.
+    if (trace)
+        std::ios::sync_with_stdio(false);
+    opts.trace_summary |= trace;
+    opts.progress = !(opts.trace_summary || histogram);
+
+    return evmone::test::test(vm, paths, opts, std::cout);
+}
+
 }  // namespace
 
 int main(int argc, const char* const* argv) noexcept
@@ -198,6 +238,10 @@ int main(int argc, const char* const* argv) noexcept
         T8nOptions t8n_opts;
         const auto& t8n_cmd = setup_t8n_cmd(app, t8n_opts);
 
+        std::vector<fs::path> test_paths;
+        evmone::test::RunOptions test_opts;
+        const auto& test_cmd = setup_test_cmd(app, test_paths, test_opts);
+
         try
         {
             app.parse(argc, argv);
@@ -217,6 +261,9 @@ int main(int argc, const char* const* argv) noexcept
 
             if (t8n_cmd)
                 return exec_t8n_cmd(vm, t8n_opts);
+
+            if (test_cmd)
+                return exec_test_cmd(vm, test_paths, test_opts, trace, histogram);
 
             return 0;
         }
