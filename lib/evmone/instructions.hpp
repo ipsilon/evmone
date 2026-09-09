@@ -115,21 +115,6 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     return num_words(size_in_bytes) * WordCopyCost;
 }
 
-
-/// Threads a child frame's state gas back to the parent: take its leftover reservoir and
-/// accumulate its spill. A failed child already rolled itself back at its boundary, so success
-/// and failure are handled identically. With the child's reservoir merged in, a successful child
-/// also repays the frame's outstanding spill from it, so a refill the child credited to the
-/// reservoir reaches the `gas_left` that funded the matching charge (EIP-8037).
-inline void accumulate_child_state_gas(
-    int64_t& gas_left, ExecutionState& state, const evmc::Result& result) noexcept
-{
-    state.state_gas.left = result.state_gas_left;
-    state.state_gas.spilled += result.state_gas_spilled;
-    if (result.status_code == EVMC_SUCCESS)
-        state.state_gas.repay_spill(gas_left);
-}
-
 /// Grows EVM memory and checks its cost.
 ///
 /// This function should not be inlined because this may affect other inlining decisions:
