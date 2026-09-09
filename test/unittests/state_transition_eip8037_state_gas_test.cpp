@@ -107,3 +107,39 @@ TEST_F(state_transition, eip8037_value_to_zero_balance_precompile_pays_new_accou
     expect.gas_used = 21'000 + IdentityBaseCost + evmone::NEW_ACCOUNT_STATE_GAS;
     expect.state_gas = evmone::NEW_ACCOUNT_STATE_GAS;
 }
+
+TEST_F(state_transition, eip8037_sstore_slot_allocated_and_cleared_in_one_tx)
+{
+    // Allocating a storage slot and clearing it in the same transaction (0 -> 1 -> 0) refills
+    // the STORAGE_SET_STATE_GAS charge, leaving the net state gas at zero.
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    pre[To] = {.code = sstore(1, 1) + sstore(1, 0)};
+
+    // Pre-refund: 21000 intrinsic + 12 (four PUSHes) + 5000 (cold slot allocation)
+    // + 100 (warm clear) = 26112. The clear refunds set - warm_access = 2800.
+    expect.gas_used = 26112 - 2800;
+    expect.gas_refund = 2800;
+    expect.state_gas = 0;
+    expect.post[To].exists = true;
+}
+
+TEST_F(state_transition, eip8037_sstore_slot_cleared_in_a_child_frame)
+{
+    // A slot allocated in one frame and cleared in a deeper one refills more state gas than the
+    // child was given, so the child returns a bigger reservoir than it received. The credit must
+    // reach the `gas_left` that funded the spilled allocation charge.
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    static constexpr auto Clearer = 0xdead_address;
+    pre[Clearer] = {.code = sstore(1, 0)};
+    pre[To] = {.code = sstore(1, 1) + delegatecall(Clearer).gas(0xffff) + OP_STOP};
+
+    // Pre-refund: 21000 intrinsic + 30 (ten PUSHes) + 5000 (cold slot allocation)
+    // + 2600 (cold DELEGATECALL) + 100 (warm clear) = 28730. The clear refunds 2800.
+    expect.gas_used = 28730 - 2800;
+    expect.gas_refund = 2800;
+    expect.state_gas = 0;
+    expect.post[To].exists = true;
+    expect.post[Clearer].exists = true;
+}

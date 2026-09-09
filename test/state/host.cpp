@@ -284,6 +284,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         const auto regular_cost = 6 * ((std::ssize(code) + 31) / 32);
         const auto state_cost = std::ssize(code) * COST_PER_STATE_BYTE;
         gas_left -= regular_cost;
+        // FIXME: Can .charge() handle negative gas_left? Is this covered by tests?
         if (gas_left < 0 || !state_gas.charge(gas_left, state_cost))
             return evmc::Result{EVMC_FAILURE};
     }

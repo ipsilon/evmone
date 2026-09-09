@@ -39,6 +39,30 @@ inline std::variant<evmc::address, Result> get_target_address(
 
     return *delegate_addr;
 }
+
+/// Absorbs a child's state-gas back to the parent (EIP-8037).
+inline void absorb_child_state_gas(
+    int64_t& gas_left, ExecutionState& state, const evmc::Result& result) noexcept
+{
+    assert(result.state_gas_left >= 0);
+    assert(result.state_gas_spilled >= 0);
+
+    // At most one of the two pools is ever non-empty.
+    assert(state.state_gas.left == 0 || state.state_gas.spilled == 0);
+    assert(result.state_gas_left == 0 || result.state_gas_spilled == 0);
+
+    // In a non-successful result, all is returned back.
+    assert(result.status_code == EVMC_SUCCESS ||
+           (result.state_gas_left == state.state_gas.left && result.state_gas_spilled == 0));
+
+    // Accumulate the spilled state-gas.
+    state.state_gas.spilled += result.state_gas_spilled;
+
+    // Rebalance the state-gas refills: the caller must move callee's refills to gas_left up to the
+    // caller's spilled counter. Do this by refilling all returned state-gas to zeroed `left`.
+    state.state_gas.left = 0;
+    state.state_gas.refill(gas_left, result.state_gas_left);
+}
 }  // namespace
 
 /// Converts an opcode to matching EVMC call kind.
@@ -215,7 +239,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     state.gas_refund += result.gas_refund;
     // Thread the child's state gas back. A failed child rolls the created account back, so its
     // NEW_ACCOUNT charge is refilled (EIP-8037).
-    accumulate_child_state_gas(gas_left, state, result);
+    absorb_child_state_gas(gas_left, state, result);
     if (result.status_code != EVMC_SUCCESS)
         refund_new_account_state_gas();
     return {EVMC_SUCCESS, gas_left};
@@ -327,7 +351,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     // Thread the child's state gas back. A non-success result — a rolled-back initcode or an
     // address collision — creates no account, so its NEW_ACCOUNT charge is refilled; a create
     // onto an already-alive account was never charged (EIP-8037).
-    accumulate_child_state_gas(gas_left, state, result);
+    absorb_child_state_gas(gas_left, state, result);
     if (create_state_gas_charged != 0 && result.status_code != EVMC_SUCCESS)
         state.state_gas.refill(gas_left, create_state_gas_charged);
 

@@ -465,18 +465,12 @@ struct evmc_result
 
     /**
      * The amount of state gas left after execution (EIP-8037).
-     *
-     * Returned to the caller so it can restore its own state_gas tracking.
      */
+    // FIXME: Move after gas_refund.
     int64_t state_gas_left;
 
     /**
-     * The portion of consumed state gas that spilled into gas_left (EIP-8037).
-     *
-     * Tracked so refunds and frame rollback restore gas in LIFO order: the
-     * spilled portion returns to gas_left, the rest to the reservoir
-     * (state_gas_left). On a successful child this accumulates into the
-     * caller; on revert/halt the frame refills itself before returning.
+     * The portion of consumed state gas taken from gas_left (EIP-8037).
      */
     int64_t state_gas_spilled;
 };
