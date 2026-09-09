@@ -151,6 +151,7 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
 
     // A refill (0 -> Y -> 0) is applied BEFORE the regular charge, as in EELS, so gas returned
     // to gas_left from a prior spill can fund that charge (EIP-8037).
+    // FIXME: .refill(c) looks like .charge(-c). Can we combine these?
     if (state_gas < 0)
         state.state_gas.refill(gas_left, -state_gas);
 
@@ -159,7 +160,7 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     if ((gas_left -= gas_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    if (!state.state_gas.charge(gas_left, state_gas))
+    if (state_gas > 0 && !state.state_gas.charge(gas_left, state_gas))
         return {EVMC_OUT_OF_GAS, gas_left};
     state.gas_refund += gas_refund;
     return {EVMC_SUCCESS, gas_left};
