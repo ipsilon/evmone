@@ -50,3 +50,20 @@ TEST_F(state_transition, delegatecall_static_legacy)
     expect.post[CALLEE1].storage[0x01_bytes32] = 0xdd_bytes32;
     expect.post[CALLEE2].storage[0x01_bytes32] = 0xdd_bytes32;
 }
+
+TEST_F(state_transition, call_max_depth)
+{
+    static constexpr auto JUMPDEST_POS = 38;
+    const auto code = jumpi(JUMPDEST_POS, eq(calldataload(0), 1024)) +
+                      mstore(0, add(calldataload(0), 1)) +
+                      call(OP_ADDRESS).input(0, 32).gas(0xffffffffff) + OP_STOP + OP_JUMPDEST +
+                      sstore(0, calldataload(0));
+    ASSERT_EQ(code.find(OP_JUMPDEST), JUMPDEST_POS);
+
+    block.gas_limit = 1'000'000'000'000;
+    tx.gas_limit = block.gas_limit;
+    tx.to = To;
+    pre[To].code = code;
+    pre[Sender].balance = tx.gas_limit * tx.max_gas_price;
+    expect.post[To].storage[0x00_bytes32] = 0x0400_bytes32;
+}
