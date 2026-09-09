@@ -42,6 +42,16 @@ struct StateGasProbe
     /// BEFORE the repayment, so it measures inputs that reach the rule.
     int64_t cross_frame_absorbable = 0;
 
+    /// State gas actually taken FROM the reservoir, as opposed to spilled into
+    /// `gas_left`. Non-zero means the reservoir was USED.
+    ///
+    /// `spills` cannot answer that: it counts only the OVERFLOW case, so a
+    /// reservoir large enough to cover every charge leaves it at zero. Measured
+    /// 2026-09-09 on the CodeTest census: 41 entries carried a reservoir and
+    /// `spills` reported 0 for every one -- which reads as "the reservoir is
+    /// never used" when the truth is "it is used and it is big enough".
+    int64_t drawn = 0;
+
     void reset() noexcept { *this = {}; }
 };
 
@@ -63,6 +73,7 @@ struct StateGas
         if (left >= cost)
         {
             left -= cost;
+            state_gas_probe.drawn += cost;
             return true;
         }
         const auto spill = cost - left;
@@ -70,6 +81,7 @@ struct StateGas
             return false;
         gas_left -= spill;
         spilled += spill;
+        state_gas_probe.drawn += left;  // the part the reservoir did cover
         left = 0;
         ++state_gas_probe.spills;
         return true;
