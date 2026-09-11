@@ -158,9 +158,9 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
         {
             if (state.rev >= EVMC_AMSTERDAM)
             {
-                // The state charge comes after every regular cost of this instruction is
-                // committed (reservoir model), so a regular OOG cannot leave committed
-                // state growth behind.
+                // The state charge comes after every execution-gas cost of this instruction
+                // is committed (reservoir model), so an execution-gas OOG cannot leave
+                // committed state growth behind.
                 new_account_state_gas = NEW_ACCOUNT_STATE_GAS;
                 if (!state.state_gas.charge(gas_left, new_account_state_gas))
                     return {EVMC_OUT_OF_GAS, gas_left};

@@ -1084,7 +1084,6 @@ inline TermResult selfdestruct(StackTop stack, int64_t gas_left, ExecutionState&
             {
                 if (state.rev >= EVMC_AMSTERDAM)
                 {
-                    // The new account leaf is paid in state gas (EIP-8037).
                     if (!state.state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
                         return {EVMC_OUT_OF_GAS, gas_left};
                 }
