@@ -42,7 +42,9 @@ constexpr auto storage_cost_spec = []() noexcept {
     tbl[EVMC_PRAGUE] = tbl[EVMC_LONDON];
     tbl[EVMC_OSAKA] = tbl[EVMC_LONDON];
     tbl[EVMC_AMSTERDAM] = tbl[EVMC_LONDON];
-    tbl[EVMC_AMSTERDAM].set = 2900;  // EIP-8037: regular component only (was 20000).
+    // A new slot's execution gas drops to the cost of updating one; the rest is paid in
+    // state gas (EIP-8037).
+    tbl[EVMC_AMSTERDAM].set = tbl[EVMC_AMSTERDAM].reset;
     tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_AMSTERDAM];
     return tbl;
 }();
@@ -149,14 +151,14 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     const auto [gas_cost_warm, gas_refund, state_gas] = sstore_costs[state.rev][status];
     const auto gas_cost = gas_cost_warm + gas_cost_cold;
 
-    // A refill (0 -> Y -> 0) is applied BEFORE the regular charge, as in EELS, so gas returned
-    // to gas_left from a prior spill can fund that charge (EIP-8037).
+    // A refill (0 -> Y -> 0) is applied BEFORE the execution-gas charge, as in EELS, so gas
+    // returned to gas_left from a prior spill can fund that charge (EIP-8037).
     // FIXME: .refill(c) looks like .charge(-c). Can we combine these?
     if (state_gas < 0)
         state.state_gas.refill(gas_left, -state_gas);
 
-    // Charge regular gas FIRST, then state gas: this order prevents a state-gas spill from
-    // counting committed state growth behind a subsequent regular OOG (EIP-8037).
+    // Charge execution gas FIRST, then state gas: this order prevents a state-gas spill from
+    // counting committed state growth behind a subsequent execution-gas OOG (EIP-8037).
     if ((gas_left -= gas_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 

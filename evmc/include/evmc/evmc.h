@@ -422,6 +422,16 @@ struct evmc_result
     int64_t gas_refund;
 
     /**
+     * The amount of state gas left after execution (EIP-8037).
+     */
+    int64_t state_gas_left;
+
+    /**
+     * The portion of consumed state gas taken from gas_left (EIP-8037).
+     */
+    int64_t state_gas_spilled;
+
+    /**
      * The reference to output data.
      *
      * The output contains data coming from RETURN opcode (iff evmc_result::code
@@ -462,17 +472,6 @@ struct evmc_result
      * function to the result itself allows VM composition.
      */
     evmc_release_result_fn release;
-
-    /**
-     * The amount of state gas left after execution (EIP-8037).
-     */
-    // FIXME: Move after gas_refund.
-    int64_t state_gas_left;
-
-    /**
-     * The portion of consumed state gas taken from gas_left (EIP-8037).
-     */
-    int64_t state_gas_spilled;
 };
 
 

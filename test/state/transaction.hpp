@@ -101,12 +101,13 @@ struct Transaction
 /// Transaction properties computed during the validation needed for the execution.
 struct TransactionProperties
 {
-    /// The amount of gas provided to the EVM for the transaction execution.
-    int64_t execution_gas_limit = 0;
+    /// The amount of gas provided to the EVM for the transaction execution, the spec's
+    /// `evm_gas`. Under EIP-8037 it is split into the execution gas and the state-gas reservoir.
+    int64_t evm_gas = 0;
 
-    /// The regular portion of the intrinsic cost (EIP-8037 keeps the state-dependent charges out
-    /// of the intrinsic; they are charged at the top frame).
-    int64_t intrinsic_regular_gas = 0;
+    /// The execution-gas portion of the intrinsic cost (EIP-8037 keeps the state-dependent
+    /// charges out of the intrinsic; they are charged at the top frame).
+    int64_t intrinsic_execution_gas = 0;
 
     /// The minimal amount of gas the transaction must use.
     int64_t min_gas_cost = 0;
@@ -144,10 +145,11 @@ struct TransactionReceipt
     int64_t cumulative_gas_used = 0;
 
     /// 2D per-tx block-gas components. The runner aggregates as
-    /// `block.gas_used = max(sum_regular, sum_state)` (EIP-7778). Pre-Amsterdam the block has a
-    /// single dimension: the regular component is `gas_used` and the state one is 0 (EIP-8037).
-    int64_t regular_block_gas = 0;  ///< Regular gas component.
-    int64_t state_block_gas = 0;    ///< State gas component.
+    /// `block.gas_used = max(sum_execution, sum_state)` (EIP-7778). Pre-Amsterdam the block has
+    /// a single dimension: the execution-gas component is `gas_used` and the state one is 0
+    /// (EIP-8037).
+    int64_t block_execution_gas = 0;  ///< Execution gas component.
+    int64_t block_state_gas = 0;      ///< State gas component.
 
     std::vector<Log> logs;
     BloomFilter logs_bloom_filter;

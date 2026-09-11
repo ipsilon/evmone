@@ -9,7 +9,7 @@
 
 namespace evmone
 {
-/// A frame's state-gas as a (left, spilled) pair, independent from the regular gas (EIP-8037).
+/// A frame's state-gas as a (left, spilled) pair, independent from the execution gas (EIP-8037).
 struct StateGas
 {
     /// Remaining state-gas reservoir.

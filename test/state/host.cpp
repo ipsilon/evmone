@@ -12,6 +12,13 @@ namespace evmone::state
 {
 namespace
 {
+/// Whether a looked-up account is alive, i.e. has a state leaf: it exists and is not empty
+/// (EIP-161). A null pointer is a non-existent account.
+[[nodiscard]] bool is_alive(const Account* account) noexcept
+{
+    return account != nullptr && !account->is_empty();
+}
+
 /// Sets the state-gas fields on a returned Result. `used` is not stored; the caller derives it
 /// as `initial - left + spilled` (EIP-8037).
 void set_state_gas(evmc::Result& r, int64_t left, int64_t spilled) noexcept
@@ -206,10 +213,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     else
     {
         if (is_create_collision(*new_acc))
-        {
-            // TODO: Add EVMC errors for creation failures.
-            return evmc::Result{EVMC_FAILURE};
-        }
+            return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
         m_state.journal_create(msg.recipient);
     }
 
@@ -236,10 +240,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     create_msg.input_data = nullptr;
     create_msg.input_size = 0;
 
-    // The create frame's state gas, held across the initcode execution: the depth-0 tx-level
-    // create charges the created account's NEW_ACCOUNT here (the opcode CREATE charges it in
-    // create_impl), the initcode frame's pools merge back in below, and the code deposit draws
-    // from the total (charge-at-access, EELS #3126) (EIP-8037).
+    // The create frame's state gas, held across the initcode execution. Only the depth-0 create
+    // charges NEW_ACCOUNT here; the opcode charges it in create_impl (EIP-8037).
     StateGas state_gas{.left = create_msg.state_gas};
     if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0 && !target_alive)
     {
@@ -252,10 +254,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
     {
-        // No account created, so the NEW_ACCOUNT charge is refunded: Host::call restores the
-        // reservoir portion, while the spilled portion returns to gas only on a revert — an
-        // exceptional halt consumes it as regular gas (matches EELS refill_frame_state_gas then
-        // gas_left = 0).
+        // No account created, so the charge is refunded. Host::call restores the reservoir; the
+        // spill returns to gas on a revert and is consumed by a halt (EIP-8037).
         if (result.status_code == EVMC_REVERT)
             result.gas_left += state_gas.spilled;
         return result;
@@ -280,27 +280,24 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     state_gas.spilled += result.state_gas_spilled;
     if (m_rev >= EVMC_AMSTERDAM)
     {
-        // The code deposit splits into a regular and a state component (EIP-8037).
-        const auto regular_cost = 6 * ((std::ssize(code) + 31) / 32);
+        // The code deposit splits into an execution-gas and a state-gas component (EIP-8037).
+        const auto execution_cost = 6 * ((std::ssize(code) + 31) / 32);
         const auto state_cost = std::ssize(code) * COST_PER_STATE_BYTE;
-        gas_left -= regular_cost;
+        gas_left -= execution_cost;
         // FIXME: Can .charge() handle negative gas_left? Is this covered by tests?
         if (gas_left < 0 || !state_gas.charge(gas_left, state_cost))
             return evmc::Result{EVMC_FAILURE};
     }
     else
     {
+        // Code deployment cost.
         const auto cost = std::ssize(code) * 200;
         gas_left -= cost;
         if (gas_left < 0)
         {
-            if (m_rev == EVMC_FRONTIER)
-            {
-                auto r = evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund};
-                set_state_gas(r, state_gas.left, state_gas.spilled);
-                return r;
-            }
-            return evmc::Result{EVMC_FAILURE};
+            return (m_rev == EVMC_FRONTIER) ?
+                       evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund} :
+                       evmc::Result{EVMC_FAILURE};
         }
     }
 
@@ -321,18 +318,15 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
         return create(msg);
 
-    // The frame's regular gas: the depth-0 state charge below can spill into it, so it is not
+    // The frame's execution gas: the depth-0 state charge below can spill into it, so it is not
     // `msg.gas` for the rest of the function.
     auto gas = msg.gas;
 
-    // TODO: This depth-0 charge belongs to the transaction pre-execution phase in transition(),
-    // beside the EIP-7702 authorizations it follows, not in the per-frame dispatcher. Moving it
-    // drops the `msg.depth == 0` special cases here and the gas plumbed around them.
     // A top-level value transfer pays NEW_ACCOUNT for the recipient it materializes, evaluated
-    // against the pre-transfer state, after the authorizations and before any opcode. Charged
-    // here rather than in the interpreter because such a transfer runs no code (EIP-8037).
-    // `msg.state_gas` stays the entry reservoir while `top_level_sg` holds the post-charge pools,
-    // which a consuming path commits on success; on failure Host::call restores them.
+    // against the pre-transfer state. Charged here because such a transfer runs no code
+    // (EIP-8037).
+    // TODO: This belongs in transition(), beside the EIP-7702 authorizations it follows. Moving
+    // it drops the `msg.depth == 0` special cases here and the gas plumbed around them.
     StateGas top_level_sg{.left = msg.state_gas};
     if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
     {
@@ -407,12 +401,9 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     }
 
     // The depth-0 charge cannot reach here: it implies a not-alive recipient, which has empty
-    // code and returned above. Asserted rather than carried out, because it must be refilled on
-    // failure while the authorization charges beside it must survive one.
-    // TODO: The premise couples two addresses that coincide only by convention: liveness is read
-    // from `msg.recipient`, code from `msg.code_address`, and they differ under EVMC_DELEGATED.
-    // Should they ever part, NDEBUG turns this into a silently dropped charge and an under-paid
-    // transaction. Moving the charge to transition() (TODO above) removes the coupling.
+    // code and returned above.
+    // TODO: The premise holds only while `msg.recipient` and `msg.code_address` agree, which
+    // EVMC_DELEGATED breaks. Moving the charge to transition() (TODO above) removes the coupling.
     assert(gas == msg.gas && top_level_sg.left == msg.state_gas && top_level_sg.spilled == 0);
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
@@ -435,10 +426,8 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
 
     if (result.status_code != EVMC_SUCCESS)
     {
-        // A rolled-back frame created no state, so it carries no state gas out: restore the entry
-        // reservoir and drop the spill, which the frame either returned to its own gas_left
-        // (revert) or consumed with it (halt). Enforced here for every failure path, including
-        // the ones this Host builds itself (EIP-8037).
+        // A rolled-back frame created no state, so it carries none out. Enforced here for every
+        // failure path, including the ones this Host builds itself (EIP-8037).
         result.state_gas_left = msg.state_gas;
         result.state_gas_spilled = 0;
 

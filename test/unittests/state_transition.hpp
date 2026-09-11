@@ -71,7 +71,7 @@ protected:
         /// exactly: count, address, data, topics, and order.
         std::optional<std::vector<Log>> logs;
 
-        /// The expected EIP-8037 state-gas component of the receipt (`state_block_gas`),
+        /// The expected EIP-8037 state-gas component of the receipt (`block_state_gas`),
         /// e.g. a NEW_ACCOUNT_STATE_GAS charge that survives a light failure.
         std::optional<int64_t> state_gas;
 

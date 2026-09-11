@@ -157,9 +157,8 @@ public:
 
     /// The frame's state-gas reservoir + spill; used is derived (EIP-8037).
     ///
-    /// Declared in the cold tail: inserting it earlier shifts `status` and `host` past the
-    /// x86-64 disp8 window, which costs 3 bytes of encoding on every one of the ~195 `status`
-    /// accesses in each dispatch loop.
+    /// Kept in the cold tail: earlier placement pushes `status` and `host` out of the x86-64
+    /// disp8 window, costing 3 bytes on every `status` access in the dispatch loop.
     StateGas state_gas;
 
     /// Stack space allocation.
