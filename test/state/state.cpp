@@ -10,6 +10,7 @@
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
 #include <algorithm>
+#include <cassert>
 #include <ranges>
 
 using namespace intx;
@@ -194,7 +195,7 @@ int64_t process_authorization_list(
     return delegation_refund;
 }
 
-evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) noexcept
+evmc_message build_message(const Transaction& tx, int64_t evm_gas) noexcept
 {
     const auto recipient = tx.to.has_value() ? *tx.to : compute_create_address(tx.sender, tx.nonce);
 
@@ -202,7 +203,7 @@ evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) n
         .kind = tx.to.has_value() ? EVMC_CALL : EVMC_CREATE,
         .flags = 0,
         .depth = 0,
-        .gas = execution_gas_limit,
+        .gas = evm_gas,
         .recipient = recipient,
         .sender = tx.sender,
         .input_data = tx.data.data(),
@@ -437,7 +438,7 @@ void State::rollback(size_t checkpoint)
 /// @return  Execution gas limit or transaction validation error.
 std::variant<TransactionProperties, std::error_code> validate_transaction(
     const StateView& state_view, const BlockInfo& block, const Transaction& tx, evmc_revision rev,
-    int64_t block_gas_left, int64_t blob_gas_left, int64_t state_block_gas_left) noexcept
+    int64_t block_gas_left, int64_t block_state_gas_left, int64_t blob_gas_left) noexcept
 {
     if (tx.chain_id_protected() && tx.chain_id != block.chain_id)
         return make_error_code(INVALID_CHAIN_ID);
@@ -499,14 +500,12 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     assert(tx.max_priority_gas_price <= tx.max_gas_price);
 
     // The per-tx gas-limit cap is lifted again by EIP-8037; the reservoir model instead caps the
-    // regular-gas intrinsic and the per-dimension block inclusion below.
+    // execution-gas intrinsic and the per-dimension block inclusion below.
     if (rev >= EVMC_OSAKA && rev < EVMC_AMSTERDAM && tx.gas_limit > MAX_TX_GAS_LIMIT)
         return make_error_code(GAS_LIMIT_EXCEEDS_MAXIMUM);
 
-    // The tx must fit in the block's remaining gas. Checked ahead of the sender's nonce and
-    // balance, matching the pre-existing order. Note EELS check_transaction runs the whole of
-    // validate_transaction (including the intrinsic checks below) before this, so a transaction
-    // invalid in several ways can report a different one of them here.
+    // The tx must fit in the block's remaining gas. Checked before the nonce and balance, as
+    // before, so a transaction invalid in several ways can report a different one than EELS.
     if (rev < EVMC_AMSTERDAM)
     {
         if (tx.gas_limit > block_gas_left)
@@ -518,7 +517,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
         // (EIP-8037 inclusion rule 2).
         if (std::min<int64_t>(MAX_TX_GAS_LIMIT, tx.gas_limit) > block_gas_left)
             return make_error_code(GAS_ALLOWANCE_EXCEEDED);
-        if (tx.gas_limit > state_block_gas_left)
+        if (tx.gas_limit > block_state_gas_left)
             return make_error_code(GAS_ALLOWANCE_EXCEEDED);
     }
 
@@ -566,11 +565,11 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
 
     const auto [intrinsic_cost, min_cost] = compute_tx_intrinsic_cost(rev, tx);
 
-    // max(intrinsic_regular_gas, calldata_floor_gas_cost) <= TX_MAX_GAS_LIMIT
+    // max(intrinsic_execution_gas, calldata_floor_gas_cost) <= TX_MAX_GAS_LIMIT
     // (EIP-8037 §"Transaction validation" condition 1).
     // Amsterdam lifts the per-tx cap on tx.gas_limit (above) but keeps this
-    // cap on the regular-gas intrinsic so that the reservoir-model invariant
-    // regular_gas_budget = TX_MAX_GAS_LIMIT - intrinsic_regular_gas
+    // cap on the execution-gas intrinsic so that the reservoir-model invariant
+    // execution_gas_budget = TX_MAX_GAS_LIMIT - intrinsic_execution_gas
     // stays non-negative. EELS validate_transaction bounds `intrinsic.execution` and
     // `intrinsic.calldata_floor` against TX_MAX_GAS_LIMIT separately; `max()` of the two is
     // the same condition.
@@ -583,8 +582,8 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     if (tx.gas_limit < std::max(intrinsic_cost, min_cost))
         return make_error_code(INTRINSIC_GAS_TOO_LOW);
 
-    const auto execution_gas_limit = tx.gas_limit - intrinsic_cost;
-    return TransactionProperties{execution_gas_limit, intrinsic_cost, min_cost};
+    const auto evm_gas = tx.gas_limit - intrinsic_cost;
+    return TransactionProperties{evm_gas, intrinsic_cost, min_cost};
 }
 
 StateDiff finalize(const StateView& state_view, evmc_revision rev, const address& coinbase,
@@ -652,7 +651,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 
     Host host{rev, vm, state, block, block_hashes, tx};
 
-    auto message = build_message(tx, tx_props.execution_gas_limit);
+    auto message = build_message(tx, tx_props.evm_gas);
 
     sender_acc.access_status = EVMC_ACCESS_WARM;  // Sender is always warm.
     host.access_account(message.recipient);  // Recipient (incl. create address) is always warm.
@@ -680,30 +679,28 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         }
     }
 
-    // Split execution gas into a regular budget and a state-gas reservoir. The intrinsic — regular
-    // only, the state-dependent charges being applied at the top frame — is already subtracted
-    // from gas_limit (EIP-8037).
-    //   regular = min(MAX_TX_GAS_LIMIT - intrinsic_regular, exec_gas); reservoir = exec_gas -
-    //   regular.
+    // Split the EVM gas into an execution-gas budget and a state-gas reservoir (EIP-8037):
+    //   execution = min(MAX_TX_GAS_LIMIT - intrinsic_execution, evm_gas), reservoir = the rest.
     if (rev >= EVMC_AMSTERDAM)
     {
-        const auto exec_gas = tx_props.execution_gas_limit;
-        const auto regular_cap = std::max(
-            int64_t{0}, static_cast<int64_t>(MAX_TX_GAS_LIMIT) - tx_props.intrinsic_regular_gas);
-        const auto regular_exec = std::min(exec_gas, regular_cap);
-        message.gas = regular_exec;
-        message.state_gas = exec_gas - regular_exec;
+        const auto evm_gas = tx_props.evm_gas;
+        const auto execution_cap = std::max(
+            int64_t{0}, static_cast<int64_t>(MAX_TX_GAS_LIMIT) - tx_props.intrinsic_execution_gas);
+        const auto execution_gas = std::min(evm_gas, execution_cap);
+        message.gas = execution_gas;
+        message.state_gas = evm_gas - execution_gas;
     }
 
     const auto result = host.call(message);
 
     // Net state gas consumed by the execution, derived from the reservoir the top frame was
     // handed: initial - left + spilled. Zero on a top-level failure, the frame having refilled
-    // itself. Clamped at 0 defensively (EIP-8037).
-    const auto exec_state_gas =
-        std::max<int64_t>(0, message.state_gas - result.state_gas_left + result.state_gas_spilled);
+    // itself. Never negative: a refill needs a matching allocation, and the top frame has no
+    // ancestor to have made one (EIP-8037).
+    const auto tx_state_gas = message.state_gas - result.state_gas_left + result.state_gas_spilled;
+    assert(tx_state_gas >= 0);
 
-    // Gas consumed = gas_limit - regular_unspent - reservoir_unspent, pre-refund and pre-floor.
+    // Gas consumed = gas_limit - execution_unspent - reservoir_unspent, pre-refund and pre-floor.
     // Kept immutable: the receipt's gas_refund is derived from it (EIP-8037).
     const auto gas_used_b4_refund = tx.gas_limit - result.gas_left - result.state_gas_left;
 
@@ -716,17 +713,15 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     const auto sender_gas_cost = std::max(gas_used_b4_refund - refund, tx_props.min_gas_cost);
 
     // The block's 2D gas components (EIP-7778): pre-Amsterdam the block tracks a single
-    // dimension, so all of the gas the sender paid for is regular.
-    auto regular_block_gas = sender_gas_cost;
-    int64_t state_block_gas = 0;
+    // dimension, so all of the gas the sender paid for is execution gas.
+    auto block_execution_gas = sender_gas_cost;
+    int64_t block_state_gas = 0;
     if (rev >= EVMC_AMSTERDAM)
     {
-        // `exec_state_gas` captures all state gas and the intrinsic state gas is zero, so the
-        // remainder — including any CREATE-collision burned gas — is the regular component,
-        // floored at the calldata floor so state-gas spending cannot discount it (EELS:
-        // max(before_refund - state, floor)) (EIP-7778, EIP-8037).
-        state_block_gas = exec_state_gas;
-        regular_block_gas = std::max(gas_used_b4_refund - exec_state_gas, tx_props.min_gas_cost);
+        // The intrinsic state gas is zero, so whatever `tx_state_gas` does not cover is the
+        // execution-gas component, floored so state-gas spending cannot discount it (EIP-7778).
+        block_state_gas = tx_state_gas;
+        block_execution_gas = std::max(gas_used_b4_refund - tx_state_gas, tx_props.min_gas_cost);
     }
     sender_acc.balance += tx_max_cost - sender_gas_cost * effective_gas_price;
     state.touch(block.coinbase).balance += sender_gas_cost * priority_gas_price;
@@ -738,8 +733,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     // Receipt gas_used = what the sender paid for: post-refund, floored at the
     // EIP-7623 calldata floor.
     receipt.gas_used = sender_gas_cost;
-    receipt.regular_block_gas = regular_block_gas;
-    receipt.state_block_gas = state_block_gas;
+    receipt.block_execution_gas = block_execution_gas;
+    receipt.block_state_gas = block_state_gas;
     // Per-tx refund applied to receipt.gas_used: the floored pre-refund gas minus what the
     // sender paid, so gas_used + gas_refund is the pre-refund gas the block accumulates
     // (EIP-7778) and never goes negative when the calldata floor binds.
