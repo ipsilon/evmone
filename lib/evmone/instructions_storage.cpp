@@ -42,7 +42,10 @@ constexpr auto storage_cost_spec = []() noexcept {
     tbl[EVMC_PRAGUE] = tbl[EVMC_LONDON];
     tbl[EVMC_OSAKA] = tbl[EVMC_LONDON];
     tbl[EVMC_AMSTERDAM] = tbl[EVMC_LONDON];
-    tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_LONDON];
+    // A new slot's execution gas drops to the cost of updating one; the rest is paid in
+    // state gas (EIP-8037).
+    tbl[EVMC_AMSTERDAM].set = tbl[EVMC_AMSTERDAM].reset;
+    tbl[EVMC_EXPERIMENTAL] = tbl[EVMC_AMSTERDAM];
     return tbl;
 }();
 
@@ -51,6 +54,9 @@ struct StorageStoreCost
 {
     int16_t gas_cost;
     int16_t gas_refund;
+    /// State gas for the slot allocation: positive to charge, negative to refill, zero before
+    /// Amsterdam. Wider than int16_t because 64 * COST_PER_STATE_BYTE is 97'920 (EIP-8037).
+    int32_t state_gas = 0;
 };
 
 // The lookup table of SSTORE costs by the storage update status.
@@ -88,6 +94,14 @@ constexpr auto sstore_costs = []() noexcept {
                 c.warm_access, static_cast<int16_t>(c.set - c.warm_access)};
             e[EVMC_STORAGE_MODIFIED_RESTORED] = {
                 c.warm_access, static_cast<int16_t>(c.reset - c.warm_access)};
+        }
+
+        // Allocating a slot (0 -> non-zero) costs state gas; undoing it in the same
+        // transaction (0 -> Y -> 0) refills it (EIP-8037).
+        if (rev >= EVMC_AMSTERDAM)
+        {
+            e[EVMC_STORAGE_ADDED].state_gas = STORAGE_SET_STATE_GAS;
+            e[EVMC_STORAGE_ADDED_DELETED].state_gas = -STORAGE_SET_STATE_GAS;
         }
     }
 
@@ -134,9 +148,21 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
             0;
     const auto status = state.host.set_storage(state.msg->recipient, key, value);
 
-    const auto [gas_cost_warm, gas_refund] = sstore_costs[state.rev][status];
+    const auto [gas_cost_warm, gas_refund, state_gas] = sstore_costs[state.rev][status];
     const auto gas_cost = gas_cost_warm + gas_cost_cold;
+
+    // A refill (0 -> Y -> 0) is applied BEFORE the execution-gas charge, as in EELS, so gas
+    // returned to gas_left from a prior spill can fund that charge (EIP-8037).
+    // FIXME: .refill(c) looks like .charge(-c). Can we combine these?
+    if (state_gas < 0)
+        state.state_gas.refill(gas_left, -state_gas);
+
+    // Charge execution gas FIRST, then state gas: this order prevents a state-gas spill from
+    // counting committed state growth behind a subsequent execution-gas OOG (EIP-8037).
     if ((gas_left -= gas_cost) < 0)
+        return {EVMC_OUT_OF_GAS, gas_left};
+
+    if (state_gas > 0 && !state.state_gas.charge(gas_left, state_gas))
         return {EVMC_OUT_OF_GAS, gas_left};
     state.gas_refund += gas_refund;
     return {EVMC_SUCCESS, gas_left};
