@@ -50,3 +50,22 @@ TEST_F(state_transition, delegatecall_static_legacy)
     expect.post[CALLEE1].storage[0x01_bytes32] = 0xdd_bytes32;
     expect.post[CALLEE2].storage[0x01_bytes32] = 0xdd_bytes32;
 }
+
+TEST_F(state_transition, osaka_call_depth_limit_unreachable)
+{
+    // The 1024 call depth limit is unreachable at Osaka: EIP-7825 caps the transaction gas and
+    // the 63/64 rule hands each frame a 64th less than its parent, so the cheapest self-recursion
+    // there is runs out of gas at depth 494. gas_used is what shows it: a frame stopped by the
+    // depth limit would keep the gas it tried to forward.
+    rev = EVMC_OSAKA;
+    tx.gas_limit = state::MAX_TX_GAS_LIMIT;
+    block.gas_limit = tx.gas_limit;
+    pre[Sender].balance = intx::uint256{tx.gas_limit} * tx.max_gas_price + 1;
+    tx.to = To;
+    pre[To] = {
+        .code =
+            delegatecall(OP_ADDRESS).gas(OP_GAS).input(push0(), push0()).output(push0(), push0())};
+
+    expect.gas_used = 76'314;  // 21'000 intrinsic + 494 frames x 112
+    expect.post[To].exists = true;
+}
