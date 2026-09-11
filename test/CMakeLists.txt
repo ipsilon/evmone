@@ -72,3 +72,53 @@ set_target_properties(
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}
 )
+
+# Register execution-spec-test (EEST) fixtures as ctest tests so they run in parallel
+# under `ctest --parallel` instead of one serial runner invocation. EVMONE_SPEC_TESTS is a
+# list of base directories; below each, the fixture directories three levels under
+# `state_tests` / `blockchain_tests` become one test each, running `evmone test` over the
+# directory. A tree shallower than that is registered at its leaves, so every fixture runs
+# exactly once: no fixture directory holds both files and subdirectories.
+#
+# Grouping by directory rather than by file is what makes this a win: ctest's per-test cost
+# is paid on one thread whatever --parallel says, so registering every file made the run
+# slower than the serial one it replaces.
+#
+# Tests are named by the directory path relative to the base, so fixtures from different
+# sources stay distinct. The fixtures must exist at configure time. Select a type with
+# `ctest -L state_tests`, a source with `ctest -R <base-subdir>`.
+set(EVMONE_SPEC_TESTS "" CACHE STRING
+    "List of base directories scanned for execution-spec-test fixtures to register as ctest tests")
+
+function(evmone_register_spec_test_dir base dir type depth)
+    file(GLOB entries LIST_DIRECTORIES true "${dir}/*")
+    set(subdirs "")
+    foreach(entry ${entries})
+        if(IS_DIRECTORY "${entry}")
+            list(APPEND subdirs "${entry}")
+        endif()
+    endforeach()
+
+    # Three levels down, or a leaf above it, is one test. Otherwise recurse.
+    if(depth LESS 3 AND subdirs)
+        foreach(subdir ${subdirs})
+            math(EXPR next "${depth} + 1")
+            evmone_register_spec_test_dir("${base}" "${subdir}" "${type}" ${next})
+        endforeach()
+        return()
+    endif()
+
+    file(RELATIVE_PATH name "${base}" "${dir}")
+    add_test(NAME "${name}" COMMAND evmone-cli test "${dir}")
+    # Per-process profraw so parallel coverage runs do not clobber each other.
+    set_tests_properties("${name}" PROPERTIES LABELS "${type}"
+        ENVIRONMENT "LLVM_PROFILE_FILE=${PROJECT_BINARY_DIR}/${type}-%m.profraw")
+endfunction()
+
+foreach(base ${EVMONE_SPEC_TESTS})
+    foreach(type state_tests blockchain_tests)
+        if(IS_DIRECTORY "${base}/fixtures/${type}")
+            evmone_register_spec_test_dir("${base}" "${base}/fixtures/${type}" "${type}" 0)
+        endif()
+    endforeach()
+endforeach()
