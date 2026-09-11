@@ -175,7 +175,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
         }
     }
 
-    if (state.msg->depth >= 1024)
+    if (state.rev < EVMC_OSAKA && state.msg->depth >= 1024)
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
 
     const auto result = state.host.call(msg);
@@ -232,7 +232,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
     if ((gas_left -= init_code_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    if (state.msg->depth >= 1024)
+    if (state.rev < EVMC_OSAKA && state.msg->depth >= 1024)
         return {EVMC_SUCCESS, gas_left};  // "Light" failure.
 
     if (endowment != 0 &&

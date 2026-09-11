@@ -35,6 +35,10 @@ add_library(evmone
 )
 target_compile_features(evmone PUBLIC cxx_std_20)
 target_link_libraries(evmone PUBLIC evmc::evmc intx::intx PRIVATE evmone::precompiles)
+
+# Nested EVM calls recurse ~2.6 KB of stack per frame, too much for Windows' 1 MB default.
+target_link_options(evmone INTERFACE $<$<CXX_COMPILER_ID:MSVC>:/STACK:8388608>)
+
 target_include_directories(evmone PUBLIC
     $<BUILD_INTERFACE:${include_dir}>$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
