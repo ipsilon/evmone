@@ -8,6 +8,7 @@
 #include "vm.hpp"
 #include "advanced_execution.hpp"
 #include "baseline.hpp"
+#include "caterpillar.hpp"
 #include <evmone/evmone.h>
 #include <cassert>
 #include <iostream>
@@ -31,6 +32,11 @@ evmc_set_option_result set_option(evmc_vm* c_vm, char const* c_name, char const*
     if (name == "advanced")
     {
         c_vm->execute = evmone::advanced::execute;
+        return EVMC_SET_OPTION_SUCCESS;
+    }
+    else if (name == "caterpillar")
+    {
+        c_vm->execute = evmone::caterpillar::execute;
         return EVMC_SET_OPTION_SUCCESS;
     }
     else if (name == "cgoto")
