@@ -379,7 +379,7 @@ jobs:
       - run:
           name: "Check spelling"
           command: |
-            codespell --quiet-level=4 --ignore-words=.codespell-ignore --skip=./lib/evmone_precompiles/keccak.c
+            codespell --quiet-level=4 --ignore-words=.codespell-ignore --skip=./lib/evmone_precompiles/keccak.cpp
 
   release-linux:
     executor: linux-gcc-latest
