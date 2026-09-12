@@ -1,0 +1,81 @@
+# evmone: Fast Ethereum Virtual Machine implementation
+# Copyright 2026 The evmone Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+name: RISC-V
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  BUILD_DIR: build
+
+jobs:
+  riscv64:
+    name: riscv64
+    # A native build on real hardware: Scaleway EM-RV1, 4 T-Head C910 cores at 1.85 GHz. The
+    # runners are operated by the RISE project: https://riscv-runners.riseproject.dev.
+    # They are 64-bit only, so the riscv32 build stays cross-compiled and emulated on CircleCI.
+    runs-on: ubuntu-24.04-riscv
+    timeout-minutes: 120
+    permissions:
+      contents: read  # required for actions/checkout
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Environment
+        # Nothing pins a parallel level: ninja takes the CPU count itself and ctest is handed it,
+        # so report what they see. A container is where that count stops being the machine's.
+        run: |
+          uname -srm
+          echo "nproc: $(nproc)"
+          cmake --version | head -1
+          ninja --version
+          c++ --version | head -1
+
+      - name: Restore the Hunter cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.hunter/_Base/Cache
+          key: hunter-riscv64-${{ hashFiles('cmake/Hunter/*.cmake') }}
+
+      - name: Configure
+        run: >
+          cmake -S . -B $BUILD_DIR -G Ninja
+          -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=TRUE
+          -DEVMONE_TESTING=ON
+
+      - name: Build
+        run: cmake --build $BUILD_DIR --parallel
+
+      - name: Install
+        run: cmake --build $BUILD_DIR --target install
+
+      - name: Test
+        # ctest takes the job count without an argument only from CMake 3.29; the runner's
+        # 3.28 accepts the bare flag and silently runs the tests one at a time.
+        run: >
+          ctest --test-dir $BUILD_DIR --schedule-random --output-on-failure
+          --no-tests=error --parallel $(nproc)
+
+      - name: Package
+        run: cmake --build $BUILD_DIR --target package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: riscv64
+          path: ${{ env.BUILD_DIR }}/evmone-*.*
+          if-no-files-found: error
