@@ -30,11 +30,11 @@ template <FieldSpec Spec>
 class FieldElement
 {
     using uint_type = std::remove_const_t<decltype(Spec::ORDER)>;
-    static constexpr ModArith<uint_type> Fp{Spec::ORDER};
+    static constexpr MontgomeryArith<uint_type> Fp{Spec::ORDER};
 
     uint_type value_;
 
-    /// Wraps a value into the Element type assuming it is already in the internal ModArith form.
+    /// Wraps a value into the Element type assuming it is already in the internal form.
     [[gnu::always_inline]] static constexpr FieldElement wrap(const uint_type& v) noexcept
     {
         FieldElement element;
@@ -48,9 +48,9 @@ public:
 
     FieldElement() = default;
 
-    constexpr explicit FieldElement(uint_type v) : value_{Fp.to_mont(v)} {}
+    constexpr explicit FieldElement(uint_type v) : value_{Fp.to_internal(v)} {}
 
-    constexpr uint_type value() const noexcept { return Fp.from_mont(value_); }
+    constexpr uint_type value() const noexcept { return Fp.from_internal(value_); }
 
     /// The valid range for from_bytes().
     enum class Range : bool
@@ -109,20 +109,20 @@ public:
         return wrap(Fp.sub(0, a.value_));
     }
 
-    /// Division returns 0 when the divisor is 0. See ModArith::inv().
+    /// Division returns 0 when the divisor is 0. See MontgomeryArith::inv().
     friend constexpr auto operator/(one_t, const FieldElement& a) noexcept
     {
         return wrap(Fp.inv(a.value_));
     }
 
-    /// Division returns 0 when the divisor is 0. See ModArith::inv().
+    /// Division returns 0 when the divisor is 0. See MontgomeryArith::inv().
     friend constexpr auto operator/(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.mul(a.value_, Fp.inv(b.value_)));
     }
 
     /// Named 1/x inversion method. Needed in the pairing templates.
-    /// Returns 0 when this element is 0. See ModArith::inv().
+    /// Returns 0 when this element is 0. See MontgomeryArith::inv().
     constexpr auto inv() const noexcept { return wrap(Fp.inv(value_)); }
 
     /// Named one element. Needed in the pairing templates.
@@ -518,17 +518,17 @@ template <typename Curve>
 {
     // Verify k ≡ k₁ + k₂·λ (mod N).
     {
-        static constexpr ModArith N{Curve::ORDER};
-        auto r_k1 = N.to_mont(k1.value);
+        static constexpr MontgomeryArith N{Curve::ORDER};
+        auto r_k1 = N.to_internal(k1.value);
         if (k1.sign)
             r_k1 = N.sub(0, r_k1);
-        auto r_k2 = N.to_mont(k2.value);
+        auto r_k2 = N.to_internal(k2.value);
         if (k2.sign)
             r_k2 = N.sub(0, r_k2);
 
-        const auto r_k = N.to_mont(k);
+        const auto r_k = N.to_internal(k);
 
-        const auto right = N.add(r_k1, N.mul(r_k2, N.to_mont(Curve::LAMBDA)));
+        const auto right = N.add(r_k1, N.mul(r_k2, N.to_internal(Curve::LAMBDA)));
         if (r_k != right)
             return false;
     }
