@@ -152,60 +152,45 @@ constexpr UintT modinv_scaled(const UintT& x, const UintT& scale, const UintT& m
 }
 
 /// The modular arithmetic operations using the Montgomery form of the values.
-template <typename UintT>
-class ModArith
+/// The modulus is a compile-time constant, given as a reference to it.
+template <const auto& Mod>
+struct MontgomeryArith
 {
-    const UintT mod_;  ///< The modulus.
+    using uint_type = std::remove_cvref_t<decltype(Mod)>;
 
-    const UintT r_squared_;  ///< R² % mod.
+    /// The alias to the modulus.
+    static constexpr auto& MOD = Mod;
 
-    /// The modulus inversion, i.e. the number N' such that mod⋅N' = 2⁶⁴-1.
-    const uint64_t mod_inv_;
-
-    /// Compute R² % mod.
-    static constexpr UintT compute_r_squared(const UintT& mod) noexcept
-    {
-        // R is 2^num_bits, R² is 2^(2*num_bits) and needs 2*num_bits+1 bits to represent,
-        // rounded to 2*num_bits+64 for intx requirements.
-        constexpr auto RR = intx::uint<UintT::num_bits * 2 + 64>{1} << (UintT::num_bits * 2);
-        return intx::udivrem(RR, mod).rem;
-    }
-
-public:
-    constexpr explicit ModArith(const UintT& mod) noexcept
-      : mod_{mod}, r_squared_{compute_r_squared(mod)}, mod_inv_{compute_mont_mod_inv(mod)}
-    {}
-
-    /// Returns the modulus.
-    constexpr const UintT& mod() const noexcept { return mod_; }
-
-    /// Converts a value to Montgomery form.
+    /// Converts a value to the internal (Montgomery) form.
     ///
     /// This is done by using Montgomery multiplication mul(x, R²)
     /// what gives aR²R⁻¹ % mod = aR % mod.
-    constexpr UintT to_mont(const UintT& x) const noexcept { return mul(x, r_squared_); }
+    static constexpr uint_type to_internal(const uint_type& x) noexcept
+    {
+        return mul(x, R_SQUARED);
+    }
 
-    /// Converts a value in Montgomery form back to normal value.
+    /// Converts a value in the internal (Montgomery) form back to normal value.
     ///
     /// Given the x is the Montgomery form x = aR, the conversion is done by using
     /// Montgomery multiplication mul(x, 1) what gives aRR⁻¹ % mod = a % mod.
-    constexpr UintT from_mont(const UintT& x) const noexcept { return mul(x, 1); }
+    static constexpr uint_type from_internal(const uint_type& x) noexcept { return mul(x, 1); }
 
     /// Performs a Montgomery modular multiplication.
     ///
     /// Inputs must be in Montgomery form: x = aR, y = bR.
     /// This computes Montgomery multiplication xyR⁻¹ % mod what gives aRbRR⁻¹ % mod = abR % mod.
     /// The result (abR) is in Montgomery form.
-    constexpr UintT mul(const UintT& x, const UintT& y) const noexcept
+    static constexpr uint_type mul(const uint_type& x, const uint_type& y) noexcept
     {
         // Coarsely Integrated Operand Scanning (CIOS) Method
         // Based on 2.3.2 from
         // High-Speed Algorithms & Architectures For Number-Theoretic Cryptosystems
         // https://www.microsoft.com/en-us/research/wp-content/uploads/1998/06/97Acar.pdf
 
-        constexpr auto S = UintT::num_words;  // TODO(C++23): Make it static
+        constexpr auto S = uint_type::num_words;  // TODO(C++23): Make it static
 
-        intx::uint<UintT::num_bits + 64> t;
+        intx::uint<uint_type::num_bits + 64> t;
         for (size_t i = 0; i != S; ++i)
         {
             uint64_t c = 0;
@@ -216,43 +201,53 @@ public:
             t[S] = tmp.value;
             const auto d = tmp.carry;  // TODO: Carry is 0 for sparse modulus.
 
-            const auto m = t[0] * mod_inv_;
-            std::tie(c, std::ignore) = addmul(t[0], m, mod_[0], 0);
+            const auto m = t[0] * MOD_INV;
+            std::tie(c, std::ignore) = addmul(t[0], m, MOD[0], 0);
 #pragma GCC unroll 8
             for (size_t j = 1; j != S; ++j)
-                std::tie(c, t[j - 1]) = addmul(t[j], m, mod_[j], c);
+                std::tie(c, t[j - 1]) = addmul(t[j], m, MOD[j], c);
             tmp = intx::addc(t[S], c);
             t[S - 1] = tmp.value;
             t[S] = d + tmp.carry;  // TODO: Carry is 0 for sparse modulus.
         }
 
-        if (t >= mod_)
-            t -= mod_;
+        if (t >= MOD)
+            t -= MOD;
 
-        return static_cast<UintT>(t);
+        return static_cast<uint_type>(t);
     }
 
     /// Performs a modular addition.
-    constexpr UintT add(const UintT& x, const UintT& y) const noexcept
+    static constexpr uint_type add(const uint_type& x, const uint_type& y) noexcept
     {
         // Using generic procedure is fine for Montgomery forms.
-        return modadd(x, y, mod_);
+        return modadd(x, y, MOD);
     }
 
     /// Performs a modular subtraction.
-    constexpr UintT sub(const UintT& x, const UintT& y) const noexcept
+    static constexpr uint_type sub(const uint_type& x, const uint_type& y) noexcept
     {
         // Using generic procedure is fine for Montgomery forms.
-        return modsub(x, y, mod_);
+        return modsub(x, y, MOD);
     }
 
     /// Computes modular inverse of x in Montgomery form. Result is in Montgomery form.
     /// Returns 0 for non-invertible x (including x == 0).
-    constexpr UintT inv(const UintT& x) const noexcept
+    static constexpr uint_type inv(const uint_type& x) noexcept
     {
         // The input XR would invert to X⁻¹R⁻¹, so scaling by R² gives the expected Montgomery
         // form X⁻¹R at no extra cost.
-        return modinv_scaled(x, r_squared_, mod_);
+        return modinv_scaled(x, R_SQUARED, MOD);
     }
+
+private:
+    /// The modulus inversion, i.e. the number N' such that MOD⋅N' = 2⁶⁴-1.
+    static constexpr uint64_t MOD_INV = compute_mont_mod_inv(Mod);
+
+    /// R² % MOD, where R is 2^num_bits. R² is 2^(2*num_bits) and needs 2*num_bits+1 bits to
+    /// represent, rounded to 2*num_bits+64 for intx requirements.
+    static constexpr uint_type R_SQUARED =
+        intx::udivrem(intx::uint<uint_type::num_bits * 2 + 64>{1} << (uint_type::num_bits * 2), Mod)
+            .rem;
 };
 }  // namespace evmone::crypto

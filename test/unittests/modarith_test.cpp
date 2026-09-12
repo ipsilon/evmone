@@ -18,47 +18,39 @@ constexpr auto BLS12384Mod =
     0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab_u384;
 
 
-template <typename UintT, const UintT& Mod>
-struct ModA : ModArith<UintT>
-{
-    using uint = UintT;
-    ModA() : ModArith<UintT>{Mod} {}
-};
-
 template <typename>
 class modarith_test : public testing::Test
 {};
 
-using test_types = testing::Types<ModA<uint256, P23>, ModA<uint256, BN254Mod>,
-    ModA<uint256, Secp256k1Mod>, ModA<uint256, M256>, ModA<uint384, BLS12384Mod>>;
+using test_types = testing::Types<MontgomeryArith<P23>, MontgomeryArith<BN254Mod>,
+    MontgomeryArith<Secp256k1Mod>, MontgomeryArith<M256>, MontgomeryArith<BLS12384Mod>>;
 TYPED_TEST_SUITE(modarith_test, test_types);
 
-TYPED_TEST(modarith_test, to_from_mont)
+TYPED_TEST(modarith_test, to_from_internal)
 {
-    const typename TypeParam::uint v = 1;
+    const typename TypeParam::uint_type v = 1;
 
-    const TypeParam s;
-    const auto x = s.to_mont(v);
-    EXPECT_EQ(s.from_mont(x), v);
+    const auto x = TypeParam::to_internal(v);
+    EXPECT_EQ(TypeParam::from_internal(x), v);
 }
 
-TYPED_TEST(modarith_test, to_from_mont_0)
+TYPED_TEST(modarith_test, to_from_internal_0)
 {
-    const TypeParam s;
-    EXPECT_EQ(s.to_mont(0), 0);
-    EXPECT_EQ(s.from_mont(0), 0);
+    EXPECT_EQ(TypeParam::to_internal(0), 0);
+    EXPECT_EQ(TypeParam::from_internal(0), 0);
 }
 
-template <typename Mod>
-static auto get_test_values(const Mod& m) noexcept
+template <typename Arith>
+static auto get_test_values() noexcept
 {
-    using Uint = Mod::uint;
+    using Uint = Arith::uint_type;
+    static constexpr auto& MOD = Arith::MOD;
     return std::array{
-        m.mod() - 1,
-        m.mod() - 2,
-        m.mod() / 2 + 1,
-        m.mod() / 2,
-        m.mod() / 2 - 1,
+        MOD - 1,
+        MOD - 2,
+        MOD / 2 + 1,
+        MOD / 2,
+        MOD / 2 - 1,
         Uint{2},
         Uint{1},
         Uint{0},
@@ -67,37 +59,37 @@ static auto get_test_values(const Mod& m) noexcept
 
 [[maybe_unused]] static void constexpr_test()
 {
-    // Make sure ModArith works in constexpr.
-    static constexpr ModArith m{BN254Mod};
-    static_assert(m.mod() == BN254Mod);
+    // Make sure MontgomeryArith works in constexpr.
+    using M = MontgomeryArith<BN254Mod>;
+    static_assert(M::MOD == BN254Mod);
 
-    static constexpr auto a = m.to_mont(3);
-    static constexpr auto b = m.to_mont(11);
-    static_assert(m.add(a, b) == m.to_mont(14));
-    static_assert(m.sub(a, b) == m.to_mont(BN254Mod - 8));
-    static_assert(m.mul(a, b) == m.to_mont(33));
+    static constexpr auto a = M::to_internal(3);
+    static constexpr auto b = M::to_internal(11);
+    static_assert(M::add(a, b) == M::to_internal(14));
+    static_assert(M::sub(a, b) == M::to_internal(BN254Mod - 8));
+    static_assert(M::mul(a, b) == M::to_internal(33));
 }
 
 TYPED_TEST(modarith_test, add)
 {
-    const TypeParam m;
-    const auto values = get_test_values(m);
+    using M = TypeParam;
+    const auto values = get_test_values<M>();
 
     for (const auto& x : values)
     {
-        const auto xm = m.to_mont(x);
+        const auto xm = M::to_internal(x);
         for (const auto& y : values)
         {
             const auto expected =
-                udivrem(intx::uint<TypeParam::uint::num_bits + 64>{x} + y, m.mod()).rem;
+                udivrem(intx::uint<M::uint_type::num_bits + 64>{x} + y, M::MOD).rem;
 
-            const auto ym = m.to_mont(y);
-            const auto s1m = m.add(xm, ym);
-            const auto s1 = m.from_mont(s1m);
+            const auto ym = M::to_internal(y);
+            const auto s1m = M::add(xm, ym);
+            const auto s1 = M::from_internal(s1m);
             EXPECT_EQ(s1, expected);
 
             // Conversion to Montgomery form is not necessary for addition to work.
-            const auto s2 = m.add(x, y);
+            const auto s2 = M::add(x, y);
             EXPECT_EQ(s2, expected);
         }
     }
@@ -105,24 +97,24 @@ TYPED_TEST(modarith_test, add)
 
 TYPED_TEST(modarith_test, sub)
 {
-    const TypeParam m;
-    const auto values = get_test_values(m);
+    using M = TypeParam;
+    const auto values = get_test_values<M>();
 
     for (const auto& x : values)
     {
-        const auto xm = m.to_mont(x);
+        const auto xm = M::to_internal(x);
         for (const auto& y : values)
         {
             const auto expected =
-                udivrem(intx::uint<TypeParam::uint::num_bits + 64>{x} + m.mod() - y, m.mod()).rem;
+                udivrem(intx::uint<M::uint_type::num_bits + 64>{x} + M::MOD - y, M::MOD).rem;
 
-            const auto ym = m.to_mont(y);
-            const auto d1m = m.sub(xm, ym);
-            const auto d1 = m.from_mont(d1m);
+            const auto ym = M::to_internal(y);
+            const auto d1m = M::sub(xm, ym);
+            const auto d1 = M::from_internal(d1m);
             EXPECT_EQ(d1, expected);
 
             // Conversion to Montgomery form is not necessary for subtraction to work.
-            const auto d2 = m.sub(x, y);
+            const auto d2 = M::sub(x, y);
             EXPECT_EQ(d2, expected);
         }
     }
@@ -130,19 +122,19 @@ TYPED_TEST(modarith_test, sub)
 
 TYPED_TEST(modarith_test, mul)
 {
-    const TypeParam m;
-    const auto values = get_test_values(m);
+    using M = TypeParam;
+    const auto values = get_test_values<M>();
 
     for (const auto& x : values)
     {
-        const auto xm = m.to_mont(x);
+        const auto xm = M::to_internal(x);
         for (const auto& y : values)
         {
-            const auto expected = udivrem(umul(x, y), m.mod()).rem;
+            const auto expected = udivrem(umul(x, y), M::MOD).rem;
 
-            const auto ym = m.to_mont(y);
-            const auto pm = m.mul(xm, ym);
-            const auto p = m.from_mont(pm);
+            const auto ym = M::to_internal(y);
+            const auto pm = M::mul(xm, ym);
+            const auto p = M::from_internal(pm);
             EXPECT_EQ(p, expected);
         }
     }
@@ -150,20 +142,20 @@ TYPED_TEST(modarith_test, mul)
 
 TYPED_TEST(modarith_test, inv)
 {
-    const TypeParam m;
-    for (const auto& x : get_test_values(m))
+    using M = TypeParam;
+    for (const auto& x : get_test_values<M>())
     {
-        const auto xm = m.to_mont(x);
-        const auto xm_inv = m.inv(xm);
+        const auto xm = M::to_internal(x);
+        const auto xm_inv = M::inv(xm);
         if (xm_inv == 0)  // not invertible
         {
-            if (m.mod() != M256)  // mod is prime
+            if (M::MOD != M256)  // mod is prime
             {
                 EXPECT_EQ(x, 0);
             }
             continue;
         }
-        const auto pm = m.mul(xm, xm_inv);
-        EXPECT_EQ(m.from_mont(pm), 1);
+        const auto pm = M::mul(xm, xm_inv);
+        EXPECT_EQ(M::from_internal(pm), 1);
     }
 }
