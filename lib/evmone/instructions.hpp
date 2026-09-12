@@ -190,6 +190,7 @@ namespace instr::core
 inline void noop(StackTop /*stack*/) noexcept {}
 inline constexpr auto pop = noop;
 inline constexpr auto jumpdest = noop;
+inline constexpr auto calldest = noop;  ///< EIP-7979: a label, like JUMPDEST.
 
 template <evmc_status_code Status>
 inline TermResult stop_impl(
@@ -765,8 +766,14 @@ inline code_iterator jump_impl(ExecutionState& state, const uint256& dst) noexce
     const auto hi_part_is_nonzero = (dst[3] | dst[2] | dst[1]) != 0;
     if (hi_part_is_nonzero || !state.analysis.baseline->check_jumpdest(dst[0])) [[unlikely]]
     {
-        state.status = EVMC_BAD_JUMP_DESTINATION;
-        return nullptr;
+        // EIP-7979: a jump may also land on a CALLDEST. Checked only when the
+        // JUMPDEST test fails, so ordinary jumps pay nothing for it.
+        if (hi_part_is_nonzero || state.rev < EVMC_EXPERIMENTAL ||
+            !state.analysis.baseline->check_calldest(dst[0]))
+        {
+            state.status = EVMC_BAD_JUMP_DESTINATION;
+            return nullptr;
+        }
     }
 
     return &state.analysis.baseline->code()[static_cast<size_t>(dst[0])];
@@ -784,6 +791,46 @@ inline code_iterator jumpi(StackTop stack, ExecutionState& state, code_iterator 
     const auto& dst = stack.pop();
     const auto& cond = stack.pop();
     return cond ? jump_impl(state, dst) : pos + 1;
+}
+
+/// CALLSUB instruction implementation using baseline::CodeAnalysis (EIP-7979).
+/// Pushes the position of the next instruction onto the return stack and
+/// transfers control to the CALLDEST at the destination.
+inline code_iterator callsub(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
+{
+    const auto& dst = stack.pop();
+    const auto hi_part_is_nonzero = (dst[3] | dst[2] | dst[1]) != 0;
+    if (hi_part_is_nonzero || !state.analysis.baseline->check_calldest(dst[0])) [[unlikely]]
+    {
+        state.status = EVMC_BAD_JUMP_DESTINATION;
+        return nullptr;
+    }
+    if (state.return_stack.size() >= ExecutionState::RETURN_STACK_LIMIT) [[unlikely]]
+    {
+        state.status = EVMC_STACK_OVERFLOW;
+        return nullptr;
+    }
+
+    const auto code = state.analysis.baseline->code();
+    state.return_stack.push_back(static_cast<uint32_t>(pos + 1 - code.data()));
+    return &code[static_cast<size_t>(dst[0])];
+}
+
+/// RETURNSUB instruction implementation using baseline::CodeAnalysis (EIP-7979).
+/// Pops the return stack into the program counter.
+inline code_iterator returnsub(
+    StackTop /*stack*/, ExecutionState& state, code_iterator /*pos*/) noexcept
+{
+    if (state.return_stack.empty()) [[unlikely]]
+    {
+        state.status = EVMC_STACK_UNDERFLOW;
+        return nullptr;
+    }
+
+    const auto ret = state.return_stack.back();
+    state.return_stack.pop_back();
+    // The return position may be the code end, where the padding guarantees a STOP.
+    return state.analysis.baseline->code().data() + ret;
 }
 
 inline code_iterator pc(StackTop stack, ExecutionState& state, code_iterator pos) noexcept

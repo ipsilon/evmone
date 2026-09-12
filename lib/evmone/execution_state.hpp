@@ -138,6 +138,11 @@ public:
     /// Reference to original EVM code.
     bytes_view original_code;
 
+    /// EIP-7979: the return stack. Holds positions of the instructions following CALLSUBs,
+    /// pushed only by CALLSUB and popped only by RETURNSUB.
+    static constexpr size_t RETURN_STACK_LIMIT = 1024;
+    std::vector<uint32_t> return_stack;
+
     evmc_status_code status = EVMC_SUCCESS;
     size_t output_offset = 0;
     size_t output_size = 0;
@@ -178,6 +183,7 @@ public:
         host = {host_interface, host_ctx};
         rev = revision;
         return_data.clear();
+        return_stack.clear();
         original_code = _code;
         status = EVMC_SUCCESS;
         output_offset = 0;
