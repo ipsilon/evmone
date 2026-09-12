@@ -868,7 +868,9 @@ evmc::Result call_precompile(evmc_revision rev, const evmc_message& msg) noexcep
 
     // Allocate buffer for the precompile's output and pass its ownership to evmc::Result.
     // TODO: This can be done more elegantly by providing constructor evmc::Result(std::unique_ptr).
-    const auto output_data = new (std::nothrow) uint8_t[max_output_size];  // TODO: handle nullptr.
+    const auto output_data = new (std::nothrow) uint8_t[max_output_size];
+    if (output_data == nullptr)
+        return evmc::Result{EVMC_INTERNAL_ERROR};
     const auto [status_code, output_size] =
         execute(msg.input_data, msg.input_size, output_data, max_output_size);
     const evmc_result result{status_code, status_code == EVMC_SUCCESS ? gas_left : 0, 0,
