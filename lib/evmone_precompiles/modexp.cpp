@@ -348,17 +348,13 @@ void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
     for (size_t i = 1; i != n; ++i)
     {
         const auto c1 = addmul(r, r, x, y[i]);
-        const auto [sum1, d1] = intx::addc(c1, uint64_t{r_carry});
 
         const auto m = r[0] * mod_inv;
         const auto p = umul(mod[0], m) + r[0];
         assert(p[0] == 0);  // The lowest word is canceled by m.
 
         const auto c3 = addmul(r_lo, r_hi, mod_hi, m, p[1]);
-        const auto [sum2, d2] = intx::addc(sum1, c3);
-        r[n - 1] = sum2;
-        assert(!(d1 && d2));
-        r_carry = d1 || d2;
+        std::tie(r[n - 1], r_carry) = intx::addc(c1, c3, r_carry);
     }
 
     assert(!r_carry || less(r, mod));  // r_carry => r < mod.

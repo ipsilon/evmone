@@ -37,17 +37,13 @@ void mul_amm_256(std::span<uint64_t, 4> r, std::span<const uint64_t, 4> x,
     for (size_t i = 1; i != N; ++i)
     {
         const auto c1 = addmul(t, t, x, y[i]);
-        const auto [sum1, d1] = addc(c1, uint64_t{t_carry});
 
         const auto m = t[0] * mod_inv;
         const auto p = umul(mod[0], m) + t[0];
         assert(p[0] == 0);  // The lowest word is canceled by m.
 
         const auto c3 = addmul(t_lo, t_hi, mod_hi, m, p[1]);
-        const auto [sum2, d2] = addc(sum1, c3);
-        t[N - 1] = sum2;
-        assert(!(d1 && d2));
-        t_carry = d1 || d2;
+        std::tie(t[N - 1], t_carry) = addc(c1, c3, t_carry);
     }
 
     assert(!t_carry || less(t, mod));  // t_carry => t < mod.
