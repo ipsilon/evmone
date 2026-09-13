@@ -115,13 +115,6 @@ void store(std::span<uint8_t> r, std::span<const uint64_t> words) noexcept
     std::ranges::fill(r.subspan(0, pos), uint8_t{0});
 }
 
-/// Compares two same-size little-endian word arrays as unsigned integers: returns true if x < y.
-constexpr bool less(std::span<const uint64_t> x, std::span<const uint64_t> y) noexcept
-{
-    assert(x.size() == y.size());
-    return std::ranges::lexicographical_compare(std::views::reverse(x), std::views::reverse(y));
-}
-
 /// Right-shifts a little-endian word array by k bits.
 /// Returns a subspan trimmed to significant (non-zero) words.
 std::span<const uint64_t> shr(
@@ -331,6 +324,7 @@ void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
     assert(y.size() == n);
     assert(mod.size() == n);
     assert(mod.back() != 0);
+    assert(mod[0] * mod_inv + 1 == 0);                     // The negative modulus inverse identity.
     assert(r.data() != x.data() && r.data() != y.data());  // r must not alias inputs.
 
     const auto r_lo = r.subspan(0, n - 1);
@@ -343,9 +337,10 @@ void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
         const auto c1 = crypto::mul(r, x, y[0]);
 
         const auto m = r[0] * mod_inv;
-        const auto c2 = (umul(mod[0], m) + r[0])[1];
+        const auto p = umul(mod[0], m) + r[0];
+        assert(p[0] == 0);  // The lowest word is canceled by m.
 
-        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, c2);
+        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, p[1]);
         std::tie(r[n - 1], r_carry) = intx::addc(c1, c3);
     }
 
@@ -356,15 +351,17 @@ void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
         const auto [sum1, d1] = intx::addc(c1, uint64_t{r_carry});
 
         const auto m = r[0] * mod_inv;
-        const auto c2 = (umul(mod[0], m) + r[0])[1];
+        const auto p = umul(mod[0], m) + r[0];
+        assert(p[0] == 0);  // The lowest word is canceled by m.
 
-        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, c2);
+        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, p[1]);
         const auto [sum2, d2] = intx::addc(sum1, c3);
         r[n - 1] = sum2;
         assert(!(d1 && d2));
         r_carry = d1 || d2;
     }
 
+    assert(!r_carry || less(r, mod));  // r_carry => r < mod.
     if (r_carry)
         sub(r, mod);
 }

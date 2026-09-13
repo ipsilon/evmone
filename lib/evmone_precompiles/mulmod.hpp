@@ -5,11 +5,19 @@
 #pragma once
 
 #include <intx/intx.hpp>
+#include <ranges>
 #include <span>
 
 namespace evmone::crypto
 {
 using namespace intx;
+
+/// Compares two same-size little-endian word arrays as unsigned integers: returns true if x < y.
+constexpr bool less(std::span<const uint64_t> x, std::span<const uint64_t> y) noexcept
+{
+    assert(x.size() == y.size());
+    return std::ranges::lexicographical_compare(std::views::reverse(x), std::views::reverse(y));
+}
 
 /// Subtracts y from x: x[] -= y[]. The result is truncated to the size of x.
 constexpr void sub(std::span<uint64_t> x, std::span<const uint64_t> y) noexcept
