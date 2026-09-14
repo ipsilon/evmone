@@ -397,9 +397,13 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     // TODO: On a modified-set miss the account is looked up twice. This can be improved with
     //   a try_emplace-like API, but the miss happens only in ~39% of the calls on Mainnet.
     if (acc == nullptr)
+    {
         acc = &m_state.insert(addr, {.erase_if_empty = true});
+        m_state.journal_new_account(addr);
+    }
+    else
+        m_state.journal_account_flags(addr, *acc);
 
-    m_state.journal_account_flags(addr, *acc);
     acc->access_status = EVMC_ACCESS_WARM;
     return EVMC_ACCESS_COLD;
 }
