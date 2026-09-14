@@ -307,3 +307,18 @@ TEST_F(state_transition, touch_revert_storage_only)
     expect.post[STORAGE_ONLY].exists = true;
     expect.post[STORAGE_ONLY].storage[0x01_bytes32] = 0x01_bytes32;
 }
+
+TEST_F(state_transition, access_nonexistent_revert)
+{
+    // Accessing an account which does not exist warms it up (EIP-2929) without creating it,
+    // so a revert of the accessing frame must leave no trace of it in the state diff.
+    static constexpr auto ABSENT = 0xab5e17_address;
+
+    tx.to = To;
+    pre[*tx.to] = {.code = push(ABSENT) + OP_BALANCE + OP_POP + revert(0, 0)};
+
+    expect.status = EVMC_REVERT;
+    expect.post[*tx.to].exists = true;
+    expect.post[ABSENT].exists = false;
+    expect.diff_excludes = {ABSENT};
+}
