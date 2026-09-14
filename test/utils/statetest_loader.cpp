@@ -277,9 +277,9 @@ state::BlockInfo from_json_with_rev(
 
     return state::BlockInfo{
         .number = from_json<int64_t>(j.at("currentNumber")),
-                .timestamp = from_json<uint64_t>(j.at("currentTimestamp")),
+        .timestamp = from_json<uint64_t>(j.at("currentTimestamp")),
                 .parent_timestamp = load_or<uint64_t>(j, "parentTimestamp", 0),
-        .gas_limit = from_json<int64_t>(j.at("currentGasLimit")),
+        .parent_timestamp = load_or<uint64_t>(j, "parentTimestamp", 0),
         .coinbase = from_json<evmc::address>(j.at("currentCoinbase")),
         .difficulty = load_or<int64_t>(j, "currentDifficulty", 0),
         .parent_difficulty = load_or<int64_t>(j, "parentDifficulty", 0),
