@@ -277,8 +277,8 @@ state::BlockInfo from_json_with_rev(
 
     return state::BlockInfo{
         .number = from_json<int64_t>(j.at("currentNumber")),
-        .timestamp = from_json<int64_t>(j.at("currentTimestamp")),
-        .parent_timestamp = load_or<int64_t>(j, "parentTimestamp", 0),
+                .timestamp = from_json<uint64_t>(j.at("currentTimestamp")),
+                .parent_timestamp = load_or<uint64_t>(j, "parentTimestamp", 0),
         .gas_limit = from_json<int64_t>(j.at("currentGasLimit")),
         .coinbase = from_json<evmc::address>(j.at("currentCoinbase")),
         .difficulty = load_or<int64_t>(j, "currentDifficulty", 0),
@@ -328,7 +328,7 @@ TestState from_json<TestState>(const json::json& j)
                     acc.storage[from_json<bytes32>(j_key)] = value;
             }
         }
-    }
+        // Block timestamps are loaded as uint64_t to preserve the full EVM range.
     return o;
 }
 
