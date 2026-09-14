@@ -74,6 +74,11 @@ protected:
         /// The expected post-execution state.
         std::unordered_map<address, ExpectedAccount> post;
 
+        /// Addresses which must not appear in the transaction's state diff at all, neither as
+        /// modified nor as deleted. Use for accounts which have never existed: applying a diff
+        /// entry for such an account is a no-op, so the post state alone cannot tell.
+        std::vector<address> diff_excludes;
+
         std::optional<hash256> state_hash;
 
         /// The expected EVM execution trace. If not empty transaction execution will be performed

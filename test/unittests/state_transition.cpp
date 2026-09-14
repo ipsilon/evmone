@@ -7,6 +7,7 @@
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/statetest.hpp>
 #include <test/utils/utils.hpp>
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
@@ -101,6 +102,17 @@ void state_transition::TearDown()
                     << "log " << i << " topics";
             }
         }
+        const auto& diff = receipt.state_diff;
+        for (const auto& addr : expect.diff_excludes)
+        {
+            EXPECT_TRUE(
+                std::ranges::find(diff.deleted_accounts, addr) == diff.deleted_accounts.end())
+                << addr << ": deleted in the state diff";
+            EXPECT_TRUE(std::ranges::find(diff.modified_accounts, addr, &StateDiff::Entry::addr) ==
+                        diff.modified_accounts.end())
+                << addr << ": modified in the state diff";
+        }
+
         // Update default expectations - valid transaction means coinbase exists unless explicitly
         // requested otherwise
         if (!expect.post.contains(Coinbase))
