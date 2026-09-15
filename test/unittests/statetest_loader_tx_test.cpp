@@ -155,6 +155,41 @@ TEST(statetest_loader, tx_eip1559)
     EXPECT_EQ(tx.v, 1);
 }
 
+TEST(statetest_loader, tx_y_parity)
+{
+    // go-ethereum names a typed transaction's `v` as `yParity`; the two must agree when both are
+    // given. A legacy transaction's `v` also carries the chain id, so `yParity` cannot name it.
+    constexpr std::string_view typed = R"({
+        "input": "", "gas": "0x5208", "value": "0", "sender": "a0a1", "to": "c0c1",
+        "maxFeePerGas": "1", "maxPriorityFeePerGas": "0", "accessList": [], "nonce": "0",
+        "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "s": "0x2222222222222222222222222222222222222222222222222222222222222222",
+        "type": "2")";
+    constexpr std::string_view legacy = R"({
+        "input": "", "gas": "0x5208", "value": "0", "sender": "a0a1", "to": "c0c1",
+        "gasPrice": "1", "nonce": "0",
+        "r": "0x1111111111111111111111111111111111111111111111111111111111111111",
+        "s": "0x2222222222222222222222222222222222222222222222222222222222222222")";
+
+    const auto load = [](std::string_view head, std::string_view signature) {
+        return test::from_json<state::Transaction>(
+            json::json::parse(std::string{head} + ", " + std::string{signature} + "}"));
+    };
+
+    EXPECT_EQ(load(typed, R"("yParity": "0x1")").v, 1);
+    EXPECT_EQ(load(typed, R"("yParity": "0x0")").v, 0);
+    EXPECT_EQ(load(typed, R"("v": "0x1")").v, 1);
+    EXPECT_EQ(load(typed, R"("v": "0x1", "yParity": "0x1")").v, 1);
+
+    EXPECT_THAT([&] { load(typed, R"("v": "0x0", "yParity": "0x1")"); },
+        ThrowsMessage<std::invalid_argument>("invalid transaction: v and yParity do not match"));
+    EXPECT_THAT([&] { load(typed, R"("yParity": "0x2")"); },
+        ThrowsMessage<std::invalid_argument>("invalid transaction: yParity must be 0 or 1"));
+
+    EXPECT_EQ(load(legacy, R"("v": "0x1b", "yParity": "0x0")").v, 27);  // yParity is ignored.
+    EXPECT_THROW(load(legacy, R"("yParity": "0x1")"), json::json::out_of_range);
+}
+
 TEST(statetest_loader, tx_access_list)
 {
     constexpr std::string_view input = R"({
