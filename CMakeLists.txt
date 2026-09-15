@@ -49,9 +49,11 @@ if(CABLE_COMPILER_GNULIKE)
         $<$<COMPILE_LANGUAGE:CXX>:-Wextra-semi>
         $<$<COMPILE_LANGUAGE:CXX>:-Wno-missing-field-initializers>
 
-        $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,12>>:-Wno-attributes=clang::>
-        $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,12>>:-Wno-attributes=msvc::>
-        $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,12>>:-Wno-attributes>
+        # GCC has the namespaced form from 12, but only keeps it across a precompiled header
+        # from 14 on.
+        $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,14>>:-Wno-attributes=clang::>
+        $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,14>>:-Wno-attributes=msvc::>
+        $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,14>>:-Wno-attributes>
         $<$<CXX_COMPILER_ID:GNU>:-Wduplicated-cond>
         $<$<CXX_COMPILER_ID:GNU>:-Wlogical-op>
 
