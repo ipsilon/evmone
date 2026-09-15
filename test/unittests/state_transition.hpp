@@ -45,6 +45,10 @@ protected:
     struct ExpectedAccount
     {
         bool exists = true;
+
+        /// Whether the account is expected to be mentioned in the transaction's state diff.
+        std::optional<bool> in_diff;
+
         std::optional<uint64_t> nonce;
         std::optional<intx::uint256> balance;
         std::optional<bytes> code;

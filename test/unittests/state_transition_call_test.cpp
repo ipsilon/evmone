@@ -18,6 +18,7 @@ TEST_F(state_transition, call_value_to_empty)
 
     expect.post[To].balance = 0;
     expect.post[BENEFICIARY].balance = 1;
+    expect.post[BENEFICIARY].in_diff = true;  // The received value is a real modification.
 }
 
 TEST_F(state_transition, delegatecall_static_legacy)

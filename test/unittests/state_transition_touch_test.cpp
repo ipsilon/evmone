@@ -21,6 +21,7 @@ TEST_F(state_transition, touch_empty_sd)
 
     expect.post[*tx.to].exists = true;
     expect.post[EMPTY].exists = false;
+    expect.post[EMPTY].in_diff = true;  // Pre-existing account, the sweep is a real deletion.
 }
 
 TEST_F(state_transition, touch_empty_tw)
@@ -109,6 +110,24 @@ TEST_F(state_transition, touch_revert_nonexistent_istanbul)
     expect.status = EVMC_REVERT;
     expect.post[*tx.to].exists = true;
     expect.post[EMPTY].exists = false;
+}
+
+TEST_F(state_transition, touch_revert_cold_access_nonexistent)
+{
+    // Accessing a non-existent account warms it up by inserting a temporary empty one (EIP-2929).
+    // Reverting the accessing frame must restore it to non-existent, leaving no state diff entry.
+    rev = EVMC_BERLIN;
+    block.base_fee = 0;
+    static constexpr auto NONEXISTENT = 0x4e_address;
+
+    tx.type = Transaction::Type::legacy;
+    tx.to = To;
+    pre[*tx.to] = {.code = push(NONEXISTENT) + OP_BALANCE + OP_POP + revert(0, 0)};
+
+    expect.status = EVMC_REVERT;
+    expect.post[*tx.to].exists = true;
+    expect.post[NONEXISTENT].exists = false;
+    expect.post[NONEXISTENT].in_diff = false;
 }
 
 TEST_F(state_transition, touch_revert_nonexistent_tw)

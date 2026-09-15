@@ -101,6 +101,21 @@ void state_transition::TearDown()
                     << "log " << i << " topics";
             }
         }
+
+        const auto& diff = receipt.state_diff;
+        for (const auto& [addr, expected_acc] : expect.post)
+        {
+            if (!expected_acc.in_diff.has_value())
+                continue;
+            const auto present =
+                std::ranges::find(diff.deleted_accounts, addr) != diff.deleted_accounts.end() ||
+                std::ranges::find(diff.modified_accounts, addr, &StateDiff::Entry::addr) !=
+                    diff.modified_accounts.end();
+            EXPECT_EQ(present, *expected_acc.in_diff)
+                << addr
+                << (present ? ": unexpectedly in the state diff" : ": missing from the state diff");
+        }
+
         // Update default expectations - valid transaction means coinbase exists unless explicitly
         // requested otherwise
         if (!expect.post.contains(Coinbase))
