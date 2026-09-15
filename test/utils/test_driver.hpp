@@ -28,6 +28,7 @@ enum class Outcome : char
     passed = '.',
     failed = 'F',
     skipped = 's',
+    deselected = 'd',  ///< A file whose fixtures were all filtered out.
 };
 
 /// What running one fixture produced.

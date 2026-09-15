@@ -186,10 +186,26 @@ TEST(test_driver, a_file_is_skipped_only_when_nothing_in_it_ran)
 
 TEST(test_driver, a_file_whose_fixtures_were_all_filtered_out_verifies_nothing)
 {
-    // A filter selecting nothing leaves no result at all, which is not a pass.
+    // A filter selecting nothing leaves no result at all: not a pass, and not a skip either.
     const std::vector<TestCase> cases{holding("a file", {})};
 
     const auto [exit_code, output] = run(cases);
     EXPECT_EQ(exit_code, NOTHING_VERIFIED);
-    EXPECT_NE(output.find("0 passed, 1 skipped"), std::string::npos);
+    EXPECT_NE(output.find("0 passed, 1 deselected in"), std::string::npos);
+    EXPECT_EQ(output.find("skipped"), std::string::npos);
+    // Deselected files are not listed.
+    EXPECT_EQ(output.find("short test summary info"), std::string::npos);
+}
+
+TEST(test_driver, deselected_is_counted_apart_from_skipped)
+{
+    const std::vector<TestCase> cases{
+        holding("ran", {Outcome::passed}),
+        holding("declined", {Outcome::skipped}),
+        holding("filtered out", {}),
+    };
+
+    const auto [exit_code, output] = run(cases);
+    EXPECT_EQ(exit_code, SUCCESS);
+    EXPECT_NE(output.find("1 passed, 1 skipped, 1 deselected in"), std::string::npos);
 }

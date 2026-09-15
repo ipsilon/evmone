@@ -55,6 +55,25 @@ set_tests_properties(
     ${PREFIX}/test_dir_skipped PROPERTIES PASS_REGULAR_EXPRESSION
     "all_unsupported\\.json::a_engine - unsupported fixture format: \"blockchain_test_engine\"\nSKIPPED[^\n]*::b_engine_x - .*empty\\.json - not a test.*pre_alloc\\.json - not a test.*0 passed, 5 skipped in")
 
+# A filter which selects nothing deselects every file: counted apart from skipped, not named,
+# and still nothing verified.
+add_test(NAME ${PREFIX}/test_dir_deselected COMMAND evmone-cli test
+    ${DATA}/testcmd -k no_such_name)
+set_tests_properties(
+    ${PREFIX}/test_dir_deselected PROPERTIES
+    PASS_REGULAR_EXPRESSION "collected 1 file\n\nd[^\n]*\n\n=+ 0 passed, 1 deselected in"
+    FAIL_REGULAR_EXPRESSION "skipped|SKIPPED")
+add_test(NAME ${PREFIX}/test_dir_deselected_exit_code COMMAND evmone-cli test
+    ${DATA}/testcmd -k no_such_name)
+set_tests_properties(${PREFIX}/test_dir_deselected_exit_code PROPERTIES WILL_FAIL TRUE)
+
+# A file the filter empties is deselected; one which declined its fixtures is still skipped.
+add_test(NAME ${PREFIX}/test_dir_deselected_beside_skipped COMMAND evmone-cli test
+    ${DATA}/testcmd_skipped -k no_such_name)
+set_tests_properties(
+    ${PREFIX}/test_dir_deselected_beside_skipped PROPERTIES
+    PASS_REGULAR_EXPRESSION "0 passed, 4 skipped, 1 deselected in")
+
 # The --histogram output reaches the report, and the progress row keeps out of its way:
 # a run without it ends every line with the percentage done.
 add_test(NAME ${PREFIX}/test_histogram COMMAND evmone-cli test --histogram
