@@ -537,11 +537,7 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     max_total_fee += tx.value;
 
     if (tx.type == Transaction::Type::blob)
-    {
-        const auto total_blob_gas = tx.blob_gas_used();
-        // FIXME: Can overflow uint256.
-        max_total_fee += total_blob_gas * tx.max_blob_gas_price;
-    }
+        max_total_fee += umul(uint256{tx.blob_gas_used()}, tx.max_blob_gas_price);
     if (sender_acc.balance < max_total_fee)
         return make_error_code(INSUFFICIENT_ACCOUNT_FUNDS);
 
