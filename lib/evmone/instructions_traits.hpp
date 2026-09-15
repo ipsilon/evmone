@@ -181,6 +181,10 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_AMSTERDAM][OP_EXCHANGE] = 3;
 
     table[EVMC_EXPERIMENTAL] = table[EVMC_AMSTERDAM];
+    // EIP-7979: Call and Return Opcodes for the EVM (mid, jumpdest, low).
+    table[EVMC_EXPERIMENTAL][OP_CALLSUB] = 8;
+    table[EVMC_EXPERIMENTAL][OP_CALLDEST] = 1;
+    table[EVMC_EXPERIMENTAL][OP_RETURNSUB] = 5;
 
     return table;
 }();
@@ -388,6 +392,10 @@ constexpr inline std::array<Traits, 256> traits = []() noexcept {
     table[OP_LOG2] = {"LOG2", 0, false, 4, -4, EVMC_FRONTIER};
     table[OP_LOG3] = {"LOG3", 0, false, 5, -5, EVMC_FRONTIER};
     table[OP_LOG4] = {"LOG4", 0, false, 6, -6, EVMC_FRONTIER};
+
+    table[OP_CALLSUB] = {"CALLSUB", 0, false, 1, -1, EVMC_EXPERIMENTAL};
+    table[OP_CALLDEST] = {"CALLDEST", 0, false, 0, 0, EVMC_EXPERIMENTAL};
+    table[OP_RETURNSUB] = {"RETURNSUB", 0, false, 0, 0, EVMC_EXPERIMENTAL};
 
     table[OP_MCOPY] = {"MCOPY", 0, false, 3, -3, EVMC_CANCUN};
 
