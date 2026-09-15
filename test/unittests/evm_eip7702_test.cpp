@@ -29,10 +29,10 @@ TEST_P(evm, eip7702_call_designator)
     execute(call(callee).gas(50'000));
     EXPECT_STATUS(EVMC_SUCCESS);
     ASSERT_EQ(host.recorded_calls.size(), 1);
-    const auto& msg = host.recorded_calls[0];
-    EXPECT_EQ(msg.recipient, callee);
-    EXPECT_EQ(msg.code_address, delegate);
-    EXPECT_TRUE(msg.flags & EVMC_DELEGATED);
+    const auto& call_msg = host.recorded_calls[0];
+    EXPECT_EQ(call_msg.recipient, callee);
+    EXPECT_EQ(call_msg.code_address, delegate);
+    EXPECT_TRUE(call_msg.flags & EVMC_DELEGATED);
 }
 
 TEST_P(evm, eip7702_call_designator_magic_only)
@@ -43,10 +43,10 @@ TEST_P(evm, eip7702_call_designator_magic_only)
     execute(call(callee).gas(50'000));
     EXPECT_STATUS(EVMC_SUCCESS);
     ASSERT_EQ(host.recorded_calls.size(), 1);
-    const auto& msg = host.recorded_calls[0];
-    EXPECT_EQ(msg.recipient, callee);
-    EXPECT_EQ(msg.code_address, callee);
-    EXPECT_FALSE(msg.flags & EVMC_DELEGATED);
+    const auto& call_msg = host.recorded_calls[0];
+    EXPECT_EQ(call_msg.recipient, callee);
+    EXPECT_EQ(call_msg.code_address, callee);
+    EXPECT_FALSE(call_msg.flags & EVMC_DELEGATED);
 }
 
 TEST_P(evm, eip7702_call_designator_too_short)
@@ -57,10 +57,10 @@ TEST_P(evm, eip7702_call_designator_too_short)
     execute(call(callee).gas(50'000));
     EXPECT_STATUS(EVMC_SUCCESS);
     ASSERT_EQ(host.recorded_calls.size(), 1);
-    const auto& msg = host.recorded_calls[0];
-    EXPECT_EQ(msg.recipient, callee);
-    EXPECT_EQ(msg.code_address, callee);
-    EXPECT_FALSE(msg.flags & EVMC_DELEGATED);
+    const auto& call_msg = host.recorded_calls[0];
+    EXPECT_EQ(call_msg.recipient, callee);
+    EXPECT_EQ(call_msg.code_address, callee);
+    EXPECT_FALSE(call_msg.flags & EVMC_DELEGATED);
 }
 
 TEST_P(evm, eip7702_call_designator_too_long)
@@ -71,8 +71,8 @@ TEST_P(evm, eip7702_call_designator_too_long)
     execute(call(callee).gas(50'000));
     EXPECT_STATUS(EVMC_SUCCESS);
     ASSERT_EQ(host.recorded_calls.size(), 1);
-    const auto& msg = host.recorded_calls[0];
-    EXPECT_EQ(msg.recipient, callee);
-    EXPECT_EQ(msg.code_address, callee);
-    EXPECT_FALSE(msg.flags & EVMC_DELEGATED);
+    const auto& call_msg = host.recorded_calls[0];
+    EXPECT_EQ(call_msg.recipient, callee);
+    EXPECT_EQ(call_msg.code_address, callee);
+    EXPECT_FALSE(call_msg.flags & EVMC_DELEGATED);
 }
