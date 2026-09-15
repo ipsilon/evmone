@@ -153,7 +153,7 @@ constexpr UintT modinv_scaled(const UintT& x, const UintT& scale, const UintT& m
 
 /// The modular arithmetic operations using the Montgomery form of the values.
 template <typename UintT>
-class ModArith
+class MontgomeryArith
 {
     const UintT mod_;  ///< The modulus.
 
@@ -172,24 +172,24 @@ class ModArith
     }
 
 public:
-    constexpr explicit ModArith(const UintT& mod) noexcept
+    constexpr explicit MontgomeryArith(const UintT& mod) noexcept
       : mod_{mod}, r_squared_{compute_r_squared(mod)}, mod_inv_{compute_mont_mod_inv(mod)}
     {}
 
     /// Returns the modulus.
     constexpr const UintT& mod() const noexcept { return mod_; }
 
-    /// Converts a value to Montgomery form.
+    /// Converts a value to the internal (Montgomery) form.
     ///
     /// This is done by using Montgomery multiplication mul(x, R²)
     /// what gives aR²R⁻¹ % mod = aR % mod.
-    constexpr UintT to_mont(const UintT& x) const noexcept { return mul(x, r_squared_); }
+    constexpr UintT to_internal(const UintT& x) const noexcept { return mul(x, r_squared_); }
 
-    /// Converts a value in Montgomery form back to normal value.
+    /// Converts a value in the internal (Montgomery) form back to normal value.
     ///
     /// Given the x is the Montgomery form x = aR, the conversion is done by using
     /// Montgomery multiplication mul(x, 1) what gives aRR⁻¹ % mod = a % mod.
-    constexpr UintT from_mont(const UintT& x) const noexcept { return mul(x, 1); }
+    constexpr UintT from_internal(const UintT& x) const noexcept { return mul(x, 1); }
 
     /// Performs a Montgomery modular multiplication.
     ///
