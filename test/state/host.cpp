@@ -10,16 +10,6 @@
 
 namespace evmone::state
 {
-namespace
-{
-/// Whether a looked-up account is alive, i.e. has a state leaf: it exists and is not empty
-/// (EIP-161). A null pointer is a non-existent account.
-[[nodiscard]] bool is_alive(const Account* account) noexcept
-{
-    return account != nullptr && !account->is_empty();
-}
-}  // namespace
-
 bool Host::account_exists(const address& addr) const noexcept
 {
     const auto* const acc = m_state.find(addr);
@@ -194,9 +184,6 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     // TODO: find()+insert() probes m_modified twice for a new recipient.
     auto* new_acc = m_state.find(msg.recipient);
-    // The created account's NEW_ACCOUNT state gas is charged at this access when the deployment
-    // address has no leaf; captured before any mutation (EIP-8037, EIP-161, EELS #3126).
-    const bool target_alive = is_alive(new_acc);
     if (new_acc == nullptr)
     {
         new_acc = &m_state.insert(msg.recipient);
@@ -232,24 +219,10 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     create_msg.input_data = nullptr;
     create_msg.input_size = 0;
 
-    // The create frame's state gas, held across the initcode execution. Only the depth-0 create
-    // charges NEW_ACCOUNT here; the opcode charges it in create_impl (EIP-8037).
-    StateGas state_gas{.left = create_msg.state_gas};
-    if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0 && !target_alive)
-    {
-        if (!state_gas.charge(create_msg.gas, NEW_ACCOUNT_STATE_GAS))
-            return evmc::Result{EVMC_OUT_OF_GAS};
-        create_msg.state_gas = state_gas.left;
-    }
-
     const bytes_view initcode{msg.input_data, msg.input_size};
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
-    {
-        // Report the host's charge so Host::call can apply the failed-frame rule.
-        result.state_gas_spilled += state_gas.spilled;
         return result;
-    }
 
     auto gas_left = result.gas_left;
     assert(gas_left >= 0);
@@ -264,10 +237,11 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (m_rev >= EVMC_LONDON && code.starts_with(0xEF))
         return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
 
-    // Merge the initcode frame's pools back, keeping the NEW_ACCOUNT charge's spill so the
-    // created account's state gas is reported on success.
-    state_gas.left = result.state_gas_left;
-    state_gas.spilled += result.state_gas_spilled;
+    // The initcode frame's state-gas pools, carried into the code-deposit charge.
+    StateGas state_gas{
+        .left = result.state_gas_left,
+        .spilled = result.state_gas_spilled,
+    };
     if (m_rev >= EVMC_AMSTERDAM)
     {
         // The code deposit splits into an execution-gas and a state-gas component (EIP-8037).

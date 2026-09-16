@@ -666,9 +666,9 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     const auto state_gas_limit = message.state_gas;
     StateGas state_gas{.left = state_gas_limit};
     auto preparation_state_cost = int64_t{0};
-    // A top-level value transfer materializing a new state leaf pays NEW_ACCOUNT here, after
-    // authorizations and before the transfer. There is no opcode execution to charge it instead.
-    if (rev >= EVMC_AMSTERDAM && tx.to.has_value() && tx.value != 0)
+    // A top-level create or value transfer materializing a new state leaf pays NEW_ACCOUNT here,
+    // after authorizations and before execution. There is no calling opcode to charge it instead.
+    if (rev >= EVMC_AMSTERDAM && (!tx.to.has_value() || tx.value != 0))
     {
         const auto* const recipient = state.find(message.recipient);
         if (recipient == nullptr || recipient->is_empty())
