@@ -751,6 +751,8 @@ jobs:
 workflows:
   version: 2
   evmone:
+    # TEMPORARY: leaves the CodSpeed workflow the only one this branch runs. Drop this commit.
+    when: false
     jobs:
       - lint
       - clang-tidy
