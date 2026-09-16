@@ -121,6 +121,11 @@ struct evmc_message
     int64_t gas;
 
     /**
+     * The amount of state gas available (EIP-8037).
+     */
+    int64_t state_gas;
+
+    /**
      * The recipient of the message.
      *
      * This is the address of the account which storage/balance/nonce is going to be modified
@@ -189,13 +194,6 @@ struct evmc_message
      * The length of the code to be executed.
      */
     size_t code_size;
-
-    /**
-     * The amount of state gas available (EIP-8037).
-     *
-     * It draws from a reservoir allocated at transaction level.
-     */
-    int64_t state_gas;
 };
 
 /** The transaction and block data for execution. */

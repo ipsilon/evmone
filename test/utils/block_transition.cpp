@@ -51,7 +51,7 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
     int64_t block_gas_left = block.gas_limit;
     int64_t block_state_gas_left = block.gas_limit;
     int64_t cumulative_gas_used = 0;
-    // The two dimensions of the block-level max(sum_regular, sum_state) formula (EIP-8037).
+    // The two dimensions of the block-level max(sum_execution, sum_state) formula (EIP-8037).
     int64_t sum_execution_gas = 0;
     int64_t sum_state_gas = 0;
     auto blob_gas_left = blob_gas_limit;
