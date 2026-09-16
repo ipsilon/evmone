@@ -646,8 +646,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 
     const auto gas_used_b4_refund = tx.gas_limit - result.gas_left;
 
-    const auto max_refund_quotient = rev >= EVMC_LONDON ? 5 : 2;
-    const auto refund_limit = gas_used_b4_refund / max_refund_quotient;
+    const auto refund_limit = rev >= EVMC_LONDON ? gas_used_b4_refund / 5 : gas_used_b4_refund / 2;
     const auto refund = std::min(delegation_refund + result.gas_refund, refund_limit);
     auto gas_used = gas_used_b4_refund - refund;
     assert(gas_used > 0);
@@ -663,8 +662,14 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     state.touch(block.coinbase).balance += gas_used * priority_gas_price;
 
     // Cumulative gas used is unknown in this scope.
-    TransactionReceipt receipt{tx.type, result.status_code, gas_used, gas_refund, {},
-        host.take_logs(), {}, state.build_diff(rev)};
+    TransactionReceipt receipt{
+        .type = tx.type,
+        .status = result.status_code,
+        .gas_used = gas_used,
+        .gas_refund = gas_refund,
+        .logs = host.take_logs(),
+        .state_diff = state.build_diff(rev),
+    };
 
     // Cannot put it into constructor call because logs are std::moved from host instance.
     receipt.logs_bloom_filter = compute_bloom_filter(receipt.logs);
