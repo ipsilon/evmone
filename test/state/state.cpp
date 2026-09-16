@@ -514,7 +514,6 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
         // (EIP-8037 inclusion rule 2).
         if (std::min<int64_t>(MAX_TX_GAS_LIMIT, tx.gas_limit) > block_gas_left)
             return make_error_code(GAS_ALLOWANCE_EXCEEDED);
-        // REVIEW: Is this correct? why not check after the state-gas split?
         if (tx.gas_limit > block_state_gas_left)
             return make_error_code(GAS_ALLOWANCE_EXCEEDED);
     }
@@ -685,17 +684,6 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     // The post-refund, post-floor gas the sender pays for (== receipt gas_used).
     const auto sender_gas_cost = std::max(gas_used_b4_refund - refund, tx_props.min_gas_cost);
 
-    // The block's 2D gas components (EIP-7778): pre-Amsterdam the block tracks a single
-    // dimension, so all of the gas the sender paid for is execution gas.
-    auto block_execution_gas = sender_gas_cost;
-    int64_t block_state_gas = 0;
-    if (rev >= EVMC_AMSTERDAM)
-    {
-        // The intrinsic state gas is zero, so whatever `tx_state_gas` does not cover is the
-        // execution-gas component, floored so state-gas spending cannot discount it (EIP-7778).
-        block_state_gas = tx_state_gas;
-        block_execution_gas = std::max(gas_used_b4_refund - tx_state_gas, tx_props.min_gas_cost);
-    }
     sender_acc.balance += tx_max_cost - sender_gas_cost * effective_gas_price;
     state.touch(block.coinbase).balance += sender_gas_cost * priority_gas_price;
 
@@ -705,9 +693,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         .status = result.status_code,
         .gas_used = sender_gas_cost,
         .gas_refund =
-            std::max(gas_used_b4_refund, tx_props.min_gas_cost) - sender_gas_cost,
-        .block_execution_gas = block_execution_gas,
-        .block_state_gas = block_state_gas,
+            std::max(gas_used_b4_refund, tx_props.min_gas_cost + tx_state_gas) - sender_gas_cost,
+        .state_gas_used = tx_state_gas,
         .logs = host.take_logs(),
         .state_diff = state.build_diff(rev),
     };

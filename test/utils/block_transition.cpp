@@ -51,9 +51,6 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
     int64_t block_gas_left = block.gas_limit;
     int64_t block_state_gas_left = block.gas_limit;
     int64_t cumulative_gas_used = 0;
-    // The two dimensions of the block-level max(sum_execution, sum_state) formula (EIP-8037).
-    int64_t sum_execution_gas = 0;
-    int64_t sum_state_gas = 0;
     auto blob_gas_left = blob_gas_limit;
 
     for (size_t i = 0; i < txs.size(); ++i)
@@ -81,12 +78,12 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
             if (rev < EVMC_BYZANTIUM)
                 receipt.post_state = state::mpt_hash(block_state);
 
-            // Accumulate the 2D components for the block-level max(sum_execution, sum_state)
-            // formula, which pre-Amsterdam is the single gas dimension (EIP-8037).
-            sum_execution_gas += receipt.block_execution_gas;
-            sum_state_gas += receipt.block_state_gas;
-            block_gas_left -= receipt.block_execution_gas;
-            block_state_gas_left -= receipt.block_state_gas;
+            // The execution dimension is the block gas less the state one; transition() floors
+            // gas_refund above the state component to keep it at the EIP-7623 calldata floor.
+            const auto block_tx_gas =
+                (rev >= EVMC_AMSTERDAM) ? receipt.gas_used + receipt.gas_refund : receipt.gas_used;
+            block_gas_left -= block_tx_gas - receipt.state_gas_used;
+            block_state_gas_left -= receipt.state_gas_used;
             blob_gas_left -= static_cast<int64_t>(tx.blob_gas_used());
             receipts.emplace_back(std::move(receipt));
         }
@@ -118,8 +115,9 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
 
     const auto bloom = compute_bloom_filter(receipts);
 
-    // The block's 2D gas formula (EIP-8037).
-    const auto block_gas_used = std::max(sum_execution_gas, sum_state_gas);
+    // Both counters start at block.gas_limit, so this is max(execution used, state used):
+    // the block's gas used is its bottleneck dimension (EIP-8037).
+    const auto block_gas_used = block.gas_limit - std::min(block_gas_left, block_state_gas_left);
     return {std::move(receipts), std::move(rejected_txs), std::move(requests), requests_error,
         block_gas_used, bloom, blob_gas_left, std::move(block_state)};
 }

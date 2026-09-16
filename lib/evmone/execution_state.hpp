@@ -155,10 +155,9 @@ public:
         const advanced::AdvancedCodeAnalysis* advanced;
     } analysis{};
 
-    /// The frame's state-gas reservoir + spill; used is derived (EIP-8037).
+    /// The frame's state-gas counters (EIP-8037).
     ///
-    /// Kept in the cold tail: earlier placement pushes `status` and `host` out of the x86-64
-    /// disp8 window, costing 3 bytes on every `status` access in the dispatch loop.
+    /// Kept in the cold tail so `status` and `host` are accessed with shorted instructions.
     StateGas state_gas;
 
     /// Stack space allocation.
@@ -214,11 +213,9 @@ public:
 /// success, and the output is the memory range recorded in the state.
 inline evmc_result make_execution_result(ExecutionState& state, int64_t gas_left) noexcept
 {
-    // A rolled-back frame created no state, so its net state gas used is zero: the reservoir is
-    // restored to the frame's budget and the spilled portion returns to `gas_left`, kept on a
-    // revert and consumed by the halt's gas_left = 0 below (EIP-8037).
     if (state.rev >= EVMC_AMSTERDAM && state.status != EVMC_SUCCESS)
     {
+        // Unsuccessful frame doesn't commit any state changes, roll-back all state-gas costs.
         gas_left += state.state_gas.spilled;
         state.state_gas.left = state.msg->state_gas;
         state.state_gas.spilled = 0;
@@ -230,12 +227,9 @@ inline evmc_result make_execution_result(ExecutionState& state, int64_t gas_left
     const auto gas_refund = (state.status == EVMC_SUCCESS) ? state.gas_refund : 0;
 
     assert(state.output_size != 0 || state.output_offset == 0);
+    // TODO: Simplify result creation.
     auto result = evmc::make_result(state.status, gas_left, gas_refund,
         state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size);
-
-    // Return the leftover reservoir and spill; the caller derives the net used as
-    // `initial - state_gas_left + state_gas_spilled` (EIP-8037).
-    assert(state.state_gas.left >= 0);
     result.state_gas_left = state.state_gas.left;
     result.state_gas_spilled = state.state_gas.spilled;
     return result;

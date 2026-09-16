@@ -13,7 +13,6 @@ namespace evmone
 struct StateGas
 {
     /// Remaining state-gas reservoir.
-    /// TODO: Try changing type to uint32_t.
     int64_t left = 0;
 
     /// Consumed state-gas taken from `gas_left` (happens when `left` is empty).
