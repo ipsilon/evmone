@@ -145,6 +145,11 @@ std::optional<address> recover_sender(const Transaction& tx, bytes_view txbytes)
 {
     // The signing preimage is the transaction's encoding without the trailing (v, r, s).
     const auto typed = tx.type != Transaction::Type::legacy;
+
+    // The decoder bounds v, but a transaction built from JSON carries whatever v the input names.
+    if (typed ? tx.v > 1 : (tx.v != 27 && tx.v != 28 && tx.v < 35))
+        return std::nullopt;
+
     auto envelope = txbytes.substr(typed ? 1 : 0);  // Skip the EIP-2718 type byte.
     bytes_view payload;
     [[maybe_unused]] const auto is_list = rlp::take_list_payload(envelope, payload);
