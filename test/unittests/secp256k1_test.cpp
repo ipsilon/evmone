@@ -58,7 +58,7 @@ TEST(secp256k1, field_sqrt_invalid)
 
 TEST(secp256k1, scalar_inv)
 {
-    const evmone::crypto::ModArith n{Curve::ORDER};
+    using N = evmone::crypto::MontgomeryArith<Curve::ORDER>;
 
     for (const auto& t : {
              1_u256,
@@ -67,10 +67,10 @@ TEST(secp256k1, scalar_inv)
          })
     {
         ASSERT_LT(t, Curve::ORDER);
-        const auto a = n.to_mont(t);
-        const auto a_inv = n.inv(a);
-        const auto p = n.mul(a, a_inv);
-        EXPECT_EQ(n.from_mont(p), 1) << hex(t);
+        const auto a = N::to_internal(t);
+        const auto a_inv = N::inv(a);
+        const auto p = N::mul(a, a_inv);
+        EXPECT_EQ(N::from_internal(p), 1) << hex(t);
     }
 }
 
