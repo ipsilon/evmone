@@ -104,7 +104,7 @@ void state_transition::TearDown()
         }
         if (expect.state_gas.has_value())
         {
-            EXPECT_EQ(receipt.block_state_gas, *expect.state_gas);
+            EXPECT_EQ(receipt.state_gas_used, *expect.state_gas);
         }
 
         const auto& diff = receipt.state_diff;

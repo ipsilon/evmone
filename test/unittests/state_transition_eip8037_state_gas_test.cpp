@@ -36,9 +36,15 @@ TEST_F(state_transition, eip8037_create_tx_collision_excess_reservoir_refunded)
 
 namespace
 {
-/// Pinned: the intrinsic plus the CALL's execution gas, the NEW_ACCOUNT state charge having been
-/// refilled on the light failure.
-constexpr int64_t CALL_LIGHTFAIL_EXECUTION_GAS = 30'321;
+constexpr int64_t CALL_VALUE_COST = 9000;  // Not exported by the interpreter.
+
+/// The intrinsic plus the CALL's execution gas: its seven arguments, the warm call, the
+/// cold-account surcharge and the value transfer, less the stipend a light failure never spends.
+/// The NEW_ACCOUNT state charge is refilled, so it does not appear here.
+constexpr int64_t CALL_LIGHTFAIL_EXECUTION_GAS =
+    21'000 + 7 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1] +
+    instr::gas_costs[EVMC_AMSTERDAM][OP_CALL] + instr::additional_cold_account_access_cost +
+    CALL_VALUE_COST - CALL_STIPEND;
 }  // namespace
 
 TEST_F(state_transition, eip8037_call_value_lightfail_new_account_charge_refilled)
@@ -129,13 +135,33 @@ TEST_F(state_transition, eip8037_sstore_slot_cleared_in_a_child_frame)
     expect.post[CLEARER].exists = true;
 }
 
+TEST_F(state_transition, eip8037_reverted_child_keeps_the_slot_allocation_charged)
+{
+    // A child clearing a slot its caller allocated refills more state-gas than it was given,
+    // leaving its reservoir above its own budget. Reverting must restore that budget rather than
+    // credit the refill, so the allocation stays charged.
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    constexpr auto CLEARER = 0xdead_address;
+    pre[CLEARER] = {.code = sstore(1, 0) + revert(0, 0)};
+    pre[To] = {.code = sstore(1, 1) + delegatecall(CLEARER).gas(0xffff) + OP_STOP};
+
+    // Intrinsic, twelve PUSHes, the cold allocation and its state charge, the cold DELEGATECALL,
+    // the reverted warm clear. The clear's refund dies with the frame.
+    expect.gas_used = 21'000 + 36 + 5000 + STORAGE_SET_STATE_GAS + 2600 + 100;
+    expect.gas_refund = 0;
+    expect.state_gas = STORAGE_SET_STATE_GAS;
+    expect.post[To].exists = true;
+    expect.post[To].storage[0x01_bytes32] = 0x01_bytes32;  // The child's clear is rolled back.
+    expect.post[CLEARER].exists = true;
+}
+
 namespace
 {
 /// The code deposit of a maximum-size contract, split into its two components (EIP-8037).
-constexpr int64_t DEPOSIT_CODE_SIZE = MAX_CODE_SIZE_AMSTERDAM;
-constexpr auto DEPOSIT_CODE_WORDS = DEPOSIT_CODE_SIZE / 32;
+constexpr auto DEPOSIT_CODE_WORDS = MAX_CODE_SIZE_AMSTERDAM / 32;
 constexpr auto DEPOSIT_EXECUTION = 6 * DEPOSIT_CODE_WORDS;
-constexpr auto DEPOSIT_STATE = DEPOSIT_CODE_SIZE * COST_PER_STATE_BYTE;
+constexpr int64_t DEPOSIT_STATE = int64_t{MAX_CODE_SIZE_AMSTERDAM} * COST_PER_STATE_BYTE;
 
 /// Gas limit whose excess over the cap covers the deposit's state component outright.
 constexpr auto DEPOSIT_TX_GAS = state::MAX_TX_GAS_LIMIT + DEPOSIT_STATE + 1'000'000;
@@ -143,6 +169,8 @@ constexpr auto DEPOSIT_TX_GAS = state::MAX_TX_GAS_LIMIT + DEPOSIT_STATE + 1'000'
 /// Cap leaving the initcode frame mid-window: enough for CREATE and the memory the returned code
 /// needs, plus half the execution component. The CREATE price is the only term a reprice has
 /// moved, so it comes from the cost table rather than being pinned.
+/// DEPOSIT_MEMORY mirrors the expansion formula in check_memory(); a change there shifts the
+/// window rather than failing here.
 constexpr auto DEPOSIT_MEMORY =
     3 * DEPOSIT_CODE_WORDS + DEPOSIT_CODE_WORDS * DEPOSIT_CODE_WORDS / 512;
 constexpr auto DEPOSIT_GAS_CAP =
@@ -150,10 +178,10 @@ constexpr auto DEPOSIT_GAS_CAP =
 
 constexpr auto DEPOSIT_CREATOR = 0xbbbb_address;
 
-/// Code deploying DEPOSIT_CODE_SIZE zero bytes through a nested CREATE.
+/// Code deploying MAX_CODE_SIZE_AMSTERDAM zero bytes through a nested CREATE.
 bytecode deposit_creator_code()
 {
-    const auto initcode = ret(0, DEPOSIT_CODE_SIZE);
+    const auto initcode = ret(0, MAX_CODE_SIZE_AMSTERDAM);
     return mstore(0, push(initcode)) + create().input(32 - initcode.size(), initcode.size());
 }
 }  // namespace
@@ -193,5 +221,5 @@ TEST_F(state_transition, eip8037_code_deposit_execution_gas_boundary)
     expect.post[To].exists = true;
     expect.post[DEPOSIT_CREATOR].nonce = pre[DEPOSIT_CREATOR].nonce + 1;
     expect.post[compute_create_address(DEPOSIT_CREATOR, pre[DEPOSIT_CREATOR].nonce)].code =
-        bytes(DEPOSIT_CODE_SIZE, 0x00);
+        bytes(MAX_CODE_SIZE_AMSTERDAM, 0x00);
 }

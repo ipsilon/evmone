@@ -139,16 +139,11 @@ struct TransactionReceipt
     /// Effectively, the difference between "block" and "user" gas.
     int64_t gas_refund = 0;
 
+    /// The amount of state-gas used by this transaction (since EIP-8037).
+    int64_t state_gas_used = 0;
+
     /// Amount of gas used by this and previous transactions in the block.
     int64_t cumulative_gas_used = 0;
-
-    // REVIEW: missing.
-    /// 2D per-tx block-gas components. The runner aggregates as
-    /// `block.gas_used = max(sum_execution, sum_state)` (EIP-7778). Pre-Amsterdam the block has
-    /// a single dimension: the execution-gas component is `gas_used` and the state one is 0
-    /// (EIP-8037).
-    int64_t block_execution_gas = 0;  ///< Execution gas component.
-    int64_t block_state_gas = 0;      ///< State gas component.
 
     std::vector<Log> logs;
     BloomFilter logs_bloom_filter;
