@@ -668,14 +668,20 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         message.state_gas - result.state_gas_left + result.state_gas_spilled;
     assert(state_gas_used >= 0);
 
-    // Gas consumed = gas_limit - execution_unspent - reservoir_unspent, pre-refund and pre-floor.
-    // Kept immutable: the receipt's gas_refund is derived from it (EIP-8037).
     const auto gas_used_b4_refund = tx.gas_limit - result.gas_left - result.state_gas_left;
 
     const auto refund_limit = rev >= EVMC_LONDON ? gas_used_b4_refund / 5 : gas_used_b4_refund / 2;
     const auto refund = std::min(delegation_refund + result.gas_refund, refund_limit);
-    assert(gas_used_b4_refund > refund);
-    const auto gas_used = std::max(gas_used_b4_refund - refund, tx_props.min_gas_cost);
+    auto gas_used = gas_used_b4_refund - refund;
+    assert(gas_used > 0);
+
+    // The gas used by the transaction must be at least the min_gas_cost (EIP-7623).
+    gas_used = std::max(gas_used, tx_props.min_gas_cost);
+
+    // For block gas accounting, compute the gas refund capped by the min gas cost (EIP-7778).
+    const auto block_gas_used =
+        std::max(gas_used_b4_refund, tx_props.min_gas_cost + state_gas_used);
+    const auto gas_refund = block_gas_used - gas_used;
 
     sender_acc.balance += tx_max_cost - gas_used * effective_gas_price;
     state.touch(block.coinbase).balance += gas_used * priority_gas_price;
@@ -685,8 +691,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         .type = tx.type,
         .status = result.status_code,
         .gas_used = gas_used,
-        .gas_refund =
-            std::max(gas_used_b4_refund, tx_props.min_gas_cost + state_gas_used) - gas_used,
+        .gas_refund = gas_refund,
         .state_gas_used = state_gas_used,
         .logs = host.take_logs(),
         .state_diff = state.build_diff(rev),
