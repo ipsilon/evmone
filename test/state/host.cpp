@@ -425,10 +425,8 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
 
     if (result.status_code != EVMC_SUCCESS)
     {
-        // A rolled-back frame created no state, so it carries none out. Enforced here for every
-        // failure path, including the ones this Host builds itself (EIP-8037).
+        // Patch returned state-gas for early exits (not reaching EVM). TODO: Refactor.
         result.state_gas_left = msg.state_gas;
-        result.state_gas_spilled = 0;
 
         // The 0x03 (RIPEMD-160) touch quirk: a touch on this address is
         // never reverted. It only matters when the account is empty, so gate it by rev range.
