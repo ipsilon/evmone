@@ -42,8 +42,7 @@ TEST_F(state_transition, eip8037_create_tx_revert_refunds_spilled_new_account_ch
     const auto create_address = compute_create_address(Sender, pre[Sender].nonce);
     expect.status = EVMC_REVERT;
     // Intrinsic create and initcode costs plus two PUSH1 instructions. NEW_ACCOUNT is refunded.
-    expect.gas_used =
-        21'000 + 32'000 + 56 + 2 + 2 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1];
+    expect.gas_used = 21'000 + 32'000 + 56 + 2 + 2 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1];
     expect.gas_refund = 0;
     expect.state_gas = 0;
     expect.post[create_address].exists = false;
@@ -77,6 +76,16 @@ TEST_F(state_transition, eip8037_create_tx_charges_new_account_and_code_deposit)
 
     expect.state_gas = NEW_ACCOUNT_STATE_GAS + COST_PER_STATE_BYTE;
     expect.post[compute_create_address(Sender, pre[Sender].nonce)].code = bytes{0x00};
+}
+
+TEST_F(state_transition, eip8037_create_tx_with_value_pays_new_account_once)
+{
+    rev = EVMC_AMSTERDAM;
+    tx.value = 1;
+
+    expect.gas_used = 53'000 + NEW_ACCOUNT_STATE_GAS;
+    expect.state_gas = NEW_ACCOUNT_STATE_GAS;
+    expect.post[compute_create_address(Sender, pre[Sender].nonce)] = {.nonce = 1, .balance = 1};
 }
 
 TEST_F(state_transition, eip8037_create_tx_out_of_gas_on_new_account_charge)
@@ -164,6 +173,70 @@ TEST_F(state_transition, eip8037_value_to_zero_balance_precompile_pays_new_accou
     expect.post[*tx.to].balance = 1;
     expect.gas_used = 21'000 + IDENTITY_BASE_COST + NEW_ACCOUNT_STATE_GAS;
     expect.state_gas = NEW_ACCOUNT_STATE_GAS;
+}
+
+TEST_F(state_transition, eip8037_value_to_new_account_pays_new_account)
+{
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;  // Absent from pre.
+    tx.value = 1;
+    tx.gas_limit = 21'000 + NEW_ACCOUNT_STATE_GAS;  // Exact successful boundary.
+
+    expect.post[To].balance = 1;
+    expect.gas_used = tx.gas_limit;
+    expect.state_gas = NEW_ACCOUNT_STATE_GAS;
+}
+
+TEST_F(state_transition, eip8037_value_to_existing_empty_account_pays_new_account)
+{
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    tx.value = 1;
+    pre[To] = {};
+
+    expect.post[To].balance = 1;
+    expect.gas_used = 21'000 + NEW_ACCOUNT_STATE_GAS;
+    expect.state_gas = NEW_ACCOUNT_STATE_GAS;
+}
+
+TEST_F(state_transition, eip8037_value_to_new_account_uses_reservoir_then_execution_gas)
+{
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;  // Absent from pre.
+    tx.value = 1;
+    tx.gas_limit = state::MAX_TX_GAS_LIMIT + NEW_ACCOUNT_STATE_GAS / 2;
+    block.gas_limit = tx.gas_limit;
+    pre[Sender].balance = intx::uint256{tx.gas_limit} * tx.max_gas_price + tx.value + 1;
+
+    expect.post[To].balance = 1;
+    expect.gas_used = 21'000 + NEW_ACCOUNT_STATE_GAS;
+    expect.state_gas = NEW_ACCOUNT_STATE_GAS;
+}
+
+TEST_F(state_transition, eip8037_value_to_new_account_out_of_gas)
+{
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;  // Absent from pre.
+    tx.value = 1;
+    tx.gas_limit = 21'000 + NEW_ACCOUNT_STATE_GAS - 1;
+
+    expect.status = EVMC_OUT_OF_GAS;
+    expect.gas_used = tx.gas_limit;
+    expect.state_gas = 0;
+    expect.post[To].exists = false;
+}
+
+TEST_F(state_transition, eip8037_value_to_new_precompile_failure_refunds_new_account)
+{
+    rev = EVMC_AMSTERDAM;
+    tx.to = 0x04_address;  // Identity, absent from pre.
+    tx.value = 1;
+    tx.gas_limit = 21'000 + NEW_ACCOUNT_STATE_GAS + 14;  // Identity requires 15 gas.
+
+    expect.status = EVMC_OUT_OF_GAS;
+    expect.gas_used = tx.gas_limit;
+    expect.state_gas = 0;
+    expect.post[*tx.to].exists = false;
 }
 
 TEST_F(state_transition, eip8037_sstore_slot_allocated_and_cleared_in_one_tx)

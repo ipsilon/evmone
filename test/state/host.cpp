@@ -18,14 +18,6 @@ namespace
 {
     return account != nullptr && !account->is_empty();
 }
-
-/// Sets the state-gas fields on a returned Result. `used` is not stored; the caller derives it
-/// as `initial - left + spilled` (EIP-8037).
-void set_state_gas(evmc::Result& r, int64_t left, int64_t spilled) noexcept
-{
-    r.state_gas_left = left;
-    r.state_gas_spilled = spilled;
-}
 }  // namespace
 
 bool Host::account_exists(const address& addr) const noexcept
@@ -314,29 +306,6 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     if (msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2)
         return create(msg);
 
-    // The frame's execution gas: the depth-0 state charge below can spill into it, so it is not
-    // `msg.gas` for the rest of the function.
-    auto gas = msg.gas;
-
-    // A top-level value transfer pays NEW_ACCOUNT for the recipient it materializes, evaluated
-    // against the pre-transfer state. Charged here because such a transfer runs no code
-    // (EIP-8037).
-    // TODO: This belongs in transition(), beside the EIP-7702 authorizations it follows. Moving
-    // it drops the `msg.depth == 0` special cases here and the gas plumbed around them.
-    StateGas top_level_sg{.left = msg.state_gas};
-    if (m_rev >= EVMC_AMSTERDAM && msg.depth == 0)
-    {
-        const auto recipient_alive = is_alive(m_state.find(msg.recipient));
-        if (!evmc::is_zero(msg.value) && !recipient_alive)
-        {
-            // A new account is materialized by the value transfer: pay NEW_ACCOUNT state gas.
-            // This includes a previously-zero-balance precompile (EIP-161): funding it
-            // creates a state account just like any other recipient.
-            if (!top_level_sg.charge(gas, NEW_ACCOUNT_STATE_GAS))
-                return evmc::Result{EVMC_OUT_OF_GAS, 0};
-        }
-    }
-
     if (msg.kind == EVMC_CALL)
     {
         auto* recipient_acc = m_state.find(msg.recipient);
@@ -373,34 +342,16 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
 
     // Calls to precompile address via EIP-7702 delegation execute empty code instead of precompile.
     if ((msg.flags & EVMC_DELEGATED) == 0 && is_precompile(m_rev, msg.code_address))
-    {
-        auto precompile_msg = msg;
-        precompile_msg.gas = gas;
-        auto r = call_precompile(m_rev, precompile_msg);
-        // A precompile consumes no execution state gas, but funding a zero-balance one paid
-        // NEW_ACCOUNT above: on success the account persists so the charge is committed, on
-        // failure nothing persists and Host::call refills it (EIP-8037, EIP-2780).
-        if (r.status_code == EVMC_SUCCESS)
-            set_state_gas(r, top_level_sg.left, top_level_sg.spilled);
-        return r;
-    }
+        return call_precompile(m_rev, msg);
 
     // TODO: get_code() performs the account lookup. Add a way to get an account with code?
     const auto code = m_state.get_code(msg.code_address);
     if (code.empty())
     {
-        // An empty-code call consumes no execution state gas, but the value transfer above may
-        // have paid NEW_ACCOUNT: commit those pools, a no-op when nothing was charged.
-        // Skip the trivial execution.
-        return evmc::Result{
-            EVMC_SUCCESS, gas, 0, {.left = top_level_sg.left, .spilled = top_level_sg.spilled}};
+        // Skip trivial execution.
+        return evmc::Result{EVMC_SUCCESS, msg.gas, 0, {.left = msg.state_gas}};
     }
 
-    // The depth-0 charge cannot reach here: it implies a not-alive recipient, which has empty
-    // code and returned above.
-    // TODO: The premise holds only while `msg.recipient` and `msg.code_address` agree, which
-    // EVMC_DELEGATED breaks. Moving the charge to transition() (TODO above) removes the coupling.
-    assert(gas == msg.gas && top_level_sg.left == msg.state_gas && top_level_sg.spilled == 0);
     return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
 }
 
@@ -426,8 +377,7 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
         // from execution gas; an exceptional halt consumes it with the rest of the frame's gas.
         if (result.status_code == EVMC_REVERT)
             result.gas_left += result.state_gas_spilled;
-        // msg.state_gas is the frame's baseline. Top-level preparation charges which survive a
-        // failed frame must therefore be applied before this value is put in the message.
+        // msg.state_gas is the frame's baseline supplied by the caller.
         result.state_gas_left = msg.state_gas;
         result.state_gas_spilled = 0;
 

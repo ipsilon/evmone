@@ -9,6 +9,7 @@
 #include "state_view.hpp"
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
+#include <evmone/state_gas.hpp>
 #include <algorithm>
 #include <ranges>
 
@@ -662,10 +663,41 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         }
     }
 
-    const auto result = host.call(message);
+    const auto state_gas_limit = message.state_gas;
+    StateGas state_gas{.left = state_gas_limit};
+    auto preparation_state_cost = int64_t{0};
+    // A top-level value transfer materializing a new state leaf pays NEW_ACCOUNT here, after
+    // authorizations and before the transfer. There is no opcode execution to charge it instead.
+    if (rev >= EVMC_AMSTERDAM && tx.to.has_value() && tx.value != 0)
+    {
+        const auto* const recipient = state.find(message.recipient);
+        if (recipient == nullptr || recipient->is_empty())
+            preparation_state_cost = NEW_ACCOUNT_STATE_GAS;
+    }
+    const auto charge_succeeded = state_gas.charge(message.gas, preparation_state_cost);
+    message.state_gas = state_gas.left;
 
-    const auto state_gas_used =
-        message.state_gas - result.state_gas_left + result.state_gas_spilled;
+    // A failed runtime preparation charge is an included out-of-gas transaction (EIP-2780).
+    // TODO(EIP-2780): Roll back authorization changes when this charge fails.
+    auto result = evmc::Result{EVMC_OUT_OF_GAS, 0, 0, {.left = state_gas_limit}};
+    if (charge_succeeded)
+    {
+        result = host.call(message);
+        if (result.status_code == EVMC_SUCCESS)
+        {
+            result.state_gas_spilled += state_gas.spilled;
+        }
+        else
+        {
+            assert(result.state_gas_left == message.state_gas);
+            assert(result.state_gas_spilled == 0);
+            if (result.status_code == EVMC_REVERT)
+                result.gas_left += state_gas.spilled;
+            result.state_gas_left = state_gas_limit;
+        }
+    }
+
+    const auto state_gas_used = state_gas_limit - result.state_gas_left + result.state_gas_spilled;
     assert(state_gas_used >= 0);
 
     const auto gas_used_b4_refund = tx.gas_limit - result.gas_left - result.state_gas_left;
