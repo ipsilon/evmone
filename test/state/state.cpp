@@ -664,23 +664,17 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 
     const auto result = host.call(message);
 
-    // Net state gas consumed by the execution, derived from the reservoir the top frame was
-    // handed: initial - left + spilled. Zero on a top-level failure, the frame having refilled
-    // itself. Never negative: a refill needs a matching allocation, and the top frame has no
-    // ancestor to have made one (EIP-8037).
-    const auto tx_state_gas = message.state_gas - result.state_gas_left + result.state_gas_spilled;
-    assert(tx_state_gas >= 0);
+    const auto state_gas_used =
+        message.state_gas - result.state_gas_left + result.state_gas_spilled;
+    assert(state_gas_used >= 0);
 
     // Gas consumed = gas_limit - execution_unspent - reservoir_unspent, pre-refund and pre-floor.
     // Kept immutable: the receipt's gas_refund is derived from it (EIP-8037).
     const auto gas_used_b4_refund = tx.gas_limit - result.gas_left - result.state_gas_left;
 
-    // The refund is capped at 1/5 of the gas consumed (1/2 before EIP-3529). The sender pays the
-    // rest, floored at the EIP-7623 calldata floor (EELS: max(before_refund - refund, floor)).
     const auto refund_limit = rev >= EVMC_LONDON ? gas_used_b4_refund / 5 : gas_used_b4_refund / 2;
     const auto refund = std::min(delegation_refund + result.gas_refund, refund_limit);
-    assert(gas_used_b4_refund - refund > 0);
-    // The post-refund, post-floor gas the sender pays for (== receipt gas_used).
+    assert(gas_used_b4_refund > refund);
     const auto gas_used = std::max(gas_used_b4_refund - refund, tx_props.min_gas_cost);
 
     sender_acc.balance += tx_max_cost - gas_used * effective_gas_price;
@@ -692,8 +686,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         .status = result.status_code,
         .gas_used = gas_used,
         .gas_refund =
-            std::max(gas_used_b4_refund, tx_props.min_gas_cost + tx_state_gas) - gas_used,
-        .state_gas_used = tx_state_gas,
+            std::max(gas_used_b4_refund, tx_props.min_gas_cost + state_gas_used) - gas_used,
+        .state_gas_used = state_gas_used,
         .logs = host.take_logs(),
         .state_diff = state.build_diff(rev),
     };
