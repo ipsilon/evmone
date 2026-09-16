@@ -510,9 +510,8 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     }
     else
     {
-        // A per-dimension worst-case check on bare `tx.gas`, with no intrinsic subtraction
-        // (EIP-8037 inclusion rule 2).
-        if (std::min<int64_t>(MAX_TX_GAS_LIMIT, tx.gas_limit) > block_gas_left)
+        // Check limits in both dimensions, any failure invalidates the transaction.
+        if (std::min(tx.gas_limit, int64_t{MAX_TX_GAS_LIMIT}) > block_gas_left)
             return make_error_code(GAS_ALLOWANCE_EXCEEDED);
         if (tx.gas_limit > block_state_gas_left)
             return make_error_code(GAS_ALLOWANCE_EXCEEDED);
