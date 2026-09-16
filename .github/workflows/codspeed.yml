@@ -19,16 +19,45 @@ env:
   # The newest GCC on the ubuntu-24.04 image, which otherwise defaults to GCC 13.
   CC: gcc-14
   CXX: g++-14
+  # A benchmark is identified by the name of the fixture it ran, so a release which renames
+  # the fixtures starts the series over. Bump this deliberately.
+  BENCHMARK_FIXTURES_RELEASE: benchmark@v0.0.7
 
 jobs:
   benchmark:
-    name: Benchmark
+    name: Benchmark ${{ matrix.suite }}
     # CodSpeed ships its instrumented Valgrind for Ubuntu 22.04, Ubuntu 24.04 and Debian 12 only,
     # and bails out with "Unsupported system" anywhere else, so the image cannot be `latest`.
     runs-on: ubuntu-24.04
     permissions:
       contents: read # required for actions/checkout
       id-token: write # required for OIDC authentication with CodSpeed
+    strategy:
+      fail-fast: false
+      # CodSpeed aggregates the jobs of one workflow run into a single report, but rejects an
+      # upload of more than 1000 benchmarks, which the suites together exceed. One job each
+      # keeps every upload under the limit and runs them at once; each benchmark belongs to
+      # exactly one suite, which is what lets the results be aggregated.
+      # A report is rejected above 1000 benchmarks however many jobs it was uploaded from, so
+      # the two suites which sweep what something else already covers give up their sweep.
+      # Splitting a suite further costs nothing but a job, and shortens the longest of them.
+      matrix:
+        include:
+          - suite: evmone
+          - suite: compute/instruction
+            # The heaviest directories are jobs of their own below, and what is left over is
+            # this one, so a directory added upstream is measured rather than silently missed.
+            # log.json sweeps the same opcodes as log_benchmark.json, which only varies sizes.
+            ignore: >-
+              --ignore log/log_benchmark.json
+              --ignore call_context
+              --ignore account_query
+          - suite: compute/instruction/call_context
+          - suite: compute/instruction/account_query
+          - suite: compute/precompile
+            # The precompiles benchmark above sweeps the modexp parameters already.
+            ignore: --ignore modexp/modexp.json
+          - suite: compute/scenario
     steps:
       - uses: actions/checkout@v5
         with:
@@ -53,10 +82,24 @@ jobs:
           -DCODSPEED_MODE=simulation
 
       - name: Build
-        run: cmake --build $BUILD_DIR --target evmone-bench evmone-precompiles-bench
+        run: cmake --build $BUILD_DIR --target evmone-bench evmone-precompiles-bench evmone-cli
 
-      # CodSpeed aggregates the results of all the runs of a single workflow run.
+      # Only the suite's own fixtures are unpacked. The engine variants of the same fixtures
+      # are a format this tool does not run, and the whole archive outweighs the runner's disk.
+      - name: Download the benchmark fixtures
+        if: matrix.suite != 'evmone'
+        run: |
+          # The "@" of the release tag is percent-encoded in the download URL.
+          curl -L --fail --retry 3 --output-dir /tmp -O \
+            https://github.com/ethereum/execution-spec-tests/releases/download/${BENCHMARK_FIXTURES_RELEASE/@/%40}/fixtures_benchmark.tar.gz
+          mkdir -p ~/benchmark-fixtures
+          tar -xzf /tmp/fixtures_benchmark.tar.gz -C ~/benchmark-fixtures $FIXTURES
+          rm /tmp/fixtures_benchmark.tar.gz
+        env:
+          FIXTURES: fixtures/blockchain_tests/benchmark/${{ matrix.suite }}
+
       - name: Benchmark the baseline VM
+        if: matrix.suite == 'evmone'
         uses: CodSpeedHQ/action@v5
         with:
           mode: simulation
@@ -65,7 +108,19 @@ jobs:
       # Both the mainnet inputs and the modexp parameter sweep: the mainnet moduli are all odd
       # and 256-bit, so they cover a single code path and hide the work done on the others.
       - name: Benchmark the precompiles
+        if: matrix.suite == 'evmone'
         uses: CodSpeedHQ/action@v5
         with:
           mode: simulation
           run: ${{ env.BUILD_DIR }}/bin/evmone-precompiles-bench
+
+      # The worst-case blocks of the execution spec tests, run as the tests they are: each
+      # checks its post state, and is measured on the way. Every benchmark is filled for seven
+      # block sizes and the smallest is taken, which covers all of them in a fraction of the
+      # time the larger ones need under the simulator.
+      - name: Benchmark the execution spec tests
+        if: matrix.suite != 'evmone'
+        uses: CodSpeedHQ/action@v5
+        with:
+          mode: simulation
+          run: ${{ env.BUILD_DIR }}/bin/evmone test ~/benchmark-fixtures/fixtures/blockchain_tests/benchmark/${{ matrix.suite }} -k benchmark-gas-value_1M ${{ matrix.ignore }}
