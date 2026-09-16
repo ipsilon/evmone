@@ -129,10 +129,10 @@ TEST(state_tx, validate_blob_tx)
     EXPECT_EQ(
         expect_error(blob_gas_limit - 1), make_error_code(ErrorCode::BLOB_GAS_LIMIT_EXCEEDED));
 
-    EXPECT_EQ(std::get<TransactionProperties>(validate_transaction(state, block, tx, EVMC_CANCUN,
-                                                  block.gas_limit, 0, blob_gas_limit))
-                  .evm_gas,
-        39000);
+    const auto res =
+        validate_transaction(state, block, tx, EVMC_CANCUN, block.gas_limit, 0, blob_gas_limit);
+    const auto& tx_props = std::get<TransactionProperties>(res);
+    EXPECT_EQ(tx_props.execution_gas_limit, 39000);
 
     tx.blob_hashes[0] = 0x0200000000000000000000000000000000000000000000000000000000000001_bytes32;
     EXPECT_EQ(expect_error(blob_gas_limit), make_error_code(ErrorCode::INVALID_BLOB_HASH_VERSION));
@@ -191,10 +191,10 @@ TEST(state_tx, validate_tx_data_cost)
         return tx.gas_limit - (21000 + 3 * nonzero_cost + 2 * zero_cost);
     };
 
-    EXPECT_EQ(get_props(EVMC_PETERSBURG).evm_gas, from_data_cost(68, 4));
-    EXPECT_EQ(get_props(EVMC_ISTANBUL).evm_gas, from_data_cost(16, 4));
-    EXPECT_EQ(get_props(EVMC_CANCUN).evm_gas, from_data_cost(16, 4));
-    EXPECT_EQ(get_props(EVMC_PRAGUE).evm_gas, from_data_cost(16, 4));
+    EXPECT_EQ(get_props(EVMC_PETERSBURG).execution_gas_limit, from_data_cost(68, 4));
+    EXPECT_EQ(get_props(EVMC_ISTANBUL).execution_gas_limit, from_data_cost(16, 4));
+    EXPECT_EQ(get_props(EVMC_CANCUN).execution_gas_limit, from_data_cost(16, 4));
+    EXPECT_EQ(get_props(EVMC_PRAGUE).execution_gas_limit, from_data_cost(16, 4));
 
     EXPECT_EQ(get_props(EVMC_PETERSBURG).min_gas_cost, 0);
     EXPECT_EQ(get_props(EVMC_ISTANBUL).min_gas_cost, 0);

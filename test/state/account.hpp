@@ -97,5 +97,4 @@ struct Account
         return nonce == 0 && balance == 0 && code_hash == EMPTY_CODE_HASH;
     }
 };
-
 }  // namespace evmone::state
