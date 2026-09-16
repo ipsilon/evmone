@@ -15,6 +15,27 @@ TEST(evmone, info)
     EXPECT_TRUE(vm.is_abi_compatible());
 }
 
+TEST(evmc, result_with_state_gas)
+{
+    const auto result = evmc::Result{EVMC_SUCCESS, 1, 2, {.left = 3, .spilled = 4}};
+    EXPECT_EQ(result.status_code, EVMC_SUCCESS);
+    EXPECT_EQ(result.gas_left, 1);
+    EXPECT_EQ(result.gas_refund, 2);
+    EXPECT_EQ(result.state_gas_left, 3);
+    EXPECT_EQ(result.state_gas_spilled, 4);
+    EXPECT_EQ(result.output_data, nullptr);
+    EXPECT_EQ(result.output_size, 0);
+
+    const auto default_result = evmc::Result{};
+    EXPECT_EQ(default_result.state_gas_left, 0);
+    EXPECT_EQ(default_result.state_gas_spilled, 0);
+
+    const uint8_t output[] = {0x01};
+    const auto output_result = evmc::Result{EVMC_REVERT, 1, 0, output, std::size(output)};
+    EXPECT_EQ(output_result.state_gas_left, 0);
+    EXPECT_EQ(output_result.state_gas_spilled, 0);
+}
+
 TEST(evmone, set_option_invalid)
 {
     auto vm = evmc_create_evmone();

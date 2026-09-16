@@ -421,11 +421,18 @@ struct evmc_result
 
     /**
      * The amount of state gas left after execution (EIP-8037).
+     *
+     * If evmc_result::status_code is a positive failure code, this MUST equal
+     * ::evmc_message::state_gas supplied to the execution.
      */
     int64_t state_gas_left;
 
     /**
      * The portion of consumed state gas taken from gas_left (EIP-8037).
+     *
+     * If evmc_result::status_code is a positive failure code, this MUST be 0.
+     * State gas spilled during a failed execution is not committed: for ::EVMC_REVERT it MUST
+     * be returned to evmc_result::gas_left; other failures consume it with the rest of the gas.
      */
     int64_t state_gas_spilled;
 

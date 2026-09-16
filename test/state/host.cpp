@@ -305,9 +305,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         new_acc->code_changed = true;
     }
 
-    auto r = evmc::Result{result.status_code, gas_left, result.gas_refund};
-    set_state_gas(r, state_gas.left, state_gas.spilled);
-    return r;
+    return evmc::Result{result.status_code, gas_left, result.gas_refund,
+        {.left = state_gas.left, .spilled = state_gas.spilled}};
 }
 
 evmc::Result Host::execute_message(const evmc_message& msg) noexcept
@@ -390,11 +389,11 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     const auto code = m_state.get_code(msg.code_address);
     if (code.empty())
     {
-        auto r = evmc::Result{EVMC_SUCCESS, gas};  // Skip trivial execution.
         // An empty-code call consumes no execution state gas, but the value transfer above may
         // have paid NEW_ACCOUNT: commit those pools, a no-op when nothing was charged.
-        set_state_gas(r, top_level_sg.left, top_level_sg.spilled);
-        return r;
+        // Skip the trivial execution.
+        return evmc::Result{
+            EVMC_SUCCESS, gas, 0, {.left = top_level_sg.left, .spilled = top_level_sg.spilled}};
     }
 
     // The depth-0 charge cannot reach here: it implies a not-alive recipient, which has empty

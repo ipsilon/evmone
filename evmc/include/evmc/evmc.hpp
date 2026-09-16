@@ -328,6 +328,13 @@ constexpr auto make_result = evmc_make_result;
 class Result : private evmc_result
 {
 public:
+    /// State-gas fields of an execution result.
+    struct StateGas
+    {
+        int64_t left = 0;
+        int64_t spilled = 0;
+    };
+
     using evmc_result::gas_left;
     using evmc_result::gas_refund;
     using evmc_result::output_data;
@@ -346,6 +353,8 @@ public:
     /// @param _gas_refund   The amount of refunded gas.
     /// @param _output_data  The pointer to the output.
     /// @param _output_size  The output size.
+    ///
+    /// The state-gas fields are initialized to 0.
     explicit Result(evmc_status_code _status_code,
                     int64_t _gas_left,
                     int64_t _gas_refund,
@@ -364,6 +373,22 @@ public:
                     int64_t _gas_refund = 0) noexcept
       : evmc_result{make_result(_status_code, _gas_left, _gas_refund, nullptr, 0)}
     {}
+
+    /// Creates the result without output.
+    ///
+    /// @param _status_code  The status code.
+    /// @param _gas_left     The amount of gas left.
+    /// @param _gas_refund   The amount of refunded gas.
+    /// @param _state_gas    The state-gas fields.
+    explicit Result(evmc_status_code _status_code,
+                    int64_t _gas_left,
+                    int64_t _gas_refund,
+                    StateGas _state_gas) noexcept
+      : Result{_status_code, _gas_left, _gas_refund}
+    {
+        state_gas_left = _state_gas.left;
+        state_gas_spilled = _state_gas.spilled;
+    }
 
     /// Converting constructor from raw evmc_result.
     ///
