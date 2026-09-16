@@ -273,6 +273,9 @@ constexpr std::array<instruction_exec_fn, 256> instruction_implementations = [](
     table[OP_DUPN] = op_undefined;
     table[OP_SWAPN] = op_undefined;
     table[OP_EXCHANGE] = op_undefined;
+    table[OP_CALLSUB] = op_undefined;
+    table[OP_CALLDEST] = op_undefined;
+    table[OP_RETURNSUB] = op_undefined;
 
     return table;
 }();

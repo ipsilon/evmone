@@ -15,7 +15,10 @@ static_assert(!std::is_copy_assignable_v<CodeAnalysis>);
 
 namespace
 {
-void analyze_jumpdests(BitsetSpan map, bytes_view code) noexcept
+/// Builds the map of valid jump destinations and, for EIP-7979, the map of
+/// CALLDEST positions. The analysis is revision-independent, so CALLDESTs are
+/// kept in their own map; jumps accept them only from the revision that has them.
+void analyze_jumpdests(BitsetSpan jumpdest_map, BitsetSpan calldest_map, bytes_view code) noexcept
 {
     // To find if op is any PUSH opcode (OP_PUSH1 <= op <= OP_PUSH32)
     // it can be noticed that OP_PUSH32 is INT8_MAX (0x7f) therefore,
@@ -28,7 +31,9 @@ void analyze_jumpdests(BitsetSpan map, bytes_view code) noexcept
         if (static_cast<int8_t>(op) >= OP_PUSH1)  // If any PUSH opcode (see explanation above).
             i += op - size_t{OP_PUSH1 - 1};       // Skip PUSH data.
         else if (INTX_UNLIKELY(op == OP_JUMPDEST))
-            map.set(i);
+            jumpdest_map.set(i);
+        else if (INTX_UNLIKELY(op == OP_CALLDEST))
+            calldest_map.set(i);
     }
 }
 
@@ -45,18 +50,20 @@ CodeAnalysis analyze_legacy(bytes_view code)
     const auto aligned_code_size =
         (padded_code_size + (BITSET_ALIGNMENT - 1)) / BITSET_ALIGNMENT * BITSET_ALIGNMENT;
     const auto bitset_words = (code.size() + (BitsetSpan::WORD_BITS)) / BitsetSpan::WORD_BITS;
-    const auto total_size = aligned_code_size + bitset_words * sizeof(BitsetSpan::word_type);
+    // Two bitsets: jump destinations and, for EIP-7979, CALLDEST positions.
+    const auto total_size = aligned_code_size + 2 * bitset_words * sizeof(BitsetSpan::word_type);
 
     auto storage = std::make_unique_for_overwrite<uint8_t[]>(total_size);
     std::ranges::copy(code, storage.get());                           // Copy code.
     std::fill_n(&storage[code.size()], total_size - code.size(), 0);  // Pad code and init bitset.
 
     const auto bitset_storage =
-        new (&storage[aligned_code_size]) BitsetSpan::word_type[bitset_words];
+        new (&storage[aligned_code_size]) BitsetSpan::word_type[2 * bitset_words];
     const BitsetSpan jumpdest_bitset{bitset_storage};
-    analyze_jumpdests(jumpdest_bitset, code);
+    const BitsetSpan calldest_bitset{bitset_storage + bitset_words};
+    analyze_jumpdests(jumpdest_bitset, calldest_bitset, code);
 
-    return {std::move(storage), code.size(), jumpdest_bitset};
+    return {std::move(storage), code.size(), jumpdest_bitset, calldest_bitset};
 }
 }  // namespace
 
