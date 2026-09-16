@@ -254,10 +254,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
     {
-        // No account created, so the charge is refunded. Host::call restores the reservoir; the
-        // spill returns to gas on a revert and is consumed by a halt (EIP-8037).
-        if (result.status_code == EVMC_REVERT)
-            result.gas_left += state_gas.spilled;
+        // Report the host's charge so Host::call can apply the failed-frame rule.
+        result.state_gas_spilled += state_gas.spilled;
         return result;
     }
 
@@ -425,8 +423,14 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
 
     if (result.status_code != EVMC_SUCCESS)
     {
-        // Patch returned state-gas for early exits (not reaching EVM). TODO: Refactor.
+        // A failed frame commits none of its state-gas charges. On REVERT, return the part drawn
+        // from execution gas; an exceptional halt consumes it with the rest of the frame's gas.
+        if (result.status_code == EVMC_REVERT)
+            result.gas_left += result.state_gas_spilled;
+        // msg.state_gas is the frame's baseline. Top-level preparation charges which survive a
+        // failed frame must therefore be applied before this value is put in the message.
         result.state_gas_left = msg.state_gas;
+        result.state_gas_spilled = 0;
 
         // The 0x03 (RIPEMD-160) touch quirk: a touch on this address is
         // never reverted. It only matters when the account is empty, so gate it by rev range.

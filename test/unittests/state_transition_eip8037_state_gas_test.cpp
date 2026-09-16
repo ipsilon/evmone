@@ -34,6 +34,72 @@ TEST_F(state_transition, eip8037_create_tx_collision_excess_reservoir_refunded)
     expect.post[create_address] = {.nonce = 1, .code = bytecode{OP_STOP}};
 }
 
+TEST_F(state_transition, eip8037_create_tx_revert_refunds_spilled_new_account_charge)
+{
+    rev = EVMC_AMSTERDAM;
+    tx.data = revert(0, 0);
+
+    const auto create_address = compute_create_address(Sender, pre[Sender].nonce);
+    expect.status = EVMC_REVERT;
+    // Intrinsic create and initcode costs plus two PUSH1 instructions. NEW_ACCOUNT is refunded.
+    expect.gas_used =
+        21'000 + 32'000 + 56 + 2 + 2 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1];
+    expect.gas_refund = 0;
+    expect.state_gas = 0;
+    expect.post[create_address].exists = false;
+}
+
+TEST_F(state_transition, eip8037_create_tx_halt_returns_excess_reservoir)
+{
+    rev = EVMC_AMSTERDAM;
+
+    constexpr int64_t TX_GAS_LIMIT = 18'000'000;
+    static_assert(TX_GAS_LIMIT > state::MAX_TX_GAS_LIMIT);
+
+    block.gas_limit = TX_GAS_LIMIT * 2;
+    tx.gas_limit = TX_GAS_LIMIT;
+    tx.data = bytecode{OP_INVALID};
+    pre[Sender].balance = intx::uint256{tx.gas_limit} * tx.max_gas_price + tx.value + 1;
+
+    const auto create_address = compute_create_address(Sender, pre[Sender].nonce);
+    expect.status = EVMC_INVALID_INSTRUCTION;
+    // The halt consumes the execution-gas dimension, but the unused reservoir is returned.
+    expect.gas_used = state::MAX_TX_GAS_LIMIT;
+    expect.gas_refund = 0;
+    expect.state_gas = 0;
+    expect.post[create_address].exists = false;
+}
+
+TEST_F(state_transition, eip8037_create_tx_charges_new_account_and_code_deposit)
+{
+    rev = EVMC_AMSTERDAM;
+    tx.data = ret(0, 1);  // Deploy a single zero byte.
+
+    expect.state_gas = NEW_ACCOUNT_STATE_GAS + COST_PER_STATE_BYTE;
+    expect.post[compute_create_address(Sender, pre[Sender].nonce)].code = bytes{0x00};
+}
+
+TEST_F(state_transition, eip8037_create_tx_out_of_gas_on_new_account_charge)
+{
+    rev = EVMC_AMSTERDAM;
+    tx.gas_limit = 60'000;  // Intrinsic gas leaves less than NEW_ACCOUNT_STATE_GAS.
+
+    expect.status = EVMC_OUT_OF_GAS;
+    expect.gas_used = tx.gas_limit;
+    expect.state_gas = 0;
+    expect.post[compute_create_address(Sender, pre[Sender].nonce)].exists = false;
+}
+
+TEST_F(state_transition, eip8037_nested_create_revert_refills_new_account_charge)
+{
+    rev = EVMC_AMSTERDAM;
+    tx.to = To;
+    pre[To] = {.code = mstore(0, push(revert(0, 0))) + create().input(27, 5) + OP_STOP};
+
+    expect.state_gas = 0;
+    expect.post[To].nonce = 1;
+}
+
 namespace
 {
 constexpr int64_t CALL_VALUE_COST = 9000;  // Not exported by the interpreter.
