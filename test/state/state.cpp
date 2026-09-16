@@ -681,18 +681,18 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     const auto refund = std::min(delegation_refund + result.gas_refund, refund_limit);
     assert(gas_used_b4_refund - refund > 0);
     // The post-refund, post-floor gas the sender pays for (== receipt gas_used).
-    const auto sender_gas_cost = std::max(gas_used_b4_refund - refund, tx_props.min_gas_cost);
+    const auto gas_used = std::max(gas_used_b4_refund - refund, tx_props.min_gas_cost);
 
-    sender_acc.balance += tx_max_cost - sender_gas_cost * effective_gas_price;
-    state.touch(block.coinbase).balance += sender_gas_cost * priority_gas_price;
+    sender_acc.balance += tx_max_cost - gas_used * effective_gas_price;
+    state.touch(block.coinbase).balance += gas_used * priority_gas_price;
 
     // Cumulative gas used is unknown in this scope.
     TransactionReceipt receipt{
         .type = tx.type,
         .status = result.status_code,
-        .gas_used = sender_gas_cost,
+        .gas_used = gas_used,
         .gas_refund =
-            std::max(gas_used_b4_refund, tx_props.min_gas_cost + tx_state_gas) - sender_gas_cost,
+            std::max(gas_used_b4_refund, tx_props.min_gas_cost + tx_state_gas) - gas_used,
         .state_gas_used = tx_state_gas,
         .logs = host.take_logs(),
         .state_diff = state.build_diff(rev),
