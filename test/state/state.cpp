@@ -680,22 +680,23 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 
     // A failed runtime preparation charge is an included out-of-gas transaction (EIP-2780).
     // TODO(EIP-2780): Roll back authorization changes when this charge fails.
-    auto result = evmc::Result{EVMC_OUT_OF_GAS, 0, 0, {.left = state_gas_limit}};
-    if (charge_succeeded)
+    auto result = charge_succeeded ? host.call(message) :
+                                     evmc::Result{EVMC_OUT_OF_GAS, 0, 0, {.left = state_gas_limit}};
+
+    // Settle the preparation charge like any frame charge: committed on success, and on failure
+    // returned whole, its spill going back to gas_left on a revert and consumed by a halt.
+    // A failed charge leaves both counters untouched, making this a no-op for it.
+    if (result.status_code == EVMC_SUCCESS)
     {
-        result = host.call(message);
-        if (result.status_code == EVMC_SUCCESS)
-        {
-            result.state_gas_spilled += state_gas.spilled;
-        }
-        else
-        {
-            assert(result.state_gas_left == message.state_gas);
-            assert(result.state_gas_spilled == 0);
-            if (result.status_code == EVMC_REVERT)
-                result.gas_left += state_gas.spilled;
-            result.state_gas_left = state_gas_limit;
-        }
+        result.state_gas_spilled += state_gas.spilled;
+    }
+    else
+    {
+        assert(result.state_gas_left == message.state_gas);
+        assert(result.state_gas_spilled == 0);
+        if (result.status_code == EVMC_REVERT)
+            result.gas_left += state_gas.spilled;
+        result.state_gas_left = state_gas_limit;
     }
 
     const auto state_gas_used = state_gas_limit - result.state_gas_left + result.state_gas_spilled;
