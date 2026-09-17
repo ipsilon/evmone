@@ -182,11 +182,13 @@ TEST(statetest_loader, validate_state_unexpected_ef_prefix)
 
 TEST(statetest_loader, validate_state_invalid_delegation_size)
 {
+    // is_code_delegated() requires the designator to be exactly 23 bytes, so a short EF01 payload
+    // is not a delegation at all: it is plain 0xEF code and the EIP-3541 rule rejects it first.
+    // The state is still refused at Prague, which is what this case is about.
     TestState state{{0xadd4_address, {.code = "EF010000"_hex}}};
     EXPECT_THAT([&] { validate_state(state, EVMC_PRAGUE); },
         ThrowsMessage<std::invalid_argument>(
-            "EIP-7702 delegation designator at 0x000000000000000000000000000000000000add4 has "
-            "invalid size"));
+            "unexpected code starting with 0xEF at 0x000000000000000000000000000000000000add4"));
 }
 
 TEST(statetest_loader, validate_state_unexpected_delegation)
