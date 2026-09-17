@@ -182,6 +182,11 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     assert(msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2);
     assert(msg.recipient != address{});  // Must be computed already.
 
+    // A failed create commits no state gas, so it returns the caller's baseline (EIP-8037).
+    const auto fail = [&msg](evmc_status_code status) noexcept {
+        return evmc::Result{status, 0, 0, {.left = msg.state_gas}};
+    };
+
     // TODO: find()+insert() probes m_modified twice for a new recipient.
     auto* new_acc = m_state.find(msg.recipient);
     if (new_acc == nullptr)
@@ -192,7 +197,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     else
     {
         if (is_create_collision(*new_acc))
-            return evmc::Result{EVMC_FAILURE};  // TODO: Add EVMC errors for creation failures.
+            return fail(EVMC_FAILURE);  // TODO: Add EVMC errors for creation failures.
         m_state.journal_create(msg.recipient);
     }
 
@@ -231,11 +236,11 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     const size_t max_code_size = m_rev >= EVMC_AMSTERDAM ? MAX_CODE_SIZE_AMSTERDAM : MAX_CODE_SIZE;
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > max_code_size)
-        return evmc::Result{EVMC_FAILURE};
+        return fail(EVMC_FAILURE);
 
     // Reject new contract code starting with the 0xEF byte (EIP-3541).
     if (m_rev >= EVMC_LONDON && code.starts_with(0xEF))
-        return evmc::Result{EVMC_CONTRACT_VALIDATION_FAILURE};
+        return fail(EVMC_CONTRACT_VALIDATION_FAILURE);
 
     // The initcode frame's state-gas pools, carried into the code-deposit charge.
     StateGas state_gas{
@@ -249,7 +254,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         const auto state_cost = std::ssize(code) * COST_PER_STATE_BYTE;
         gas_left -= execution_cost;
         if (gas_left < 0 || !state_gas.charge(gas_left, state_cost))
-            return evmc::Result{EVMC_FAILURE};
+            return fail(EVMC_FAILURE);
     }
     else
     {
@@ -260,7 +265,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         {
             return (m_rev == EVMC_FRONTIER) ?
                        evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund} :
-                       evmc::Result{EVMC_FAILURE};
+                       fail(EVMC_FAILURE);
         }
     }
 
@@ -347,13 +352,10 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
 
     if (result.status_code != EVMC_SUCCESS)
     {
-        // A failed frame commits none of its state-gas charges. On REVERT, return the part drawn
-        // from execution gas; an exceptional halt consumes it with the rest of the frame's gas.
-        if (result.status_code == EVMC_REVERT)
-            result.gas_left += result.state_gas_spilled;
-        // msg.state_gas is the frame's baseline supplied by the caller.
-        result.state_gas_left = msg.state_gas;
-        result.state_gas_spilled = 0;
+        // A failed frame commits none of its state-gas charges: it returns the caller's baseline
+        // and carries no spill (EIP-8037).
+        assert(result.state_gas_left == msg.state_gas);
+        assert(result.state_gas_spilled == 0);
 
         // The 0x03 (RIPEMD-160) touch quirk: a touch on this address is
         // never reverted. It only matters when the account is empty, so gate it by rev range.
