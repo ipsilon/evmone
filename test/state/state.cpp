@@ -9,6 +9,7 @@
 #include "state_view.hpp"
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
+#include <evmone/state_gas.hpp>
 #include <algorithm>
 #include <ranges>
 
@@ -194,7 +195,7 @@ int64_t process_authorization_list(
     return delegation_refund;
 }
 
-evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) noexcept
+evmc_message build_message(const Transaction& tx, const TransactionProperties& tx_props) noexcept
 {
     const auto recipient = tx.to.has_value() ? *tx.to : compute_create_address(tx.sender, tx.nonce);
 
@@ -202,7 +203,8 @@ evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) n
         .kind = tx.to.has_value() ? EVMC_CALL : EVMC_CREATE,
         .flags = 0,
         .depth = 0,
-        .gas = execution_gas_limit,
+        .gas = tx_props.execution_gas_limit,
+        .state_gas = tx_props.state_gas_limit,
         .recipient = recipient,
         .sender = tx.sender,
         .input_data = tx.data.data(),
@@ -432,11 +434,12 @@ void State::rollback(size_t checkpoint)
     }
 }
 
-/// Validates transaction and computes its execution gas limit (the amount of gas provided to EVM).
-/// @return  Execution gas limit or transaction validation error.
+/// Validates transaction and computes the gas limits it provides to the EVM: the execution gas
+/// and, since EIP-8037, the state-gas reservoir.
+/// @return  The transaction's computed gas properties or a validation error.
 std::variant<TransactionProperties, std::error_code> validate_transaction(
     const StateView& state_view, const BlockInfo& block, const Transaction& tx, evmc_revision rev,
-    int64_t block_gas_left, int64_t blob_gas_left) noexcept
+    int64_t block_gas_left, int64_t block_state_gas_left, int64_t blob_gas_left) noexcept
 {
     if (tx.chain_id_protected() && tx.chain_id != block.chain_id)
         return make_error_code(INVALID_CHAIN_ID);
@@ -497,11 +500,24 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
 
     assert(tx.max_priority_gas_price <= tx.max_gas_price);
 
-    if (rev >= EVMC_OSAKA && tx.gas_limit > MAX_TX_GAS_LIMIT)
+    if (rev == EVMC_OSAKA && tx.gas_limit > MAX_TX_GAS_LIMIT)
         return make_error_code(GAS_LIMIT_EXCEEDS_MAXIMUM);
 
-    if (tx.gas_limit > block_gas_left)
-        return make_error_code(GAS_ALLOWANCE_EXCEEDED);
+    // The tx must fit in the block's remaining gas. Checked before the nonce and balance, as
+    // before, so a transaction invalid in several ways can report a different one than EELS.
+    if (rev < EVMC_AMSTERDAM)
+    {
+        if (tx.gas_limit > block_gas_left)
+            return make_error_code(GAS_ALLOWANCE_EXCEEDED);
+    }
+    else
+    {
+        // Check limits in both dimensions, any failure invalidates the transaction.
+        if (std::min(tx.gas_limit, int64_t{MAX_TX_GAS_LIMIT}) > block_gas_left)
+            return make_error_code(GAS_ALLOWANCE_EXCEEDED);
+        if (tx.gas_limit > block_state_gas_left)
+            return make_error_code(GAS_ALLOWANCE_EXCEEDED);
+    }
 
     if (tx.max_gas_price < block.base_fee)
         return make_error_code(INSUFFICIENT_MAX_FEE_PER_GAS);
@@ -542,11 +558,17 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
         return make_error_code(INSUFFICIENT_ACCOUNT_FUNDS);
 
     const auto [intrinsic_cost, min_cost] = compute_tx_intrinsic_cost(rev, tx);
-    if (tx.gas_limit < std::max(intrinsic_cost, min_cost))
+
+    // The transaction state-gas limit is all above the cap constant (EIP-8037).
+    const auto state_gas_limit =
+        rev >= EVMC_AMSTERDAM ? std::max(tx.gas_limit - MAX_TX_GAS_LIMIT, int64_t{0}) : 0;
+
+    // Transaction gas limit with state-gas limit excluded must cover intrinsic and min cost.
+    if (tx.gas_limit - state_gas_limit < std::max(intrinsic_cost, min_cost))
         return make_error_code(INTRINSIC_GAS_TOO_LOW);
 
-    const auto execution_gas_limit = tx.gas_limit - intrinsic_cost;
-    return TransactionProperties{execution_gas_limit, min_cost};
+    const auto execution_gas_limit = tx.gas_limit - intrinsic_cost - state_gas_limit;
+    return TransactionProperties{execution_gas_limit, state_gas_limit, min_cost};
 }
 
 StateDiff finalize(const StateView& state_view, evmc_revision rev, const address& coinbase,
@@ -614,7 +636,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 
     Host host{rev, vm, state, block, block_hashes, tx};
 
-    auto message = build_message(tx, tx_props.execution_gas_limit);
+    auto message = build_message(tx, tx_props);
 
     sender_acc.access_status = EVMC_ACCESS_WARM;  // Sender is always warm.
     host.access_account(message.recipient);  // Recipient (incl. create address) is always warm.
@@ -642,9 +664,45 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         }
     }
 
-    const auto result = host.call(message);
+    const auto state_gas_limit = message.state_gas;
+    StateGas state_gas{.left = state_gas_limit};
+    auto preparation_state_cost = int64_t{0};
+    // A top-level create or value transfer materializing a new state leaf pays NEW_ACCOUNT here,
+    // after authorizations and before execution. There is no calling opcode to charge it instead.
+    if (rev >= EVMC_AMSTERDAM && (!tx.to.has_value() || tx.value != 0))
+    {
+        const auto* const recipient = state.find(message.recipient);
+        if (recipient == nullptr || recipient->is_empty())
+            preparation_state_cost = NEW_ACCOUNT_STATE_GAS;
+    }
+    const auto charge_succeeded = state_gas.charge(message.gas, preparation_state_cost);
+    message.state_gas = state_gas.left;
 
-    const auto gas_used_b4_refund = tx.gas_limit - result.gas_left;
+    // A failed runtime preparation charge is an included out-of-gas transaction (EIP-2780).
+    // TODO(EIP-2780): Roll back authorization changes when this charge fails.
+    auto result = charge_succeeded ? host.call(message) :
+                                     evmc::Result{EVMC_OUT_OF_GAS, 0, 0, {.left = state_gas_limit}};
+
+    // Settle the preparation charge like any frame charge: committed on success, and on failure
+    // returned whole, its spill going back to gas_left on a revert and consumed by a halt.
+    // A failed charge leaves both counters untouched, making this a no-op for it.
+    if (result.status_code == EVMC_SUCCESS)
+    {
+        result.state_gas_spilled += state_gas.spilled;
+    }
+    else
+    {
+        assert(result.state_gas_left == message.state_gas);
+        assert(result.state_gas_spilled == 0);
+        if (result.status_code == EVMC_REVERT)
+            result.gas_left += state_gas.spilled;
+        result.state_gas_left = state_gas_limit;
+    }
+
+    const auto state_gas_used = state_gas_limit - result.state_gas_left + result.state_gas_spilled;
+    assert(state_gas_used >= 0);
+
+    const auto gas_used_b4_refund = tx.gas_limit - result.gas_left - result.state_gas_left;
 
     const auto refund_limit = rev >= EVMC_LONDON ? gas_used_b4_refund / 5 : gas_used_b4_refund / 2;
     const auto refund = std::min(delegation_refund + result.gas_refund, refund_limit);
@@ -655,7 +713,8 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     gas_used = std::max(gas_used, tx_props.min_gas_cost);
 
     // For block gas accounting, compute the gas refund capped by the min gas cost (EIP-7778).
-    const auto block_gas_used = std::max(gas_used_b4_refund, tx_props.min_gas_cost);
+    const auto block_gas_used =
+        std::max(gas_used_b4_refund, tx_props.min_gas_cost + state_gas_used);
     const auto gas_refund = block_gas_used - gas_used;
 
     sender_acc.balance += tx_max_cost - gas_used * effective_gas_price;
@@ -667,6 +726,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         .status = result.status_code,
         .gas_used = gas_used,
         .gas_refund = gas_refund,
+        .state_gas_used = state_gas_used,
         .logs = host.take_logs(),
         .state_diff = state.build_diff(rev),
     };

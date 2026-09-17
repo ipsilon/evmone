@@ -6,6 +6,7 @@
 #include "errors.hpp"
 #include "host.hpp"
 #include "state_view.hpp"
+#include <evmone/constants.hpp>
 
 namespace evmone::state
 {
@@ -80,6 +81,7 @@ evmc::Result execute_system_call(State& state, const BlockInfo& block,
     const evmc_message msg{
         .kind = EVMC_CALL,
         .gas = 30'000'000,
+        .state_gas = 16 * STORAGE_SET_STATE_GAS,  // Additional state-gas (EIP-8037).
         .recipient = addr,
         .sender = SYSTEM_ADDRESS,
         .input_data = input.data(),

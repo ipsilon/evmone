@@ -104,6 +104,9 @@ struct TransactionProperties
     /// The amount of gas provided to the EVM for the transaction execution.
     int64_t execution_gas_limit = 0;
 
+    /// The amount of state-gas spendable by EVM on state increase (since EIP-8037).
+    int64_t state_gas_limit = 0;
+
     /// The minimal amount of gas the transaction must use.
     int64_t min_gas_cost = 0;
 };
@@ -136,8 +139,12 @@ struct TransactionReceipt
     /// Effectively, the difference between "block" and "user" gas.
     int64_t gas_refund = 0;
 
+    /// The amount of state-gas used by this transaction (since EIP-8037).
+    int64_t state_gas_used = 0;
+
     /// Amount of gas used by this and previous transactions in the block.
     int64_t cumulative_gas_used = 0;
+
     std::vector<Log> logs;
     BloomFilter logs_bloom_filter;
     StateDiff state_diff;
