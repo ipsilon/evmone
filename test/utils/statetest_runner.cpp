@@ -77,7 +77,7 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, const StateTe
             const auto logs_hash =
                 receipt != nullptr ? test::logs_hash(receipt->logs) : test::logs_hash({});
 
-            if (options.trace_summary)
+            if (options.trace_summary || options.state_diff)
             {
                 auto& out = options.output;
                 out << '{';
@@ -91,7 +91,16 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, const StateTe
                     out << R"(,"gasUsed":")" << hex0x(r.gas_used) << R"(",)";
                 }
                 out << R"("logsHash":")" << hex0x(logs_hash) << R"(",)";
-                out << R"("stateRoot":")" << hex0x(state_root) << "\"}\n";
+                out << R"("stateRoot":")" << hex0x(state_root) << '"';
+                if (options.state_diff)
+                {
+                    out << R"(,"stateDiff":)";
+                    const auto& diff = holds_alternative<state::TransactionReceipt>(res) ?
+                                           get<state::TransactionReceipt>(res).state_diff :
+                                           state::StateDiff{};
+                    out << to_json(diff).dump();
+                }
+                out << "}\n";
             }
 
             if (!expected.exception.empty())

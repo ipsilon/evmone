@@ -172,8 +172,11 @@ const CLI::App& setup_test_cmd(
     cmd.add_flag(
         "--collect-only", opts.collect_only, "List each collected test, one per line, and exit.");
     cmd.add_flag("--trace-summary", opts.trace_summary,
-        "Report each state test's execution summary, as --trace also does. Blockchain tests "
-        "have no summary to report.");
+        "Report each state test's execution summary, as --trace also does, on the trace stream. "
+        "Blockchain tests have no summary to report.");
+    cmd.add_flag("--state-diff", opts.state_diff,
+        "Report each state test's execution summary (same as `--trace-summary`) and transaction's "
+        "state diff. Blockchain tests have no summary to report.");
     return cmd;
 }
 
@@ -186,7 +189,7 @@ int exec_test_cmd(evmc::VM& vm, std::span<const fs::path> paths, evmone::test::R
     if (trace)
         std::ios::sync_with_stdio(false);
     opts.trace_summary |= trace;
-    opts.progress = !(opts.trace_summary || histogram);
+    opts.progress = !(opts.trace_summary || opts.state_diff || histogram);
 
     return evmone::test::test(vm, paths, opts, std::cout);
 }

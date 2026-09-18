@@ -122,7 +122,10 @@ void run_fixture(const std::string& name, const json::json& fixture, const RunOp
     {
     case Format::state_test:
         run_state_test(make_state_test(name, fixture), vm,
-            {.output = std::clog, .trace_summary = options.trace_summary}, report);
+            {.output = std::clog,
+                .trace_summary = options.trace_summary,
+                .state_diff = options.state_diff},
+            report);
         break;
     case Format::blockchain_test:
         run_blockchain_test(make_blockchain_test(name, fixture), vm, report);

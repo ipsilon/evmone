@@ -146,7 +146,7 @@ struct Run
     std::string output;
 };
 
-Run run(std::string_view fixture, bool trace_summary = false)
+Run run(std::string_view fixture, bool trace_summary = false, bool state_diff = false)
 {
     std::istringstream input{std::string{fixture}};
     const auto tests = load_state_tests(input);
@@ -156,7 +156,8 @@ Run run(std::string_view fixture, bool trace_summary = false)
     TestReport report{[&](const Failure& failure) { failures.push_back(failure); }};
     evmc::VM vm{evmc_create_evmone()};
     for (const auto& t : tests)
-        run_state_test(t, vm, {.output = output, .trace_summary = trace_summary}, report);
+        run_state_test(t, vm,
+            {.output = output, .trace_summary = trace_summary, .state_diff = state_diff}, report);
     return {std::move(failures), std::move(output).str()};
 }
 }  // namespace
@@ -217,6 +218,45 @@ TEST(statetest_runner, trace_summary_failed_transaction)
     EXPECT_EQ(output,
         R"({"pass":false,"error":"invalid instruction","gasUsed":"0x61a80","logsHash":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","stateRoot":"0x994280467b9327f616db6328828df403c3493f32ca409a86e7ce6a415a7be488"})"
         "\n");
+}
+
+TEST(statetest_runner, state_diff)
+{
+    // --state-diff implies --trace-summary, so the diff rides on the same JSON object as the
+    // summary rather than replacing it.
+    const auto [failures, output] = run(VALID_TX, true, true);
+
+    EXPECT_THAT(failures, testing::IsEmpty());
+    EXPECT_EQ(output,
+        R"({"pass":true,"gasUsed":"0x5208","logsHash":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","stateRoot":"0x71322a2754548ef6d3b540e9b6b858379787c2d1f31bc68205b70902c1d6155f","stateDiff":{"deletedAccounts":[],"modifiedAccounts":{"0x0000000000000000000000000000000000000000":{"balance":"0x1","modifiedStorage":{},"nonce":"0x0"},"0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b":{"balance":"0xde0b6b3a760cbaf","modifiedStorage":{},"nonce":"0x1"}}}})"
+        "\n");
+}
+
+TEST(statetest_runner, state_diff_rejected_transaction)
+{
+    // A rejected transaction has no receipt, so its diff is empty rather than omitted.
+    const auto [failures, output] = run(NONCE_TOO_HIGH, true, true);
+
+    EXPECT_EQ(failures.size(), 1u);
+    EXPECT_EQ(output,
+        R"({"logsHash":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","stateRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","stateDiff":{"deletedAccounts":[],"modifiedAccounts":{}}})"
+        "\n");
+}
+
+TEST(statetest_runner, trace_summary_output_is_valid_json)
+{
+    // Verifies the output is proper JSON, regardless of which fields it holds: the pinned tests
+    // above catch a wrong value, but not e.g. a trailing comma left over from a conditionally
+    // printed field.
+    for (const std::string_view fixture : {VALID_TX, NONCE_TOO_HIGH, FAILING_TX})
+    {
+        for (const bool state_diff : {false, true})
+        {
+            json::json parsed;
+            EXPECT_NO_THROW(parsed = json::json::parse(run(fixture, true, state_diff).output));
+            EXPECT_TRUE(parsed.is_object());
+        }
+    }
 }
 
 TEST(statetest_runner, txbytes_invalid_signature)

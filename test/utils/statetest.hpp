@@ -150,6 +150,9 @@ json::json to_json(const TestState& state);
 /// Exports a transaction log to JSON format (as in a receipt's log list).
 json::json to_json(const state::Log& log);
 
+/// Exports a StateDiff to JSON.
+json::json to_json(const state::StateDiff& diff);
+
 /// Export the state test to JSON format.
 json::json to_state_test(std::string_view test_name, const state::BlockInfo& block,
     state::Transaction& tx, const TestState& pre, evmc_revision rev,
@@ -172,6 +175,9 @@ struct StateTestOptions
 
     /// Report each case's execution summary.
     bool trace_summary = false;
+
+    /// Report each case's execution summary and state diff.
+    bool state_diff = false;
 };
 
 /// Execute the state @p test using the @p vm, recording what does not match into @p report.

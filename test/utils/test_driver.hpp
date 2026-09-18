@@ -75,9 +75,13 @@ struct RunOptions
     /// Paths, relative to a test directory, not to collect tests from.
     std::vector<std::filesystem::path> ignored;
 
-    /// Report each state test's execution summary on the trace stream. Blockchain tests
-    /// have no summary to report.
+    /// Report each state test's execution summary on the trace stream.
+    /// Blockchain tests have no summary to report.
     bool trace_summary = false;
+
+    /// The same as above, but additionally reports the state diff.
+    /// Blockchain tests have no summary to report.
+    bool state_diff = false;
 
     /// Whether the name filter, if any, keeps the fixture called @p name.
     [[nodiscard]] bool selects(const std::string& name) const noexcept
