@@ -654,9 +654,9 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     // The gas used by the transaction must be at least the min_gas_cost (EIP-7623).
     gas_used = std::max(gas_used, tx_props.min_gas_cost);
 
-    // For block gas accounting, compute the gas refund capped by the min gas cost (EIP-7778).
-    const auto block_gas_used = std::max(gas_used_b4_refund, tx_props.min_gas_cost);
-    const auto gas_refund = block_gas_used - gas_used;
+    // For block gas accounting, exclude refunds and enforce the min gas cost (EIP-7778).
+    const auto block_gas_used =
+        (rev >= EVMC_AMSTERDAM) ? std::max(gas_used_b4_refund, tx_props.min_gas_cost) : gas_used;
 
     sender_acc.balance += tx_max_cost - gas_used * effective_gas_price;
     state.touch(block.coinbase).balance += gas_used * priority_gas_price;
@@ -666,7 +666,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         .type = tx.type,
         .status = result.status_code,
         .gas_used = gas_used,
-        .gas_refund = gas_refund,
+        .block_gas_used = block_gas_used,
         .logs = host.take_logs(),
         .state_diff = state.build_diff(rev),
     };

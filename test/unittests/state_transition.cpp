@@ -86,9 +86,9 @@ void state_transition::TearDown()
         {
             EXPECT_EQ(receipt.gas_used, *expect.gas_used);
         }
-        if (expect.gas_refund.has_value())
+        if (expect.block_gas_used.has_value())
         {
-            EXPECT_EQ(receipt.gas_refund, *expect.gas_refund);
+            EXPECT_EQ(receipt.block_gas_used, *expect.block_gas_used);
         }
         if (expect.logs.has_value())
         {
