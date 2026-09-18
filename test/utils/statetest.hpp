@@ -149,6 +149,9 @@ json::json to_json(const TestState& state);
 /// Exports a transaction log to JSON format (as in a receipt's log list).
 json::json to_json(const state::Log& log);
 
+/// Exports a StateDiff (only the accounts/slots actually modified by a transaction) to JSON.
+json::json to_json(const state::StateDiff& diff);
+
 /// Export the state test to JSON format.
 json::json to_state_test(std::string_view test_name, const state::BlockInfo& block,
     state::Transaction& tx, const TestState& pre, evmc_revision rev,
@@ -165,9 +168,11 @@ void validate_state(const TestState& state, evmc_revision rev);
 
 /// Execute the state @p test using the @p vm, recording what does not match into @p report.
 ///
-/// @param trace_summary  Output execution summary to the default trace stream.
-void run_state_test(
-    const StateTransitionTest& test, evmc::VM& vm, bool trace_summary, TestReport& report);
+/// @param trace_summary   Output execution summary to the default trace stream.
+/// @param dump_statediff  Print the transaction's StateDiff (only the accounts/slots it
+///                        actually modified) as JSON to stdout, one line per test case.
+void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_summary,
+    bool dump_statediff, TestReport& report);
 
 /// Computes the hash of the RLP-encoded list of transaction logs.
 /// This method is only used in tests.

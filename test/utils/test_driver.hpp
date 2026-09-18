@@ -79,6 +79,10 @@ struct RunOptions
     /// have no summary to report.
     bool trace_summary = false;
 
+    /// Print each state test's transaction StateDiff as JSON to stdout, one line per test
+    /// case. Blockchain tests have no per-transaction diff to print.
+    bool dump_statediff = false;
+
     /// Whether the name filter, if any, keeps the fixture called @p name.
     [[nodiscard]] bool selects(const std::string& name) const noexcept
     {

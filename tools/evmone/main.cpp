@@ -174,6 +174,9 @@ const CLI::App& setup_test_cmd(
     cmd.add_flag("--trace-summary", opts.trace_summary,
         "Report each state test's execution summary, as --trace also does. Blockchain tests "
         "have no summary to report.");
+    cmd.add_flag("--dump-statediff", opts.dump_statediff,
+        "Print each state test's transaction StateDiff as JSON to stdout, one line per test "
+        "case. Blockchain tests have no per-transaction diff to print.");
     return cmd;
 }
 
