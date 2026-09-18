@@ -58,7 +58,7 @@ target_sources(
 # google/benchmark, which the parent directory fetches, and are used without it: the target is
 # defined after this one, which linking tolerates, but only when that directory is configured.
 if(CODSPEED_MODE AND EVMONE_TESTING)
-    target_link_libraries(evmone.testutils PRIVATE codspeed instrument_hooks)
+    target_link_libraries(evmone.testutils PRIVATE instrument_hooks)
     set_source_files_properties(
         benchmark_recorder.cpp PROPERTIES COMPILE_DEFINITIONS EVMONE_CODSPEED
     )

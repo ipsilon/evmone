@@ -5,7 +5,6 @@
 #include "benchmark_recorder.hpp"
 
 #ifdef EVMONE_CODSPEED
-#include <codspeed.h>
 #include <core.h>
 #include <unistd.h>
 #endif
@@ -42,16 +41,11 @@ BenchmarkRecorder::~BenchmarkRecorder()
 }
 
 void BenchmarkRecorder::__codspeed_root_frame__measure(
-    const char* file, const std::string& name, const std::function<void()>& run) const
+    const std::string& uri, const std::function<void()>& run) const
 {
     instrument_hooks_start_benchmark_inline(m_hooks);
     run();
     instrument_hooks_stop_benchmark_inline(m_hooks);
-
-    // The name a fixture carries is the file it was filled from in another repository, which
-    // CodSpeed cannot find, so the file registering it goes in front. Built once the stop has
-    // been counted, the work of it being no part of the benchmark.
-    const auto uri = codspeed::get_path_relative_to_workspace(file) + "::" + name;
     instrument_hooks_set_executed_benchmark(m_hooks, getpid(), uri.c_str());
 }
 
@@ -64,7 +58,7 @@ BenchmarkRecorder::~BenchmarkRecorder() = default;
 // compiled.
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void BenchmarkRecorder::__codspeed_root_frame__measure(
-    const char* /*file*/, const std::string& /*name*/, const std::function<void()>& run) const
+    const std::string& /*uri*/, const std::function<void()>& run) const
 {
     run();
 }
