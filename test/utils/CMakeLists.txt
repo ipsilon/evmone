@@ -14,6 +14,8 @@ target_sources(
     evmone.testutils
     PRIVATE
     stdx/utility.hpp
+    benchmark_recorder.hpp
+    benchmark_recorder.cpp
     blob_schedule.hpp
     blob_schedule.cpp
     block_transition.hpp
@@ -51,3 +53,13 @@ target_sources(
     utils.hpp
     utils.cpp
 )
+
+# The hooks report each test to the CodSpeed runner. They come with the fork of
+# google/benchmark, which the parent directory fetches, and are used without it: the target is
+# defined after this one, which linking tolerates, but only when that directory is configured.
+if(CODSPEED_MODE AND EVMONE_TESTING)
+    target_link_libraries(evmone.testutils PRIVATE codspeed instrument_hooks)
+    set_source_files_properties(
+        benchmark_recorder.cpp PROPERTIES COMPILE_DEFINITIONS EVMONE_CODSPEED
+    )
+endif()

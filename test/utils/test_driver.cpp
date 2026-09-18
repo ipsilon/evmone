@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "test_driver.hpp"
+#include <test/utils/benchmark_recorder.hpp>
 #include <test/utils/blockchaintest.hpp>
 #include <test/utils/statetest.hpp>
 #include <cassert>
@@ -134,6 +135,13 @@ void run_fixture(const std::string& name, const json::json& fixture, const RunOp
         report.fail("not a test");
         break;
     }
+}
+
+/// The recorder every test is measured by, initialized on the first test and held for the run.
+const BenchmarkRecorder& benchmark_recorder()
+{
+    static const BenchmarkRecorder recorder;
+    return recorder;
 }
 
 }  // namespace
@@ -302,13 +310,19 @@ std::vector<Result> run_fixture_file(const fs::path& path, const RunOptions& opt
         loaded.outcome != Outcome::passed)
         return {std::move(loaded)};
 
+    const auto& recorder = benchmark_recorder();
+
     std::vector<Result> results;
     for (const auto& [name, fixture] : contents.items())
     {
         if (!options.selects(name))
             continue;
-        results.push_back(run_one(path.string() + "::" + name,
-            [&](TestReport& report) { run_fixture(name, fixture, options, vm, report); }));
+        // A fixture's name is already the "<file>::<test>[<params>]" a benchmark is identified
+        // by, the file being the one it was filled from in the repository which holds it.
+        results.push_back(recorder.measure(name, [&] {
+            return run_one(path.string() + "::" + name,
+                [&](TestReport& report) { run_fixture(name, fixture, options, vm, report); });
+        }));
     }
     return results;
 }
