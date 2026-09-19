@@ -12,8 +12,8 @@
 
 namespace evmone::test
 {
-void run_state_test(
-    const StateTransitionTest& test, evmc::VM& vm, bool trace_summary, TestReport& report)
+void run_state_test(const StateTransitionTest& test, evmc::VM& vm, bool trace_summary,
+    bool dump_statediff, TestReport& report)
 {
     report.start_case(test.name);
     for (const auto& [rev, cases, block] : test.cases)
@@ -90,6 +90,15 @@ void run_state_test(
                 }
                 std::clog << R"("logsHash":"0x)" << hex(logs_hash) << R"(",)";
                 std::clog << R"("stateRoot":"0x)" << hex(state_root) << "\"}\n";
+            }
+
+            if (dump_statediff)
+            {
+                static const state::StateDiff empty_diff;
+                const auto& diff = holds_alternative<state::TransactionReceipt>(res) ?
+                                       get<state::TransactionReceipt>(res).state_diff :
+                                       empty_diff;
+                std::cout << to_json(diff).dump() << "\n";
             }
 
             if (!expected.exception.empty())

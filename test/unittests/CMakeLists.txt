@@ -79,6 +79,7 @@ target_sources(
     state_transition_transient_storage_test.cpp
     state_transition_tx_test.cpp
     state_tx_test.cpp
+    statediff_export_test.cpp
     statetest_loader_block_info_test.cpp
     statetest_loader_test.cpp
     statetest_loader_tx_test.cpp

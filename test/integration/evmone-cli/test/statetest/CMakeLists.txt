@@ -82,6 +82,18 @@ set_tests_properties(
     "\"pass\":true,\"gasUsed\":\"0xa868\",\"logsHash\":\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\",\"stateRoot\":\"0xe8010ce590f401c9d61fef8ab05bea9bcec24281b795e5868809bc4e515aa530\""
 )
 
+# --dump-statediff prints the transaction's StateDiff as JSON, one line per test case, on top of
+# the run's own progress/summary output.
+add_test(
+    NAME ${PREFIX}/dump_statediff
+    COMMAND evmone-cli test ${TESTS1}/SuiteA/test1.json --dump-statediff
+)
+set_tests_properties(
+    ${PREFIX}/dump_statediff PROPERTIES
+    PASS_REGULAR_EXPRESSION
+    "\"deletedAccounts\":\\[\\],\"modifiedAccounts\":\\{\"0x095e7baea6a6c7c4c2dfeb977efac326af552d87\":\\{\"balance\":\"0xde0b6b3a76586a0\",\"modifiedStorage\":\\{\"0x0000000000000000000000000000000000000000000000000000000000000000\":\"0x0000000000000000000000000000000000000000000000000000000000000002\"\\},\"nonce\":\"0x0\"\\}"
+)
+
 add_test(
     NAME ${PREFIX}/filter
     COMMAND evmone-cli test ${TESTS_FILTER}/one_failing_of_two.json -k passing_test_case

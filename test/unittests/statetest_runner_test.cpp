@@ -117,7 +117,7 @@ std::vector<Failure> run(std::string_view fixture)
     TestReport report{[&](const Failure& failure) { failures.push_back(failure); }};
     evmc::VM vm{evmc_create_evmone()};
     for (const auto& t : tests)
-        run_state_test(t, vm, false, report);
+        run_state_test(t, vm, false, false, report);
     return failures;
 }
 }  // namespace
