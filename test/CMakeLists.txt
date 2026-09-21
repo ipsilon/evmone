@@ -37,6 +37,8 @@ block(PROPAGATE benchmark_libs)
             SOURCE_SUBDIR google_benchmark
         )
         list(APPEND benchmark_libs codspeed instrument_hooks)
+        # Also reports the tests `evmone test` runs as benchmarks (utils/test_driver.cpp).
+        target_link_libraries(evmone.testutils PRIVATE codspeed)
     endif()
     FetchContent_MakeAvailable(benchmark)
 endblock()

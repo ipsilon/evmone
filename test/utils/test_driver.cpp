@@ -12,6 +12,11 @@
 #include <iostream>
 #include <vector>
 
+#ifdef CODSPEED_ENABLED
+#include <codspeed.h>
+#include <measurement.hpp>
+#endif
+
 namespace evmone::test
 {
 namespace fs = std::filesystem;
@@ -128,8 +133,19 @@ void run_fixture(const std::string& name, const json::json& fixture, const RunOp
             report);
         break;
     case Format::blockchain_test:
-        run_blockchain_test(make_blockchain_test(name, fixture), vm, report);
+    {
+        const auto test = make_blockchain_test(name, fixture);
+#ifdef CODSPEED_ENABLED
+        codspeed::CodSpeed::getInstance();  // Sets up the hooks and the integration name, once.
+        measurement_start();
+#endif
+        run_blockchain_test(test, vm, report);
+#ifdef CODSPEED_ENABLED
+        measurement_stop();
+        measurement_set_executed_benchmark(name);  // The fixture's name is the benchmark's URI.
+#endif
         break;
+    }
     case Format::unsupported:
         throw UnsupportedTestFeature{
             "unsupported fixture format: " + fixture.at("_info").at("fixture-format").dump()};
