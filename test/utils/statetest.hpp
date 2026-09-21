@@ -11,6 +11,7 @@
 #include <test/state/transaction.hpp>
 #include <test/utils/test_report.hpp>
 #include <test/utils/test_state.hpp>
+#include <iosfwd>
 #include <optional>
 
 namespace json = nlohmann;
@@ -163,11 +164,19 @@ StateTransitionTest make_state_test(const std::string& name, const json::json& j
 /// Throws std::invalid_argument exception.
 void validate_state(const TestState& state, evmc_revision rev);
 
+/// What run_state_test() reports besides the failures, and where.
+struct StateTestOptions
+{
+    /// The stream the enabled reports are written to.
+    std::ostream& output;
+
+    /// Report each case's execution summary.
+    bool trace_summary = false;
+};
+
 /// Execute the state @p test using the @p vm, recording what does not match into @p report.
-///
-/// @param trace_summary  Output execution summary to the default trace stream.
-void run_state_test(
-    const StateTransitionTest& test, evmc::VM& vm, bool trace_summary, TestReport& report);
+void run_state_test(const StateTransitionTest& test, evmc::VM& vm, const StateTestOptions& options,
+    TestReport& report);
 
 /// Computes the hash of the RLP-encoded list of transaction logs.
 /// This method is only used in tests.

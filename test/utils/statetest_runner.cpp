@@ -8,12 +8,12 @@
 #include <test/utils/rlp_encode.hpp>
 #include <test/utils/statetest.hpp>
 #include <test/utils/test_report.hpp>
-#include <iostream>
+#include <ostream>
 
 namespace evmone::test
 {
-void run_state_test(
-    const StateTransitionTest& test, evmc::VM& vm, bool trace_summary, TestReport& report)
+void run_state_test(const StateTransitionTest& test, evmc::VM& vm, const StateTestOptions& options,
+    TestReport& report)
 {
     report.start_case(test.name);
     for (const auto& [rev, cases, block] : test.cases)
@@ -76,20 +76,21 @@ void run_state_test(
             const auto logs_hash =
                 receipt != nullptr ? test::logs_hash(receipt->logs) : test::logs_hash({});
 
-            if (trace_summary)
+            if (options.trace_summary)
             {
-                std::clog << '{';
+                auto& out = options.output;
+                out << '{';
                 if (holds_alternative<state::TransactionReceipt>(res))  // if tx valid
                 {
                     const auto& r = get<state::TransactionReceipt>(res);
                     if (r.status == EVMC_SUCCESS)
-                        std::clog << R"("pass":true)";
+                        out << R"("pass":true)";
                     else
-                        std::clog << R"("pass":false,"error":")" << r.status << '"';
-                    std::clog << R"(,"gasUsed":"0x)" << std::hex << r.gas_used << R"(",)";
+                        out << R"("pass":false,"error":")" << r.status << '"';
+                    out << R"(,"gasUsed":")" << hex0x(r.gas_used) << R"(",)";
                 }
-                std::clog << R"("logsHash":"0x)" << hex(logs_hash) << R"(",)";
-                std::clog << R"("stateRoot":"0x)" << hex(state_root) << "\"}\n";
+                out << R"("logsHash":")" << hex0x(logs_hash) << R"(",)";
+                out << R"("stateRoot":")" << hex0x(state_root) << "\"}\n";
             }
 
             if (!expected.exception.empty())

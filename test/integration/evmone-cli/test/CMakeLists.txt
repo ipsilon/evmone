@@ -83,12 +83,13 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "--- # HISTOGRAM.*= 1 passed in"
     FAIL_REGULAR_EXPRESSION "\\[100%\\]")
 
-# The --trace output likewise.
+# The --trace output likewise, and it reports the state test summary as --trace-summary does.
+# What the summary holds is pinned by the runner unit tests; here it only has to appear.
 add_test(NAME ${PREFIX}/test_trace COMMAND evmone-cli test --trace
     ${DATA}/statetest/tests1/SuiteA/test1.json)
 set_tests_properties(
     ${PREFIX}/test_trace PROPERTIES
-    PASS_REGULAR_EXPRESSION "\\{\"pc\":0,[^\n]*\"opName\":\"PUSH1\"\\}.*= 1 passed in"
+    PASS_REGULAR_EXPRESSION "\\{\"pc\":0,[^\n]*\"opName\":\"PUSH1\"\\}.*\"pass\":true.*= 1 passed in"
     FAIL_REGULAR_EXPRESSION "\\[100%\\]")
 
 # A named file is loaded whatever its extension.
