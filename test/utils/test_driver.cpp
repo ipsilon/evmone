@@ -137,6 +137,25 @@ void run_fixture(const std::string& name, const json::json& fixture, const RunOp
     }
 }
 
+/// PROBE: names a benchmark by the URL of the test which filled the fixture, in place of the
+/// path that names it, to find out whether CodSpeed makes a link of an absolute one. The path
+/// belongs to another repository, which is not where CodSpeed looks for it.
+std::string benchmark_uri(const std::string& name, const json::json& fixture)
+{
+    const auto separator = name.find("::");
+    if (separator == std::string::npos)
+        return name;
+
+    const auto info = fixture.find("_info");
+    if (info == fixture.end())
+        return name;
+    const auto url = info->find("url");
+    if (url == info->end() || !url->is_string())
+        return name;
+
+    return url->get<std::string>() + name.substr(separator);
+}
+
 /// The recorder every test is measured by, initialized on the first test and held for the run.
 const BenchmarkRecorder& benchmark_recorder()
 {
@@ -319,7 +338,7 @@ std::vector<Result> run_fixture_file(const fs::path& path, const RunOptions& opt
             continue;
         // A fixture's name is already the "<file>::<test>[<params>]" a benchmark is identified
         // by, the file being the one it was filled from in the repository which holds it.
-        results.push_back(recorder.measure(name, [&] {
+        results.push_back(recorder.measure(benchmark_uri(name, fixture), [&] {
             return run_one(path.string() + "::" + name,
                 [&](TestReport& report) { run_fixture(name, fixture, options, vm, report); });
         }));
