@@ -8,13 +8,13 @@
 #include "instructions.hpp"
 #include <variant>
 
-constexpr int64_t CALL_VALUE_COST = 9000;
-constexpr int64_t ACCOUNT_CREATION_COST = 25000;
-
 namespace evmone::instr::core
 {
 namespace
 {
+constexpr auto CALL_VALUE_COST = 9000;
+constexpr auto ACCOUNT_CREATION_COST = 25000;
+
 /// Get target address of a code executing instruction.
 ///
 /// Returns EIP-7702 delegate address if addr is delegated, or addr itself otherwise.
@@ -30,9 +30,8 @@ inline std::variant<evmc::address, Result> get_target_address(
         return addr;
 
     const auto delegate_account_access_cost =
-        (state.host.access_account(*delegate_addr) == EVMC_ACCESS_COLD ?
-                instr::cold_account_access_cost :
-                instr::warm_storage_read_cost);
+        (state.host.access_account(*delegate_addr) == EVMC_ACCESS_COLD ? COLD_ACCOUNT_ACCESS :
+                                                                         WARM_ACCESS);
 
     if ((gas_left -= delegate_account_access_cost) < 0)
         return Result{EVMC_OUT_OF_GAS, gas_left};
@@ -133,7 +132,7 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= instr::additional_cold_account_access_cost) < 0)
+        if ((gas_left -= ADDITIONAL_COLD_ACCOUNT_ACCESS) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 

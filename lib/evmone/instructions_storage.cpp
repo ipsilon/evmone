@@ -17,25 +17,26 @@ struct StorageCostSpec
     int16_t set;          ///< Storage addition cost, YP: G_{sset}
     int16_t reset;        ///< Storage modification cost, YP: G_{sreset}
     int16_t clear;        ///< Storage deletion refund, YP: R_{sclear}
+    int16_t cold;         ///< Additional cold access cost (EIP-2929).
 };
 
 /// Table of gas cost specification for storage instructions per EVM revision.
 /// TODO: This can be moved to instruction traits and be used in other places: e.g.
-///       SLOAD cost, replacement for warm_storage_read_cost.
-constexpr auto storage_cost_spec = []() noexcept {
+///       SLOAD cost, replacement for WARM_ACCESS.
+constexpr auto STORAGE_COST_SPEC = []() noexcept {
     std::array<StorageCostSpec, EVMC_MAX_REVISION + 1> tbl{};
 
     // Legacy cost schedule.
-    for (auto rev : {EVMC_FRONTIER, EVMC_HOMESTEAD, EVMC_TANGERINE_WHISTLE, EVMC_SPURIOUS_DRAGON,
-             EVMC_BYZANTIUM, EVMC_PETERSBURG})
-        tbl[rev] = {false, 200, 20000, 5000, 15000};
+    for (const auto rev : {EVMC_FRONTIER, EVMC_HOMESTEAD, EVMC_TANGERINE_WHISTLE,
+             EVMC_SPURIOUS_DRAGON, EVMC_BYZANTIUM, EVMC_PETERSBURG})
+        tbl[rev] = {false, 200, 20000, 5000, 15000, 0};
 
     // Net cost schedule.
-    tbl[EVMC_ISTANBUL] = {true, 800, 20000, 5000, 15000};
+    tbl[EVMC_ISTANBUL] = {true, 800, 20000, 5000, 15000, 0};
     tbl[EVMC_BERLIN] = {
-        true, instr::warm_storage_read_cost, 20000, 5000 - instr::cold_sload_cost, 15000};
+        true, WARM_ACCESS, 20000, 5000 - COLD_STORAGE_ACCESS, 15000, COLD_STORAGE_ACCESS};
     tbl[EVMC_LONDON] = {
-        true, instr::warm_storage_read_cost, 20000, 5000 - instr::cold_sload_cost, 4800};
+        true, WARM_ACCESS, 20000, 5000 - COLD_STORAGE_ACCESS, 4800, COLD_STORAGE_ACCESS};
     tbl[EVMC_PARIS] = tbl[EVMC_LONDON];
     tbl[EVMC_SHANGHAI] = tbl[EVMC_LONDON];
     tbl[EVMC_CANCUN] = tbl[EVMC_LONDON];
@@ -55,7 +56,7 @@ struct StorageStoreCost
 };
 
 // The lookup table of SSTORE costs by the storage update status.
-constexpr auto sstore_costs = []() noexcept {
+constexpr auto SSTORE_COSTS = []() noexcept {
     std::array<std::array<StorageStoreCost, EVMC_STORAGE_MODIFIED_RESTORED + 1>,
         EVMC_MAX_REVISION + 1>
         tbl{};
@@ -63,7 +64,7 @@ constexpr auto sstore_costs = []() noexcept {
     for (size_t rev = EVMC_FRONTIER; rev <= EVMC_MAX_REVISION; ++rev)
     {
         auto& e = tbl[rev];
-        if (const auto c = storage_cost_spec[rev]; !c.net_cost)  // legacy
+        if (const auto c = STORAGE_COST_SPEC[rev]; !c.net_cost)  // legacy
         {
             e[EVMC_STORAGE_ADDED] = {c.set, 0};
             e[EVMC_STORAGE_DELETED] = {c.reset, c.clear};
@@ -106,9 +107,7 @@ Result sload(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     {
         // The warm storage access cost is already applied (from the cost table).
         // Here we need to apply additional cold storage access cost.
-        constexpr auto additional_cold_sload_cost =
-            instr::cold_sload_cost - instr::warm_storage_read_cost;
-        if ((gas_left -= additional_cold_sload_cost) < 0)
+        if ((gas_left -= ADDITIONAL_COLD_STORAGE_ACCESS) < 0)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -131,11 +130,11 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     const auto gas_cost_cold =
         (state.rev >= EVMC_BERLIN &&
             state.host.access_storage(state.msg->recipient, key) == EVMC_ACCESS_COLD) ?
-            instr::cold_sload_cost :
+            STORAGE_COST_SPEC[state.rev].cold :
             0;
     const auto status = state.host.set_storage(state.msg->recipient, key, value);
 
-    const auto [gas_cost_warm, gas_refund] = sstore_costs[state.rev][status];
+    const auto [gas_cost_warm, gas_refund] = SSTORE_COSTS[state.rev][status];
     const auto gas_cost = gas_cost_warm + gas_cost_cold;
     if ((gas_left -= gas_cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
@@ -143,7 +142,7 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
     if (state.rev >= EVMC_AMSTERDAM)
     {
         // The refill part can be done here because gas_left check always succeeds in this case.
-        static_assert(cold_sload_cost + warm_storage_read_cost <= CALL_STIPEND);
+        static_assert(COLD_STORAGE_ACCESS + WARM_ACCESS <= CALL_STIPEND);
         if (status == EVMC_STORAGE_ADDED_DELETED)
             state.state_gas.refill(gas_left, STORAGE_SET_STATE_GAS);
         else if (status == EVMC_STORAGE_ADDED &&

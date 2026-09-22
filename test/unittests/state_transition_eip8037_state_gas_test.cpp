@@ -143,7 +143,7 @@ constexpr int64_t CALL_VALUE_COST = 9000;  // Not exported by the interpreter.
 /// The NEW_ACCOUNT state charge is refilled, so it does not appear here.
 constexpr int64_t CALL_LIGHTFAIL_EXECUTION_GAS =
     21'000 + 7 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1] +
-    instr::gas_costs[EVMC_AMSTERDAM][OP_CALL] + instr::additional_cold_account_access_cost +
+    instr::gas_costs[EVMC_AMSTERDAM][OP_CALL] + instr::ADDITIONAL_COLD_ACCOUNT_ACCESS +
     CALL_VALUE_COST - CALL_STIPEND;
 }  // namespace
 

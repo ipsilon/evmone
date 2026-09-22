@@ -13,18 +13,20 @@ namespace evmone::instr
 /// The special gas cost value marking an EVM instruction as "undefined".
 constexpr int16_t undefined = -1;
 
-/// EIP-2929 constants (https://eips.ethereum.org/EIPS/eip-2929).
+/// State-access cost constants (EIP-2929).
 /// @{
-inline constexpr auto cold_sload_cost = 2100;
-inline constexpr auto cold_account_access_cost = 2600;
-inline constexpr auto warm_storage_read_cost = 100;
+inline constexpr auto WARM_ACCESS = 100;
+inline constexpr auto COLD_STORAGE_ACCESS = 2100;
+inline constexpr auto COLD_ACCOUNT_ACCESS = 2600;
 
 /// Additional cold account access cost.
 ///
 /// The warm access cost is unconditionally applied for every account access instruction.
 /// If the access turns out to be cold, this cost must be applied additionally.
-inline constexpr auto additional_cold_account_access_cost =
-    cold_account_access_cost - warm_storage_read_cost;
+inline constexpr auto ADDITIONAL_COLD_ACCOUNT_ACCESS = COLD_ACCOUNT_ACCESS - WARM_ACCESS;
+
+/// Additional cold storage access cost over the unconditionally-charged warm cost.
+inline constexpr auto ADDITIONAL_COLD_STORAGE_ACCESS = COLD_STORAGE_ACCESS - WARM_ACCESS;
 /// @}
 
 
@@ -144,15 +146,15 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_ISTANBUL][OP_SLOAD] = 800;
 
     table[EVMC_BERLIN] = table[EVMC_ISTANBUL];
-    table[EVMC_BERLIN][OP_EXTCODESIZE] = warm_storage_read_cost;
-    table[EVMC_BERLIN][OP_EXTCODECOPY] = warm_storage_read_cost;
-    table[EVMC_BERLIN][OP_EXTCODEHASH] = warm_storage_read_cost;
-    table[EVMC_BERLIN][OP_BALANCE] = warm_storage_read_cost;
-    table[EVMC_BERLIN][OP_CALL] = warm_storage_read_cost;
-    table[EVMC_BERLIN][OP_CALLCODE] = warm_storage_read_cost;
-    table[EVMC_BERLIN][OP_DELEGATECALL] = warm_storage_read_cost;
-    table[EVMC_BERLIN][OP_STATICCALL] = warm_storage_read_cost;
-    table[EVMC_BERLIN][OP_SLOAD] = warm_storage_read_cost;
+    table[EVMC_BERLIN][OP_EXTCODESIZE] = WARM_ACCESS;
+    table[EVMC_BERLIN][OP_EXTCODECOPY] = WARM_ACCESS;
+    table[EVMC_BERLIN][OP_EXTCODEHASH] = WARM_ACCESS;
+    table[EVMC_BERLIN][OP_BALANCE] = WARM_ACCESS;
+    table[EVMC_BERLIN][OP_CALL] = WARM_ACCESS;
+    table[EVMC_BERLIN][OP_CALLCODE] = WARM_ACCESS;
+    table[EVMC_BERLIN][OP_DELEGATECALL] = WARM_ACCESS;
+    table[EVMC_BERLIN][OP_STATICCALL] = WARM_ACCESS;
+    table[EVMC_BERLIN][OP_SLOAD] = WARM_ACCESS;
 
     table[EVMC_LONDON] = table[EVMC_BERLIN];
     table[EVMC_LONDON][OP_BASEFEE] = 2;
@@ -165,8 +167,8 @@ constexpr inline GasCostTable gas_costs = []() noexcept {
     table[EVMC_CANCUN] = table[EVMC_SHANGHAI];
     table[EVMC_CANCUN][OP_BLOBHASH] = 3;
     table[EVMC_CANCUN][OP_BLOBBASEFEE] = 2;
-    table[EVMC_CANCUN][OP_TLOAD] = warm_storage_read_cost;
-    table[EVMC_CANCUN][OP_TSTORE] = warm_storage_read_cost;
+    table[EVMC_CANCUN][OP_TLOAD] = WARM_ACCESS;
+    table[EVMC_CANCUN][OP_TSTORE] = WARM_ACCESS;
     table[EVMC_CANCUN][OP_MCOPY] = 3;
 
     table[EVMC_PRAGUE] = table[EVMC_CANCUN];
