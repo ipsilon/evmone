@@ -466,9 +466,8 @@ jobs:
     steps:
       - build
       - run_execution_spec_tests:
-          release: tests-glamsterdam-devnet@v8.1.2
+          release: tests-glamsterdam-devnet@v8.1.4
           fixtures_suffix: _glamsterdam-devnet
-          ignore: "--ignore for_amsterdam --ignore for_bpo2toamsterdamattime15k"
       - collect_coverage_clang:
           flags: eest-develop
           ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
