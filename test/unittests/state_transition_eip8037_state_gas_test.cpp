@@ -41,8 +41,8 @@ TEST_F(state_transition, eip8037_create_tx_revert_refunds_spilled_new_account_ch
 
     const auto create_address = compute_create_address(Sender, pre[Sender].nonce);
     expect.status = EVMC_REVERT;
-    // Intrinsic create and initcode costs plus two PUSH1 instructions. NEW_ACCOUNT is refunded.
-    expect.gas_used = 21'000 + 32'000 + 56 + 2 + 2 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1];
+    // The calldata floor of the 5-byte initcode. NEW_ACCOUNT is refunded.
+    expect.gas_used = 24'000 + 5 * 64;
     expect.block_gas_used = expect.gas_used;  // No refund.
     expect.state_gas = 0;
     expect.post[create_address].exists = false;
@@ -83,7 +83,7 @@ TEST_F(state_transition, eip8037_create_tx_with_value_pays_new_account_once)
     rev = EVMC_AMSTERDAM;
     tx.value = 1;
 
-    expect.gas_used = 53'000 + NEW_ACCOUNT_STATE_GAS;
+    expect.gas_used = 24'000 + NEW_ACCOUNT_STATE_GAS;
     expect.state_gas = NEW_ACCOUNT_STATE_GAS;
     expect.post[compute_create_address(Sender, pre[Sender].nonce)] = {.nonce = 1, .balance = 1};
 }
@@ -95,7 +95,7 @@ TEST_F(state_transition, eip8037_create_tx_uses_reservoir_then_execution_gas)
     block.gas_limit = tx.gas_limit;
     pre[Sender].balance = uint256{tx.gas_limit} * tx.max_gas_price + tx.value + 1;
 
-    expect.gas_used = 53'000 + NEW_ACCOUNT_STATE_GAS;
+    expect.gas_used = 24'000 + NEW_ACCOUNT_STATE_GAS;
     expect.block_gas_used = expect.gas_used;  // No refund.
     expect.state_gas = NEW_ACCOUNT_STATE_GAS;
     expect.post[compute_create_address(Sender, pre[Sender].nonce)].nonce = 1;
@@ -108,7 +108,7 @@ TEST_F(state_transition, eip8037_create_tx_to_prefunded_account_has_no_new_accou
     const auto create_address = compute_create_address(Sender, pre[Sender].nonce);
     pre[create_address].balance = 1;
 
-    expect.gas_used = 53'000;
+    expect.gas_used = 24'000;
     expect.state_gas = 0;
     expect.post[create_address] = {.nonce = 1, .balance = 1};
 }
@@ -141,7 +141,7 @@ namespace
 /// and a light failure returns the stipend unspent, so only ACCOUNT_WRITE remains (EIP-8038).
 /// The NEW_ACCOUNT state charge is refilled, so it does not appear here.
 constexpr int64_t CALL_LIGHTFAIL_EXECUTION_GAS =
-    21'000 + 7 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1] +
+    15'000 + 7 * instr::gas_costs[EVMC_AMSTERDAM][OP_PUSH1] +
     instr::gas_costs[EVMC_AMSTERDAM][OP_CALL] +
     instr::additional_cold_account_access(EVMC_AMSTERDAM) + instr::ACCOUNT_WRITE;
 }  // namespace
@@ -273,7 +273,7 @@ TEST_F(state_transition, eip8037_sstore_slot_allocated_and_cleared_in_one_tx)
 
     // Intrinsic, four PUSHes, the cold allocation, the warm clear; the clear's refund is capped
     // at a fifth of the pre-refund gas.
-    constexpr auto PRE_REFUND = 21'000 + 12 + 12'100 + 100;
+    constexpr auto PRE_REFUND = 15'000 + 12 + 12'100 + 100;
     expect.gas_used = PRE_REFUND - PRE_REFUND / 5;
     expect.block_gas_used = PRE_REFUND;
     expect.state_gas = 0;
@@ -293,7 +293,7 @@ TEST_F(state_transition, eip8037_sstore_slot_cleared_in_a_child_frame)
 
     // Intrinsic, ten PUSHes, the cold allocation, the cold DELEGATECALL, the warm clear; the
     // clear's refund is capped at a fifth of the pre-refund gas.
-    constexpr auto PRE_REFUND = 21'000 + 30 + 12'100 + 3000 + 100;
+    constexpr auto PRE_REFUND = 15'000 + 30 + 12'100 + 3000 + 100;
     expect.gas_used = PRE_REFUND - PRE_REFUND / 5;
     expect.block_gas_used = PRE_REFUND;
     expect.state_gas = 0;
@@ -314,7 +314,7 @@ TEST_F(state_transition, eip8037_reverted_child_keeps_the_slot_allocation_charge
 
     // Intrinsic, twelve PUSHes, the cold allocation and its state charge, the cold DELEGATECALL,
     // the reverted warm clear. The clear's refund dies with the frame.
-    expect.gas_used = 21'000 + 36 + 12'100 + STORAGE_SET_STATE_GAS + 3000 + 100;
+    expect.gas_used = 15'000 + 36 + 12'100 + STORAGE_SET_STATE_GAS + 3000 + 100;
     expect.block_gas_used = expect.gas_used;  // No refund.
     expect.state_gas = STORAGE_SET_STATE_GAS;
     expect.post[To].exists = true;

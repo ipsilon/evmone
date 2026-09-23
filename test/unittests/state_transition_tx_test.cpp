@@ -222,7 +222,7 @@ TEST_F(state_transition, tx_data_floor_amsterdam_exec_0)
     tx.data = "0001"_hex;
     static constexpr auto MIN_GAS = 64 * 2;
 
-    expect.gas_used = 21000 + MIN_GAS;
+    expect.gas_used = 15000 + MIN_GAS;
 }
 
 TEST_F(state_transition, tx_data_floor_amsterdam_exec_below_floor)
@@ -235,7 +235,7 @@ TEST_F(state_transition, tx_data_floor_amsterdam_exec_below_floor)
     static constexpr auto MIN_GAS = 64 * 2;
 
     pre[To] = {.code = (MIN_GAS - DATA_GAS - 1) * OP_JUMPDEST};
-    expect.gas_used = 21000 + MIN_GAS;
+    expect.gas_used = 15000 + MIN_GAS;
     expect.post[To].exists = true;
 }
 
@@ -249,7 +249,7 @@ TEST_F(state_transition, tx_data_floor_amsterdam_exec_at_floor)
     static constexpr auto MIN_GAS = 64 * 2;
 
     pre[To] = {.code = (MIN_GAS - DATA_GAS) * OP_JUMPDEST};
-    expect.gas_used = 21000 + MIN_GAS;
+    expect.gas_used = 15000 + MIN_GAS;
     expect.post[To].exists = true;
 }
 
@@ -263,7 +263,7 @@ TEST_F(state_transition, tx_data_floor_amsterdam_exec_above_floor)
     static constexpr auto MIN_GAS = 64 * 2;
 
     pre[To] = {.code = (MIN_GAS - DATA_GAS + 1) * OP_JUMPDEST};
-    expect.gas_used = 21000 + MIN_GAS + 1;
+    expect.gas_used = 15000 + MIN_GAS + 1;
     expect.post[To].exists = true;
 }
 
@@ -275,7 +275,7 @@ TEST_F(state_transition, tx_data_floor_amsterdam_zero_bytes)
     tx.data = "0000"_hex;
     static constexpr auto MIN_GAS = 64 * 2;
 
-    expect.gas_used = 21000 + MIN_GAS;
+    expect.gas_used = 15000 + MIN_GAS;
 }
 
 TEST_F(state_transition, tx_data_floor_osaka_uses_eip7623)
@@ -296,8 +296,8 @@ TEST_F(state_transition, access_list_cost_amsterdam)
     rev = EVMC_AMSTERDAM;
     tx.to = To;
     tx.access_list = {{To, {0x01_bytes32}}};
-    // intrinsic = 21000 + 2900 + 2000 + 1280 + 2048 = 29228
-    expect.gas_used = 29228;
+    // intrinsic = 15000 + 2900 + 2000 + 1280 + 2048 = 23228
+    expect.gas_used = 23228;
 }
 
 TEST_F(state_transition, access_list_cost_osaka_unchanged)
@@ -328,19 +328,19 @@ TEST_F(state_transition, access_list_floor_amsterdam)
     tx.to = To;
     tx.data = bytes(100, 0x00);
     tx.access_list = {{To, {}}};
-    // intrinsic = 21000 + 100*4 + 2900 + 1280 = 25580
-    // floor     = 21000 + 64*(100 + 20)       = 28680  (dominates)
-    expect.gas_used = 28680;
+    // intrinsic = 15000 + 100*4 + 2900 + 1280 = 19580
+    // floor     = 15000 + 64*(100 + 20)       = 22680  (dominates)
+    expect.gas_used = 22680;
 }
 
 TEST_F(state_transition, invalid_access_list_amsterdam_gas_limit_below_floor)
 {
-    // EIP-7981: gas limit must cover the floor (28680) — the intrinsic cost (25580) is not enough.
+    // EIP-7981: gas limit must cover the floor (22680) — the intrinsic cost (19580) is not enough.
     rev = EVMC_AMSTERDAM;
     tx.to = To;
     tx.data = bytes(100, 0x00);
     tx.access_list = {{To, {}}};
-    tx.gas_limit = 28679;
+    tx.gas_limit = 22679;
     expect.tx_error = INTRINSIC_GAS_TOO_LOW;
 }
 

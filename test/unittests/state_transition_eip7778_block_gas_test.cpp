@@ -18,7 +18,7 @@ TEST_F(state_transition, eip7778_sstore_clear_refund_amsterdam)
 
     // Intrinsic, two PUSHes and the cold SSTORE clear (EIP-8038). The clear refund (11616) is
     // capped at a fifth of the pre-refund gas (EIP-3529).
-    constexpr auto PRE_REFUND = 21'000 + 6 + 12'100;
+    constexpr auto PRE_REFUND = 15'000 + 6 + 12'100;
     expect.gas_used = PRE_REFUND - PRE_REFUND / 5;
     expect.block_gas_used = PRE_REFUND;
     expect.post[To].exists = true;
