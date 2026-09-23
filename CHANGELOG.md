@@ -5,6 +5,100 @@ Documentation of all notable changes to the **evmone** project.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.24.0] — unreleased
+
+This release brings the state gas repricing to the Amsterdam EVM revision
+and consolidates the test tools into a single `evmone test` command.
+
+### Added
+
+- **Amsterdam EVM revision**: next set of EIPs.
+  - [EIP-8037]: State Creation Gas Cost Increase — a second gas dimension
+    metering the state growth, funded by a per-frame state gas reservoir.
+    [#1672](https://github.com/ipsilon/evmone/pull/1672)
+  - [EIP-8038]: State-access gas cost update.
+    [#1731](https://github.com/ipsilon/evmone/pull/1731)
+    [#1732](https://github.com/ipsilon/evmone/pull/1732)
+- **The `evmone test` command** runs both state and blockchain test fixtures,
+  recognizing the format of each fixture. It prints a pytest-like report
+  and supports the `--ignore` and `--collect-only` options.
+  [#1683](https://github.com/ipsilon/evmone/pull/1683)
+  [#1684](https://github.com/ipsilon/evmone/pull/1684)
+  [#1685](https://github.com/ipsilon/evmone/pull/1685)
+  [#1687](https://github.com/ipsilon/evmone/pull/1687)
+  [#1699](https://github.com/ipsilon/evmone/pull/1699)
+  [#1716](https://github.com/ipsilon/evmone/pull/1716)
+- The `--trace-summary` of `evmone test` reports the logs hash,
+  and the new `--state-diff` option adds the transaction state diff to it.
+  [#1722](https://github.com/ipsilon/evmone/pull/1722)
+  [#1723](https://github.com/ipsilon/evmone/pull/1723)
+
+### Changed
+
+- **EVMC ABI version bumped to 19**: `evmc_message::state_gas` and
+  `evmc_result::state_gas` carry the [EIP-8037] state gas reservoir.
+  [#1672](https://github.com/ipsilon/evmone/pull/1672)
+- The call depth limit is not checked from Osaka on: the [EIP-7825] transaction
+  gas limit together with the 63/64 call gas rule keeps the depth below 500.
+  [#1704](https://github.com/ipsilon/evmone/pull/1704)
+- **`modexp` optimizations**: the Montgomery multiplication carries are folded
+  into a single addition (halving the 256-bit `modexp` time with GCC on x86-64)
+  and the exponent is reduced for the power-of-two part of the modulus
+  (up to ~30% faster for even moduli with wide exponents).
+  [#1662](https://github.com/ipsilon/evmone/pull/1662)
+  [#1708](https://github.com/ipsilon/evmone/pull/1708)
+- **BN254 pairing (`ecpairing`) optimizations**: a single Miller loop
+  accumulator shares the Fq12 squarings across all pairs.
+  [#1544](https://github.com/ipsilon/evmone/pull/1544)
+  [#1637](https://github.com/ipsilon/evmone/pull/1637)
+  [#1646](https://github.com/ipsilon/evmone/pull/1646)
+- The EVMMAX modular arithmetic moved into the `evmone::crypto` namespace
+  of the precompiles library; the `evmone::evmmax` target and
+  the `include/evmmax/evmmax.hpp` header are gone.
+  [#1652](https://github.com/ipsilon/evmone/pull/1652)
+  [#1657](https://github.com/ipsilon/evmone/pull/1657)
+  [#1659](https://github.com/ipsilon/evmone/pull/1659)
+- The state-independent CALL costs are charged before the [EIP-7702]
+  delegation lookup, as in [execution-specs].
+  [#1668](https://github.com/ipsilon/evmone/pull/1668)
+- **CMake 3.25** is the minimum required version.
+  [#1660](https://github.com/ipsilon/evmone/pull/1660)
+- Dependencies upgraded: libsecp256k1 v0.8.0, blst v0.3.17, googletest v1.18.0.
+  google/benchmark is fetched with FetchContent instead of Hunter.
+  [#1650](https://github.com/ipsilon/evmone/pull/1650)
+  [#1651](https://github.com/ipsilon/evmone/pull/1651)
+  [#1656](https://github.com/ipsilon/evmone/pull/1656)
+  [#1661](https://github.com/ipsilon/evmone/pull/1661)
+- The [Execution Spec Tests] fixtures upgraded to `tests@v21.0.0`
+  and `tests-glamsterdam-devnet@v8.1.4`.
+  [#1682](https://github.com/ipsilon/evmone/pull/1682)
+  [#1734](https://github.com/ipsilon/evmone/pull/1734)
+
+### Removed
+
+- The `evmone-statetest` and `evmone-blockchaintest` tools,
+  replaced by `evmone test`. The `--gtest_*` options are gone with them.
+  [#1685](https://github.com/ipsilon/evmone/pull/1685)
+
+### Fixed
+
+- The blob fee in the transaction affordability check could overflow,
+  letting a transaction with a huge `max_fee_per_blob_gas` pass the balance check.
+  [#1714](https://github.com/ipsilon/evmone/pull/1714)
+- A reverted cold access to a non-existent account restored it as an existing
+  empty account, which showed up as a spurious deleted account in the state diff.
+  [#1709](https://github.com/ipsilon/evmone/pull/1709)
+- `evmone t8n` emitted receipts with a hard-coded success status and no logs,
+  and reported the post-refund block `gasUsed` in Amsterdam ([EIP-7778]).
+  [#1667](https://github.com/ipsilon/evmone/pull/1667)
+  [#1698](https://github.com/ipsilon/evmone/pull/1698)
+- A subcommand name among another subcommand's arguments (e.g. a trailing `run`)
+  was silently executed instead of the requested command.
+  [#1691](https://github.com/ipsilon/evmone/pull/1691)
+- A blockchain test which failed early skipped all the following tests
+  in the same fixture file.
+  [#1690](https://github.com/ipsilon/evmone/pull/1690)
+
 ## [0.23.0] — 2026-08-11
 
 This release continues the implementation of the Amsterdam EVM revision
@@ -1465,6 +1559,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 - Exposes [EVMC] 6 ABI.
 - The [intx 0.2.0](https://github.com/chfast/intx/releases/tag/v0.2.0) library is used for 256-bit precision arithmetic. 
 
+[0.24.0]: https://github.com/ipsilon/evmone/compare/v0.23.0...master
 [0.23.0]: https://github.com/ipsilon/evmone/releases/tag/v0.23.0
 [0.22.0]: https://github.com/ipsilon/evmone/releases/tag/v0.22.0
 [0.21.0]: https://github.com/ipsilon/evmone/releases/tag/v0.21.0
@@ -1550,6 +1645,8 @@ It delivers fully-compatible and high-speed EVM implementation.
 [EIP-7976]: https://eips.ethereum.org/EIPS/eip-7976
 [EIP-7981]: https://eips.ethereum.org/EIPS/eip-7981
 [EIP-8024]: https://eips.ethereum.org/EIPS/eip-8024
+[EIP-8037]: https://eips.ethereum.org/EIPS/eip-8037
+[EIP-8038]: https://eips.ethereum.org/EIPS/eip-8038
 [EIP-8246]: https://eips.ethereum.org/EIPS/eip-8246
 
 [Spurious Dragon]: https://eips.ethereum.org/EIPS/eip-607
