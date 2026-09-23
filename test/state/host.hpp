@@ -32,9 +32,9 @@ public:
 
     evmc::Result call(const evmc_message& msg) noexcept override;
 
-private:
     [[nodiscard]] bool account_exists(const address& addr) const noexcept override;
 
+private:
     [[nodiscard]] bytes32 get_storage(
         const address& addr, const bytes32& key) const noexcept override;
 

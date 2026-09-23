@@ -10,6 +10,7 @@
 #include <evmone/constants.hpp>
 #include <evmone/delegation.hpp>
 #include <evmone/instructions_traits.hpp>
+#include <evmone/state_gas.hpp>
 #include <algorithm>
 #include <ranges>
 
@@ -222,6 +223,49 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
         .code = nullptr,
         .code_size = 0,
     };
+}
+
+/// Applies the authorizations (EIP-7702), resolves the delegation and calls the top-level message.
+[[nodiscard]] evmc::Result process_top_level(
+    State& state, Host& host, evmc_revision rev, const Transaction& tx, evmc_message msg)
+{
+    const auto delegation_refund =
+        process_authorization_list(state, tx.chain_id, tx.authorization_list);
+
+    if (tx.to.has_value())
+    {
+        if (const auto delegate = get_delegate_address(host, *tx.to))
+        {
+            msg.code_address = *delegate;
+            msg.flags |= EVMC_DELEGATED;
+            host.access_account(msg.code_address);
+        }
+    }
+
+    // Creating the recipient account costs state-gas, refilled if the call fails (EIP-8037).
+    const auto state_gas_init = msg.state_gas;
+    StateGas state_gas{{.left = state_gas_init}};
+    if (rev >= EVMC_AMSTERDAM && (!tx.to.has_value() || tx.value != 0) &&
+        !host.account_exists(msg.recipient) && !state_gas.charge(msg.gas, NEW_ACCOUNT_STATE_GAS))
+        return evmc::Result{EVMC_OUT_OF_GAS, 0, delegation_refund, {.left = state_gas_init}};
+
+    msg.state_gas = state_gas.left;
+    auto result = host.call(msg);
+    if (result.status_code == EVMC_SUCCESS)
+    {
+        result.state_gas.spilled += state_gas.spilled;
+    }
+    else
+    {
+        // Rollback state-gas costs.
+        assert(result.state_gas.left == msg.state_gas);
+        assert(result.state_gas.spilled == 0);
+        if (result.status_code == EVMC_REVERT)
+            result.gas_left += state_gas.spilled;
+        result.state_gas.left = state_gas_init;
+    }
+    result.gas_refund += delegation_refund;  // Kept even if the call fails (EIP-7702).
+    return result;
 }
 }  // namespace
 
@@ -613,9 +657,6 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     assert(sender_acc.nonce < MAX_NONCE);  // Required for valid tx.
     ++sender_acc.nonce;                    // Bump sender nonce.
 
-    const auto delegation_refund =
-        process_authorization_list(state, tx.chain_id, tx.authorization_list);
-
     const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
     assert(tx.max_gas_price >= base_fee);                   // Required for valid tx.
     assert(tx.max_gas_price >= tx.max_priority_gas_price);  // Required for valid tx.
@@ -641,7 +682,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
 
     Host host{rev, vm, state, block, block_hashes, tx};
 
-    auto message = build_message(tx, tx_props);
+    const auto message = build_message(tx, tx_props);
 
     sender_acc.access_status = EVMC_ACCESS_WARM;  // Sender is always warm.
     host.access_account(message.recipient);  // Recipient (incl. create address) is always warm.
@@ -659,22 +700,12 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     if (rev >= EVMC_SHANGHAI)
         host.access_account(block.coinbase);
 
-    if (tx.to.has_value())
-    {
-        if (const auto delegate = get_delegate_address(host, *tx.to))
-        {
-            message.code_address = *delegate;
-            message.flags |= EVMC_DELEGATED;
-            host.access_account(message.code_address);
-        }
-    }
-
-    const auto result = host.call(message);
+    const auto result = process_top_level(state, host, rev, tx, message);
 
     const auto gas_used_b4_refund = tx.gas_limit - result.gas_left - result.state_gas.left;
 
     const auto refund_limit = rev >= EVMC_LONDON ? gas_used_b4_refund / 5 : gas_used_b4_refund / 2;
-    const auto refund = std::min(delegation_refund + result.gas_refund, refund_limit);
+    const auto refund = std::min(result.gas_refund, refund_limit);
     auto gas_used = gas_used_b4_refund - refund;
     assert(gas_used > 0);
 

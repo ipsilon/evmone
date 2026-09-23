@@ -332,33 +332,15 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
         ++sender_acc.nonce;
     }
 
-    auto exec_msg = msg;
-    StateGas state_gas{{.left = msg.state_gas}};  // State-gas for top-level account creation cost.
-    if (msg.depth == 0 && m_rev >= EVMC_AMSTERDAM &&
-        (msg.kind == EVMC_CREATE || !evmc::is_zero(msg.value)) && !account_exists(msg.recipient))
-    {
-        if (!state_gas.charge(exec_msg.gas, NEW_ACCOUNT_STATE_GAS))
-            return evmc::Result{EVMC_OUT_OF_GAS, {.left = msg.state_gas}};
-        exec_msg.state_gas = state_gas.left;
-    }
-
     const auto logs_checkpoint = m_logs.size();
     const auto state_checkpoint = m_state.checkpoint();
 
-    auto result = execute_message(exec_msg);
+    auto result = execute_message(msg);
 
-    if (result.status_code == EVMC_SUCCESS)
+    if (result.status_code != EVMC_SUCCESS)
     {
-        result.state_gas.spilled += state_gas.spilled;  // Commit the top-level new account cost.
-    }
-    else
-    {
-        // Rollback state-gas costs.
-        assert(result.state_gas.left == exec_msg.state_gas);
+        assert(result.state_gas.left == msg.state_gas);
         assert(result.state_gas.spilled == 0);
-        if (result.status_code == EVMC_REVERT)
-            result.gas_left += state_gas.spilled;
-        result.state_gas.left = msg.state_gas;
 
         // The 0x03 (RIPEMD-160) touch quirk: a touch on this address is
         // never reverted. It only matters when the account is empty, so gate it by rev range.
