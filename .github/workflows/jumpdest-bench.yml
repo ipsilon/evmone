@@ -1,0 +1,42 @@
+name: jumpdest-bench
+
+on:
+  push:
+    branches:
+      - bench/jumpdest-analysis
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-24.04
+          - ubuntu-22.04
+          - ubuntu-24.04-arm
+          - ubuntu-22.04-arm
+          - macos-26
+          - macos-15
+          - macos-14
+          - macos-15-intel
+          - macos-13
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: command -v ninja || (sudo apt-get update && sudo apt-get install -y ninja-build)
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: command -v ninja || HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
+      - name: JUMPDEST analysis benchmark
+        run: JOBS=4 test/internal_benchmarks/jumpdest_bench_ci.sh github-${{ matrix.os }} results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jumpdest-${{ matrix.os }}
+          path: results

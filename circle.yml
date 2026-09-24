@@ -748,49 +748,191 @@ jobs:
       - test
       - package
 
+  jumpdest-bench-docker:
+    parameters:
+      image:
+        type: string
+        default: chfast/cpp-build-env:25-gcc-15
+      resource_class:
+        type: string
+      label:
+        type: string
+      jobs:
+        type: integer
+        default: 2
+    docker:
+      - image: << parameters.image >>
+    resource_class: << parameters.resource_class >>
+    steps:
+      - checkout
+      - run:
+          name: "JUMPDEST analysis benchmark"
+          no_output_timeout: 30m
+          command: JOBS=<< parameters.jobs >> test/internal_benchmarks/jumpdest_bench_ci.sh << parameters.label >> ~/results
+      - store_artifacts:
+          path: ~/results
+          destination: results
 
+  jumpdest-bench-machine:
+    parameters:
+      resource_class:
+        type: string
+      label:
+        type: string
+      native:
+        type: boolean
+        default: false
+    machine:
+      image: ubuntu-2404:current
+    resource_class: << parameters.resource_class >>
+    steps:
+      - checkout
+      - when:
+          condition: << parameters.native >>
+          steps:
+            - run:
+                name: "Install build tools"
+                command: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++
+            - run:
+                name: "JUMPDEST analysis benchmark"
+                no_output_timeout: 30m
+                command: JOBS=4 test/internal_benchmarks/jumpdest_bench_ci.sh << parameters.label >> ~/results
+      - unless:
+          condition: << parameters.native >>
+          steps:
+            - run:
+                name: "JUMPDEST analysis benchmark (in docker)"
+                no_output_timeout: 30m
+                command: |
+                  mkdir -p ~/results
+                  docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e JOBS=4 \
+                    -v "$PWD:/src" -v "$HOME/results:/results" -w /src chfast/cpp-build-env:25-gcc-15 \
+                    test/internal_benchmarks/jumpdest_bench_ci.sh << parameters.label >> /results
+      - store_artifacts:
+          path: ~/results
+          destination: results
+
+  jumpdest-bench-macos:
+    parameters:
+      resource_class:
+        type: string
+      label:
+        type: string
+    macos:
+      xcode: 26.5
+    resource_class: << parameters.resource_class >>
+    steps:
+      - checkout
+      - run:
+          name: "Install build tools"
+          command: HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
+      - run:
+          name: "JUMPDEST analysis benchmark"
+          no_output_timeout: 30m
+          command: JOBS=4 test/internal_benchmarks/jumpdest_bench_ci.sh << parameters.label >> ~/results
+      - store_artifacts:
+          path: ~/results
+          destination: results
 
 workflows:
-  version: 2
-  evmone:
+  jumpdest-bench:
     jobs:
-      - lint
-      - clang-tidy
-      - release-linux:
-          filters:
-            tags:
-              only: /.*/
-      - release-windows:
-          filters:
-            tags:
-              only: /.*/
-      - release-macos:
-          filters:
-            tags:
-              only: /.*/
-      - deploy:
-          requires:
-            - release-linux
-            - release-windows
-            - release-macos
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: /^v[0-9].*/
-      - execution-spec-tests
-      - ethereum-tests
-      - precompiles-libsecp256k1
-      - precompiles-gmp
-      - cmake-min
-      - gcc-min
-      - clang-min
-      - gcc-latest-memcheck
-      - clang-latest-sanitizers
-      - clang-latest-coverage
-      - macos-asan
-      - xcode-min
-      - gcc-32bit
-      - x86-64-v1
-      - riscv32
-      - fuzzing
+      - jumpdest-bench-docker:
+          name: docker-gcc-small
+          label: circleci-docker-gcc-small
+          resource_class: small
+          jobs: 1
+      - jumpdest-bench-docker:
+          name: docker-gcc-medium
+          label: circleci-docker-gcc-medium
+          resource_class: medium
+          jobs: 2
+      - jumpdest-bench-docker:
+          name: docker-gcc-mediumplus
+          label: circleci-docker-gcc-mediumplus
+          resource_class: medium+
+          jobs: 3
+      - jumpdest-bench-docker:
+          name: docker-gcc-large
+          label: circleci-docker-gcc-large
+          resource_class: large
+          jobs: 4
+      - jumpdest-bench-docker:
+          name: docker-gcc-xlarge
+          label: circleci-docker-gcc-xlarge
+          resource_class: xlarge
+          jobs: 8
+      - jumpdest-bench-docker:
+          name: docker-gcc-2xlarge
+          label: circleci-docker-gcc-2xlarge
+          resource_class: 2xlarge
+          jobs: 16
+      - jumpdest-bench-docker:
+          name: docker-gcc-2xlargeplus
+          label: circleci-docker-gcc-2xlargeplus
+          resource_class: 2xlarge+
+          jobs: 20
+      - jumpdest-bench-docker:
+          name: docker-clang-large
+          label: circleci-docker-clang-large
+          image: chfast/cpp-build-env:25-clang-21
+          resource_class: large
+          jobs: 4
+      - jumpdest-bench-docker:
+          name: selfhosted-ha9x
+          label: circleci-selfhosted-ha9x
+          image: chfast/cpp-build-env:25-clang-21
+          resource_class: ipsilon/ha9x
+          jobs: 8
+      - jumpdest-bench-machine:
+          name: machine-medium
+          label: circleci-machine-medium
+          resource_class: medium
+      - jumpdest-bench-machine:
+          name: machine-large
+          label: circleci-machine-large
+          resource_class: large
+      - jumpdest-bench-machine:
+          name: machine-xlarge
+          label: circleci-machine-xlarge
+          resource_class: xlarge
+      - jumpdest-bench-machine:
+          name: machine-2xlarge
+          label: circleci-machine-2xlarge
+          resource_class: 2xlarge
+      - jumpdest-bench-machine:
+          name: machine-arm-medium
+          label: circleci-machine-arm-medium
+          resource_class: arm.medium
+          native: true
+      - jumpdest-bench-machine:
+          name: machine-arm-large
+          label: circleci-machine-arm-large
+          resource_class: arm.large
+          native: true
+      - jumpdest-bench-machine:
+          name: machine-arm-xlarge
+          label: circleci-machine-arm-xlarge
+          resource_class: arm.xlarge
+          native: true
+      - jumpdest-bench-machine:
+          name: machine-arm-2xlarge
+          label: circleci-machine-arm-2xlarge
+          resource_class: arm.2xlarge
+          native: true
+      - jumpdest-bench-macos:
+          name: macos-m4pro-medium
+          label: circleci-macos-m4pro-medium
+          resource_class: m4pro.medium
+      - jumpdest-bench-macos:
+          name: macos-m4pro-large
+          label: circleci-macos-m4pro-large
+          resource_class: m4pro.large
+      - jumpdest-bench-macos:
+          name: macos-m2pro-medium
+          label: circleci-macos-m2pro-medium
+          resource_class: m2pro.medium
+      - jumpdest-bench-macos:
+          name: macos-m2pro-large
+          label: circleci-macos-m2pro-large
+          resource_class: m2pro.large
