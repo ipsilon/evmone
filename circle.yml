@@ -858,21 +858,6 @@ workflows:
           resource_class: large
           jobs: 4
       - jumpdest-bench-docker:
-          name: docker-gcc-xlarge
-          label: circleci-docker-gcc-xlarge
-          resource_class: xlarge
-          jobs: 8
-      - jumpdest-bench-docker:
-          name: docker-gcc-2xlarge
-          label: circleci-docker-gcc-2xlarge
-          resource_class: 2xlarge
-          jobs: 16
-      - jumpdest-bench-docker:
-          name: docker-gcc-2xlargeplus
-          label: circleci-docker-gcc-2xlargeplus
-          resource_class: 2xlarge+
-          jobs: 20
-      - jumpdest-bench-docker:
           name: docker-clang-large
           label: circleci-docker-clang-large
           image: chfast/cpp-build-env:25-clang-21
@@ -893,14 +878,6 @@ workflows:
           label: circleci-machine-large
           resource_class: large
       - jumpdest-bench-machine:
-          name: machine-xlarge
-          label: circleci-machine-xlarge
-          resource_class: xlarge
-      - jumpdest-bench-machine:
-          name: machine-2xlarge
-          label: circleci-machine-2xlarge
-          resource_class: 2xlarge
-      - jumpdest-bench-machine:
           name: machine-arm-medium
           label: circleci-machine-arm-medium
           resource_class: arm.medium
@@ -910,29 +887,7 @@ workflows:
           label: circleci-machine-arm-large
           resource_class: arm.large
           native: true
-      - jumpdest-bench-machine:
-          name: machine-arm-xlarge
-          label: circleci-machine-arm-xlarge
-          resource_class: arm.xlarge
-          native: true
-      - jumpdest-bench-machine:
-          name: machine-arm-2xlarge
-          label: circleci-machine-arm-2xlarge
-          resource_class: arm.2xlarge
-          native: true
       - jumpdest-bench-macos:
           name: macos-m4pro-medium
           label: circleci-macos-m4pro-medium
           resource_class: m4pro.medium
-      - jumpdest-bench-macos:
-          name: macos-m4pro-large
-          label: circleci-macos-m4pro-large
-          resource_class: m4pro.large
-      - jumpdest-bench-macos:
-          name: macos-m2pro-medium
-          label: circleci-macos-m2pro-medium
-          resource_class: m2pro.medium
-      - jumpdest-bench-macos:
-          name: macos-m2pro-large
-          label: circleci-macos-m2pro-large
-          resource_class: m2pro.large

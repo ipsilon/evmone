@@ -34,8 +34,8 @@ cmake --build "$build" --target evmone-bench-internal --parallel "$jobs"
 } > "$out/$label-hw.txt" 2>&1
 
 "$build/bin/evmone-bench-internal" --benchmark_filter='^jumpdest_analysis/' \
-    --benchmark_repetitions=30 --benchmark_enable_random_interleaving=true \
-    --benchmark_min_time=0.015s --benchmark_display_aggregates_only=true \
+    --benchmark_repetitions=20 --benchmark_enable_random_interleaving=true \
+    --benchmark_min_time=0.012s --benchmark_display_aggregates_only=true \
     --benchmark_context=label="$label" \
     --benchmark_out="$out/$label.json" --benchmark_out_format=json > "$out/$label.txt"
 tail -n 3 "$out/$label.txt"
