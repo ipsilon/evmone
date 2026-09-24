@@ -6,6 +6,8 @@ add_executable(
     evmone-bench-internal
     modarith_bench.cpp
     find_jumpdest_bench.cpp
+    jumpdest_analysis_bench.cpp
+    test_bytecodes.cpp
     memory_allocation.cpp
     lru_cache_bench.cpp
 )
