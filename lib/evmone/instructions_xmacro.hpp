@@ -219,9 +219,9 @@
     ON_OPCODE_UNDEFINED(0xae)                               \
     ON_OPCODE_UNDEFINED(0xaf)                               \
                                                             \
-    ON_OPCODE_UNDEFINED(0xb0)                               \
-    ON_OPCODE_UNDEFINED(0xb1)                               \
-    ON_OPCODE_UNDEFINED(0xb2)                               \
+    ON_OPCODE_IDENTIFIER(OP_CALLSUB, callsub)               \
+    ON_OPCODE_IDENTIFIER(OP_CALLDEST, calldest)             \
+    ON_OPCODE_IDENTIFIER(OP_RETURNSUB, returnsub)           \
     ON_OPCODE_UNDEFINED(0xb3)                               \
     ON_OPCODE_UNDEFINED(0xb4)                               \
     ON_OPCODE_UNDEFINED(0xb5)                               \
