@@ -55,8 +55,21 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
 
     for (size_t i = 0; i < txs.size(); ++i)
     {
-        const auto& tx = txs[i];
-        const auto computed_tx_hash = keccak256(rlp::encode(tx));
+        auto tx = txs[i];
+        const auto txbytes = rlp::encode(tx);
+        const auto computed_tx_hash = keccak256(txbytes);
+
+        if (opts.recover_senders)
+        {
+            const auto sender = state::recover_sender(tx, txbytes);
+            if (!sender.has_value())
+            {
+                rejected_txs.push_back(
+                    {computed_tx_hash, i, make_error_code(state::INVALID_SIGNATURE)});
+                continue;
+            }
+            tx.sender = *sender;
+        }
 
         std::optional<StreamRedirect> trace_guard;
         if (trace_enabled)
