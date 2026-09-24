@@ -1,5 +1,4 @@
 // JUMPDEST analysis v4: 16-byte groups, pshufb pointer doubling, pair composition.
-#pragma once
 
 // v4: positions are encoded as 0x70 + pos, so pos >= 16 (the group exit) has bit 7 set and
 // pshufb returns 0 for it; the setup is 3 ops. Tables have tails so the chain needs no compares:
@@ -57,8 +56,8 @@ __attribute__((target("ssse3,sse4.1"))) void g16v4_sse(const u8* code, size_t si
     for (size_t q = 0; q < num_pairs; ++q)
     {
         MCA_BEGIN("g16v4_sse");
-        const auto ca = _mm_loadu_si128(reinterpret_cast<const __m128i*>(code + 32 * q));
-        const auto cb = _mm_loadu_si128(reinterpret_cast<const __m128i*>(code + 32 * q + 16));
+        const auto ca = JDA_LOAD128(code + 32 * q);
+        const auto cb = JDA_LOAD128(code + 32 * q + 16);
         const auto a = g16x(ca);
         const auto b = g16x(cb);
         const auto ta = _mm_and_si128(a.x, c7f);  // Entry offset into B: 0..32.
@@ -104,7 +103,7 @@ __attribute__((target("avx2"))) void g16v4_avx2(const u8* code, size_t size, u64
     for (size_t q = 0; q < num_pairs; ++q)
     {
         MCA_BEGIN("g16v4_avx2");
-        const auto c = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(code + 32 * q));
+        const auto c = JDA_LOAD256(code + 32 * q);
         const auto p = _mm256_max_epi8(_mm256_subs_epi8(c, c5f), _mm256_setzero_si256());
         auto x = _mm256_add_epi8(iota, p);
         auto v = v0;

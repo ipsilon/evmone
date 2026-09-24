@@ -1,4 +1,3 @@
-#pragma once
 // g9_avx2: JUMPDEST analysis, x86-64-v3. Combines the other agent's o8_avx2 front-end and scalar
 // chain with a 2-stage ring-buffer pipeline and permute-free table stores.
 //
@@ -50,7 +49,7 @@ __attribute__((target("avx2"), always_inline)) inline Tables compute(const u8* p
     const auto bit = _mm256_setr_epi8(1, 2, 4, 8, 16, 32, 64, -128, 1, 2, 4, 8, 16, 32, 64, -128,
         1, 2, 4, 8, 16, 32, 64, -128, 1, 2, 4, 8, 16, 32, 64, -128);
 
-    const auto c = _mm256_load_si256(reinterpret_cast<const __m256i*>(p));
+    const auto c = JDA_LOAD256(p);
     const auto y = _mm256_add_epi8(_mm256_max_epi8(c, _mm256_set1_epi8(0x5f)), iota);
     auto n = _mm256_sub_epi8(y, k8);                          // 0x70 + next start in the group
     auto x = _mm256_max_epi8(_mm256_xor_si256(y, k8), lane);  // in-half pointer, or a sink

@@ -1,4 +1,3 @@
-#pragma once
 // ---------------------------------------------------------------------------------------------
 // g8_sse: final SSE (x86-64-v2) kernel.
 //
@@ -85,8 +84,8 @@ __attribute__((target("ssse3,sse4.1"))) void g8_sse(const u8* code, size_t size,
     for (size_t q = 0; q < num_blocks; ++q)
     {
         MCA_BEGIN("g8_sse");
-        const auto a = g8_half(_mm_loadu_si128(reinterpret_cast<const __m128i*>(code + 32 * q)));
-        const auto c = g8_half(_mm_loadu_si128(reinterpret_cast<const __m128i*>(code + 32 * q + 16)));
+        const auto a = g8_half(JDA_LOAD128(code + 32 * q));
+        const auto c = g8_half(JDA_LOAD128(code + 32 * q + 16));
         _mm_store_si128(reinterpret_cast<__m128i*>(b + T::TA), a.xm);
         _mm_store_si128(reinterpret_cast<__m128i*>(b + T::PT + 16), c.xm);
         // Block composition is one more doubling step: PT[s] = c.xm[a.xm[s] - 16] or a.xm[s] - 16.
@@ -128,8 +127,8 @@ __attribute__((target("ssse3,sse4.1"))) void g8nc_sse(const u8* code, size_t siz
     for (size_t q = 0; q < num_blocks; ++q)
     {
         MCA_BEGIN("g8nc_sse");
-        const auto a = g8_half(_mm_loadu_si128(reinterpret_cast<const __m128i*>(code + 32 * q)));
-        const auto c = g8_half(_mm_loadu_si128(reinterpret_cast<const __m128i*>(code + 32 * q + 16)));
+        const auto a = g8_half(JDA_LOAD128(code + 32 * q));
+        const auto c = g8_half(JDA_LOAD128(code + 32 * q + 16));
         _mm_store_si128(reinterpret_cast<__m128i*>(b + T::TA), a.xm);
         _mm_store_si128(reinterpret_cast<__m128i*>(b + T::PT), c.xm);
         _mm_storel_epi64(reinterpret_cast<__m128i*>(b + T::T0), a.xa);
@@ -188,7 +187,7 @@ __attribute__((target("avx2"))) void g8_avx2(const u8* code, size_t size, u64* b
     for (size_t q = 0; q < num_blocks; ++q)
     {
         MCA_BEGIN("g8_avx2");
-        const auto c = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(code + 32 * q));
+        const auto c = JDA_LOAD256(code + 32 * q);
         const auto y = _mm256_add_epi8(_mm256_max_epi8(c, _mm256_set1_epi8(0x5f)), iota);
         auto n = _mm256_sub_epi8(y, k8);
         auto x = _mm256_max_epi8(_mm256_xor_si256(y, k8), lane);

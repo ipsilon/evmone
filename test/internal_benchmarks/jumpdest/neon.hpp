@@ -1,5 +1,5 @@
 // JUMPDEST analysis v4 for AArch64 NEON.
-#pragma once
+
 
 namespace
 {

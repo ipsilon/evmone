@@ -1,4 +1,3 @@
-#pragma once
 // JUMPDEST analysis, AVX2 (x86-64-v3), final kernel.
 //
 // Core (per 32-byte block = 4 half-groups of 8 bytes, as in g8): for every entry offset of every
@@ -63,7 +62,7 @@ __attribute__((target("avx2"), always_inline)) inline JdaCore jda_core(const u8*
     const auto bit = _mm256_broadcastsi128_si256(
         _mm_setr_epi8(1, 2, 4, 8, 16, 32, 64, -128, 1, 2, 4, 8, 16, 32, 64, -128));
 
-    const auto c = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(code));
+    const auto c = JDA_LOAD256(code);
     const auto y = _mm256_add_epi8(_mm256_max_epi8(c, _mm256_set1_epi8(0x5f)), iota);
     auto n = _mm256_sub_epi8(y, k8);                          // 0x70 + next pos in the group.
     auto x = _mm256_max_epi8(_mm256_xor_si256(y, k8), lane);  // Pointer with self-loop sinks.
