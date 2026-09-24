@@ -516,5 +516,5 @@ TEST(tooling_t8n, block_gas_used_is_pre_refund_from_amsterdam)
     // The difference is the refund for clearing the slot, capped at 1/5 of the gas used
     // (EIP-3529): the repriced refund exceeds that cap.
     const auto [block_gas, cumulative] = run(EVMC_AMSTERDAM);
-    EXPECT_EQ(block_gas - cumulative, 6620);
+    EXPECT_EQ(block_gas - cumulative, 5420);
 }
