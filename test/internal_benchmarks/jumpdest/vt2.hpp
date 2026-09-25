@@ -211,10 +211,15 @@ template <typename V, Layout L>
     }
     auto* const out = reinterpret_cast<u8*>(bits);
     size_t e = 0x80;
-    for (size_t q = 0; q < n; ++q)
+    // One induction variable i, counting the output bytes from -4n up to 0 (the loop ends with add
+    // + jne); the code is at 8 * i from its end. The empty asm keeps compilers from rewriting it.
+    const auto m = static_cast<ptrdiff_t>(4 * n);
+    const u8* const code_end = code + 8 * m;
+    u8* const out_end = out + m;
+    for (ptrdiff_t i = -m; i != 0; i += 4)
     {
-        block<V, L>(code + 32 * q, s);
-        u8* const o = out + 4 * q;
+        block<V, L>(code_end + 8 * i, s);
+        u8* const o = out_end + i;
         if constexpr (L == Layout::words)
         {
             const size_t e2 = s[B::TA + e - 0x80];
@@ -236,6 +241,9 @@ template <typename V, Layout L>
             o[3] = s[B::V3 + e3 - 0x78];
         }
         e = s[B::PT + e - 0x80];
+#ifdef __clang__
+        asm("" : "+r"(i));  // clang would rewrite the loop into a compare against the end.
+#endif
     }
 }
 }  // namespace vt2
