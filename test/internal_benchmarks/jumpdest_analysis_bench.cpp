@@ -88,6 +88,8 @@ using u64 = uint64_t;
 #define JDA_LOAD256(p) _mm256_load_si256(reinterpret_cast<const __m256i*>(p))
 #include "jumpdest/g8.hpp"
 
+#include "jumpdest/vt.hpp"
+
 #undef JDA_LOAD128
 #undef JDA_LOAD256
 }  // namespace aligned_load
@@ -173,6 +175,8 @@ const Variant variants[] = {
     // clang-format on
     JDA_SIMD("g8_sse", g8_sse, has_sse41),
     JDA_SIMD("g8_avx2", g8_avx2, has_avx2),
+    {"vt_g8_sse", aligned_load::vt_g8_sse, Kind::simd_load, has_sse41},
+    {"vt_g9np_avx2", aligned_load::vt_g9np_avx2, Kind::simd_load, has_avx2},
 #undef JDA_SIMD
 #endif
 #if JDA_FROZEN_ASM
