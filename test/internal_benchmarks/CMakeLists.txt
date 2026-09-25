@@ -13,6 +13,9 @@ add_executable(
 )
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64" AND NOT APPLE AND NOT WIN32)
     enable_language(ASM)
+    target_sources(evmone-bench-internal PRIVATE jumpdest/vt2_sse.cpp jumpdest/vt2_avx2.cpp)
+    set_source_files_properties(jumpdest/vt2_sse.cpp PROPERTIES COMPILE_OPTIONS "-mssse3;-msse4.1")
+    set_source_files_properties(jumpdest/vt2_avx2.cpp PROPERTIES COMPILE_OPTIONS "-mavx2")
     target_sources(evmone-bench-internal PRIVATE jumpdest/frozen_asm.S
         jumpdest/r3/g9np_avx2_ofix.S jumpdest/r3/g9np_avx2_o41.S jumpdest/r3/c8_avx2_fnew1.S)
     target_compile_definitions(evmone-bench-internal PRIVATE JDA_FROZEN_ASM=1)
