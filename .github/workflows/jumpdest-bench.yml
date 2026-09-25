@@ -22,6 +22,12 @@ jobs:
           - macos-26
           - macos-15
           - macos-15-intel
+        cc: [default]
+        include:
+          - os: ubuntu-24.04
+            cc: clang
+          - os: ubuntu-22.04
+            cc: clang
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -32,9 +38,11 @@ jobs:
         if: runner.os == 'macOS'
         run: command -v ninja || HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
       - name: JUMPDEST analysis benchmark
-        run: JOBS=4 test/internal_benchmarks/jumpdest_bench_ci.sh github-${{ matrix.os }} results
+        run: |
+          if [ "${{ matrix.cc }}" = clang ]; then export CC=clang CXX=clang++; fi
+          JOBS=4 test/internal_benchmarks/jumpdest_bench_ci.sh github-${{ matrix.os }}-${{ matrix.cc }} results
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: jumpdest-${{ matrix.os }}
+          name: jumpdest-${{ matrix.os }}-${{ matrix.cc }}
           path: results

@@ -11,6 +11,11 @@ add_executable(
     memory_allocation.cpp
     lru_cache_bench.cpp
 )
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64" AND NOT APPLE AND NOT WIN32)
+    enable_language(ASM)
+    target_sources(evmone-bench-internal PRIVATE jumpdest/frozen_asm.S)
+    target_compile_definitions(evmone-bench-internal PRIVATE JDA_FROZEN_ASM=1)
+endif()
 
 # TODO: Not sure why evmone::precompiles must be here, but otherwise this don't link.
 target_link_libraries(evmone-bench-internal PRIVATE evmone evmone::precompiles benchmark::benchmark)

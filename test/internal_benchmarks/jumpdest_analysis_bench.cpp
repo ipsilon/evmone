@@ -135,6 +135,13 @@ namespace neon
 #undef MCA_END
 #pragma GCC diagnostic pop
 
+#if JDA_FROZEN_ASM
+// Frozen clang-21 builds (jumpdest/frozen_asm.S): the same code for every compiler.
+extern "C" void jda_asm_g8_sse(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_g8_avx2(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_c9_avx2(const uint8_t*, size_t, uint64_t*);
+#endif
+
 namespace
 {
 enum class Kind
@@ -202,6 +209,11 @@ const Variant variants[] = {
     JDA_SIMD("c10_avx2", c10_avx2, has_avx2_bmi2),
     JDA_SIMD("d6_avx2", d6_avx2, has_avx2_bmi2),
 #undef JDA_SIMD
+#endif
+#if JDA_FROZEN_ASM
+    {"asm_g8_sse", jda_asm_g8_sse, Kind::simd_load, has_sse41},
+    {"asm_g8_avx2", jda_asm_g8_avx2, Kind::simd_load, has_avx2},
+    {"asm_c9_avx2", jda_asm_c9_avx2, Kind::simd_load, has_avx2_bmi2},
 #endif
 #if JDA_NEON
     {"v4_neon", neon::g16v4_neon, Kind::simd_native, always},
