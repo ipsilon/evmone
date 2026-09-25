@@ -838,21 +838,6 @@ workflows:
   jumpdest-bench:
     jobs:
       - jumpdest-bench-docker:
-          name: docker-gcc-small
-          label: circleci-docker-gcc-small
-          resource_class: small
-          jobs: 1
-      - jumpdest-bench-docker:
-          name: docker-gcc-medium
-          label: circleci-docker-gcc-medium
-          resource_class: medium
-          jobs: 2
-      - jumpdest-bench-docker:
-          name: docker-gcc-mediumplus
-          label: circleci-docker-gcc-mediumplus
-          resource_class: medium+
-          jobs: 3
-      - jumpdest-bench-docker:
           name: docker-gcc-large
           label: circleci-docker-gcc-large
           resource_class: large

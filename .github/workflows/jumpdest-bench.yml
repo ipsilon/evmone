@@ -26,8 +26,6 @@ jobs:
         include:
           - os: ubuntu-24.04
             cc: clang
-          - os: ubuntu-22.04
-            cc: clang
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
