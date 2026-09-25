@@ -97,16 +97,41 @@ template <int L>
     asm("" : "+m"(*reinterpret_cast<u8(*)[16]>(p)));
 }
 
-constexpr size_t PT = 0;    // u8: 0x80 + next block entry; [16,32) = TB; tail s >= 32.
-constexpr size_t TA = 48;   // u8: 0x80 + entry into group B; tail s >= 16.
-constexpr size_t VA = 96;   // u16: JUMPDEST bits of group A (0 for s >= 16).
-constexpr size_t VB = 176;  // u16: JUMPDEST bits of group B (0 for s >= 16).
-constexpr size_t SLOT = 256;
+/// Stores the low n bytes of v at p.
+template <size_t N>
+[[gnu::always_inline]] inline void store_n(u8* p, u8x16 v)
+{
+    __builtin_memcpy(p, &v, N);
+    asm("" : "+m"(*reinterpret_cast<u8(*)[N]>(p)));
+}
 
-template <typename V>
+/// Table layouts. Words: 16-bit JUMPDEST words per group entry (unpacks, 2 output words per
+/// block). Bytes: JUMPDEST bytes per 8-byte half and the half-exit tables (4 output bytes).
+enum class Layout
+{
+    words,
+    bytes
+};
+
+template <Layout L>
+struct Tab;
+template <>
+struct Tab<Layout::words>
+{
+    static constexpr size_t PT = 0, TA = 48, VA = 96, VB = 176, SIZE = 256;
+};
+template <>
+struct Tab<Layout::bytes>
+{
+    static constexpr size_t TA = 0, PT = 48, T0 = 96, T2 = 144, V0 = 192, V2 = 240, V1 = 296,
+                            V3 = 344, SIZE = 384;
+};
+
+template <typename V, Layout L>
 [[gnu::always_inline]] inline void block(const u8* p, u8* s)
 {
     using T = Traits<V>;
+    using B = Tab<L>;
     constexpr u8x16 IOTA = {0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x1a, 0x1b, 0x1c, 0x1d,
         0x1e, 0x1f, 0x20, 0x21};
     constexpr u8x16 K8 = {8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -114,10 +139,13 @@ template <typename V>
     constexpr u8x16 BIT = {1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128};
     const auto iota = rep<V>(IOTA), k8 = rep<V>(K8), lane = rep<V>(LANE), bit = rep<V>(BIT);
 
-    u8x16 xm_g[2], vl_g[2], vh_g[2];  // Per 16-byte group: [TA or TB], word halves.
+    // Per 16-byte group: xm = 0x80 + entry into the next group, then either the word halves
+    // (a, b) or the half exits and the JUMPDEST bytes (a = n, b = v).
+    u8x16 xm_g[2], a_g[2], b_g[2];
     for (int k = 0; k < T::N; ++k)
     {
-        const V c = *static_cast<const V*>(__builtin_assume_aligned(p + k * sizeof(V), sizeof(V)));
+        const V c = *static_cast<const V*>(
+            __builtin_assume_aligned(p + static_cast<size_t>(k) * sizeof(V), sizeof(V)));
         const V y = max_s(c, V{} + 0x5f) + iota;
         V n = y - k8;               // 0x70 + next start in the group.
         V x = max_s(y ^ k8, lane);  // In-half pointer, or a sink.
@@ -130,46 +158,84 @@ template <typename V>
         }
         n = T::shuffle(n, x);                     // Exit of the half.
         const V xm = max_u(n, T::shuffle(n, n));  // 0x80 + entry into the next group.
-        const V h = T::shuffle(v, n);             // 2nd-half bits for 1st-half entries.
-        const V vl = unpack<0>(v, h), vh = unpack<8>(h, v);
+        V a = n, b = v;
+        if constexpr (L == Layout::words)
+        {
+            const V h = T::shuffle(v, n);  // 2nd-half bits for 1st-half entries.
+            a = unpack<0>(v, h);
+            b = unpack<8>(h, v);
+        }
         for (int g = 0; g < 2 / T::N; ++g)
         {
             xm_g[k + g] = group(xm, g);
-            vl_g[k + g] = group(vl, g);
-            vh_g[k + g] = group(vh, g);
+            a_g[k + g] = group(a, g);
+            b_g[k + g] = group(b, g);
         }
     }
     const u8x16 ia = xm_g[0] - 0x10;
-    store(s + TA, xm_g[0]);
-    store(s + PT, max_u(T::shuffle(xm_g[1], ia), ia));
-    store(s + PT + 16, xm_g[1]);
-    store(s + VA, vl_g[0]);
-    store(s + VA + 16, vh_g[0]);
-    store(s + VB, vl_g[1]);
-    store(s + VB + 16, vh_g[1]);
+    store(s + B::TA, xm_g[0]);
+    store(s + B::PT, max_u(T::shuffle(xm_g[1], ia), ia));
+    store(s + B::PT + 16, xm_g[1]);
+    if constexpr (L == Layout::words)
+    {
+        store(s + B::VA, a_g[0]);
+        store(s + B::VA + 16, b_g[0]);
+        store(s + B::VB, a_g[1]);
+        store(s + B::VB + 16, b_g[1]);
+    }
+    else
+    {
+        store_n<8>(s + B::T0, a_g[0]);
+        store_n<8>(s + B::T2, a_g[1]);
+        store_n<8>(s + B::V0, b_g[0]);
+        store_n<8>(s + B::V2, b_g[1]);
+        store(s + B::V1 - 8, b_g[0]);
+        store(s + B::V3 - 8, b_g[1]);
+    }
 }
 
-template <typename V>
+template <typename V, Layout L>
 [[gnu::always_inline]] inline void run(const u8* code, size_t size, u64* bits)
 {
+    using B = Tab<L>;
     const size_t n = (size + 31) / 32;
-    alignas(64) u8 s[SLOT] = {};
-    for (unsigned i = 16; i < 48; ++i)
-        s[TA + i] = static_cast<u8>(0x80 + i - 16);
-    for (unsigned i = 32; i < 48; ++i)
-        s[PT + i] = static_cast<u8>(0x80 + i - 32);
-    auto* const out = reinterpret_cast<uint16_t*>(bits);
+    alignas(64) u8 s[B::SIZE] = {};
+    for (unsigned i = 16; i < 40; ++i)
+        s[B::TA + i] = static_cast<u8>(0x80 + i - 16);
+    for (unsigned i = 32; i < 40; ++i)
+        s[B::PT + i] = static_cast<u8>(0x80 + i - 32);
+    if constexpr (L == Layout::bytes)
+    {
+        for (unsigned i = 8; i < 40; ++i)
+            s[B::T0 + i] = s[B::T2 + i] = static_cast<u8>(0x78 + i - 8);
+    }
+    auto* const out = reinterpret_cast<u8*>(bits);
     size_t e = 0x80;
     for (size_t q = 0; q < n; ++q)
     {
-        block<V>(code + 32 * q, s);
-        const size_t e2 = s[TA + e - 0x80];
-        uint16_t w0, w1;
-        __builtin_memcpy(&w0, s + VA + 2 * (e - 0x80), 2);
-        __builtin_memcpy(&w1, s + VB + 2 * (e2 - 0x80), 2);
-        out[2 * q] = w0;
-        out[2 * q + 1] = w1;
-        e = s[PT + e - 0x80];
+        block<V, L>(code + 32 * q, s);
+        u8* const o = out + 4 * q;
+        if constexpr (L == Layout::words)
+        {
+            const size_t e2 = s[B::TA + e - 0x80];
+            __builtin_memcpy(o, s + B::VA + 2 * (e - 0x80), 2);
+            asm("" : "+m"(*reinterpret_cast<u8(*)[2]>(o)));
+            __builtin_memcpy(o + 2, s + B::VB + 2 * (e2 - 0x80), 2);
+        }
+        else
+        {
+            const size_t e1 = s[B::T0 + e - 0x80];
+            const size_t e2 = s[B::TA + e - 0x80];
+            const size_t e3 = s[B::T2 + e2 - 0x80];
+            o[0] = s[B::V0 + e - 0x80];
+            asm("" : "+m"(o[0]));
+            o[1] = s[B::V1 + e1 - 0x78];
+            asm("" : "+m"(o[1]));
+            o[2] = s[B::V2 + e2 - 0x80];
+            asm("" : "+m"(o[2]));
+            o[3] = s[B::V3 + e3 - 0x78];
+        }
+        e = s[B::PT + e - 0x80];
     }
 }
 }  // namespace vt2
