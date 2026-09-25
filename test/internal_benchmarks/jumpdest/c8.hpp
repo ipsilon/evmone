@@ -43,6 +43,7 @@ constexpr size_t VG = 128;  // [VG, VG + 64) data, [VG + 64, VG + 160) zeros.
 
 // C8: gapped word tables: vl at VG, vh at VG + 32 (2 ymm stores); the word index of entry s is
 // s + (s & 0x38) from a static byte table (entries 8..15 -> 16..23, >= 16 -> zeros).
+constexpr size_t X = 288;   // Scratch [TA | TB] (CLEAN_PT only).
 constexpr size_t GT = 336;  // GT[e - 0x80] = 0x80 + gap(e - 0x80), e - 0x80 in [0, 48).
 struct alignas(64) Tables8
 {
@@ -58,14 +59,28 @@ struct alignas(64) Tables8
             b[GT + i] = static_cast<u8>(0x80 + i + (i & 0x38));
     }
 };
+template <bool CLEAN_PT>
 R2_I void finish_c8(Core g, u8* b, size_t& e, uint16_t* out)
 {
     _mm_store_si128(reinterpret_cast<__m128i*>(b + TA), _mm256_castsi256_si128(g.xm));
+    if constexpr (CLEAN_PT)
+    {
+        // [TA | TB] goes to a scratch slot, so PT is written by two non-overlapping stores.
+        _mm256_store_si256(reinterpret_cast<__m256i*>(b + X), g.xm);
+        R2_BARRIER(b + X, 32);
+        const auto tb = _mm_load_si128(reinterpret_cast<const __m128i*>(b + X + 16));
+        const auto ia = _mm_sub_epi8(_mm256_castsi256_si128(g.xm), _mm_set1_epi8(0x10));
+        _mm_store_si128(reinterpret_cast<__m128i*>(b + PT), _mm_max_epu8(_mm_shuffle_epi8(tb, ia), ia));
+        _mm_store_si128(reinterpret_cast<__m128i*>(b + PT + 16), tb);
+    }
+    else
+    {
     _mm256_store_si256(reinterpret_cast<__m256i*>(b + PT), g.xm);
     R2_BARRIER(b + PT, 32);
     const auto tb = _mm_load_si128(reinterpret_cast<const __m128i*>(b + PT + 16));
     const auto ia = _mm_sub_epi8(_mm256_castsi256_si128(g.xm), _mm_set1_epi8(0x10));
     _mm_store_si128(reinterpret_cast<__m128i*>(b + PT), _mm_max_epu8(_mm_shuffle_epi8(tb, ia), ia));
+    }
     _mm256_store_si256(reinterpret_cast<__m256i*>(b + VG), g.lo);
     _mm256_store_si256(reinterpret_cast<__m256i*>(b + VG + 32), g.hi);
     const size_t e2 = b[e - 0x80 + TA];
@@ -91,4 +106,5 @@ R2_I void finish_c8(Core g, u8* b, size_t& e, uint16_t* out)
             FINISH(a, t.b, e, reinterpret_cast<uint16_t*>(bits) + 2 * q);                      \
         }                                                                                      \
     }
-R2_DRIVER(c8_avx2, r2::core_v, r2::finish_c8, r2::Tables8)
+R2_DRIVER(c8_avx2, r2::core_v, r2::finish_c8<false>, r2::Tables8)
+R2_DRIVER(c8f_avx2, r2::core_v, r2::finish_c8<true>, r2::Tables8)

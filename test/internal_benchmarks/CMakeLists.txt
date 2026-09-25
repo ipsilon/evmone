@@ -13,7 +13,8 @@ add_executable(
 )
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64" AND NOT APPLE AND NOT WIN32)
     enable_language(ASM)
-    target_sources(evmone-bench-internal PRIVATE jumpdest/frozen_asm.S)
+    target_sources(evmone-bench-internal PRIVATE jumpdest/frozen_asm.S
+        jumpdest/r3/g8_avx2_ofix.S jumpdest/r3/g9np_avx2_ofix.S jumpdest/r3/c8_avx2_ofix.S jumpdest/r3/g8_avx2_onew1.S jumpdest/r3/g9np_avx2_onew1.S jumpdest/r3/c8_avx2_onew1.S jumpdest/r3/g8_sse_onew1.S)
     target_compile_definitions(evmone-bench-internal PRIVATE JDA_FROZEN_ASM=1)
 endif()
 

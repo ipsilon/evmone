@@ -127,6 +127,13 @@ extern "C" void jda_asm_g8_sse(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_g8_avx2(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_g9np_avx2(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_c8_avx2(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_g8_avx2_ofix(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_g9np_avx2_ofix(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_c8_avx2_ofix(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_g8_avx2_onew1(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_g9np_avx2_onew1(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_c8_avx2_onew1(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_g8_sse_onew1(const uint8_t*, size_t, uint64_t*);
 #endif
 
 namespace
@@ -182,6 +189,8 @@ const Variant variants[] = {
     JDA_SIMD("g8_avx2", g8_avx2, has_avx2),
     JDA_SIMD("g9np_avx2", g9np_avx2, has_avx2),
     JDA_SIMD("c8_avx2", c8_avx2, has_avx2_bmi2),
+    JDA_SIMD("c8f_avx2", c8f_avx2, has_avx2_bmi2),
+    JDA_SIMD("g9npf_avx2", g9npf_avx2, has_avx2),
 #undef JDA_SIMD
 #endif
 #if JDA_FROZEN_ASM
@@ -189,6 +198,13 @@ const Variant variants[] = {
     {"asm_g8_avx2", jda_asm_g8_avx2, Kind::simd_load, has_avx2},
     {"asm_g9np_avx2", jda_asm_g9np_avx2, Kind::simd_load, has_avx2},
     {"asm_c8_avx2", jda_asm_c8_avx2, Kind::simd_load, has_avx2_bmi2},
+    {"asm_g8_avx2_ofix", jda_asm_g8_avx2_ofix, Kind::simd_load, has_avx2},
+    {"asm_g9np_avx2_ofix", jda_asm_g9np_avx2_ofix, Kind::simd_load, has_avx2},
+    {"asm_c8_avx2_ofix", jda_asm_c8_avx2_ofix, Kind::simd_load, has_avx2_bmi2},
+    {"asm_g8_avx2_onew1", jda_asm_g8_avx2_onew1, Kind::simd_load, has_avx2},
+    {"asm_g9np_avx2_onew1", jda_asm_g9np_avx2_onew1, Kind::simd_load, has_avx2},
+    {"asm_c8_avx2_onew1", jda_asm_c8_avx2_onew1, Kind::simd_load, has_avx2_bmi2},
+    {"asm_g8_sse_onew1", jda_asm_g8_sse_onew1, Kind::simd_load, has_sse41},
 #endif
 #if JDA_NEON
     {"v4_neon", neon::g16v4_neon, Kind::simd_native, always},

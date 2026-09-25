@@ -10,7 +10,8 @@ constexpr size_t PT = 0;    // u8: 0x80 + next pair entry; [16,32) = TB; tail s 
 constexpr size_t TA = 48;   // u8: 0x80 + entry into group B; tail s >= 16: 0x80 + s - 16
 constexpr size_t VA = 96;   // u16: JUMPDEST bits of group A (0 for s >= 16)
 constexpr size_t VB = 176;  // u16: JUMPDEST bits of group B (0 for s >= 16)
-constexpr size_t SLOT = 256;
+constexpr size_t X = 256;    // Scratch [TA | TB] (CLEAN_PT only).
+constexpr size_t SLOT = 288;
 
 inline void init_tails(u8* s)
 {
@@ -56,15 +57,29 @@ __attribute__((target("avx2"), always_inline)) inline Tables compute(const u8* p
     return {xm, _mm256_unpacklo_epi8(v, h), _mm256_unpackhi_epi8(h, v)};
 }
 
+template <bool CLEAN_PT>
 __attribute__((target("avx2"), always_inline)) inline void store(u8* s, const Tables& t)
 {
     _mm_store_si128(reinterpret_cast<__m128i*>(s + TA), _mm256_castsi256_si128(t.xm));
     // PT = [TB[TA[s]] or TA[s] - 16 | TB]; TB is read back from memory (no lane-crossing op).
+    if constexpr (CLEAN_PT)
+    {
+        // [TA | TB] goes to a scratch slot, so PT is written by two non-overlapping stores.
+        _mm256_store_si256(reinterpret_cast<__m256i*>(s + X), t.xm);
+        asm("" : "+m"(*reinterpret_cast<u8(*)[32]>(s + X)));
+        const auto tb = _mm_load_si128(reinterpret_cast<const __m128i*>(s + X + 16));
+        const auto ia = _mm_sub_epi8(_mm256_castsi256_si128(t.xm), _mm_set1_epi8(0x10));
+        _mm_store_si128(reinterpret_cast<__m128i*>(s + PT), _mm_max_epu8(_mm_shuffle_epi8(tb, ia), ia));
+        _mm_store_si128(reinterpret_cast<__m128i*>(s + PT + 16), tb);
+    }
+    else
+    {
     _mm256_store_si256(reinterpret_cast<__m256i*>(s + PT), t.xm);
     asm("" : "+m"(*reinterpret_cast<u8(*)[32]>(s + PT)));
     const auto tb = _mm_load_si128(reinterpret_cast<const __m128i*>(s + PT + 16));
     const auto ia = _mm_sub_epi8(_mm256_castsi256_si128(t.xm), _mm_set1_epi8(0x10));
     _mm_store_si128(reinterpret_cast<__m128i*>(s + PT), _mm_max_epu8(_mm_shuffle_epi8(tb, ia), ia));
+    }
     // VA = [lo(vl) | lo(vh)], VB = [hi(vl) | hi(vh)] as 16-byte stores (no vperm2i128).
     _mm_store_si128(reinterpret_cast<__m128i*>(s + VA), _mm256_castsi256_si128(t.vl));
     asm("" : "+m"(*reinterpret_cast<u8(*)[16]>(s + VA)));
@@ -96,7 +111,21 @@ __attribute__((target("avx2"))) void g9np_avx2(const u8* code, size_t size, u64*
     size_t e = 0x80;
     for (size_t q = 0; q < n; ++q)
     {
-        g9::store(slot, g9::compute(code + 32 * q));
+        g9::store<false>(slot, g9::compute(code + 32 * q));
+        e = g9::chain(slot, e, out + 2 * q);
+    }
+}
+
+__attribute__((target("avx2"))) void g9npf_avx2(const u8* code, size_t size, u64* bits)
+{
+    const size_t n = (size + 31) / 32;
+    alignas(64) u8 slot[g9::SLOT];
+    g9::init_tails(slot);
+    auto* const out = reinterpret_cast<uint16_t*>(bits);
+    size_t e = 0x80;
+    for (size_t q = 0; q < n; ++q)
+    {
+        g9::store<true>(slot, g9::compute(code + 32 * q));
         e = g9::chain(slot, e, out + 2 * q);
     }
 }
