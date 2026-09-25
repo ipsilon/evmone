@@ -45,14 +45,23 @@ struct Result
     std::vector<Failure> failures;
 };
 
+/// Told of each fixture as it runs: its name just before, and what it produced just after.
+/// Whatever the fixture writes itself comes between the two.
+struct Observer
+{
+    std::function<void(const std::string& name)> started;
+    std::function<void(const Result& result)> finished;
+};
+
 /// A single test: its name and how to run it.
 struct TestCase
 {
     std::string name;
 
-    /// Executes the test, returning what each of its fixtures produced. A test which never got
-    /// as far as a fixture returns the one result which says so, rather than throwing.
-    std::function<std::vector<Result>()> run;
+    /// Executes the test, telling the observer of each fixture as it runs, and returns what each
+    /// produced. A test which never got as far as a fixture returns the one result which says
+    /// so, rather than throwing.
+    std::function<std::vector<Result>(const Observer&)> run;
 };
 
 /// Runs @p run under a report of its own and says what it produced. What the run recorded
@@ -99,7 +108,7 @@ struct RunOptions
 
 /// Runs every selected fixture of one fixture file, which together are one test, and returns
 /// what each produced. A file which holds no fixture, or does not parse, is the one result.
-[[nodiscard]] std::vector<Result> run_fixture_file(
-    const std::filesystem::path& path, const RunOptions& options, evmc::VM& vm);
+[[nodiscard]] std::vector<Result> run_fixture_file(const std::filesystem::path& path,
+    const RunOptions& options, evmc::VM& vm, const Observer& observer);
 
 }  // namespace evmone::test

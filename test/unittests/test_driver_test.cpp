@@ -26,7 +26,12 @@ Run run(std::span<const TestCase> cases, const RunOptions& options = {})
 /// A test which runs one fixture, as a file holding one does.
 TestCase one(const std::string& name, std::function<void(TestReport&)> run)
 {
-    return {name, [name, run = std::move(run)] { return std::vector{run_one(name, run)}; }};
+    return {name, [name, run = std::move(run)](const Observer& observer) {
+                observer.started(name);
+                auto result = run_one(name, run);
+                observer.finished(result);
+                return std::vector{std::move(result)};
+            }};
 }
 
 /// A test whose fixtures are handed their outcomes, running nothing.
@@ -35,7 +40,14 @@ TestCase holding(std::string name, std::initializer_list<Outcome> outcomes)
     std::vector<Result> results;
     for (const auto outcome : outcomes)
         results.push_back({name + "::case", outcome, "the reason", {}});
-    return {std::move(name), [results = std::move(results)] { return results; }};
+    return {std::move(name), [results = std::move(results)](const Observer& observer) {
+                for (const auto& result : results)
+                {
+                    observer.started(result.name);
+                    observer.finished(result);
+                }
+                return results;
+            }};
 }
 }  // namespace
 
