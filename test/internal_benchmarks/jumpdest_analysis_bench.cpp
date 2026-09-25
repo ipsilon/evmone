@@ -86,19 +86,12 @@ using u8 = uint8_t;
 using u64 = uint64_t;
 #define JDA_LOAD128(p) _mm_load_si128(reinterpret_cast<const __m128i*>(p))
 #define JDA_LOAD256(p) _mm256_load_si256(reinterpret_cast<const __m256i*>(p))
-#include "jumpdest/v4.hpp"
-
 #include "jumpdest/g8.hpp"
 
 #include "jumpdest/g9.hpp"
 
-#include "jumpdest/pipe.hpp"
-
-#include "jumpdest/gfr.hpp"
-
 #include "jumpdest/r2.hpp"
 
-#include "jumpdest/o2.hpp"
 #undef JDA_LOAD128
 #undef JDA_LOAD256
 }  // namespace aligned_load
@@ -108,19 +101,12 @@ using u8 = uint8_t;
 using u64 = uint64_t;
 #define JDA_LOAD128(p) _mm_loadu_si128(reinterpret_cast<const __m128i*>(p))
 #define JDA_LOAD256(p) _mm256_loadu_si256(reinterpret_cast<const __m256i*>(p))
-#include "jumpdest/v4.hpp"
-
 #include "jumpdest/g8.hpp"
 
 #include "jumpdest/g9.hpp"
 
-#include "jumpdest/pipe.hpp"
-
-#include "jumpdest/gfr.hpp"
-
 #include "jumpdest/r2.hpp"
 
-#include "jumpdest/o2.hpp"
 #undef JDA_LOAD128
 #undef JDA_LOAD256
 }  // namespace unaligned_load
@@ -139,6 +125,8 @@ namespace neon
 // Frozen clang-21 builds (jumpdest/frozen_asm.S): the same code for every compiler.
 extern "C" void jda_asm_g8_sse(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_g8_avx2(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_g9np_avx2(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_c8_avx2(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_c9_avx2(const uint8_t*, size_t, uint64_t*);
 #endif
 
@@ -191,28 +179,18 @@ const Variant variants[] = {
     {name, aligned_load::fn, Kind::simd_load, supported}, \
     {name, unaligned_load::fn, Kind::simd_loadu, supported}
     // clang-format on
-    JDA_SIMD("v4_sse", g16v4_sse, has_sse41),
     JDA_SIMD("g8_sse", g8_sse, has_sse41),
-    JDA_SIMD("o2l_sse", o2l_sse, has_sse41),
-    JDA_SIMD("o2x_sse", o2x_sse, has_sse41),
-    JDA_SIMD("o2m_sse", o2m_sse, has_sse41),
-    JDA_SIMD("v4_avx2", g16v4_avx2, has_avx2),
     JDA_SIMD("g8_avx2", g8_avx2, has_avx2),
     JDA_SIMD("g9np_avx2", g9np_avx2, has_avx2),
-    JDA_SIMD("g9_avx2", g9_avx2, has_avx2),
-    JDA_SIMD("pipe_avx2", gfinal_avx2, has_avx2),
-    JDA_SIMD("pipe_bytes_avx2", gfinal_bytes_avx2, has_avx2),
-    JDA_SIMD("gfr_avx2", gfr_avx2, has_avx2),
-    JDA_SIMD("gfrz_avx2", gfrz_avx2, has_avx2),
     JDA_SIMD("c8_avx2", c8_avx2, has_avx2_bmi2),
     JDA_SIMD("c9_avx2", c9_avx2, has_avx2_bmi2),
-    JDA_SIMD("c10_avx2", c10_avx2, has_avx2_bmi2),
-    JDA_SIMD("d6_avx2", d6_avx2, has_avx2_bmi2),
 #undef JDA_SIMD
 #endif
 #if JDA_FROZEN_ASM
     {"asm_g8_sse", jda_asm_g8_sse, Kind::simd_load, has_sse41},
     {"asm_g8_avx2", jda_asm_g8_avx2, Kind::simd_load, has_avx2},
+    {"asm_g9np_avx2", jda_asm_g9np_avx2, Kind::simd_load, has_avx2},
+    {"asm_c8_avx2", jda_asm_c8_avx2, Kind::simd_load, has_avx2_bmi2},
     {"asm_c9_avx2", jda_asm_c9_avx2, Kind::simd_load, has_avx2_bmi2},
 #endif
 #if JDA_NEON

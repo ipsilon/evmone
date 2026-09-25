@@ -862,17 +862,3 @@ workflows:
           name: machine-large
           label: circleci-machine-large
           resource_class: large
-      - jumpdest-bench-machine:
-          name: machine-arm-medium
-          label: circleci-machine-arm-medium
-          resource_class: arm.medium
-          native: true
-      - jumpdest-bench-machine:
-          name: machine-arm-large
-          label: circleci-machine-arm-large
-          resource_class: arm.large
-          native: true
-      - jumpdest-bench-macos:
-          name: macos-m4pro-medium
-          label: circleci-macos-m4pro-medium
-          resource_class: m4pro.medium
