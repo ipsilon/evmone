@@ -2,9 +2,9 @@
 // Copyright 2026 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 
-// Benchmarks of JUMPDEST analysis: the default evmone loop, the speculative variant, the full
-// baseline::analyze() and the data-independent SIMD kernels. Each benchmark checks its result
-// against the default loop before timing.
+// Benchmarks of JUMPDEST analysis of padded code: the default evmone loop, the speculative
+// variant and the data-independent SIMD kernels. Each benchmark checks its result against the
+// default loop before timing.
 //
 // Name: jumpdest_analysis/<input>/<variant>/<alignment>. The alignment is the offset of the code
 // from a 64-byte boundary (a32: 0, a16: 16, a1: 1) and, for the SIMD kernels, the load
@@ -13,7 +13,6 @@
 #include "test_bytecodes.hpp"
 #include <benchmark/benchmark.h>
 #include <evmc/hex.hpp>
-#include <evmone/baseline.hpp>
 #include <evmone/constants.hpp>
 #include <algorithm>
 #include <cstdint>
@@ -37,7 +36,7 @@ using u8 = uint8_t;
 using u64 = uint64_t;
 
 /// Writes the JUMPDEST bitset of the code of the given size. The code is followed by at least
-/// 64 zero bytes; the bitset has (size + 64) / 64 zeroed words.
+/// PADDING zero bytes; the bitset has (size + 64) / 64 zeroed words.
 using AnalyzeFn = void (*)(const u8* code, size_t size, u64* bits);
 
 /// The default evmone loop (lib/evmone/baseline_analysis.cpp).
@@ -94,6 +93,12 @@ using u64 = uint64_t;
 #include "jumpdest/g9.hpp"
 
 #include "jumpdest/pipe.hpp"
+
+#include "jumpdest/gfr.hpp"
+
+#include "jumpdest/r2.hpp"
+
+#include "jumpdest/o2.hpp"
 #undef JDA_LOAD128
 #undef JDA_LOAD256
 }  // namespace aligned_load
@@ -110,6 +115,12 @@ using u64 = uint64_t;
 #include "jumpdest/g9.hpp"
 
 #include "jumpdest/pipe.hpp"
+
+#include "jumpdest/gfr.hpp"
+
+#include "jumpdest/r2.hpp"
+
+#include "jumpdest/o2.hpp"
 #undef JDA_LOAD128
 #undef JDA_LOAD256
 }  // namespace unaligned_load
@@ -129,7 +140,6 @@ namespace
 enum class Kind
 {
     scalar,       ///< Runs at every code offset.
-    full,         ///< baseline::analyze(): copies the code, so one offset.
     simd_load,    ///< Aligned loads: the aligned code only.
     simd_loadu,   ///< Unaligned loads: every code offset.
     simd_native,  ///< Loads with no alignment variants (NEON): every code offset.
@@ -159,24 +169,38 @@ bool has_avx2()
     __builtin_cpu_init();
     return __builtin_cpu_supports("avx2");
 }
+bool has_avx2_bmi2()
+{
+    return has_avx2() && __builtin_cpu_supports("bmi") && __builtin_cpu_supports("bmi2");
+}
 #endif
 
 const Variant variants[] = {
     {"default", default_loop, Kind::scalar, always},
     {"speculate", speculate_push_data_size, Kind::scalar, always},
-    {"baseline_analyze", nullptr, Kind::full, always},
 #if JDA_X86
+// clang-format off
 #define JDA_SIMD(name, fn, supported) \
     {name, aligned_load::fn, Kind::simd_load, supported}, \
-        {name, unaligned_load::fn, Kind::simd_loadu, supported}
+    {name, unaligned_load::fn, Kind::simd_loadu, supported}
+    // clang-format on
     JDA_SIMD("v4_sse", g16v4_sse, has_sse41),
     JDA_SIMD("g8_sse", g8_sse, has_sse41),
+    JDA_SIMD("o2l_sse", o2l_sse, has_sse41),
+    JDA_SIMD("o2x_sse", o2x_sse, has_sse41),
+    JDA_SIMD("o2m_sse", o2m_sse, has_sse41),
     JDA_SIMD("v4_avx2", g16v4_avx2, has_avx2),
     JDA_SIMD("g8_avx2", g8_avx2, has_avx2),
     JDA_SIMD("g9np_avx2", g9np_avx2, has_avx2),
     JDA_SIMD("g9_avx2", g9_avx2, has_avx2),
     JDA_SIMD("pipe_avx2", gfinal_avx2, has_avx2),
     JDA_SIMD("pipe_bytes_avx2", gfinal_bytes_avx2, has_avx2),
+    JDA_SIMD("gfr_avx2", gfr_avx2, has_avx2),
+    JDA_SIMD("gfrz_avx2", gfrz_avx2, has_avx2),
+    JDA_SIMD("c8_avx2", c8_avx2, has_avx2_bmi2),
+    JDA_SIMD("c9_avx2", c9_avx2, has_avx2_bmi2),
+    JDA_SIMD("c10_avx2", c10_avx2, has_avx2_bmi2),
+    JDA_SIMD("d6_avx2", d6_avx2, has_avx2_bmi2),
 #undef JDA_SIMD
 #endif
 #if JDA_NEON
@@ -184,7 +208,7 @@ const Variant variants[] = {
 #endif
 };
 
-constexpr size_t PADDING = 64;
+constexpr size_t PADDING = 128;  // c8 loads ahead up to 95 bytes past the end.
 constexpr size_t OFFSETS[] = {0, 16, 1};
 
 /// The code copied at the given offset from a 64-byte boundary, followed by zero padding.
@@ -302,8 +326,7 @@ std::vector<Input> make_inputs()
     // Random bytes: uniform, and the alphabets of the execution-specs jumpdest analysis benchmark.
     inputs.emplace_back("rand_bytes", random_bytes(N, all, std::vector<int>(256, 1)));
     inputs.emplace_back("rand_stop_jumpdest", random_bytes(N, {0x00, 0x5b}, {1, 1}));
-    inputs.emplace_back(
-        "rand_stop_jumpdest_push1", random_bytes(N, {0x00, 0x5b, 0x60}, {1, 1, 1}));
+    inputs.emplace_back("rand_stop_jumpdest_push1", random_bytes(N, {0x00, 0x5b, 0x60}, {1, 1, 1}));
     inputs.emplace_back("rand_jumpdest_push1", random_bytes(N, {0x5b, 0x60}, {1, 1}));
     inputs.emplace_back(
         "rand_stop_jumpdest_2push1", random_bytes(N, {0x00, 0x5b, 0x60}, {1, 1, 2}));
@@ -312,10 +335,8 @@ std::vector<Input> make_inputs()
     const std::vector<u8> tricky{0x5b, 0x60, 0x7f, 0x00};
     inputs.emplace_back("rand_push1to32", random_instructions(N, 1, 32, tricky, {2, 1, 1}));
     inputs.emplace_back("rand_push1to4", random_instructions(N, 1, 4, tricky, {2, 1, 1}));
-    inputs.emplace_back(
-        "rand_push1_hidden", random_instructions(N, 1, 1, {0x5b, 0x60}, {1, 1, 0}));
-    inputs.emplace_back(
-        "rand_push32_jumpdest", random_instructions(N, 32, 32, tricky, {1, 1, 0}));
+    inputs.emplace_back("rand_push1_hidden", random_instructions(N, 1, 1, {0x5b, 0x60}, {1, 1, 0}));
+    inputs.emplace_back("rand_push32_jumpdest", random_instructions(N, 32, 32, tricky, {1, 1, 0}));
     return inputs;
 }
 
@@ -324,8 +345,8 @@ void set_counters(benchmark::State& state, size_t size)
     state.SetBytesProcessed(state.iterations() * static_cast<int64_t>(size));
     // The initcode cost that pays for the analysis (EIP-3860).
     const auto gas = 2 * ((size + 31) / 32);
-    state.counters["gas_rate"] = benchmark::Counter(
-        static_cast<double>(gas), benchmark::Counter::kIsIterationInvariantRate);
+    state.counters["gas_rate"] =
+        benchmark::Counter(static_cast<double>(gas), benchmark::Counter::kIsIterationInvariantRate);
 }
 
 void jumpdest_analysis(benchmark::State& state, const Variant& v, const Input& in, size_t buf)
@@ -347,25 +368,6 @@ void jumpdest_analysis(benchmark::State& state, const Variant& v, const Input& i
     set_counters(state, in.size);
 }
 
-void full_analysis(benchmark::State& state, const Input& in)
-{
-    const evmc::bytes_view code{in.buffers[0].code, in.size};
-    {
-        const auto a = evmone::baseline::analyze(code);
-        for (size_t i = 0; i < in.size; ++i)
-        {
-            if (a.check_jumpdest(i) != (((in.expected[i / 64] >> (i % 64)) & 1) != 0))
-                return state.SkipWithError("wrong result");
-        }
-    }
-    for ([[maybe_unused]] auto _ : state)
-    {
-        auto a = evmone::baseline::analyze(code);
-        benchmark::DoNotOptimize(a);
-    }
-    set_counters(state, in.size);
-}
-
 [[maybe_unused]] const auto registered = [] {
     static const auto inputs = make_inputs();
     const auto min_statistic = [](const std::vector<double>& x) {
@@ -381,25 +383,19 @@ void full_analysis(benchmark::State& state, const Input& in)
             {
                 const auto offset = OFFSETS[buf];
                 auto alignment = offset == 0 ? std::string{"a32"} : "a" + std::to_string(offset);
-                if (v.kind == Kind::full || v.kind == Kind::simd_load)
+                if (v.kind == Kind::simd_load)
                 {
                     if (offset != 0)
                         continue;
-                    if (v.kind == Kind::simd_load)
-                        alignment += "_load";
+                    alignment += "_load";
                 }
                 else if (v.kind == Kind::simd_loadu)
                     alignment += "_loadu";
 
                 const auto name = "jumpdest_analysis/" + in.name + "/" + v.name + "/" + alignment;
-                auto* b = v.kind == Kind::full ?
-                              benchmark::RegisterBenchmark(name,
-                                  [&in](benchmark::State& state) { full_analysis(state, in); }) :
-                              benchmark::RegisterBenchmark(
-                                  name, [&v, &in, buf](benchmark::State& state) {
-                                      jumpdest_analysis(state, v, in, buf);
-                                  });
-                b->ComputeStatistics("min", min_statistic);
+                benchmark::RegisterBenchmark(name, [&v, &in, buf](benchmark::State& state) {
+                    jumpdest_analysis(state, v, in, buf);
+                })->ComputeStatistics("min", min_statistic);
             }
         }
     }
