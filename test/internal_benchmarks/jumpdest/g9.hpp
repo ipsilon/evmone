@@ -1,15 +1,6 @@
-// g9_avx2: JUMPDEST analysis, x86-64-v3. Combines the other agent's o8_avx2 front-end and scalar
-// chain with a 2-stage ring-buffer pipeline and permute-free table stores.
-//
-// Front-end (per 32-byte pair, one ymm; lane = 16-byte group, two 8-byte halves per lane):
-//   y = max_epi8(c, 0x5f) + iota = 0x78 + next start relative to the half (negative if it leaves).
-//   x = pointer to the next start inside the half; one that leaves points to itself (a sink).
-//   3 rounds of x = x[x], v |= v[x] give the last start in the half and the JUMPDEST bits visited.
-//   n[x] is the exit of the half; one more step joins the halves: xm = 16-byte group exits.
-// Back-end: v4-style tables (PT, TA, VA, VB) indexed by the entry offset (encoded 0x80 + s), and a
-// scalar chain with one dependent byte load per 32 bytes. The tables of pair q+2 are built while
-// the chain reads the tables of pair q, so no chain load depends on a store of the same iteration
-// (only the TB reload in store() does, off the loop-carried path).
+// g9np_avx2: JUMPDEST analysis, x86-64-v3. The g8 doubling core with permute-free table stores:
+// the group-B exits are reloaded from the stored [TA | TB] instead of extracted, and the word
+// tables are written from both lanes by plain stores. One block per iteration.
 // Requires: code 32-byte aligned, at least 33 zero bytes after the code (reads at most 31 past
 // the end). Writes one uint32 per 32 bytes: (size + 64) / 64 words suffice.
 namespace g9
@@ -96,36 +87,6 @@ inline size_t chain(const u8* s, size_t e, uint16_t* out)
 }
 }  // namespace g9
 
-__attribute__((target("avx2"))) void g9_avx2(const u8* code, size_t size, u64* bits)
-{
-    const size_t n = (size + 31) / 32;
-    if (n == 0)
-        return;
-    alignas(2 * g9::SLOT) u8 buf[2 * g9::SLOT];  // Two slots; slot ^ SLOT flips between them.
-    g9::init_tails(buf);
-    g9::init_tails(buf + g9::SLOT);
-    for (size_t i = 0; i < n && i < 2; ++i)
-        g9::store(buf + g9::SLOT * i, g9::compute(code + 32 * i));
-
-    auto* const out = reinterpret_cast<uint16_t*>(bits);
-    u8* slot = buf;
-    size_t e = 0x80;  // 0x80 + entry offset into the current pair
-    size_t q = 0;
-    for (; q + 2 < n; ++q)
-    {
-        const auto t = g9::compute(code + 32 * (q + 2));
-        e = g9::chain(slot, e, out + 2 * q);
-        g9::store(slot, t);
-        slot = reinterpret_cast<u8*>(reinterpret_cast<uintptr_t>(slot) ^ g9::SLOT);
-    }
-    for (; q < n; ++q)
-    {
-        e = g9::chain(slot, e, out + 2 * q);
-        slot = reinterpret_cast<u8*>(reinterpret_cast<uintptr_t>(slot) ^ g9::SLOT);
-    }
-}
-
-// g9np_avx2: g9_avx2 without the pipeline (tables built and read in the same iteration).
 __attribute__((target("avx2"))) void g9np_avx2(const u8* code, size_t size, u64* bits)
 {
     const size_t n = (size + 31) / 32;

@@ -90,7 +90,7 @@ using u64 = uint64_t;
 
 #include "jumpdest/g9.hpp"
 
-#include "jumpdest/r2.hpp"
+#include "jumpdest/c8.hpp"
 
 #undef JDA_LOAD128
 #undef JDA_LOAD256
@@ -105,7 +105,7 @@ using u64 = uint64_t;
 
 #include "jumpdest/g9.hpp"
 
-#include "jumpdest/r2.hpp"
+#include "jumpdest/c8.hpp"
 
 #undef JDA_LOAD128
 #undef JDA_LOAD256
@@ -127,7 +127,6 @@ extern "C" void jda_asm_g8_sse(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_g8_avx2(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_g9np_avx2(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_c8_avx2(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_c9_avx2(const uint8_t*, size_t, uint64_t*);
 #endif
 
 namespace
@@ -181,11 +180,8 @@ const Variant variants[] = {
     // clang-format on
     JDA_SIMD("g8_sse", g8_sse, has_sse41),
     JDA_SIMD("g8_avx2", g8_avx2, has_avx2),
-    JDA_SIMD("g8u2_avx2", g8u2_avx2, has_avx2),
     JDA_SIMD("g9np_avx2", g9np_avx2, has_avx2),
     JDA_SIMD("c8_avx2", c8_avx2, has_avx2_bmi2),
-    JDA_SIMD("c8u1_avx2", c8u1_avx2, has_avx2_bmi2),
-    JDA_SIMD("c9_avx2", c9_avx2, has_avx2_bmi2),
 #undef JDA_SIMD
 #endif
 #if JDA_FROZEN_ASM
@@ -193,14 +189,13 @@ const Variant variants[] = {
     {"asm_g8_avx2", jda_asm_g8_avx2, Kind::simd_load, has_avx2},
     {"asm_g9np_avx2", jda_asm_g9np_avx2, Kind::simd_load, has_avx2},
     {"asm_c8_avx2", jda_asm_c8_avx2, Kind::simd_load, has_avx2_bmi2},
-    {"asm_c9_avx2", jda_asm_c9_avx2, Kind::simd_load, has_avx2_bmi2},
 #endif
 #if JDA_NEON
     {"v4_neon", neon::g16v4_neon, Kind::simd_native, always},
 #endif
 };
 
-constexpr size_t PADDING = 128;  // c8 loads ahead up to 95 bytes past the end.
+constexpr size_t PADDING = 64;
 constexpr size_t OFFSETS[] = {0, 16, 1};
 
 /// The code copied at the given offset from a 64-byte boundary, followed by zero padding.
