@@ -78,6 +78,11 @@ struct RunOptions
     /// so anything a test prints itself would continue it.
     bool progress = true;
 
+    /// Name each fixture as it runs, and what it came to, in place of the progress characters.
+    /// The name comes before anything the fixture prints itself, so that output can be told
+    /// apart from the next fixture's.
+    bool verbose = false;
+
     /// Run only the fixtures whose name contains this.
     std::optional<std::string> name_filter;
 

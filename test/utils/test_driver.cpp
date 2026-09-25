@@ -68,6 +68,23 @@ public:
     }
 };
 
+/// Names each fixture as it starts and gives its verdict once it ends, as pytest -v does. The
+/// name is flushed first, so whatever the fixture writes between the two is its own.
+Observer naming(std::ostream& out)
+{
+    return {[&out](const std::string& name) { out << name << ' ' << std::flush; },
+        [&out](const Result& result) {
+            std::clog << std::flush;
+            // Only a fixture which ran is told of, so none is deselected.
+            if (result.outcome == Outcome::failed)
+                out << "FAILED\n";
+            else if (result.outcome == Outcome::skipped)
+                out << "SKIPPED\n";
+            else
+                out << "PASSED\n";
+        }};
+}
+
 /// What this tool makes of one fixture.
 enum class Format
 {
@@ -215,7 +232,8 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     size_t deselected = 0;
     size_t passed = 0;
 
-    const Observer observer{[](const std::string&) {}, [](const Result&) {}};
+    const auto observer =
+        options.verbose ? naming(out) : Observer{[](const std::string&) {}, [](const Result&) {}};
 
     for (const auto& test : cases)
     {
@@ -261,7 +279,7 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
         if (!results.empty())
             notes.push_back({test.name, outcome, std::move(results)});
 
-        if (options.progress)
+        if (options.progress && !options.verbose)
             row.advance(outcome);
     }
 
