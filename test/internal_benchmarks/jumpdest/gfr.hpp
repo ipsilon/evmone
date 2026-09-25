@@ -69,7 +69,7 @@ __attribute__((target("avx2"), always_inline)) inline Core core(const u8* code)
 
 template <bool ZEN_STORES>
 __attribute__((target("avx2"), always_inline)) inline void finish(
-    const Core& g, u8* b, size_t& e, uint16_t* out)
+    Core g, u8* b, size_t& e, uint16_t* out)
 {
     _mm_store_si128(reinterpret_cast<__m128i*>(b + TA), _mm256_castsi256_si128(g.xm));
     _mm256_store_si256(reinterpret_cast<__m256i*>(b + PT), g.xm);

@@ -95,7 +95,7 @@ struct alignas(64) Tables8
             b[GT + i] = static_cast<u8>(0x80 + i + (i & 0x38));
     }
 };
-R2_I void finish_c8(const Core& g, u8* b, size_t& e, uint16_t* out)
+R2_I void finish_c8(Core g, u8* b, size_t& e, uint16_t* out)
 {
     _mm_store_si128(reinterpret_cast<__m128i*>(b + TA), _mm256_castsi256_si128(g.xm));
     _mm256_store_si256(reinterpret_cast<__m256i*>(b + PT), g.xm);
@@ -135,14 +135,14 @@ struct alignas(64) Tables10
             b[GT2 + i] = static_cast<u8>(0x80 + i + (i & 0x38));
     }
 };
-R2_I void store10(const Core& g, u8* s)
+R2_I void store10(Core g, u8* s)
 {
     _mm_store_si128(reinterpret_cast<__m128i*>(s + TA), _mm256_castsi256_si128(g.xm));
     _mm256_store_si256(reinterpret_cast<__m256i*>(s + PT), g.xm);
     _mm256_store_si256(reinterpret_cast<__m256i*>(s + VG), g.lo);
     _mm256_store_si256(reinterpret_cast<__m256i*>(s + VG + 32), g.hi);
 }
-R2_I void compose10(const Core& g0, u8* b)
+R2_I void compose10(Core g0, u8* b)
 {
     R2_BARRIER(b, 2 * SLOT);
     const auto tb = _mm256_inserti128_si256(
@@ -233,14 +233,14 @@ struct alignas(64) Tables6
             b[GT6 + i] = static_cast<u8>(i + (i & 0x30));
     }
 };
-R2_I void store6(const CoreD& g, u8* s)
+R2_I void store6(CoreD g, u8* s)
 {
     _mm_store_si128(reinterpret_cast<__m128i*>(s + TA), _mm256_castsi256_si128(g.xm));
     _mm256_store_si256(reinterpret_cast<__m256i*>(s + PT), g.xm);
     _mm256_store_si256(reinterpret_cast<__m256i*>(s + PL6), g.lo);
     _mm256_store_si256(reinterpret_cast<__m256i*>(s + PH6), g.hi);
 }
-R2_I void compose6(const CoreD& g0, u8* b)
+R2_I void compose6(CoreD g0, u8* b)
 {
     R2_BARRIER(b, 2 * SLOT6);
     const auto tb = _mm256_inserti128_si256(
