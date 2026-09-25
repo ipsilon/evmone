@@ -26,7 +26,12 @@ Run run(std::span<const TestCase> cases, const RunOptions& options = {})
 /// A test which runs one fixture, as a file holding one does.
 TestCase one(const std::string& name, std::function<void(TestReport&)> run)
 {
-    return {name, [name, run = std::move(run)] { return std::vector{run_one(name, run)}; }};
+    return {name, [name, run = std::move(run)](const Observer& observer) {
+                observer.started(name);
+                auto result = run_one(name, run);
+                observer.finished(result);
+                return std::vector{std::move(result)};
+            }};
 }
 
 /// A test whose fixtures are handed their outcomes, running nothing.
@@ -35,7 +40,14 @@ TestCase holding(std::string name, std::initializer_list<Outcome> outcomes)
     std::vector<Result> results;
     for (const auto outcome : outcomes)
         results.push_back({name + "::case", outcome, "the reason", {}});
-    return {std::move(name), [results = std::move(results)] { return results; }};
+    return {std::move(name), [results = std::move(results)](const Observer& observer) {
+                for (const auto& result : results)
+                {
+                    observer.started(result.name);
+                    observer.finished(result);
+                }
+                return results;
+            }};
 }
 }  // namespace
 
@@ -208,4 +220,47 @@ TEST(test_driver, deselected_is_counted_apart_from_skipped)
     const auto [exit_code, output] = run(cases);
     EXPECT_EQ(exit_code, SUCCESS);
     EXPECT_NE(output.find("1 passed, 1 skipped, 1 deselected in"), std::string::npos);
+}
+
+TEST(test_driver, verbose_names_each_fixture_with_its_verdict)
+{
+    const std::vector<TestCase> cases{
+        one("ok", [](TestReport&) {}),
+        one("throws", [](TestReport&) { throw std::runtime_error{"the reason"}; }),
+        one("skipped", [](TestReport&) { throw UnsupportedTestFeature{"no support for it"}; }),
+        holding("filtered out", {}),
+    };
+
+    const auto [exit_code, output] = run(cases, {.verbose = true});
+    EXPECT_EQ(exit_code, TESTS_FAILED);
+    EXPECT_NE(output.find("collected 4 files\n\nok PASSED\nthrows FAILED\nskipped SKIPPED\n\n"),
+        std::string::npos);
+    // The names replace the progress row; a deselected file has no fixture to name.
+    EXPECT_EQ(output.find("[100%]"), std::string::npos);
+    EXPECT_EQ(output.find("filtered out"), std::string::npos);
+    EXPECT_NE(output.find("1 failed, 1 passed, 1 skipped, 1 deselected in"), std::string::npos);
+}
+
+TEST(test_driver, verbose_names_a_fixture_before_what_it_writes)
+{
+    std::ostringstream out;
+    const std::vector<TestCase> cases{
+        one("first", [&out](TestReport&) { out << "written by first "; }),
+        one("second", [&out](TestReport&) { out << "written by second "; }),
+    };
+
+    EXPECT_EQ(run_tests(cases, out, {.verbose = true}), SUCCESS);
+    EXPECT_NE(out.str().find("first written by first PASSED\nsecond written by second PASSED\n"),
+        std::string::npos);
+}
+
+TEST(test_driver, fixtures_are_not_named_by_default)
+{
+    const std::vector<TestCase> cases{holding("a file", {Outcome::passed, Outcome::passed})};
+
+    const auto [exit_code, output] = run(cases);
+    EXPECT_EQ(exit_code, SUCCESS);
+    EXPECT_NE(output.find("collected 1 file\n\n.  "), std::string::npos);
+    EXPECT_NE(output.find("[100%]"), std::string::npos);
+    EXPECT_EQ(output.find("PASSED"), std::string::npos);
 }
