@@ -139,6 +139,10 @@ extern "C" void jda_asm_g8_avx2_fnew2(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_c8_avx2_fnew1(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_g9np_avx2_fnew1(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_g8_sse_fnew1(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_g9np_avx2_o41(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_g9np_avx2_o42(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_c8_avx2_f46(const uint8_t*, size_t, uint64_t*);
+extern "C" void jda_asm_c8_avx2_f47(const uint8_t*, size_t, uint64_t*);
 #endif
 
 namespace
@@ -213,6 +217,10 @@ const Variant variants[] = {
     {"asm_c8_avx2_fnew1", jda_asm_c8_avx2_fnew1, Kind::simd_load, has_avx2_bmi2},
     {"asm_g9np_avx2_fnew1", jda_asm_g9np_avx2_fnew1, Kind::simd_load, has_avx2},
     {"asm_g8_sse_fnew1", jda_asm_g8_sse_fnew1, Kind::simd_load, has_sse41},
+    {"asm_g9np_avx2_o41", jda_asm_g9np_avx2_o41, Kind::simd_load, has_avx2},
+    {"asm_g9np_avx2_o42", jda_asm_g9np_avx2_o42, Kind::simd_load, has_avx2},
+    {"asm_c8_avx2_f46", jda_asm_c8_avx2_f46, Kind::simd_load, has_avx2_bmi2},
+    {"asm_c8_avx2_f47", jda_asm_c8_avx2_f47, Kind::simd_load, has_avx2_bmi2},
 #endif
 #if JDA_NEON
     {"v4_neon", neon::g16v4_neon, Kind::simd_native, always},
