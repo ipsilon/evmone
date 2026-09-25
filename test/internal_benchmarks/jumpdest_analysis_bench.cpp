@@ -88,10 +88,6 @@ using u64 = uint64_t;
 #define JDA_LOAD256(p) _mm256_load_si256(reinterpret_cast<const __m256i*>(p))
 #include "jumpdest/g8.hpp"
 
-#include "jumpdest/g9.hpp"
-
-#include "jumpdest/c8.hpp"
-
 #undef JDA_LOAD128
 #undef JDA_LOAD256
 }  // namespace aligned_load
@@ -102,10 +98,6 @@ using u64 = uint64_t;
 #define JDA_LOAD128(p) _mm_loadu_si128(reinterpret_cast<const __m128i*>(p))
 #define JDA_LOAD256(p) _mm256_loadu_si256(reinterpret_cast<const __m256i*>(p))
 #include "jumpdest/g8.hpp"
-
-#include "jumpdest/g9.hpp"
-
-#include "jumpdest/c8.hpp"
 
 #undef JDA_LOAD128
 #undef JDA_LOAD256
@@ -125,24 +117,9 @@ namespace neon
 // Frozen clang-21 builds (jumpdest/frozen_asm.S): the same code for every compiler.
 extern "C" void jda_asm_g8_sse(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_g8_avx2(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_g9np_avx2(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_c8_avx2(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_g8_avx2_ofix(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_g9np_avx2_ofix(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_c8_avx2_ofix(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_g8_avx2_onew1(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_g9np_avx2_onew1(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_c8_avx2_onew1(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_g8_sse_onew1(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_g8_avx2_fnew1(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_g8_avx2_fnew2(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_c8_avx2_fnew1(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_g9np_avx2_fnew1(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_g8_sse_fnew1(const uint8_t*, size_t, uint64_t*);
 extern "C" void jda_asm_g9np_avx2_o41(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_g9np_avx2_o42(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_c8_avx2_f46(const uint8_t*, size_t, uint64_t*);
-extern "C" void jda_asm_c8_avx2_f47(const uint8_t*, size_t, uint64_t*);
 #endif
 
 namespace
@@ -196,31 +173,14 @@ const Variant variants[] = {
     // clang-format on
     JDA_SIMD("g8_sse", g8_sse, has_sse41),
     JDA_SIMD("g8_avx2", g8_avx2, has_avx2),
-    JDA_SIMD("g9np_avx2", g9np_avx2, has_avx2),
-    JDA_SIMD("c8_avx2", c8_avx2, has_avx2_bmi2),
 #undef JDA_SIMD
 #endif
 #if JDA_FROZEN_ASM
     {"asm_g8_sse", jda_asm_g8_sse, Kind::simd_load, has_sse41},
     {"asm_g8_avx2", jda_asm_g8_avx2, Kind::simd_load, has_avx2},
-    {"asm_g9np_avx2", jda_asm_g9np_avx2, Kind::simd_load, has_avx2},
-    {"asm_c8_avx2", jda_asm_c8_avx2, Kind::simd_load, has_avx2_bmi2},
-    {"asm_g8_avx2_ofix", jda_asm_g8_avx2_ofix, Kind::simd_load, has_avx2},
     {"asm_g9np_avx2_ofix", jda_asm_g9np_avx2_ofix, Kind::simd_load, has_avx2},
-    {"asm_c8_avx2_ofix", jda_asm_c8_avx2_ofix, Kind::simd_load, has_avx2_bmi2},
-    {"asm_g8_avx2_onew1", jda_asm_g8_avx2_onew1, Kind::simd_load, has_avx2},
-    {"asm_g9np_avx2_onew1", jda_asm_g9np_avx2_onew1, Kind::simd_load, has_avx2},
-    {"asm_c8_avx2_onew1", jda_asm_c8_avx2_onew1, Kind::simd_load, has_avx2_bmi2},
-    {"asm_g8_sse_onew1", jda_asm_g8_sse_onew1, Kind::simd_load, has_sse41},
-    {"asm_g8_avx2_fnew1", jda_asm_g8_avx2_fnew1, Kind::simd_load, has_avx2},
-    {"asm_g8_avx2_fnew2", jda_asm_g8_avx2_fnew2, Kind::simd_load, has_avx2},
     {"asm_c8_avx2_fnew1", jda_asm_c8_avx2_fnew1, Kind::simd_load, has_avx2_bmi2},
-    {"asm_g9np_avx2_fnew1", jda_asm_g9np_avx2_fnew1, Kind::simd_load, has_avx2},
-    {"asm_g8_sse_fnew1", jda_asm_g8_sse_fnew1, Kind::simd_load, has_sse41},
     {"asm_g9np_avx2_o41", jda_asm_g9np_avx2_o41, Kind::simd_load, has_avx2},
-    {"asm_g9np_avx2_o42", jda_asm_g9np_avx2_o42, Kind::simd_load, has_avx2},
-    {"asm_c8_avx2_f46", jda_asm_c8_avx2_f46, Kind::simd_load, has_avx2_bmi2},
-    {"asm_c8_avx2_f47", jda_asm_c8_avx2_f47, Kind::simd_load, has_avx2_bmi2},
 #endif
 #if JDA_NEON
     {"v4_neon", neon::g16v4_neon, Kind::simd_native, always},
