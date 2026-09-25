@@ -375,3 +375,20 @@ R2_DRIVER_NP(c8_avx2, r2::core_v, r2::finish_c8, r2::Tables8)
             FINISH(CORE_V(r2::ld(p)), t.b, e, o);                                              \
     }
 R2_DRIVER_NP4(c9_avx2, r2::core_v, r2::finish_c8, r2::Tables8)
+
+// One block per iteration with load-ahead (c8 and c9 without the unroll).
+#define R2_DRIVER_NP1(NAME, CORE_V, FINISH, TABLES)                                             \
+    __attribute__((target("avx2,bmi,bmi2"))) void NAME(const u8* code, size_t size, u64* bits) \
+    {                                                                                          \
+        TABLES t;                                                                              \
+        size_t e = 0x80;                                                                       \
+        const size_t nb = (size + 31) / 32;                                                    \
+        auto c = r2::ld(code);                                                                 \
+        _Pragma("GCC unroll 1") for (size_t q = 0; q < nb; ++q)                                \
+        {                                                                                      \
+            const auto a = CORE_V(c);                                                          \
+            c = r2::ld(code + 32 * q + 32);                                                    \
+            FINISH(a, t.b, e, reinterpret_cast<uint16_t*>(bits) + 2 * q);                      \
+        }                                                                                      \
+    }
+R2_DRIVER_NP1(c8u1_avx2, r2::core_v, r2::finish_c8, r2::Tables8)

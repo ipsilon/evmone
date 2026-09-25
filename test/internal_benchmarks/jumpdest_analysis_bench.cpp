@@ -181,8 +181,10 @@ const Variant variants[] = {
     // clang-format on
     JDA_SIMD("g8_sse", g8_sse, has_sse41),
     JDA_SIMD("g8_avx2", g8_avx2, has_avx2),
+    JDA_SIMD("g8u2_avx2", g8u2_avx2, has_avx2),
     JDA_SIMD("g9np_avx2", g9np_avx2, has_avx2),
     JDA_SIMD("c8_avx2", c8_avx2, has_avx2_bmi2),
+    JDA_SIMD("c8u1_avx2", c8u1_avx2, has_avx2_bmi2),
     JDA_SIMD("c9_avx2", c9_avx2, has_avx2_bmi2),
 #undef JDA_SIMD
 #endif

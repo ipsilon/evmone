@@ -216,3 +216,51 @@ __attribute__((target("avx2"))) void g8_avx2(const u8* code, size_t size, u64* b
         MCA_END("g8_avx2");
     }
 }
+
+// g8_avx2 with the block loop unrolled x2 by the compiler.
+__attribute__((target("avx2"))) void g8u2_avx2(const u8* code, size_t size, u64* bits)
+{
+    const auto iota = _mm256_broadcastsi128_si256(_mm_setr_epi8(
+        0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21));
+    const auto k8 = _mm256_broadcastsi128_si256(_mm_setr_epi8(8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0, 0, 0));
+    const auto lane = _mm256_broadcastsi128_si256(
+        _mm_setr_epi8(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15));
+    const auto bit = _mm256_broadcastsi128_si256(
+        _mm_setr_epi8(1, 2, 4, 8, 16, 32, 64, -128, 1, 2, 4, 8, 16, 32, 64, -128));
+    G8TablesAvx2 t;
+    auto* const out = reinterpret_cast<uint16_t*>(bits);
+    size_t e = 0x80;
+    const size_t num_blocks = (size + 31) / 32;
+#pragma GCC unroll 2
+    for (size_t q = 0; q < num_blocks; ++q)
+    {
+        MCA_BEGIN("g8u2_avx2");
+        const auto c = JDA_LOAD256(code + 32 * q);
+        const auto y = _mm256_add_epi8(_mm256_max_epi8(c, _mm256_set1_epi8(0x5f)), iota);
+        auto n = _mm256_sub_epi8(y, k8);
+        auto x = _mm256_max_epi8(_mm256_xor_si256(y, k8), lane);
+        auto v = _mm256_and_si256(_mm256_cmpeq_epi8(c, _mm256_set1_epi8(0x5b)), bit);
+        for (int k = 0; k < 3; ++k)
+        {
+            v = _mm256_or_si256(v, _mm256_shuffle_epi8(v, x));
+            x = _mm256_shuffle_epi8(x, x);
+        }
+        n = _mm256_shuffle_epi8(n, x);
+        const auto xm = _mm256_max_epu8(n, _mm256_shuffle_epi8(n, n));  // [TA | TB]
+        const auto h = _mm256_shuffle_epi8(v, n);  // A lanes: B's JUMPDEST bits if the exit is in B.
+        const auto vl = _mm256_unpacklo_epi8(v, h);                       // [A 0..7 | B 0..7]
+        const auto vh = _mm256_unpackhi_epi8(_mm256_setzero_si256(), v);  // [A 8..15 | B 8..15]
+        const auto ia = _mm256_sub_epi8(xm, _mm256_set1_epi8(0x10));
+        const auto pab = _mm256_max_epu8(_mm256_shuffle_epi8(_mm256_permute4x64_epi64(xm, 0xEE), ia), ia);
+        _mm_store_si128(reinterpret_cast<__m128i*>(t.TA), _mm256_castsi256_si128(xm));
+        _mm256_store_si256(reinterpret_cast<__m256i*>(t.PT), _mm256_blend_epi32(xm, pab, 0x0F));
+        _mm256_store_si256(reinterpret_cast<__m256i*>(t.VA), _mm256_permute2x128_si256(vl, vh, 0x20));
+        _mm256_store_si256(reinterpret_cast<__m256i*>(t.VB), _mm256_permute2x128_si256(vl, vh, 0x31));
+
+        const size_t e2 = t.TA[e - 0x80];
+        out[2 * q] = t.VA[e - 0x80];
+        out[2 * q + 1] = t.VB[e2 - 0x80];
+        e = t.PT[e - 0x80];
+        MCA_END("g8u2_avx2");
+    }
+}
