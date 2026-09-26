@@ -7,6 +7,7 @@
 #include "stdx/utility.hpp"
 #include "utils.hpp"
 #include <evmone/delegation.hpp>
+#include <evmone_precompiles/secp256k1.hpp>
 #include <nlohmann/json.hpp>
 #include <test/state/precompiles.hpp>
 
@@ -380,6 +381,21 @@ static void from_json_tx_common(const json::json& j, state::Transaction& o)
     }
 }
 
+/// Derives the address of the secret key a state test signs its transaction with.
+/// The scalar multiplication is not constant-time, which is fine for public test keys.
+static address secret_key_to_address(const json::json& j_secret_key)
+{
+    using namespace crypto::secp256k1;
+    static constexpr AffinePoint G{
+        0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798_u256,
+        0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256};
+
+    const auto secret_key = from_json<intx::uint256>(j_secret_key);
+    if (secret_key == 0 || secret_key >= Curve::ORDER)
+        throw std::invalid_argument("invalid secretKey: " + j_secret_key.get<std::string>());
+    return to_address(crypto::ecc::to_affine(crypto::ecc::mul(G, secret_key)));
+}
+
 template <>
 state::Transaction from_json<state::Transaction>(const json::json& j)
 {
@@ -424,6 +440,10 @@ state::Transaction from_json<state::Transaction>(const json::json& j)
 static void from_json(const json::json& j, TestMultiTransaction& o)
 {
     from_json_tx_common(j, o);
+
+    // Without `sender`, the sender is the owner of `secretKey`, as in go-ethereum.
+    if (const auto it = j.find("secretKey"); it != j.end() && !j.contains("sender"))
+        o.sender = secret_key_to_address(*it);
 
     for (const auto& j_data : j.at("data"))
         o.inputs.emplace_back(from_json<bytes>(j_data));
