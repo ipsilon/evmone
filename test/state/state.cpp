@@ -289,12 +289,16 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
 [[nodiscard]] evmc::Result process_top_level(State& state, const StateView& state_view, Host& host,
     evmc_revision rev, const Transaction& tx, evmc_message msg)
 {
-    StateGas state_gas{{.left = msg.state_gas}};
     std::vector<address> authorities;
+    const auto halt = [&, state_gas_limit = msg.state_gas] {
+        return halt_top_level(state, state_view, authorities, state_gas_limit);
+    };
+
+    StateGas state_gas{{.left = msg.state_gas}};
     const auto delegation_refund =
         process_authorization_list(state, state_view, tx, rev, msg.gas, state_gas, authorities);
     if (!delegation_refund.has_value())
-        return halt_top_level(state, state_view, authorities, msg.state_gas);
+        return halt();
 
     // The authorizations' state-gas stays consumed even if the call fails (EIP-2780).
     const auto state_gas_init = state_gas;
@@ -302,7 +306,7 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
     // Creating the recipient account costs state-gas, refilled if the call fails (EIP-8037).
     if (rev >= EVMC_AMSTERDAM && (!tx.to.has_value() || tx.value != 0) &&
         !host.account_exists(msg.recipient) && !state_gas.charge(msg.gas, NEW_ACCOUNT_STATE_GAS))
-        return halt_top_level(state, state_view, authorities, msg.state_gas);
+        return halt();
 
     if (tx.to.has_value())
     {
@@ -316,7 +320,7 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
             {
                 msg.gas -= warm ? instr::WARM_ACCESS : instr::COLD_ACCOUNT_ACCESS_AMSTERDAM;
                 if (msg.gas < 0)
-                    return halt_top_level(state, state_view, authorities, msg.state_gas);
+                    return halt();
             }
         }
     }
