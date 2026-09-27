@@ -138,12 +138,19 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     return {intrinsic_cost, min_cost};
 }
 
+/// An authorization applied to the authority account, recorded to revert it on halt (EIP-2780).
+struct AppliedAuthorization
+{
+    Account* authority = nullptr;  ///< Account in a node-based container (stable refs).
+    bytes32 prev_code_hash;
+};
+
 /// Applies the authorization list (EIP-7702) and returns the delegation refund. From Amsterdam,
-/// charges the state-dependent costs instead of the refund and records the authorities for
-/// halt_top_level(); returns nullopt when out of gas (EIP-2780).
-[[nodiscard]] std::optional<int64_t> process_authorization_list(State& state,
-    const StateView& state_view, const Transaction& tx, evmc_revision rev, int64_t& gas_left,
-    StateGas& state_gas, std::vector<address>& authorities)
+/// charges the state-dependent costs instead of the refund and records the applied authorizations
+/// for halt_top_level(); returns nullopt when out of gas (EIP-2780).
+[[nodiscard]] std::optional<int64_t> process_authorization_list(State& state, const Transaction& tx,
+    evmc_revision rev, int64_t& gas_left, StateGas& state_gas,
+    std::vector<AppliedAuthorization>& applied)
 {
     int64_t delegation_refund = 0;
     for (const auto& auth : tx.authorization_list)
@@ -196,11 +203,11 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
         {
             if (authority.is_empty() && !state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
                 return std::nullopt;
-            // The first write to the authority: its nonce is untouched so far (the sender's is
-            // already bumped) and it is not the value recipient (paid by TX_VALUE_COST).
-            const auto initial = state_view.get_account(*authority_addr);
-            if (authority.nonce == (initial.has_value() ? initial->nonce : 0) &&
-                (tx.value == 0 || tx.to != authority_addr))
+            // The first write to the authority: it is not the sender, not the value recipient
+            // (paid by TX_VALUE_COST) and not an already applied authority.
+            if (authority_addr != tx.sender && (tx.value == 0 || tx.to != authority_addr) &&
+                std::ranges::find(applied, &authority, &AppliedAuthorization::authority) ==
+                    applied.end())
             {
                 gas_left -= instr::ACCOUNT_WRITE;
                 if (gas_left < 0)
@@ -210,7 +217,7 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
             if (!is_zero(auth.addr) && authority.code_hash == Account::EMPTY_CODE_HASH &&
                 !authority.code_changed && !state_gas.charge(gas_left, AUTH_BASE_STATE_GAS))
                 return std::nullopt;
-            authorities.push_back(*authority_addr);
+            applied.emplace_back(&authority, authority.code_hash);
         }
 
         // As a special case, if address is 0 do not write the designation.
@@ -269,34 +276,33 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
 
 /// Halts the top-level message before the call (EIP-2780): the execution-gas is consumed, the
 /// state-gas is returned and the applied authorizations are reverted. Nothing else has changed
-/// the state yet, so undoing their nonce bumps and code changes is enough.
-[[nodiscard]] evmc::Result halt_top_level(State& state, const StateView& state_view,
-    const std::vector<address>& authorities, int64_t state_gas_left)
+/// the state yet, so undoing their nonce bumps and code changes is enough. Undoing in reverse
+/// order restores the code hash from before the first authorization of each authority.
+[[nodiscard]] evmc::Result halt_top_level(
+    std::span<const AppliedAuthorization> applied, int64_t state_gas_left)
 {
-    for (const auto& addr : authorities)
+    for (const auto& [authority, prev_code_hash] : std::views::reverse(applied))
     {
-        auto& a = state.get(addr);
-        --a.nonce;
-        const auto initial = state_view.get_account(addr);
-        a.code_hash = initial.has_value() ? initial->code_hash : Account::EMPTY_CODE_HASH;
-        a.code.clear();
-        a.code_changed = false;
+        --authority->nonce;
+        authority->code_hash = prev_code_hash;
+        authority->code.clear();
+        authority->code_changed = false;
     }
     return evmc::Result{EVMC_OUT_OF_GAS, {.left = state_gas_left}};
 }
 
 /// Applies the authorizations (EIP-7702), resolves the delegation and calls the top-level message.
-[[nodiscard]] evmc::Result process_top_level(State& state, const StateView& state_view, Host& host,
-    evmc_revision rev, const Transaction& tx, evmc_message msg)
+[[nodiscard]] evmc::Result process_top_level(
+    State& state, Host& host, evmc_revision rev, const Transaction& tx, evmc_message msg)
 {
-    std::vector<address> authorities;
+    std::vector<AppliedAuthorization> applied;
     const auto halt = [&, state_gas_limit = msg.state_gas] {
-        return halt_top_level(state, state_view, authorities, state_gas_limit);
+        return halt_top_level(applied, state_gas_limit);
     };
 
     StateGas state_gas{{.left = msg.state_gas}};
     const auto delegation_refund =
-        process_authorization_list(state, state_view, tx, rev, msg.gas, state_gas, authorities);
+        process_authorization_list(state, tx, rev, msg.gas, state_gas, applied);
     if (!delegation_refund.has_value())
         return halt();
 
@@ -776,7 +782,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     if (rev >= EVMC_SHANGHAI)
         host.access_account(block.coinbase);
 
-    const auto result = process_top_level(state, state_view, host, rev, tx, message);
+    const auto result = process_top_level(state, host, rev, tx, message);
 
     const auto gas_used_b4_refund = tx.gas_limit - result.gas_left - result.state_gas.left;
 
