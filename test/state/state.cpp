@@ -232,22 +232,23 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
     const auto delegation_refund =
         process_authorization_list(state, tx.chain_id, tx.authorization_list);
 
-    if (tx.to.has_value())
-    {
-        if (const auto delegate = get_delegate_address(host, *tx.to))
-        {
-            msg.code_address = *delegate;
-            msg.flags |= EVMC_DELEGATED;
-            host.access_account(msg.code_address);
-        }
-    }
-
     // Creating the recipient account costs state-gas, refilled if the call fails (EIP-8037).
     const auto state_gas_init = msg.state_gas;
     StateGas state_gas{{.left = state_gas_init}};
     if (rev >= EVMC_AMSTERDAM && (!tx.to.has_value() || tx.value != 0) &&
         !host.account_exists(msg.recipient) && !state_gas.charge(msg.gas, NEW_ACCOUNT_STATE_GAS))
         return evmc::Result{EVMC_OUT_OF_GAS, 0, delegation_refund, {.left = state_gas_init}};
+
+    if (tx.to.has_value())
+    {
+        if (const auto delegate = get_delegate_address(host, *tx.to))
+        {
+            assert(host.account_exists(*tx.to));
+            msg.code_address = *delegate;
+            msg.flags |= EVMC_DELEGATED;
+            host.access_account(msg.code_address);
+        }
+    }
 
     msg.state_gas = state_gas.left;
     auto result = host.call(msg);
