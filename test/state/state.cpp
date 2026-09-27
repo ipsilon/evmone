@@ -289,17 +289,17 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
 [[nodiscard]] evmc::Result process_top_level(State& state, const StateView& state_view, Host& host,
     evmc_revision rev, const Transaction& tx, evmc_message msg)
 {
-    // The authorizations' state-gas stays consumed even if the call fails (EIP-2780).
-    StateGas auth_state_gas{{.left = msg.state_gas}};
+    StateGas state_gas{{.left = msg.state_gas}};
     std::vector<address> authorities;
-    const auto delegation_refund = process_authorization_list(
-        state, state_view, tx, rev, msg.gas, auth_state_gas, authorities);
+    const auto delegation_refund =
+        process_authorization_list(state, state_view, tx, rev, msg.gas, state_gas, authorities);
     if (!delegation_refund.has_value())
         return halt_top_level(state, state_view, authorities, msg.state_gas);
 
+    // The authorizations' state-gas stays consumed even if the call fails (EIP-2780).
+    const auto state_gas_init = state_gas;
+
     // Creating the recipient account costs state-gas, refilled if the call fails (EIP-8037).
-    const auto state_gas_init = auth_state_gas.left;
-    StateGas state_gas{{.left = state_gas_init}};
     if (rev >= EVMC_AMSTERDAM && (!tx.to.has_value() || tx.value != 0) &&
         !host.account_exists(msg.recipient) && !state_gas.charge(msg.gas, NEW_ACCOUNT_STATE_GAS))
         return halt_top_level(state, state_view, authorities, msg.state_gas);
@@ -333,10 +333,9 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
         assert(result.state_gas.left == msg.state_gas);
         assert(result.state_gas.spilled == 0);
         if (result.status_code == EVMC_REVERT)
-            result.gas_left += state_gas.spilled;
-        result.state_gas.left = state_gas_init;
+            result.gas_left += state_gas.spilled - state_gas_init.spilled;
+        result.state_gas = state_gas_init;
     }
-    result.state_gas.spilled += auth_state_gas.spilled;
     result.gas_refund += *delegation_refund;  // Kept even if the call fails (EIP-7702).
     return result;
 }
