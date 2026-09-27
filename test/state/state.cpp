@@ -121,14 +121,13 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     return {intrinsic_cost, min_cost};
 }
 
-int64_t process_authorization_list(
-    State& state, uint64_t chain_id, const AuthorizationList& authorization_list)
+int64_t process_authorization_list(State& state, const Transaction& tx)
 {
     int64_t delegation_refund = 0;
-    for (const auto& auth : authorization_list)
+    for (const auto& auth : tx.authorization_list)
     {
         // 1. Verify the chain id is either 0 or the chain’s current ID.
-        if (auth.chain_id != 0 && auth.chain_id != chain_id)
+        if (auth.chain_id != 0 && auth.chain_id != tx.chain_id)
             continue;
 
         // 2. Verify the nonce is less than 2**64 - 1.
@@ -229,8 +228,7 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
 [[nodiscard]] evmc::Result process_top_level(
     State& state, Host& host, evmc_revision rev, const Transaction& tx, evmc_message msg)
 {
-    const auto delegation_refund =
-        process_authorization_list(state, tx.chain_id, tx.authorization_list);
+    const auto delegation_refund = process_authorization_list(state, tx);
 
     if (tx.to.has_value())
     {
