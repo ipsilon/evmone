@@ -85,8 +85,6 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto is_create = !tx.to.has_value();
 
     auto base_cost = TX_BASE_COST;
-    auto create_cost = (is_create && rev >= EVMC_HOMESTEAD) ? TX_CREATE_COST : 0;
-    auto auth_cost = AUTHORIZATION_EMPTY_ACCOUNT_COST;
     if (rev >= EVMC_AMSTERDAM)  // Resource-based base cost (EIP-2780).
     {
         base_cost = TX_BASE_COST_AMSTERDAM;
@@ -94,9 +92,10 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
             base_cost += instr::CREATE_ACCESS;
         else if (*tx.to != tx.sender)
             base_cost += instr::COLD_ACCOUNT_ACCESS_AMSTERDAM + (tx.value != 0 ? TX_VALUE_COST : 0);
-        create_cost = 0;
-        auth_cost = EXECUTION_PER_AUTH_BASE_COST;
     }
+
+    const auto create_cost =
+        (is_create && rev >= EVMC_HOMESTEAD && rev < EVMC_AMSTERDAM) ? TX_CREATE_COST : 0;
 
     const auto num_tokens = static_cast<int64_t>(compute_tx_data_tokens(rev, tx.data));
     const auto data_cost = num_tokens * DATA_TOKEN_COST;
@@ -112,6 +111,8 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     const auto access_list_cost = static_cast<int64_t>(num_addresses) * address_cost +
                                   static_cast<int64_t>(num_storage_keys) * storage_key_cost;
 
+    const auto auth_cost =
+        (rev >= EVMC_AMSTERDAM) ? EXECUTION_PER_AUTH_BASE_COST : AUTHORIZATION_EMPTY_ACCOUNT_COST;
     const auto auth_list_cost = static_cast<int64_t>(tx.authorization_list.size()) * auth_cost;
 
     const auto initcode_cost =
