@@ -200,9 +200,12 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
             // already bumped) and it is not the value recipient (paid by TX_VALUE_COST).
             const auto initial = state_view.get_account(*authority_addr);
             if (authority.nonce == (initial.has_value() ? initial->nonce : 0) &&
-                (tx.value == 0 || tx.to != authority_addr) &&
-                (gas_left -= instr::ACCOUNT_WRITE) < 0)
-                return std::nullopt;
+                (tx.value == 0 || tx.to != authority_addr))
+            {
+                gas_left -= instr::ACCOUNT_WRITE;
+                if (gas_left < 0)
+                    return std::nullopt;
+            }
             // A net-new delegation indicator: no code at the transaction start and none set since.
             if (!is_zero(auth.addr) && authority.code_hash == Account::EMPTY_CODE_HASH &&
                 !authority.code_changed && !state_gas.charge(gas_left, AUTH_BASE_STATE_GAS))
