@@ -138,13 +138,14 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     return {intrinsic_cost, min_cost};
 }
 
-/// Applies the authorization list (EIP-7702). From Amsterdam, charges the state-dependent costs
-/// instead of the refund and records the authorities for halt_top_level(); returns false when
-/// out of gas (EIP-2780).
-[[nodiscard]] bool process_authorization_list(State& state, const StateView& state_view,
-    const Transaction& tx, evmc_revision rev, int64_t& gas_left, StateGas& state_gas,
-    int64_t& delegation_refund, std::vector<address>& authorities)
+/// Applies the authorization list (EIP-7702) and returns the delegation refund. From Amsterdam,
+/// charges the state-dependent costs instead of the refund and records the authorities for
+/// halt_top_level(); returns nullopt when out of gas (EIP-2780).
+[[nodiscard]] std::optional<int64_t> process_authorization_list(State& state,
+    const StateView& state_view, const Transaction& tx, evmc_revision rev, int64_t& gas_left,
+    StateGas& state_gas, std::vector<address>& authorities)
 {
+    int64_t delegation_refund = 0;
     for (const auto& auth : tx.authorization_list)
     {
         // 1. Verify the chain id is either 0 or the chain’s current ID.
@@ -194,18 +195,18 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
         else  // The state-dependent costs replace the refund (EIP-2780).
         {
             if (authority.is_empty() && !state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
-                return false;
+                return std::nullopt;
             // The first write to the authority: its nonce is untouched so far (the sender's is
             // already bumped) and it is not the value recipient (paid by TX_VALUE_COST).
             const auto initial = state_view.get_account(*authority_addr);
             if (authority.nonce == (initial.has_value() ? initial->nonce : 0) &&
                 (tx.value == 0 || tx.to != authority_addr) &&
                 (gas_left -= instr::ACCOUNT_WRITE) < 0)
-                return false;
+                return std::nullopt;
             // A net-new delegation indicator: no code at the transaction start and none set since.
             if (!is_zero(auth.addr) && authority.code_hash == Account::EMPTY_CODE_HASH &&
                 !authority.code_changed && !state_gas.charge(gas_left, AUTH_BASE_STATE_GAS))
-                return false;
+                return std::nullopt;
             authorities.push_back(*authority_addr);
         }
 
@@ -239,7 +240,7 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
         // 9. Increase the nonce of authority by one.
         ++authority.nonce;
     }
-    return true;
+    return delegation_refund;
 }
 
 evmc_message build_message(const Transaction& tx, const TransactionProperties& tx_props) noexcept
@@ -287,10 +288,10 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
 {
     // The authorizations' state-gas stays consumed even if the call fails (EIP-2780).
     StateGas auth_state_gas{{.left = msg.state_gas}};
-    int64_t delegation_refund = 0;
     std::vector<address> authorities;
-    if (!process_authorization_list(
-            state, state_view, tx, rev, msg.gas, auth_state_gas, delegation_refund, authorities))
+    const auto delegation_refund = process_authorization_list(
+        state, state_view, tx, rev, msg.gas, auth_state_gas, authorities);
+    if (!delegation_refund.has_value())
         return halt_top_level(state, state_view, authorities, msg.state_gas);
 
     // Creating the recipient account costs state-gas, refilled if the call fails (EIP-8037).
@@ -333,7 +334,7 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
         result.state_gas.left = state_gas_init;
     }
     result.state_gas.spilled += auth_state_gas.spilled;
-    result.gas_refund += delegation_refund;  // Kept even if the call fails (EIP-7702).
+    result.gas_refund += *delegation_refund;  // Kept even if the call fails (EIP-7702).
     return result;
 }
 }  // namespace
