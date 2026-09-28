@@ -15,10 +15,6 @@ on:
 
 env:
   BUILD_DIR: build
-  CMAKE_BUILD_PARALLEL_LEVEL: 4
-  # The newest GCC on the ubuntu-24.04 image, which otherwise defaults to GCC 13.
-  CC: gcc-14
-  CXX: g++-14
   # A benchmark is identified by the name of the fixture it ran, so a release which renames
   # the fixtures starts the series over. Bump this deliberately, with the archive's digest.
   BENCHMARK_FIXTURES_RELEASE: benchmark@v0.0.7
@@ -27,13 +23,21 @@ env:
 
 jobs:
   benchmark:
-    name: Benchmark ${{ matrix.name }}
+    name: Benchmark ${{ matrix.suite.name }} (${{ matrix.mode }})
+    # The simulation counts the instructions, so it misses what only shows in the time: the
+    # cache and branch prediction effects. The walltime measures that on CodSpeed's bare-metal
+    # runners, the arm64 ones, whose minutes are free.
     # CodSpeed ships its instrumented Valgrind for Ubuntu 22.04, Ubuntu 24.04 and Debian 12 only,
     # and bails out with "Unsupported system" anywhere else, so the image cannot be `latest`.
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.mode == 'walltime' && 'codspeed-macro-arm64-graviton-ubuntu-22-04' || 'ubuntu-24.04' }}
     permissions:
       contents: read # required for actions/checkout
       id-token: write # required for OIDC authentication with CodSpeed
+    env:
+      # The newest GCC of the image, which otherwise defaults to an older one.
+      CC: ${{ matrix.mode == 'walltime' && 'gcc-12' || 'gcc-14' }}
+      CXX: ${{ matrix.mode == 'walltime' && 'g++-12' || 'g++-14' }}
+      CMAKE_BUILD_PARALLEL_LEVEL: ${{ matrix.mode == 'walltime' && 16 || 4 }}
     strategy:
       fail-fast: false
       # CodSpeed merges the jobs of a workflow run into one report, but rejects too many
@@ -41,7 +45,8 @@ jobs:
       # measured elsewhere are left out: modexp.json (the precompiles benchmark sweeps it) and
       # log_benchmark.json (log.json sweeps the same opcodes).
       matrix:
-        include:
+        mode: [simulation, walltime]
+        suite:
           - name: evmone
             # The precompiles benchmark runs both the mainnet inputs and the modexp parameter sweep:
             # the mainnet moduli are all odd and 256-bit, so they cover one code path and hide the
@@ -75,7 +80,14 @@ jobs:
           submodules: recursive
 
       - name: Install GMP
-        run: sudo apt-get -q update && sudo apt-get -qy install g++-12 libgmp-dev
+        run: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
+
+      # Ubuntu 22.04 ships CMake 3.22, older than the required 3.25, and GCC 11.
+      - name: Install CMake and GCC
+        if: matrix.mode == 'walltime'
+        run: |
+          curl -L --fail --retry 3 https://github.com/Kitware/CMake/releases/download/v4.1.2/cmake-4.1.2-linux-aarch64.tar.gz | sudo tar -xz --strip=1 -C /usr/local
+          sudo apt-get -qy install g++-12
 
       - name: Configure
         # The Release build type keeps the -O3 optimizations on, -g adds the debug information
@@ -90,69 +102,22 @@ jobs:
           -DEVMONE_TESTING=ON
           -DEVMONE_PRECOMPILES_GMP=ON
           -DEVMONE_PRECOMPILES_LIBSECP256K1=ON
-          -DCODSPEED_MODE=simulation
+          -DCODSPEED_MODE=${{ matrix.mode }}
 
       - name: Build
         run: cmake --build $BUILD_DIR --target evmone-bench evmone-precompiles-bench evmone-cli
 
       # Only the job's own fixtures are unpacked.
       - name: Download the benchmark fixtures
-        if: matrix.fixtures
+        if: matrix.suite.fixtures
         run: |
           curl -L --fail --retry 3 --output-dir /tmp -O \
             https://github.com/ethereum/execution-spec-tests/releases/download/$BENCHMARK_FIXTURES_RELEASE/fixtures_benchmark.tar.gz
           echo "$BENCHMARK_FIXTURES_SHA256  /tmp/fixtures_benchmark.tar.gz" | sha256sum -c
-          tar -xzf /tmp/fixtures_benchmark.tar.gz $FIXTURES/${{ matrix.fixtures }}
+          tar -xzf /tmp/fixtures_benchmark.tar.gz $FIXTURES/${{ matrix.suite.fixtures }}
 
       - name: Benchmark
         uses: CodSpeedHQ/action@v5
         with:
-          mode: simulation
-          run: ${{ matrix.run }}
-
-  # The simulation counts the instructions, so it misses what only shows in the time: the cache
-  # and branch prediction effects. CodSpeed's own bare-metal runners measure that stably.
-  benchmark-walltime:
-    name: Benchmark walltime
-    runs-on: codspeed-macro-arm64-graviton-ubuntu-22-04
-    permissions:
-      contents: read # required for actions/checkout
-      id-token: write # required for OIDC authentication with CodSpeed
-    env:
-      CC: gcc-12
-      CXX: g++-12
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      # Ubuntu 22.04 ships CMake 3.22, older than the required 3.25.
-      - name: Install CMake, GCC and GMP
-        run: |
-          curl -L --fail --retry 3 https://github.com/Kitware/CMake/releases/download/v4.1.2/cmake-4.1.2-linux-aarch64.tar.gz | sudo tar -xz --strip=1 -C /usr/local
-          sudo apt-get -q update && sudo apt-get -qy install g++-12 libgmp-dev
-
-      - name: Configure
-        run: >
-          cmake -S . -B $BUILD_DIR
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_C_FLAGS=-g
-          -DCMAKE_CXX_FLAGS=-g
-          -DBUILD_SHARED_LIBS=OFF
-          -DEVMONE_TESTING=ON
-          -DEVMONE_PRECOMPILES_GMP=ON
-          -DEVMONE_PRECOMPILES_LIBSECP256K1=ON
-          -DCODSPEED_MODE=walltime
-
-      - name: Build
-        run: cmake --build $BUILD_DIR --parallel 16 --target evmone-bench evmone-precompiles-bench
-
-      # The `evmone test` fixtures are left out: the walltime report is made by the benchmark
-      # library, which the test driver does not go through.
-      - name: Benchmark
-        uses: CodSpeedHQ/action@v5
-        with:
-          mode: walltime
-          run: >-
-            $BUILD_DIR/bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter='baseline/(analyse|execute)' &&
-            $BUILD_DIR/bin/evmone-precompiles-bench
+          mode: ${{ matrix.mode }}
+          run: ${{ matrix.suite.run }}
