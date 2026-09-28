@@ -284,6 +284,7 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
 [[nodiscard]] evmc::Result halt_top_level(
     std::span<const AppliedAuthorization> applied, int64_t state_gas_left)
 {
+    // REVIEW: is reverse order necessary? Is this covered in EEST?
     for (const auto& [authority, prev_code_hash] : std::views::reverse(applied))
     {
         --authority->nonce;
@@ -299,6 +300,11 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
     State& state, Host& host, evmc_revision rev, const Transaction& tx, evmc_message msg)
 {
     std::vector<AppliedAuthorization> applied;
+    // REVIEW: check if state_gas_limit copy is needed. It looks like msg.state_gas is unchanged
+    //   until the last halt().
+    // REVIEW: Having this helper is not good. We should rather wrap the section producing "halt"
+    //   into another function or lambda returning bool or optional. And then handle failure there
+    //   in single place: no need for halt nor halt_top_level.
     const auto halt = [&, state_gas_limit = msg.state_gas] {
         return halt_top_level(applied, state_gas_limit);
     };
@@ -331,6 +337,8 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
     }
 
     // The execution-gas charges above may leave the gas negative (EIP-2780).
+    // REVIEW: This is quite suspicious. We should attribute this the the specific execution-gas
+    //   charge. It looks there is only one actually.
     if (msg.gas < 0)
         return halt();
 
