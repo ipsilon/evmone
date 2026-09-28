@@ -36,24 +36,60 @@ auto pick(json::json& j, Rng& rng)
     return std::next(j.begin(), static_cast<std::ptrdiff_t>(rng() % j.size()));
 }
 
-/// Applies libFuzzer's default mutation to the code of a random pre-state account.
+/// Applies libFuzzer's default mutation to the hex bytes of the JSON string @p field.
+void mutate_bytes(json::json& field)
+{
+    auto bytes = from_hex(field.get<std::string>()).value();
+    const auto size = bytes.size();
+    bytes.resize(2 * size + 64);  // Room to grow.
+    bytes.resize(LLVMFuzzerMutate(bytes.data(), size, bytes.size()));
+    field = hex0x(bytes);
+}
+
+/// Mutates the code of a random pre-state account.
 bool mutate_code(json::json& test, Rng& rng)
 {
     auto& pre = test.at("pre");
     if (pre.empty())
         return false;
 
-    auto& code_field = pick(pre, rng)->at("code");
-    auto code = from_hex(code_field.get<std::string>()).value();
-    const auto size = code.size();
-    code.resize(2 * size + 64);  // Room to grow.
-    code.resize(LLVMFuzzerMutate(code.data(), size, code.size()));
-    code_field = hex0x(code);
+    mutate_bytes(pick(pre, rng)->at("code"));
+    return true;
+}
+
+/// Mutates one of the transaction's calldata variants.
+bool mutate_calldata(json::json& test, Rng& rng)
+{
+    auto& data = test.at("transaction").at("data");
+    if (data.empty())
+        return false;
+
+    mutate_bytes(*pick(data, rng));
+    // The cases executing the encoded transaction would not see the change: build it from the
+    // fields instead.
+    for (auto& [fork, expectations] : test.at("post").items())
+    {
+        for (auto& e : expectations)
+            e.erase("txbytes");
+    }
+    return true;
+}
+
+/// Removes a random account from the pre-state.
+bool remove_account(json::json& test, Rng& rng)
+{
+    auto& pre = test.at("pre");
+    if (pre.empty())
+        return false;
+
+    pre.erase(pick(pre, rng));
     return true;
 }
 
 constexpr Strategy STRATEGIES[] = {
-    {mutate_code, 1},
+    {mutate_code, 4},
+    {mutate_calldata, 2},
+    {remove_account, 1},
 };
 
 /// Applies the strategy picked by priority or, if it does not apply, the next one that does.
@@ -135,32 +171,83 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     return executed ? 0 : -1;
 }
 
+namespace
+{
+/// Parses the input as fixtures, empty if it is not a non-empty JSON object.
+json::json parse_fixtures(const uint8_t* data, size_t size)
+{
+    auto j = json::json::parse(data, data + size, nullptr, false);
+    return j.is_object() && !j.empty() ? j : json::json{};
+}
+
+/// Refills the state @p test, writes it alone to @p out and returns its size.
+/// Returns 0 if the test does not refill or does not fit in @p max_size.
+size_t emit(const std::string& name, json::json& test, uint8_t* out, size_t max_size) noexcept
+{
+    try
+    {
+        refill(name, test);
+        json::json mutant;
+        mutant[name] = std::move(test);
+        const auto s = mutant.dump();
+        if (s.size() > max_size)
+            return 0;
+        std::memcpy(out, s.data(), s.size());
+        return s.size();
+    }
+    catch (const std::exception&)
+    {
+        return 0;
+    }
+}
+}  // namespace
+
 extern "C" size_t LLVMFuzzerCustomMutator(
     uint8_t* data, size_t size, size_t max_size, unsigned seed)
 {
-    auto j = json::json::parse(data, data + size, nullptr, false);
-    if (!j.is_object() || j.empty())
+    auto j = parse_fixtures(data, size);
+    if (j.empty())
         return size;
 
     try
     {
         Rng rng{seed};
         const auto it = pick(j, rng);
-        auto& test = it.value();
-        if (!mutate(test, rng))
+        if (!mutate(it.value(), rng))
             return size;
-        refill(it.key(), test);
-
-        json::json mutant;
-        mutant[it.key()] = std::move(test);
-        const auto out = mutant.dump();
-        if (out.size() > max_size)
-            return size;
-        std::memcpy(data, out.data(), out.size());
-        return out.size();
+        const auto out_size = emit(it.key(), it.value(), data, max_size);
+        return out_size != 0 ? out_size : size;
     }
     catch (const std::exception&)
     {
         return size;
+    }
+}
+
+/// Copies a random pre-state account of a test of the second input into a test of the first,
+/// replacing the account at the same address if there is one. EEST reuses addresses across
+/// tests, so a contract often lands where the test calls it.
+extern "C" size_t LLVMFuzzerCustomCrossOver(const uint8_t* data1, size_t size1,
+    const uint8_t* data2, size_t size2, uint8_t* out, size_t max_out_size, unsigned seed)
+{
+    auto j1 = parse_fixtures(data1, size1);
+    auto j2 = parse_fixtures(data2, size2);
+    if (j1.empty() || j2.empty())
+        return 0;
+
+    try
+    {
+        Rng rng{seed};
+        const auto it1 = pick(j1, rng);
+        auto& donor_pre = pick(j2, rng)->at("pre");
+        if (donor_pre.empty())
+            return 0;
+        const auto account = pick(donor_pre, rng);
+        it1->at("pre")[account.key()] = account.value();
+        return emit(it1.key(), it1.value(), out, max_out_size);
+    }
+    catch (const std::exception&)
+    {
+        return 0;
     }
 }
