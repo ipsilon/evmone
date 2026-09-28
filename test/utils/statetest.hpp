@@ -180,6 +180,24 @@ struct StateTestOptions
     bool state_diff = false;
 };
 
+/// What executing one case of a state test produced.
+struct StateCaseResult
+{
+    /// The transaction, absent if the case's txbytes do not decode.
+    std::optional<state::Transaction> tx;
+
+    /// The transaction's receipt, or why it is invalid.
+    std::variant<state::TransactionReceipt, std::error_code> result;
+
+    hash256 state_root;
+    hash256 logs_hash;
+};
+
+/// Executes the @p expected case of the state @p test in @p rev, checking nothing.
+StateCaseResult execute_state_case(const StateTransitionTest& test, evmc_revision rev,
+    const state::BlockInfo& block, const StateTransitionTest::Case::Expectation& expected,
+    evmc::VM& vm);
+
 /// Execute the state @p test using the @p vm, recording what does not match into @p report.
 void run_state_test(const StateTransitionTest& test, evmc::VM& vm, const StateTestOptions& options,
     TestReport& report);
