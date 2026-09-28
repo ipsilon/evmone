@@ -78,8 +78,8 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     static constexpr auto INITCODE_WORD_COST = 2;
     static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
     static constexpr auto TOTAL_COST_FLOOR_PER_BYTE = 16 * 4;
-    // The authorization tuple bytes at the floor price, the signature recovery, the cold authority
-    // access and two warm writes (EIP-2780).
+    // The calldata cost of the 101-byte authorization tuple, the signature recovery, the cold
+    // authority access and two warm writes (EIP-8037).
     static constexpr auto EXECUTION_PER_AUTH_BASE_COST =
         101 * 16 + 3000 + instr::COLD_ACCOUNT_ACCESS_AMSTERDAM + 2 * instr::WARM_ACCESS;
 
@@ -194,7 +194,7 @@ struct AppliedAuthorization
 
         if (rev >= EVMC_AMSTERDAM)  // The state-dependent costs replace the refund (EIP-2780).
         {
-            // The 23-byte delegation indicator, only for an authority without one (EIP-8037).
+            // The 23-byte delegation indicator (EIP-8037).
             static constexpr auto AUTH_BASE_STATE_GAS = 23 * COST_PER_STATE_BYTE;
             const auto is_first = std::ranges::find(applied, &authority,
                                       &AppliedAuthorization::authority) == applied.end();
@@ -256,7 +256,8 @@ struct AppliedAuthorization
         ++authority.nonce;
     }
 
-    // The ACCOUNT_WRITE charges may leave the gas negative; it stays negative (EIP-2780).
+    // The ACCOUNT_WRITE charges are checked only here: gas_left never grows in the loop and every
+    // out-of-gas ends the same way.
     if (gas_left < 0)
         return std::nullopt;
     return delegation_refund;
@@ -293,8 +294,10 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
         process_authorization_list(state, tx, rev, msg.gas, state_gas, applied);
 
     // The authorizations' state-gas stays consumed even if the call fails (EIP-2780).
-    const auto state_gas_init = state_gas;
+    const auto committed_state_gas = state_gas;
 
+    // TODO: The recipient creation and the delegation target access are exclusive because
+    //   a delegated recipient exists. Investigate exploiting this.
     const auto charge_recipient = [&] {
         // Creating the recipient account costs state-gas, refilled if the call fails (EIP-8037).
         if (rev >= EVMC_AMSTERDAM && (!tx.to.has_value() || tx.value != 0) &&
@@ -324,13 +327,13 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
     if (!delegation_refund.has_value() || !charge_recipient())
     {
         // Out of gas before the call: the execution-gas is consumed, the state-gas is returned
-        // and the applied authorizations are reverted (EIP-2780). Nothing else has changed the
-        // state yet.
+        // and the authorizations are reverted (EIP-2780). The sender's nonce bump precedes them,
+        // so it is kept.
         for (const auto& [authority, prev_nonce, prev_code_hash] : applied)
         {
             authority->nonce = prev_nonce;
             authority->code_hash = prev_code_hash;
-            authority->code.clear();
+            authority->code.clear();  // Reloaded from the initial state by get_code().
             authority->code_changed = false;
         }
         return evmc::Result{EVMC_OUT_OF_GAS, {.left = msg.state_gas}};
@@ -348,8 +351,8 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
         assert(result.state_gas.left == msg.state_gas);
         assert(result.state_gas.spilled == 0);
         if (result.status_code == EVMC_REVERT)
-            result.gas_left += state_gas.spilled - state_gas_init.spilled;
-        result.state_gas = state_gas_init;
+            result.gas_left += state_gas.spilled - committed_state_gas.spilled;
+        result.state_gas = committed_state_gas;
     }
     result.gas_refund += *delegation_refund;  // Kept even if the call fails (EIP-7702).
     return result;
