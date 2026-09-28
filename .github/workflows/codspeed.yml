@@ -75,7 +75,7 @@ jobs:
           submodules: recursive
 
       - name: Install GMP
-        run: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
+        run: sudo apt-get -q update && sudo apt-get -qy install g++-12 libgmp-dev
 
       - name: Configure
         # The Release build type keeps the -O3 optimizations on, -g adds the debug information
@@ -109,3 +109,50 @@ jobs:
         with:
           mode: simulation
           run: ${{ matrix.run }}
+
+  # The simulation counts the instructions, so it misses what only shows in the time: the cache
+  # and branch prediction effects. CodSpeed's own bare-metal runners measure that stably.
+  benchmark-walltime:
+    name: Benchmark walltime
+    runs-on: codspeed-macro-arm64-graviton-ubuntu-22-04
+    permissions:
+      contents: read # required for actions/checkout
+      id-token: write # required for OIDC authentication with CodSpeed
+    env:
+      CC: gcc-12
+      CXX: g++-12
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      # Ubuntu 22.04 ships CMake 3.22, older than the required 3.25.
+      - name: Install CMake, GCC and GMP
+        run: |
+          curl -L --fail --retry 3 https://github.com/Kitware/CMake/releases/download/v4.1.2/cmake-4.1.2-linux-aarch64.tar.gz | sudo tar -xz --strip=1 -C /usr/local
+          sudo apt-get -q update && sudo apt-get -qy install g++-12 libgmp-dev
+
+      - name: Configure
+        run: >
+          cmake -S . -B $BUILD_DIR
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_FLAGS=-g
+          -DCMAKE_CXX_FLAGS=-g
+          -DBUILD_SHARED_LIBS=OFF
+          -DEVMONE_TESTING=ON
+          -DEVMONE_PRECOMPILES_GMP=ON
+          -DEVMONE_PRECOMPILES_LIBSECP256K1=ON
+          -DCODSPEED_MODE=walltime
+
+      - name: Build
+        run: cmake --build $BUILD_DIR --parallel 16 --target evmone-bench evmone-precompiles-bench
+
+      # The `evmone test` fixtures are left out: the walltime report is made by the benchmark
+      # library, which the test driver does not go through.
+      - name: Benchmark
+        uses: CodSpeedHQ/action@v5
+        with:
+          mode: walltime
+          run: >-
+            $BUILD_DIR/bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter='baseline/(analyse|execute)' &&
+            $BUILD_DIR/bin/evmone-precompiles-bench
