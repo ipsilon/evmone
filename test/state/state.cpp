@@ -24,6 +24,7 @@ namespace
 constexpr auto AUTHORIZATION_EMPTY_ACCOUNT_COST = 25000;
 /// EIP-7702: The cost of authorization that sets delegation to an account that already exists.
 constexpr auto AUTHORIZATION_BASE_COST = 12500;
+/// REVIEW: Is this the new value for AUTHORIZATION_BASE_COST?
 /// State-gas cost of the 23-byte delegation indicator set by an authorization (EIP-8037).
 constexpr auto AUTH_BASE_STATE_GAS = 23 * COST_PER_STATE_BYTE;
 
@@ -80,6 +81,7 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     static constexpr auto INITCODE_WORD_COST = 2;
     static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
     static constexpr auto TOTAL_COST_FLOOR_PER_BYTE = 16 * 4;
+    // REVIEW: Where does the number come from?
     static constexpr auto EXECUTION_PER_AUTH_BASE_COST = 7816;
 
     const auto is_create = !tx.to.has_value();
