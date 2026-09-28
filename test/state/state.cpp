@@ -159,6 +159,7 @@ struct AppliedAuthorization
     std::vector<AppliedAuthorization>& applied)
 {
     int64_t delegation_refund = 0;
+    int64_t state_cost = 0;
     for (const auto& auth : tx.authorization_list)
     {
         // 1. Verify the chain id is either 0 or the chain’s current ID.
@@ -200,8 +201,8 @@ struct AppliedAuthorization
                                       &AppliedAuthorization::authority) == applied.end();
             if (is_first)
                 applied.emplace_back(&authority, authority.nonce, authority.code_hash);
-            if (authority.is_empty() && !state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
-                return std::nullopt;
+            if (authority.is_empty())
+                state_cost += NEW_ACCOUNT_STATE_GAS;
             // The first write to the authority, unless it is the sender or the value recipient
             // (paid by TX_VALUE_COST).
             if (is_first && authority_addr != tx.sender &&
@@ -209,8 +210,8 @@ struct AppliedAuthorization
                 gas_left -= instr::ACCOUNT_WRITE;
             // A net-new delegation indicator: no code at the transaction start and none set since.
             if (!is_zero(auth.addr) && authority.code_hash == Account::EMPTY_CODE_HASH &&
-                !authority.code_changed && !state_gas.charge(gas_left, AUTH_BASE_STATE_GAS))
-                return std::nullopt;
+                !authority.code_changed)
+                state_cost += AUTH_BASE_STATE_GAS;
         }
         // 7. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter
         // if authority exists in the trie.
@@ -256,9 +257,9 @@ struct AppliedAuthorization
         ++authority.nonce;
     }
 
-    // The ACCOUNT_WRITE charges are checked only here: gas_left never grows in the loop and every
-    // out-of-gas ends the same way.
-    if (gas_left < 0)
+    // The costs are charged or checked only here: gas_left never grows in the loop, so this fails
+    // exactly when charging each cost in turn would.
+    if (gas_left < 0 || !state_gas.charge(gas_left, state_cost))
         return std::nullopt;
     return delegation_refund;
 }
