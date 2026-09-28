@@ -1,7 +1,7 @@
 {{- $exponent := "" -}}
 {{- range $exponent = $.Chain }}{{ end -}}
 
-uint256 expmod_(const ModArith<uint256>& m, const uint256& x) noexcept
+uint256 expmod_(const MontgomeryArith<uint256>& m, const uint256& x) noexcept
 {
     // Computes modular exponentiation
     // x^{{ printf "%#x" $exponent }}
