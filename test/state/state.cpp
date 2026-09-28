@@ -143,17 +143,17 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     return {intrinsic_cost, min_cost};
 }
 
-/// An authorization applied to the authority account, recorded to revert it on halt (EIP-2780).
+/// An authority account before its first applied authorization, to revert it on halt (EIP-2780).
 struct AppliedAuthorization
 {
     Account* authority = nullptr;  ///< Account in a node-based container (stable refs).
+    uint64_t prev_nonce = 0;
     bytes32 prev_code_hash;
 };
 
 /// Applies the authorization list (EIP-7702) and returns the delegation refund. From Amsterdam,
-/// charges the state-dependent costs instead of the refund and records the applied authorizations
-/// for halt_top_level(); returns nullopt when out of state-gas, may leave gas_left negative
-/// (EIP-2780).
+/// charges the state-dependent costs instead of the refund and records the authorities to revert
+/// on halt; returns nullopt when out of gas (EIP-2780).
 [[nodiscard]] std::optional<int64_t> process_authorization_list(State& state, const Transaction& tx,
     evmc_revision rev, int64_t& gas_left, StateGas& state_gas,
     std::vector<AppliedAuthorization>& applied)
@@ -196,19 +196,21 @@ struct AppliedAuthorization
         {
             // The 23-byte delegation indicator, only for an authority without one (EIP-8037).
             static constexpr auto AUTH_BASE_STATE_GAS = 23 * COST_PER_STATE_BYTE;
+            const auto is_first = std::ranges::find(applied, &authority,
+                                      &AppliedAuthorization::authority) == applied.end();
+            if (is_first)
+                applied.emplace_back(&authority, authority.nonce, authority.code_hash);
             if (authority.is_empty() && !state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
                 return std::nullopt;
-            // The first write to the authority: it is not the sender, not the value recipient
-            // (paid by TX_VALUE_COST) and not an already applied authority.
-            if (authority_addr != tx.sender && (tx.value == 0 || tx.to != authority_addr) &&
-                std::ranges::find(applied, &authority, &AppliedAuthorization::authority) ==
-                    applied.end())
+            // The first write to the authority, unless it is the sender or the value recipient
+            // (paid by TX_VALUE_COST).
+            if (is_first && authority_addr != tx.sender &&
+                (tx.value == 0 || tx.to != authority_addr))
                 gas_left -= instr::ACCOUNT_WRITE;
             // A net-new delegation indicator: no code at the transaction start and none set since.
             if (!is_zero(auth.addr) && authority.code_hash == Account::EMPTY_CODE_HASH &&
                 !authority.code_changed && !state_gas.charge(gas_left, AUTH_BASE_STATE_GAS))
                 return std::nullopt;
-            applied.emplace_back(&authority, authority.code_hash);
         }
         // 7. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter
         // if authority exists in the trie.
@@ -253,6 +255,10 @@ struct AppliedAuthorization
         // 9. Increase the nonce of authority by one.
         ++authority.nonce;
     }
+
+    // The ACCOUNT_WRITE charges may leave the gas negative; it stays negative (EIP-2780).
+    if (gas_left < 0)
+        return std::nullopt;
     return delegation_refund;
 }
 
@@ -277,70 +283,58 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
     };
 }
 
-/// Halts the top-level message before the call (EIP-2780): the execution-gas is consumed, the
-/// state-gas is returned and the applied authorizations are reverted. Nothing else has changed
-/// the state yet, so undoing their nonce bumps and code changes is enough. Undoing in reverse
-/// order restores the code hash from before the first authorization of each authority.
-[[nodiscard]] evmc::Result halt_top_level(
-    std::span<const AppliedAuthorization> applied, int64_t state_gas_left)
-{
-    // REVIEW: is reverse order necessary? Is this covered in EEST?
-    for (const auto& [authority, prev_code_hash] : std::views::reverse(applied))
-    {
-        --authority->nonce;
-        authority->code_hash = prev_code_hash;
-        authority->code.clear();
-        authority->code_changed = false;
-    }
-    return evmc::Result{EVMC_OUT_OF_GAS, {.left = state_gas_left}};
-}
-
 /// Applies the authorizations (EIP-7702), resolves the delegation and calls the top-level message.
 [[nodiscard]] evmc::Result process_top_level(
     State& state, Host& host, evmc_revision rev, const Transaction& tx, evmc_message msg)
 {
     std::vector<AppliedAuthorization> applied;
-    // REVIEW: check if state_gas_limit copy is needed. It looks like msg.state_gas is unchanged
-    //   until the last halt().
-    // REVIEW: Having this helper is not good. We should rather wrap the section producing "halt"
-    //   into another function or lambda returning bool or optional. And then handle failure there
-    //   in single place: no need for halt nor halt_top_level.
-    const auto halt = [&, state_gas_limit = msg.state_gas] {
-        return halt_top_level(applied, state_gas_limit);
-    };
-
     StateGas state_gas{{.left = msg.state_gas}};
     const auto delegation_refund =
         process_authorization_list(state, tx, rev, msg.gas, state_gas, applied);
-    if (!delegation_refund.has_value())
-        return halt();
 
     // The authorizations' state-gas stays consumed even if the call fails (EIP-2780).
     const auto state_gas_init = state_gas;
 
-    // Creating the recipient account costs state-gas, refilled if the call fails (EIP-8037).
-    if (rev >= EVMC_AMSTERDAM && (!tx.to.has_value() || tx.value != 0) &&
-        !host.account_exists(msg.recipient) && !state_gas.charge(msg.gas, NEW_ACCOUNT_STATE_GAS))
-        return halt();
+    const auto charge_recipient = [&] {
+        // Creating the recipient account costs state-gas, refilled if the call fails (EIP-8037).
+        if (rev >= EVMC_AMSTERDAM && (!tx.to.has_value() || tx.value != 0) &&
+            !host.account_exists(msg.recipient) &&
+            !state_gas.charge(msg.gas, NEW_ACCOUNT_STATE_GAS))
+            return false;
 
-    if (tx.to.has_value())
-    {
-        if (const auto delegate = get_delegate_address(host, *tx.to))
+        if (tx.to.has_value())
         {
-            assert(host.account_exists(*tx.to));
-            msg.code_address = *delegate;
-            msg.flags |= EVMC_DELEGATED;
-            const auto warm = host.access_account(msg.code_address) == EVMC_ACCESS_WARM;
-            if (rev >= EVMC_AMSTERDAM)  // The delegation target access (EIP-2780).
-                msg.gas -= warm ? instr::WARM_ACCESS : instr::COLD_ACCOUNT_ACCESS_AMSTERDAM;
+            if (const auto delegate = get_delegate_address(host, *tx.to))
+            {
+                assert(host.account_exists(*tx.to));
+                msg.code_address = *delegate;
+                msg.flags |= EVMC_DELEGATED;
+                const auto warm = host.access_account(msg.code_address) == EVMC_ACCESS_WARM;
+                if (rev >= EVMC_AMSTERDAM)  // The delegation target access (EIP-2780).
+                {
+                    msg.gas -= warm ? instr::WARM_ACCESS : instr::COLD_ACCOUNT_ACCESS_AMSTERDAM;
+                    if (msg.gas < 0)
+                        return false;
+                }
+            }
         }
-    }
+        return true;
+    };
 
-    // The execution-gas charges above may leave the gas negative (EIP-2780).
-    // REVIEW: This is quite suspicious. We should attribute this the the specific execution-gas
-    //   charge. It looks there is only one actually.
-    if (msg.gas < 0)
-        return halt();
+    if (!delegation_refund.has_value() || !charge_recipient())
+    {
+        // Out of gas before the call: the execution-gas is consumed, the state-gas is returned
+        // and the applied authorizations are reverted (EIP-2780). Nothing else has changed the
+        // state yet.
+        for (const auto& [authority, prev_nonce, prev_code_hash] : applied)
+        {
+            authority->nonce = prev_nonce;
+            authority->code_hash = prev_code_hash;
+            authority->code.clear();
+            authority->code_changed = false;
+        }
+        return evmc::Result{EVMC_OUT_OF_GAS, {.left = msg.state_gas}};
+    }
 
     msg.state_gas = state_gas.left;
     auto result = host.call(msg);
