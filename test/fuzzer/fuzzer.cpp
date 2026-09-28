@@ -86,20 +86,39 @@ bool remove_account(json::json& test, Rng& rng)
     return true;
 }
 
+/// Removes the cases of a random fork, unless it is the only one.
+bool remove_fork(json::json& test, Rng& rng)
+{
+    auto& post = test.at("post");
+    if (post.size() < 2)
+        return false;
+
+    post.erase(pick(post, rng));
+    return true;
+}
+
 constexpr Strategy STRATEGIES[] = {
     {mutate_code, 4},
     {mutate_calldata, 2},
     {remove_account, 1},
+    {remove_fork, 1},
 };
+
+constexpr auto TOTAL_PRIORITY = [] {
+    unsigned total = 0;
+    for (const auto& strategy : STRATEGIES)
+        total += strategy.priority;
+    return total;
+}();
+
+/// The priority of removing a fixture from an input holding more than one, relative to
+/// STRATEGIES. The other fixtures keep their expectations, so nothing is refilled.
+constexpr unsigned REMOVE_FIXTURE_PRIORITY = 1;
 
 /// Applies the strategy picked by priority or, if it does not apply, the next one that does.
 bool mutate(json::json& test, Rng& rng)
 {
-    unsigned total = 0;
-    for (const auto& strategy : STRATEGIES)
-        total += strategy.priority;
-
-    auto r = rng() % total;
+    auto r = rng() % TOTAL_PRIORITY;
     size_t first = 0;
     while (r >= STRATEGIES[first].priority)
         r -= STRATEGIES[first++].priority;
@@ -212,6 +231,17 @@ extern "C" size_t LLVMFuzzerCustomMutator(
     try
     {
         Rng rng{seed};
+        if (j.size() > 1 &&
+            rng() % (TOTAL_PRIORITY + REMOVE_FIXTURE_PRIORITY) < REMOVE_FIXTURE_PRIORITY)
+        {
+            j.erase(pick(j, rng));
+            const auto out = j.dump();
+            if (out.size() > max_size)
+                return size;
+            std::memcpy(data, out.data(), out.size());
+            return out.size();
+        }
+
         const auto it = pick(j, rng);
         if (!mutate(it.value(), rng))
             return size;
