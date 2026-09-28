@@ -88,13 +88,14 @@ struct Transaction
 /// Handles the legacy RLP list and the EIP-2718 typed envelope (type byte followed by an RLP list).
 [[nodiscard]] std::optional<Transaction> decode_transaction(bytes_view data) noexcept;
 
-/// Recovers the sender (the signer) of the transaction @p tx decoded from @p txbytes,
+/// Recovers the sender (the signer) of the transaction @p tx serialized as @p txbytes,
 /// or std::nullopt if the signature is invalid.
 ///
 /// The serialization is needed as well because the signing preimage is a slice of it; @p tx must
-/// be what decode_transaction(@p txbytes) returned.
+/// be what decode_transaction(@p txbytes) would return.
 ///
-/// The recovery is strict at every revision: r, s in [1, secp256k1n) and low s (EIP-2).
+/// The recovery is strict at every revision: v valid for its type, r, s in [1, secp256k1n)
+/// and low s (EIP-2).
 [[nodiscard]] std::optional<address> recover_sender(
     const Transaction& tx, bytes_view txbytes) noexcept;
 
