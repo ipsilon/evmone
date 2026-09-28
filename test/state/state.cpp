@@ -186,20 +186,7 @@ struct AppliedAuthorization
         if (auth.nonce != authority.nonce)
             continue;
 
-        // 7. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter
-        // if authority exists in the trie.
-        // Successful authorization validation makes an account non-empty.
-        // We apply the refund only if the account has existed before.
-        // We detect "exists in the trie" by inspecting _empty_ property (EIP-161) because _empty_
-        // implies an account doesn't exist in the state (EIP-7523).
-        if (rev < EVMC_AMSTERDAM)
-        {
-            static constexpr auto EXISTING_AUTHORITY_REFUND =
-                AUTHORIZATION_EMPTY_ACCOUNT_COST - AUTHORIZATION_BASE_COST;
-            if (!authority.is_empty())
-                delegation_refund += EXISTING_AUTHORITY_REFUND;
-        }
-        else  // The state-dependent costs replace the refund (EIP-2780).
+        if (rev >= EVMC_AMSTERDAM)  // The state-dependent costs replace the refund (EIP-2780).
         {
             if (authority.is_empty() && !state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
                 return std::nullopt;
@@ -218,6 +205,18 @@ struct AppliedAuthorization
                 !authority.code_changed && !state_gas.charge(gas_left, AUTH_BASE_STATE_GAS))
                 return std::nullopt;
             applied.emplace_back(&authority, authority.code_hash);
+        }
+        // 7. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter
+        // if authority exists in the trie.
+        // Successful authorization validation makes an account non-empty.
+        // We apply the refund only if the account has existed before.
+        // We detect "exists in the trie" by inspecting _empty_ property (EIP-161) because _empty_
+        // implies an account doesn't exist in the state (EIP-7523).
+        else if (!authority.is_empty())
+        {
+            static constexpr auto EXISTING_AUTHORITY_REFUND =
+                AUTHORIZATION_EMPTY_ACCOUNT_COST - AUTHORIZATION_BASE_COST;
+            delegation_refund += EXISTING_AUTHORITY_REFUND;
         }
 
         // As a special case, if address is 0 do not write the designation.
