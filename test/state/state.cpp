@@ -147,7 +147,8 @@ struct AppliedAuthorization
 
 /// Applies the authorization list (EIP-7702) and returns the delegation refund. From Amsterdam,
 /// charges the state-dependent costs instead of the refund and records the applied authorizations
-/// for halt_top_level(); returns nullopt when out of gas (EIP-2780).
+/// for halt_top_level(); returns nullopt when out of state-gas, may leave gas_left negative
+/// (EIP-2780).
 [[nodiscard]] std::optional<int64_t> process_authorization_list(State& state, const Transaction& tx,
     evmc_revision rev, int64_t& gas_left, StateGas& state_gas,
     std::vector<AppliedAuthorization>& applied)
@@ -195,11 +196,7 @@ struct AppliedAuthorization
             if (authority_addr != tx.sender && (tx.value == 0 || tx.to != authority_addr) &&
                 std::ranges::find(applied, &authority, &AppliedAuthorization::authority) ==
                     applied.end())
-            {
                 gas_left -= instr::ACCOUNT_WRITE;
-                if (gas_left < 0)
-                    return std::nullopt;
-            }
             // A net-new delegation indicator: no code at the transaction start and none set since.
             if (!is_zero(auth.addr) && authority.code_hash == Account::EMPTY_CODE_HASH &&
                 !authority.code_changed && !state_gas.charge(gas_left, AUTH_BASE_STATE_GAS))
@@ -322,13 +319,13 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
             msg.flags |= EVMC_DELEGATED;
             const auto warm = host.access_account(msg.code_address) == EVMC_ACCESS_WARM;
             if (rev >= EVMC_AMSTERDAM)  // The delegation target access (EIP-2780).
-            {
                 msg.gas -= warm ? instr::WARM_ACCESS : instr::COLD_ACCOUNT_ACCESS_AMSTERDAM;
-                if (msg.gas < 0)
-                    return halt();
-            }
         }
     }
+
+    // The execution-gas charges above may leave the gas negative (EIP-2780).
+    if (msg.gas < 0)
+        return halt();
 
     msg.state_gas = state_gas.left;
     auto result = host.call(msg);
