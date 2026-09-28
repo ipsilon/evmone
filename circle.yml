@@ -687,6 +687,11 @@ jobs:
           key: fuzzing-corpus-{{epoch}}
           paths:
             - ~/corpus
+      - run:
+          name: "Archive fuzzing corpus"
+          command: tar -czf ~/fuzzing-corpus.tar.gz -C ~ corpus
+      - store_artifacts:
+          path: ~/fuzzing-corpus.tar.gz
 
   macos-asan:
     executor: macos
