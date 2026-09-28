@@ -564,6 +564,51 @@ jobs:
       - collect_coverage_clang:
           flags: eest-develop-gmp
 
+  benchmark-walltime:
+    # CodSpeed recommends its own bare-metal runners for the walltime instrument, but a dedicated
+    # VM measures stably enough. The simulation runs on GitHub Actions (.github/workflows/codspeed.yml).
+    machine:
+      image: ubuntu-2604:current
+    resource_class: large
+    environment:
+      CMAKE_BUILD_PARALLEL_LEVEL: 4
+    steps:
+      - checkout
+      - checkout_submodules
+      - install_cmake:
+          version: 4.1.2
+      - run:
+          name: "Install GMP"
+          command: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
+      - run:
+          name: "Install CodSpeed CLI"
+          command: |
+            curl -fsSL https://codspeed.io/v5.1.0/install.sh | bash
+            echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> "$BASH_ENV"
+      - run:
+          name: "Configure"
+          command: >
+            cmake -S . -B build
+            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_C_FLAGS=-g
+            -DCMAKE_CXX_FLAGS=-g
+            -DBUILD_SHARED_LIBS=OFF
+            -DEVMONE_TESTING=ON
+            -DEVMONE_PRECOMPILES_GMP=ON
+            -DEVMONE_PRECOMPILES_LIBSECP256K1=ON
+            -DCODSPEED_MODE=walltime
+      - run:
+          name: "Build"
+          command: cmake --build build --target evmone-bench evmone-precompiles-bench
+      # The `evmone test` fixtures are left out: the walltime report is made by the benchmark
+      # library, which the test driver does not go through.
+      - run:
+          name: "Benchmark"
+          command: >
+            codspeed run --mode walltime --
+            "build/bin/evmone-bench test/evm-benchmarks/benchmarks --benchmark_filter='baseline/(analyse|execute)' &&
+            build/bin/evmone-precompiles-bench"
+
   gcc-min:
     executor: linux-gcc-min
     steps:
@@ -782,6 +827,7 @@ workflows:
       - ethereum-tests
       - precompiles-libsecp256k1
       - precompiles-gmp
+      - benchmark-walltime
       - cmake-min
       - gcc-min
       - clang-min
