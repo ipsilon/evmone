@@ -13,6 +13,7 @@ add_test(NAME ${PREFIX}/clean_output_dirs COMMAND ${CMAKE_COMMAND} -E rm -rf
     ${CMAKE_CURRENT_BINARY_DIR}/berlin_base_fee
     ${CMAKE_CURRENT_BINARY_DIR}/cancun_create_tx
     ${CMAKE_CURRENT_BINARY_DIR}/cancun_create_tx_trace
+    ${CMAKE_CURRENT_BINARY_DIR}/cancun_y_parity
     ${CMAKE_CURRENT_BINARY_DIR}/prague_empty_requests
     ${CMAKE_CURRENT_BINARY_DIR}/prague_pre_state_only
     ${CMAKE_CURRENT_BINARY_DIR}/osaka_blob_schedule
@@ -254,6 +255,39 @@ set_tests_properties(
     ${PREFIX}/${TEST_CASE}/trace-0.jsonl PROPERTIES
     FIXTURES_CLEANUP ${TEST_CASE}
     PASS_REGULAR_EXPRESSION [=["opName":"PUSH1".*"opName":"PUSH0".*"opName":"RETURN"]=]
+)
+
+
+set(TEST_CASE cancun_y_parity)
+
+add_test(
+    NAME ${PREFIX}/${TEST_CASE}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_CASE}
+    COMMAND
+    evmone-cli t8n
+    --state.fork Cancun
+    --state.reward 0
+    --state.chainid 1
+    --input.alloc alloc.json
+    --input.txs txs.json
+    --input.env env.json
+    --output.basedir ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}
+    --output.result out.json
+)
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE} PROPERTIES FIXTURES_REQUIRED "${TEST_CASE};outputs")
+
+add_test(
+    NAME ${PREFIX}/${TEST_CASE}/out.json
+    COMMAND ${CMAKE_COMMAND} -E cat ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}/out.json
+)
+set_tests_properties(
+    ${PREFIX}/${TEST_CASE}/out.json PROPERTIES
+    FIXTURES_CLEANUP ${TEST_CASE}
+    # The EIP-1559 transaction names its signature's y-parity as `yParity` and carries no `v`, as
+    # go-ethereum's JSON does. Loading it is the run above; this is the transaction executing.
+    PASS_REGULAR_EXPRESSION [=["gasUsed": "0x5208"]=]
+    FAIL_REGULAR_EXPRESSION [=["error"]=]
 )
 
 
