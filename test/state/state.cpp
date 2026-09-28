@@ -24,9 +24,6 @@ namespace
 constexpr auto AUTHORIZATION_EMPTY_ACCOUNT_COST = 25000;
 /// EIP-7702: The cost of authorization that sets delegation to an account that already exists.
 constexpr auto AUTHORIZATION_BASE_COST = 12500;
-/// REVIEW: Is this the new value for AUTHORIZATION_BASE_COST?
-/// State-gas cost of the 23-byte delegation indicator set by an authorization (EIP-8037).
-constexpr auto AUTH_BASE_STATE_GAS = 23 * COST_PER_STATE_BYTE;
 
 constexpr int64_t num_words(size_t size_in_bytes) noexcept
 {
@@ -81,20 +78,26 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     static constexpr auto INITCODE_WORD_COST = 2;
     static constexpr auto TOTAL_COST_FLOOR_PER_TOKEN = 10;
     static constexpr auto TOTAL_COST_FLOOR_PER_BYTE = 16 * 4;
-    // REVIEW: Where does the number come from?
-    static constexpr auto EXECUTION_PER_AUTH_BASE_COST = 7816;
+    // The authorization tuple bytes at the floor price, the signature recovery, the cold authority
+    // access and two warm writes (EIP-2780).
+    static constexpr auto EXECUTION_PER_AUTH_BASE_COST =
+        101 * 16 + 3000 + instr::COLD_ACCOUNT_ACCESS_AMSTERDAM + 2 * instr::WARM_ACCESS;
 
     const auto is_create = !tx.to.has_value();
 
-    auto base_cost = TX_BASE_COST;
-    if (rev >= EVMC_AMSTERDAM)  // Resource-based base cost (EIP-2780).
-    {
-        base_cost = TX_BASE_COST_AMSTERDAM;
+    // From Amsterdam, the base includes the recipient: its creation, or the access and the value
+    // transfer to another account (EIP-2780).
+    const auto recipient_cost = [&] {
+        if (rev < EVMC_AMSTERDAM)
+            return 0;
         if (is_create)
-            base_cost += instr::CREATE_ACCESS;
-        else if (*tx.to != tx.sender)
-            base_cost += instr::COLD_ACCOUNT_ACCESS_AMSTERDAM + (tx.value != 0 ? TX_VALUE_COST : 0);
-    }
+            return instr::CREATE_ACCESS;
+        if (*tx.to == tx.sender)
+            return 0;
+        return instr::COLD_ACCOUNT_ACCESS_AMSTERDAM + (tx.value != 0 ? TX_VALUE_COST : 0);
+    }();
+    const auto base_cost =
+        ((rev >= EVMC_AMSTERDAM) ? TX_BASE_COST_AMSTERDAM : TX_BASE_COST) + recipient_cost;
 
     const auto create_cost =
         (is_create && rev >= EVMC_HOMESTEAD && rev < EVMC_AMSTERDAM) ? TX_CREATE_COST : 0;
@@ -191,6 +194,8 @@ struct AppliedAuthorization
 
         if (rev >= EVMC_AMSTERDAM)  // The state-dependent costs replace the refund (EIP-2780).
         {
+            // The 23-byte delegation indicator, only for an authority without one (EIP-8037).
+            static constexpr auto AUTH_BASE_STATE_GAS = 23 * COST_PER_STATE_BYTE;
             if (authority.is_empty() && !state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
                 return std::nullopt;
             // The first write to the authority: it is not the sender, not the value recipient
