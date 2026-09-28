@@ -34,10 +34,10 @@ struct Withdrawal
 struct BlockInfo
 {
     int64_t number = 0;
-    int64_t timestamp = 0;
+    uint64_t timestamp = 0;
     hash256 hash;
     hash256 parent_hash;
-    int64_t parent_timestamp = 0;
+    uint64_t parent_timestamp = 0;
     int64_t gas_limit = 0;
     int64_t gas_used = 0;
     address coinbase;
