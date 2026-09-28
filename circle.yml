@@ -619,7 +619,9 @@ jobs:
       - test
       - run_execution_spec_tests:
           release: tests@v21.0.0
-          ignore: "--ignore for_amsterdam --ignore for_bpo2toamsterdamattime15k"
+          # The EIP-8037 TX_MAX_TOTAL_GAS_LIMIT cap is not implemented yet.
+          ignore: "--ignore for_amsterdam/amsterdam/eip8037_state_creation_gas_cost_increase/block_2d_gas_accounting/tx_total_gas_limit_cap.json"
+          blockchain_ignore: "--ignore for_amsterdam --ignore for_bpo2toamsterdamattime15k"
 
   clang-tidy:
     executor: linux-clang-selfhosted
