@@ -92,6 +92,29 @@ set_tests_properties(
     PASS_REGULAR_EXPRESSION "\\{\"pc\":0,[^\n]*\"opName\":\"PUSH1\"\\}.*\"pass\":true.*= 1 passed in"
     FAIL_REGULAR_EXPRESSION "\\[100%\\]")
 
+# --verbose names each fixture as <file>::<name> with its verdict, in place of the progress row.
+add_test(NAME ${PREFIX}/test_verbose COMMAND evmone-cli test --verbose ${DATA}/testcmd)
+set_tests_properties(
+    ${PREFIX}/test_verbose PROPERTIES
+    PASS_REGULAR_EXPRESSION
+    "collected 1 file\n\n[^\n]*declined\\.json::a_bad_rlp SKIPPED\n[^\n]*declined\\.json::b_state PASSED\n[^\n]*declined\\.json::c_engine SKIPPED\n\n.*= 1 passed in"
+    FAIL_REGULAR_EXPRESSION "\\[100%\\]")
+
+# A file which does not load has no fixture, so -v names the file.
+add_test(NAME ${PREFIX}/test_verbose_file_unparsed COMMAND evmone-cli test -v
+    ${DATA}/statetest/tests1/SuiteA/notes.txt)
+set_tests_properties(
+    ${PREFIX}/test_verbose_file_unparsed PROPERTIES PASS_REGULAR_EXPRESSION
+    "\n[^\n]*notes\\.txt FAILED\n")
+
+# With --trace the name comes first, so the trace below it can be told whose it is.
+add_test(NAME ${PREFIX}/test_verbose_trace COMMAND evmone-cli test --trace -v
+    ${DATA}/statetest/tests1/SuiteA/test1.json)
+set_tests_properties(
+    ${PREFIX}/test_verbose_trace PROPERTIES
+    PASS_REGULAR_EXPRESSION "test1\\.json::test1 \\{\"pc\":0,.*\"pass\":true[^\n]*\nPASSED\n"
+    FAIL_REGULAR_EXPRESSION "\\[100%\\]")
+
 # A named file is loaded whatever its extension.
 add_test(NAME ${PREFIX}/test_file_unparsed COMMAND evmone-cli test
     ${DATA}/statetest/tests1/SuiteA/notes.txt)
