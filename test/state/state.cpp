@@ -329,6 +329,7 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
     {
         // Out of gas before the call: the execution-gas is consumed, the state-gas is returned
         // and the authorizations are reverted (EIP-2780).
+        assert(rev >= EVMC_AMSTERDAM);  // The EIP-7702 refund is not kept.
         for (const auto& [authority, initial_code_hash] : applied)
         {
             --authority->nonce;
@@ -339,6 +340,8 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
                 authority->code_changed = false;
             }
         }
+        assert(
+            std::ranges::none_of(applied, [](const auto& a) { return a.authority->code_changed; }));
         return evmc::Result{EVMC_OUT_OF_GAS, {.left = msg.state_gas}};
     }
 
