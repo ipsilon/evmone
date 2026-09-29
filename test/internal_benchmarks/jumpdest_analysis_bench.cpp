@@ -111,6 +111,9 @@ namespace neon
 {
 #include "jumpdest/neon.hpp"
 #include "jumpdest/g8_neon.hpp"
+#include "jumpdest/opus_a_neon.hpp"
+#include "jumpdest/opus_b_neon.hpp"
+#include "jumpdest/fable_a_neon.hpp"
 }  // namespace neon
 #endif
 #undef MCA_BEGIN
@@ -201,6 +204,12 @@ const Variant variants[] = {
     {"g8_neon", neon::g8_neon, Kind::simd_native, always},
     {"g8x2_neon", neon::g8x2_neon, Kind::simd_native, always},
     {"x_g8_nochain", neon::x_g8_nochain, Kind::simd_native, always},
+    {"opus_a_1", neon::opus_a_1, Kind::simd_native, always},
+    {"opus_a_2", neon::opus_a_2, Kind::simd_native, always},
+    {"opus_b_1", neon::opus_b_1, Kind::simd_native, always},
+    {"opus_b_2", neon::opus_b_2, Kind::simd_native, always},
+    {"fable_a_1", neon::fable_a_1, Kind::simd_native, always},
+    {"fable_a_2", neon::fable_a_2, Kind::simd_native, always},
 #endif
 };
 

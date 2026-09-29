@@ -24,7 +24,7 @@ jobs:
       - name: Benchmark
         run: |
           build/bin/evmone-bench-internal \
-            --benchmark_filter='jumpdest_analysis/(real.*|stop|jumpdest|push32|rand_bytes|rand_stop_jumpdest_push1|rand_jumpdest_push1|rand_push1to32)/(default|v4_neon|g8_neon|g8x2_neon|x_g8_nochain)/a32' \
+            --benchmark_filter='jumpdest_analysis/(real.*|stop|jumpdest|push32|rand_bytes|rand_stop_jumpdest_push1|rand_jumpdest_push1|rand_push1to32)/(default|v4_neon|g8_neon|g8x2_neon|x_g8_nochain|opus_a_1|opus_a_2|opus_b_1|opus_b_2|fable_a_1|fable_a_2)/a32' \
             --benchmark_repetitions=5 --benchmark_report_aggregates_only=true --benchmark_min_time=0.2s \
             | tee out.txt
           { echo '```'; grep -E '_median|Benchmark' out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
