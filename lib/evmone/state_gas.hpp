@@ -18,6 +18,7 @@ struct StateGas : evmc::StateGas
     [[nodiscard]] bool charge(int64_t& gas_left, int64_t cost) noexcept
     {
         assert(cost >= 0);  // 0 charge happens in code deployment.
+        assert(gas_left >= 0);
         if (left >= cost)
         {
             left -= cost;
