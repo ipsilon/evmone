@@ -215,6 +215,9 @@ struct AppliedAuthorization
             gas_left -= execution_gas_cost;
             if (gas_left < 0 || !state_gas.charge(gas_left, state_gas_cost))
                 return std::nullopt;
+            assert(!authority.code_changed ||
+                   std::ranges::find(applied, &authority, &AppliedAuthorization::authority) !=
+                       applied.end());
             applied.emplace_back(&authority,
                 authority.code_changed ? std::nullopt : std::optional{authority.code_hash});
         }
