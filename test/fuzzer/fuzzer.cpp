@@ -57,6 +57,17 @@ bool mutate_code(json::json& test, Rng& rng)
     return true;
 }
 
+/// Drops the encoded transactions after a change of the transaction's fields: the cases
+/// executing them would not see it. The cases build the transaction from the fields instead.
+void drop_txbytes(json::json& test)
+{
+    for (auto& [fork, expectations] : test.at("post").items())
+    {
+        for (auto& e : expectations)
+            e.erase("txbytes");
+    }
+}
+
 /// Mutates one of the transaction's calldata variants.
 bool mutate_calldata(json::json& test, Rng& rng)
 {
@@ -65,13 +76,7 @@ bool mutate_calldata(json::json& test, Rng& rng)
         return false;
 
     mutate_bytes(*pick(data, rng));
-    // The cases executing the encoded transaction would not see the change: build it from the
-    // fields instead.
-    for (auto& [fork, expectations] : test.at("post").items())
-    {
-        for (auto& e : expectations)
-            e.erase("txbytes");
-    }
+    drop_txbytes(test);
     return true;
 }
 
@@ -97,12 +102,47 @@ bool remove_fork(json::json& test, Rng& rng)
     return true;
 }
 
+/// Halves one of the transaction's gas limits.
+bool halve_gas_limit(json::json& test, Rng& rng)
+{
+    auto& gas_limits = test.at("transaction").at("gasLimit");
+    if (gas_limits.empty())
+        return false;
+
+    auto& gas_limit = *pick(gas_limits, rng);
+    gas_limit = hex0x(std::stoull(gas_limit.get<std::string>(), nullptr, 16) / 2);
+    drop_txbytes(test);
+    return true;
+}
+
 constexpr Strategy STRATEGIES[] = {
     {mutate_code, 4},
     {mutate_calldata, 2},
     {remove_account, 1},
     {remove_fork, 1},
+    {halve_gas_limit, 1},
 };
+
+/// The transaction gas limit cap (EIP-7825). Applied to every mutant, as a transaction of
+/// earlier forks with the EEST default of 120M gas can grow its logs above what RLP encoding
+/// in the test tools supports.
+constexpr uint64_t TX_GAS_LIMIT_CAP = 1 << 24;
+
+/// Caps the transaction's gas limits to TX_GAS_LIMIT_CAP.
+void cap_gas_limits(json::json& test)
+{
+    bool capped = false;
+    for (auto& gas_limit : test.at("transaction").at("gasLimit"))
+    {
+        if (std::stoull(gas_limit.get<std::string>(), nullptr, 16) > TX_GAS_LIMIT_CAP)
+        {
+            gas_limit = hex0x(TX_GAS_LIMIT_CAP);
+            capped = true;
+        }
+    }
+    if (capped)
+        drop_txbytes(test);
+}
 
 constexpr auto TOTAL_PRIORITY = [] {
     unsigned total = 0;
@@ -205,6 +245,7 @@ size_t emit(const std::string& name, json::json& test, uint8_t* out, size_t max_
 {
     try
     {
+        cap_gas_limits(test);
         refill(name, test);
         json::json mutant;
         mutant[name] = std::move(test);
