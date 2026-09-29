@@ -234,6 +234,9 @@ struct AppliedAuthorization
             delegation_refund += EXISTING_AUTHORITY_REFUND;
         }
 
+        // 9. Increase the nonce of authority by one.
+        ++authority.nonce;
+
         // As a special case, if address is 0 do not write the designation.
         // Clear the account’s code and reset the account’s code hash to the empty hash.
         if (is_zero(auth.addr))
@@ -260,9 +263,6 @@ struct AppliedAuthorization
                 authority.code_hash = keccak256(designation);
             }
         }
-
-        // 9. Increase the nonce of authority by one.
-        ++authority.nonce;
     }
     return delegation_refund;
 }
