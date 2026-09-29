@@ -109,6 +109,7 @@ using u64 = uint64_t;
 namespace neon
 {
 #include "jumpdest/neon.hpp"
+#include "jumpdest/g8_neon.hpp"
 }  // namespace neon
 #endif
 #undef MCA_BEGIN
@@ -196,6 +197,7 @@ const Variant variants[] = {
 #endif
 #if JDA_NEON
     {"v4_neon", neon::g16v4_neon, Kind::simd_native, always},
+    {"g8_neon", neon::g8_neon, Kind::simd_native, always},
 #endif
 };
 

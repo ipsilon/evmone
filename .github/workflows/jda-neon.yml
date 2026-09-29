@@ -1,0 +1,30 @@
+name: JUMPDEST analysis NEON
+
+on:
+  push:
+    branches:
+      - bench/jumpdest-neon
+
+jobs:
+  bench:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, macos-15]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DEVMONE_TESTING=ON
+          cmake --build build --target evmone-bench-internal -j4
+      - name: Benchmark
+        run: |
+          build/bin/evmone-bench-internal \
+            --benchmark_filter='jumpdest_analysis/(real.*|stop|jumpdest|push32|rand_bytes|rand_stop_jumpdest_push1|rand_jumpdest_push1|rand_push1to32)/(default|v4_neon|g8_neon)/a32' \
+            --benchmark_repetitions=5 --benchmark_report_aggregates_only=true --benchmark_min_time=0.2s \
+            | tee out.txt
+          { echo '```'; grep -E '_median|Benchmark' out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
