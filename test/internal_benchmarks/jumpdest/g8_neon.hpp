@@ -58,8 +58,8 @@ struct G8NeonTables
 };
 }  // namespace
 
-// bits: bit i is set iff position i is a valid JUMPDEST. Reads up to 31 bytes past the end.
-void g8_neon(const uint8_t* code, size_t size, uint64_t* bits)
+template <bool Chain>
+void g8_neon_impl(const uint8_t* code, size_t size, uint64_t* bits)
 {
     G8NeonTables t;
     auto* const out = reinterpret_cast<uint8_t*>(bits);
@@ -87,6 +87,54 @@ void g8_neon(const uint8_t* code, size_t size, uint64_t* bits)
         out[4 * q + 1] = t.V1[t.T0[s]];
         out[4 * q + 2] = t.V2[e2];
         out[4 * q + 3] = t.V3[t.T2[e2]];
-        s = t.PT[s];
+        s = Chain ? t.PT[s] : 0;
+    }
+}
+
+// bits: bit i is set iff position i is a valid JUMPDEST. Reads up to 31 bytes past the end.
+void g8_neon(const uint8_t* code, size_t size, uint64_t* bits)
+{
+    g8_neon_impl<true>(code, size, bits);
+}
+
+// Experiment: no loop-carried entry chain (wrong result), the throughput bound.
+void x_g8_nochain(const uint8_t* code, size_t size, uint64_t* bits)
+{
+    g8_neon_impl<false>(code, size, bits);
+}
+
+// The entry chain in the vector domain: the entry is broadcast in a register and the chain
+// tables are TBL lookups, so nothing goes through memory.
+void g8v_neon(const uint8_t* code, size_t size, uint64_t* bits)
+{
+    static const uint8_t i0_d[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    static const uint8_t lo8_d[16] = {255, 255, 255, 255, 255, 255, 255, 255};
+    static const uint8_t pick_d[16] = {0, 16, 32, 48};
+    const auto i0 = vld1q_u8(i0_d);
+    const auto k16 = vdupq_n_u8(16);
+    const auto i16 = vaddq_u8(i0, k16);
+    const auto i32 = vaddq_u8(i16, k16);
+    const auto lo8 = vld1q_u8(lo8_d);
+    const auto pick = vld1q_u8(pick_d);
+    auto* const out = reinterpret_cast<uint32_t*>(bits);
+    auto e = vdupq_n_u8(0);
+    const size_t num_blocks = (size + 31) / 32;
+    for (size_t q = 0; q < num_blocks; ++q)
+    {
+        const auto a = g8_group(vld1q_u8(code + 32 * q));
+        const auto c = g8_group(vld1q_u8(code + 32 * q + 16));
+        const auto ta = vsubq_u8(a.xm, k16);
+        const auto cx = vsubq_u8(c.xm, k16);
+        const auto pab = vorrq_u8(vqtbl1q_u8(cx, ta), vsubq_u8(vmaxq_u8(ta, k16), k16));
+        const auto e2 = vqtbl3q_u8(uint8x16x3_t{{ta, i0, i16}}, e);
+        const auto e1 = vqtbl3q_u8(uint8x16x3_t{{vbslq_u8(lo8, a.ex, i0), i16, i32}}, e);
+        const auto e3 = vqtbl3q_u8(uint8x16x3_t{{vbslq_u8(lo8, c.ex, i0), i16, i32}}, e2);
+        const auto b0 = vqtbl1q_u8(vandq_u8(a.v, lo8), e);
+        const auto b1 = vqtbl1q_u8(a.v, e1);
+        const auto b2 = vqtbl1q_u8(vandq_u8(c.v, lo8), e2);
+        const auto b3 = vqtbl1q_u8(c.v, e3);
+        const auto w = vqtbl4q_u8(uint8x16x4_t{{b0, b1, b2, b3}}, pick);
+        vst1q_lane_u32(out + q, vreinterpretq_u32_u8(w), 0);
+        e = vqtbl3q_u8(uint8x16x3_t{{pab, cx, i0}}, e);
     }
 }
