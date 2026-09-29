@@ -143,23 +143,23 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     return {intrinsic_cost, min_cost};
 }
 
-/// An authority account before its first applied authorization, to revert it on halt (EIP-2780).
+/// An applied authorization, to revert it on halt (EIP-2780).
 struct AppliedAuthorization
 {
     Account* authority = nullptr;  ///< Account in a node-based container (stable refs).
-    uint64_t prev_nonce = 0;
-    bytes32 prev_code_hash;
+
+    /// The code hash from the transaction start, known until an authorization changes the code.
+    std::optional<bytes32> initial_code_hash;
 };
 
 /// Applies the authorization list (EIP-7702) and returns the delegation refund. From Amsterdam,
-/// charges the state-dependent costs instead of the refund and records the authorities to revert
-/// on halt; returns nullopt when out of gas (EIP-2780).
+/// charges the state-dependent costs instead of the refund and records the applied authorizations
+/// to revert them on halt; returns nullopt when out of gas (EIP-2780).
 [[nodiscard]] std::optional<int64_t> process_authorization_list(State& state, const Transaction& tx,
     evmc_revision rev, int64_t& gas_left, StateGas& state_gas,
     std::vector<AppliedAuthorization>& applied)
 {
     int64_t delegation_refund = 0;
-    int64_t state_cost = 0;
     for (const auto& auth : tx.authorization_list)
     {
         // 1. Verify the chain id is either 0 or the chain’s current ID.
@@ -197,21 +197,26 @@ struct AppliedAuthorization
         {
             // The 23-byte delegation indicator (EIP-8037).
             static constexpr auto AUTH_BASE_STATE_GAS = 23 * COST_PER_STATE_BYTE;
-            const auto is_first = std::ranges::find(applied, &authority,
-                                      &AppliedAuthorization::authority) == applied.end();
-            if (is_first)
-                applied.emplace_back(&authority, authority.nonce, authority.code_hash);
+            int64_t execution_gas_cost = 0;
+            int64_t state_gas_cost = 0;
             if (authority.is_empty())
-                state_cost += NEW_ACCOUNT_STATE_GAS;
-            // The first write to the authority, unless it is the sender or the value recipient
-            // (paid by TX_VALUE_COST).
-            if (is_first && authority_addr != tx.sender &&
-                (tx.value == 0 || tx.to != authority_addr))
-                gas_left -= instr::ACCOUNT_WRITE;
+                state_gas_cost += NEW_ACCOUNT_STATE_GAS;
+            // The first write to the authority: it is not the sender, not the value recipient
+            // (paid by TX_VALUE_COST) and not an already applied authority.
+            if (authority_addr != tx.sender && (tx.value == 0 || tx.to != authority_addr) &&
+                std::ranges::find(applied, &authority, &AppliedAuthorization::authority) ==
+                    applied.end())
+                execution_gas_cost += instr::ACCOUNT_WRITE;
             // A net-new delegation indicator: no code at the transaction start and none set since.
             if (!is_zero(auth.addr) && authority.code_hash == Account::EMPTY_CODE_HASH &&
                 !authority.code_changed)
-                state_cost += AUTH_BASE_STATE_GAS;
+                state_gas_cost += AUTH_BASE_STATE_GAS;
+            // Charged together, this fails exactly when charging each cost in turn would.
+            gas_left -= execution_gas_cost;
+            if (gas_left < 0 || !state_gas.charge(gas_left, state_gas_cost))
+                return std::nullopt;
+            applied.emplace_back(&authority,
+                authority.code_changed ? std::nullopt : std::optional{authority.code_hash});
         }
         // 7. Add PER_EMPTY_ACCOUNT_COST - PER_AUTH_BASE_COST gas to the global refund counter
         // if authority exists in the trie.
@@ -256,11 +261,6 @@ struct AppliedAuthorization
         // 9. Increase the nonce of authority by one.
         ++authority.nonce;
     }
-
-    // The costs are charged or checked only here: gas_left never grows in the loop, so this fails
-    // exactly when charging each cost in turn would.
-    if (gas_left < 0 || !state_gas.charge(gas_left, state_cost))
-        return std::nullopt;
     return delegation_refund;
 }
 
@@ -328,14 +328,16 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
     if (!delegation_refund.has_value() || !charge_recipient())
     {
         // Out of gas before the call: the execution-gas is consumed, the state-gas is returned
-        // and the authorizations are reverted (EIP-2780). The sender's nonce bump precedes them,
-        // so it is kept.
-        for (const auto& [authority, prev_nonce, prev_code_hash] : applied)
+        // and the authorizations are reverted (EIP-2780).
+        for (const auto& [authority, initial_code_hash] : applied)
         {
-            authority->nonce = prev_nonce;
-            authority->code_hash = prev_code_hash;
-            authority->code.clear();  // Reloaded from the initial state by get_code().
-            authority->code_changed = false;
+            --authority->nonce;
+            if (initial_code_hash.has_value())
+            {
+                authority->code_hash = *initial_code_hash;
+                authority->code.clear();  // Reloaded from the initial state by get_code().
+                authority->code_changed = false;
+            }
         }
         return evmc::Result{EVMC_OUT_OF_GAS, {.left = msg.state_gas}};
     }
