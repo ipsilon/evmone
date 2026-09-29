@@ -46,7 +46,7 @@ TEST(state_rlp, encode_string_short)
 
 TEST(state_rlp, encode_string_long)
 {
-    const auto buffer = std::make_unique<uint8_t[]>(0xffffff);
+    const auto buffer = std::make_unique<uint8_t[]>(0x1000000);
 
     const auto r1 = rlp::encode({buffer.get(), 0xaabb});
     EXPECT_EQ(r1.size(), 0xaabb + 3);
@@ -63,6 +63,10 @@ TEST(state_rlp, encode_string_long)
     const auto r4 = rlp::encode({buffer.get(), 0xffffff});
     EXPECT_EQ(r4.size(), 0xffffff + 4);
     EXPECT_EQ(hex({r4.data(), 10}), "baffffff000000000000");
+
+    const auto r5 = rlp::encode({buffer.get(), 0x1000000});
+    EXPECT_EQ(r5.size(), 0x1000000 + 5);
+    EXPECT_EQ(hex({r5.data(), 10}), "bb010000000000000000");
 }
 
 TEST(state_rlp, encode_vector)
