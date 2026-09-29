@@ -138,3 +138,76 @@ void g8v_neon(const uint8_t* code, size_t size, uint64_t* bits)
         e = vqtbl3q_u8(uint8x16x3_t{{pab, cx, i0}}, e);
     }
 }
+
+namespace
+{
+struct G8Block
+{
+    uint8x16_t ta, pab, cx;  // TA and PT for the entries 0..15 (PT for 16..31 is cx).
+    G8Group a, c;
+};
+
+inline G8Block g8_block(const uint8_t* p)
+{
+    const auto k16 = vdupq_n_u8(16);
+    const auto a = g8_group(vld1q_u8(p));
+    const auto c = g8_group(vld1q_u8(p + 16));
+    const auto ta = vsubq_u8(a.xm, k16);
+    const auto cx = vsubq_u8(c.xm, k16);
+    return {ta, vorrq_u8(vqtbl1q_u8(cx, ta), vsubq_u8(vmaxq_u8(ta, k16), k16)), cx, a, c};
+}
+
+inline void g8_store(G8NeonTables& t, const G8Block& b)
+{
+    vst1q_u8(t.TA, b.ta);
+    vst1q_u8(t.PT, b.pab);
+    vst1q_u8(t.PT + 16, b.cx);
+    vst1_u8(t.T0, vget_low_u8(b.a.ex));
+    vst1_u8(t.T2, vget_low_u8(b.c.ex));
+    vst1_u8(t.V0, vget_low_u8(b.a.v));
+    vst1_u8(t.V2, vget_low_u8(b.c.v));
+    vst1q_u8(t.V1, b.a.v);
+    vst1q_u8(t.V3, b.c.v);
+}
+
+inline uint32_t g8_bits(const G8NeonTables& t, unsigned s)
+{
+    const unsigned e2 = t.TA[s];
+    return uint32_t{t.V0[s]} | uint32_t{t.V1[t.T0[s]]} << 8 | uint32_t{t.V2[e2]} << 16 |
+           uint32_t{t.V3[t.T2[e2]]} << 24;
+}
+}  // namespace
+
+// Two 32-byte blocks per step of the entry chain: the next entry comes from the composed table
+// PT2[PT1[s]], built in SIMD off the chain.
+void g8x2_neon(const uint8_t* code, size_t size, uint64_t* bits)
+{
+    G8NeonTables t1, t2;
+    alignas(64) uint8_t PT64[48];
+    static const uint8_t i0_d[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    const auto i0 = vld1q_u8(i0_d);
+    auto* const out = reinterpret_cast<uint32_t*>(bits);
+    unsigned s = 0;
+    const size_t num_blocks = (size + 31) / 32;
+    size_t q = 0;
+    for (; q + 2 <= num_blocks; q += 2)
+    {
+        const auto b1 = g8_block(code + 32 * q);
+        const auto b2 = g8_block(code + 32 * q + 32);
+        g8_store(t1, b1);
+        g8_store(t2, b2);
+        const uint8x16x3_t pt2{{b2.pab, b2.cx, i0}};
+        vst1q_u8(PT64, vqtbl3q_u8(pt2, b1.pab));
+        vst1q_u8(PT64 + 16, vqtbl3q_u8(pt2, b1.cx));
+        vst1q_u8(PT64 + 32, vqtbl3q_u8(pt2, i0));
+        const unsigned s1 = t1.PT[s];
+        out[q] = g8_bits(t1, s);
+        out[q + 1] = g8_bits(t2, s1);
+        s = PT64[s];
+    }
+    if (q < num_blocks)
+    {
+        g8_store(t1, g8_block(code + 32 * q));
+        out[q] = g8_bits(t1, s);
+    }
+}

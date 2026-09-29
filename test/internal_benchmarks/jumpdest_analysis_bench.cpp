@@ -199,7 +199,7 @@ const Variant variants[] = {
 #if JDA_NEON
     {"v4_neon", neon::g16v4_neon, Kind::simd_native, always},
     {"g8_neon", neon::g8_neon, Kind::simd_native, always},
-    {"g8v_neon", neon::g8v_neon, Kind::simd_native, always},
+    {"g8x2_neon", neon::g8x2_neon, Kind::simd_native, always},
     {"x_g8_nochain", neon::x_g8_nochain, Kind::simd_native, always},
 #endif
 };
