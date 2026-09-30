@@ -1,0 +1,4 @@
+# The implicit conversions in libstdc++ are intentional, e.g. string_view::compare() converts
+# the difference of two sizes to int.
+[implicit-*]
+src:*/include/c++/*
