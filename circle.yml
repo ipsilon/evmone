@@ -679,15 +679,16 @@ jobs:
       - build
       - restore_cache:
           name: "Restore fuzzing corpus"
-          key: fuzzing-state-tests-corpus
+          key: fuzzing-state-tests-corpus2
       - run:
           name: "Merge the corpus"
           no_output_timeout: 60m
           working_directory: ~/build
           command: |
             mkdir -p ~/corpus ~/corpus-min
-            # The state tests of a release are merged into the corpus once.
-            if [ "$(cat ~/corpus-release 2>/dev/null)" != "$EEST_RELEASE" ]; then
+            # The state tests of a release are merged into the corpus once, or again if the corpus
+            # came out empty.
+            if [ "$(cat ~/corpus-release 2>/dev/null)" != "$EEST_RELEASE" ] || [ -z "$(ls -A ~/corpus-min)" ]; then
               curl -sSL --fail --retry 3 --output-dir /tmp -O https://github.com/ethereum/execution-specs/releases/download/$EEST_RELEASE/fixtures.tar.gz
               tar -xzf /tmp/fixtures.tar.gz -C ~ --exclude=fixtures/state_tests/for_amsterdam fixtures/state_tests
               python3 ~/project/test/fuzzer/split_fixtures.py ~/fixtures/state_tests ~/state-tests-split
@@ -714,7 +715,7 @@ jobs:
             du -sh ~/corpus-min
       - save_cache:
           name: "Save fuzzing corpus"
-          key: fuzzing-state-tests-corpus-{{epoch}}
+          key: fuzzing-state-tests-corpus2-{{epoch}}
           paths:
             - ~/corpus-min
             - ~/corpus-release
