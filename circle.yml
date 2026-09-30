@@ -682,12 +682,13 @@ jobs:
           key: fuzzing-state-tests-corpus
       - run:
           name: "Merge the corpus"
+          no_output_timeout: 60m
           working_directory: ~/build
           command: |
             mkdir -p ~/corpus ~/corpus-min
             # The state tests of a release are merged into the corpus once.
             if [ "$(cat ~/corpus-release 2>/dev/null)" != "$EEST_RELEASE" ]; then
-              curl -L --fail --retry 3 --output-dir /tmp -O https://github.com/ethereum/execution-specs/releases/download/$EEST_RELEASE/fixtures.tar.gz
+              curl -sSL --fail --retry 3 --output-dir /tmp -O https://github.com/ethereum/execution-specs/releases/download/$EEST_RELEASE/fixtures.tar.gz
               tar -xzf /tmp/fixtures.tar.gz -C ~ --exclude=fixtures/state_tests/for_amsterdam fixtures/state_tests
               python3 ~/project/test/fuzzer/split_fixtures.py ~/fixtures/state_tests ~/state-tests-split
               state_tests=~/state-tests-split
@@ -704,6 +705,7 @@ jobs:
             fi
       - run:
           name: "Minimize the corpus"
+          no_output_timeout: 60m
           working_directory: ~/build
           command: |
             rm -rf ~/corpus-min
