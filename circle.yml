@@ -668,25 +668,59 @@ jobs:
           flags: evmone-unittests
 
   fuzzing:
-    executor: linux-clang-selfhosted
+    executor: linux-clang-xlarge
     environment:
       CMAKE_GENERATOR: Ninja
       CMAKE_OPTIONS: -DASSERTIONS=ON -DEVMONE_FUZZING=ON
+      UBSAN_OPTIONS: halt_on_error=1
+      EEST_RELEASE: tests@v21.0.0
+      FUZZER_OPTIONS: -max_len=67108864 -timeout=120 -rss_limit_mb=4096
     steps:
       - build
       - restore_cache:
           name: "Restore fuzzing corpus"
-          key: fuzzing-corpus
+          key: fuzzing-state-tests-corpus
+      - run:
+          name: "Merge the corpus"
+          working_directory: ~/build
+          command: |
+            mkdir -p ~/corpus ~/corpus-min
+            # The state tests of a release are merged into the corpus once.
+            if [ "$(cat ~/corpus-release 2>/dev/null)" != "$EEST_RELEASE" ]; then
+              curl -L --fail --retry 3 --output-dir /tmp -O https://github.com/ethereum/execution-specs/releases/download/$EEST_RELEASE/fixtures.tar.gz
+              tar -xzf /tmp/fixtures.tar.gz -C ~ --exclude=fixtures/state_tests/for_amsterdam fixtures/state_tests
+              python3 ~/project/test/fuzzer/split_fixtures.py ~/fixtures/state_tests ~/state-tests-split
+              state_tests=~/state-tests-split
+              echo $EEST_RELEASE > ~/corpus-release
+            fi
+            bin/evmone-fuzzer -merge=1 $FUZZER_OPTIONS -artifact_prefix=/tmp/merge- ~/corpus ~/corpus-min $state_tests 2>&1 | grep -E '^MERGE-OUTER: [0-9]+ (files|new)'
       - run:
           name: "Run evmone-fuzzer"
           working_directory: ~/build
           command: |
-            bin/evmone-fuzzer -runs=5000000 -fork=$CMAKE_BUILD_PARALLEL_LEVEL -fork_corpus_groups=1 ~/corpus -create_missing_dirs=1 -max_len=100 -entropic_scale_per_exec_time=1 2>&1 | sed '/NEW_FUNC/d'
+            mkdir -p ~/artifacts
+            if ! bin/evmone-fuzzer $FUZZER_OPTIONS -fork=$CMAKE_BUILD_PARALLEL_LEVEL -fork_corpus_groups=1 -entropic_scale_per_exec_time=1 -max_total_time=600 -artifact_prefix=$HOME/artifacts/ ~/corpus 2>&1 | sed '/NEW_FUNC/d'; then
+              touch ~/fuzzing-failed
+            fi
+      - run:
+          name: "Minimize the corpus"
+          working_directory: ~/build
+          command: |
+            rm -rf ~/corpus-min
+            mkdir ~/corpus-min
+            bin/evmone-fuzzer -merge=1 $FUZZER_OPTIONS ~/corpus-min ~/corpus 2>&1 | grep -E '^MERGE-OUTER: [0-9]+ (files|new)'
+            du -sh ~/corpus-min
       - save_cache:
           name: "Save fuzzing corpus"
-          key: fuzzing-corpus-{{epoch}}
+          key: fuzzing-state-tests-corpus-{{epoch}}
           paths:
-            - ~/corpus
+            - ~/corpus-min
+            - ~/corpus-release
+      - store_artifacts:
+          path: ~/artifacts
+      - run:
+          name: "Check for fuzzing findings"
+          command: test ! -e ~/fuzzing-failed
 
   macos-asan:
     executor: macos
