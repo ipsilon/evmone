@@ -668,7 +668,7 @@ jobs:
           flags: evmone-unittests
 
   fuzzing:
-    executor: linux-clang-xlarge
+    executor: linux-clang-selfhosted
     environment:
       CMAKE_GENERATOR: Ninja
       CMAKE_OPTIONS: -DASSERTIONS=ON -DEVMONE_FUZZING=ON
@@ -699,7 +699,7 @@ jobs:
           working_directory: ~/build
           command: |
             mkdir -p ~/artifacts
-            if ! bin/evmone-fuzzer $FUZZER_OPTIONS -fork=$CMAKE_BUILD_PARALLEL_LEVEL -fork_corpus_groups=1 -entropic_scale_per_exec_time=1 -max_total_time=600 -artifact_prefix=$HOME/artifacts/ ~/corpus 2>&1 | sed '/NEW_FUNC/d'; then
+            if ! bin/evmone-fuzzer $FUZZER_OPTIONS -fork=8 -fork_corpus_groups=1 -entropic_scale_per_exec_time=1 -max_total_time=600 -artifact_prefix=$HOME/artifacts/ ~/corpus 2>&1 | sed '/NEW_FUNC/d'; then
               touch ~/fuzzing-failed
             fi
       - run:
