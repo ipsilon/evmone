@@ -694,7 +694,7 @@ jobs:
               state_tests=~/state-tests-split
               echo $EEST_RELEASE > ~/corpus-release
             fi
-            bin/evmone-fuzzer -merge=1 $FUZZER_OPTIONS -artifact_prefix=/tmp/merge- ~/corpus ~/corpus-min $state_tests 2>&1 | grep -E '^MERGE-OUTER: [0-9]+ (files|new)'
+            bin/evmone-fuzzer -merge=1 $FUZZER_OPTIONS -artifact_prefix=/tmp/merge- ~/corpus ~/corpus-min $state_tests 2>&1 | sed '/NEW_FUNC/d'
       - run:
           name: "Run evmone-fuzzer"
           working_directory: ~/build
@@ -710,7 +710,7 @@ jobs:
           command: |
             rm -rf ~/corpus-min
             mkdir ~/corpus-min
-            bin/evmone-fuzzer -merge=1 $FUZZER_OPTIONS ~/corpus-min ~/corpus 2>&1 | grep -E '^MERGE-OUTER: [0-9]+ (files|new)'
+            bin/evmone-fuzzer -merge=1 $FUZZER_OPTIONS ~/corpus-min ~/corpus 2>&1 | sed '/NEW_FUNC/d'
             du -sh ~/corpus-min
       - save_cache:
           name: "Save fuzzing corpus"
