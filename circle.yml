@@ -679,23 +679,24 @@ jobs:
       - build
       - restore_cache:
           name: "Restore fuzzing corpus"
-          key: fuzzing-state-tests-corpus2
+          key: fuzzing-state-tests-corpus3
       - run:
-          name: "Merge the corpus"
+          name: "Merge new execution-specs state tests"
           no_output_timeout: 60m
           working_directory: ~/build
           command: |
-            mkdir -p ~/corpus ~/corpus-min
+            mkdir -p ~/corpus
             # The state tests of a release are merged into the corpus once, or again if the corpus
             # came out empty.
-            if [ "$(cat ~/corpus-release 2>/dev/null)" != "$EEST_RELEASE" ] || [ -z "$(ls -A ~/corpus-min)" ]; then
-              curl -sSL --fail --retry 3 --output-dir /tmp -O https://github.com/ethereum/execution-specs/releases/download/$EEST_RELEASE/fixtures.tar.gz
-              tar -xzf /tmp/fixtures.tar.gz -C ~ --exclude=fixtures/state_tests/for_amsterdam fixtures/state_tests
-              python3 ~/project/test/fuzzer/split_fixtures.py ~/fixtures/state_tests ~/state-tests-split
-              state_tests=~/state-tests-split
-              echo $EEST_RELEASE > ~/corpus-release
+            if [ "$(cat ~/corpus-release 2>/dev/null)" = "$EEST_RELEASE" ] && [ -n "$(ls -A ~/corpus)" ]; then
+              echo "$EEST_RELEASE already merged"
+              exit 0
             fi
-            bin/evmone-fuzzer -merge=1 $FUZZER_OPTIONS -artifact_prefix=/tmp/merge- ~/corpus ~/corpus-min $state_tests 2>&1 | sed '/NEW_FUNC/d'
+            curl -sSL --fail --retry 3 --output-dir /tmp -O https://github.com/ethereum/execution-specs/releases/download/$EEST_RELEASE/fixtures.tar.gz
+            tar -xzf /tmp/fixtures.tar.gz -C ~ --exclude=fixtures/state_tests/for_amsterdam fixtures/state_tests
+            python3 ~/project/test/fuzzer/split_fixtures.py ~/fixtures/state_tests ~/state-tests-split
+            bin/evmone-fuzzer -merge=1 $FUZZER_OPTIONS -artifact_prefix=/tmp/merge- ~/corpus ~/state-tests-split 2>&1 | sed '/NEW_FUNC/d'
+            echo $EEST_RELEASE > ~/corpus-release
       - run:
           name: "Run evmone-fuzzer"
           working_directory: ~/build
@@ -709,15 +710,16 @@ jobs:
           no_output_timeout: 60m
           working_directory: ~/build
           command: |
-            rm -rf ~/corpus-min
             mkdir ~/corpus-min
             bin/evmone-fuzzer -merge=1 $FUZZER_OPTIONS ~/corpus-min ~/corpus 2>&1 | sed '/NEW_FUNC/d'
-            du -sh ~/corpus-min
+            rm -rf ~/corpus
+            mv ~/corpus-min ~/corpus
+            du -sh ~/corpus
       - save_cache:
           name: "Save fuzzing corpus"
-          key: fuzzing-state-tests-corpus2-{{epoch}}
+          key: fuzzing-state-tests-corpus3-{{epoch}}
           paths:
-            - ~/corpus-min
+            - ~/corpus
             - ~/corpus-release
       - store_artifacts:
           path: ~/artifacts
