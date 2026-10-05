@@ -109,10 +109,13 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
         if (code.empty())
             continue;
 
+        // The call is unchecked: a failure only reverts its state changes for testing.
         const auto input32 = get_input(block, block_hashes);
+        const auto checkpoint = state.checkpoint();
         const auto res =
             execute_system_call(state, block, block_hashes, rev, vm, addr, code, input32);
-        assert(res.status_code == EVMC_SUCCESS);
+        if (res.status_code != EVMC_SUCCESS) [[unlikely]]
+            state.rollback(checkpoint);
     }
     // TODO: Should we return empty diff if no system contracts?
     return state.build_diff(rev);
