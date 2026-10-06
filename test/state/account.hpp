@@ -59,8 +59,8 @@ struct Account
     /// Revertible.
     evmc_access_status access_status = EVMC_ACCESS_COLD;
 
-    /// The account does not exist in the state.
-    /// Revertible, usually false→true.
+    /// The account does not exist in the state: it is missing from the initial state or its
+    /// creation has been reverted. Revertible, cleared when the account is created.
     bool nonexistent = false;
 
     /// The account has been destructed and should be erased at the end of a transaction.
@@ -79,14 +79,14 @@ struct Account
 
     /// The account has been created in the current transaction.
     ///
-    /// FIXME: Not reverted on CREATE rollback; a leaked value suppresses the
-    /// EIP-161 touch-delete of the now-empty account (state-root divergence).
+    /// FIXME: Not reverted on the rollback of a CREATE over a pre-existing account; a leaked
+    /// value suppresses the EIP-161 touch-delete of the now-empty account (state-root divergence).
     bool just_created = false;
 
     /// This account's code has been modified.
     ///
-    /// FIXME: Not reverted on CREATE rollback; a leaked value adds a
-    /// false-positive code entry to the state diff.
+    /// FIXME: Not reverted on the rollback of a CREATE over a pre-existing account; a leaked
+    /// value adds a false-positive code entry to the state diff.
     bool code_changed = false;
 
     /// If the account has non-empty initial storage (when accessing the cold account).

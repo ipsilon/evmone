@@ -176,7 +176,7 @@ struct AppliedAuthorization
 
         // Get or create the authority account.
         // It is still empty at this point until nonce bump following successful authorization.
-        auto& authority = state.get_or_insert(*authority_addr, {.erase_if_empty = true});
+        auto& authority = state.get_or_insert(*authority_addr);
 
         // 4. Add authority to accessed_addresses (as defined in EIP-2929.)
         authority.access_status = EVMC_ACCESS_WARM;
@@ -379,7 +379,14 @@ StateDiff State::build_diff(evmc_revision rev) const
     for (const auto& [addr, m] : m_modified)
     {
         if (m.nonexistent)
+        {
+            // A nonexistent account holds no change: anything else would be dropped silently.
+            assert(m.is_empty() && !m.destructed && !m.erase_if_empty && !m.just_created &&
+                   !m.code_changed);
+            assert(std::ranges::all_of(m.storage | std::views::values,
+                [](const auto& v) { return v.current == v.original; }));
             continue;
+        }
         if (m.destructed)
         {
             if (rev >= EVMC_AMSTERDAM && m.balance != 0)
@@ -422,73 +429,71 @@ StateDiff State::build_diff(evmc_revision rev) const
     return diff;
 }
 
-Account& State::insert(const address& addr, Account account)
+std::pair<Account&, bool> State::get_or_create(const address& addr)
 {
-    assert(!account.nonexistent);  // No need to insert nonexistent accounts.
-    const auto [it, inserted] = m_modified.try_emplace(addr, std::move(account));
-    if (!inserted)
-    {
-        assert(it->second.nonexistent);  // Overwrite only nonexistent accounts.
-        it->second = std::move(account);
-    }
-    return it->second;
-}
-
-Account* State::find(const address& addr) noexcept
-{
-    // TODO: Avoid the double lookup (find+insert). Nonexistent accounts are still re-queried from
-    //   the initial state on every call; they could be cached as nonexistent nodes.
-    if (const auto it = m_modified.find(addr); it != m_modified.end())
-        return it->second.nonexistent ? nullptr : &it->second;
-    if (const auto cacc = m_initial.get_account(addr); cacc)
-        return &insert(addr, {.nonce = cacc->nonce,
-                                 .balance = cacc->balance,
-                                 .code_hash = cacc->code_hash,
-                                 .has_initial_storage = cacc->has_storage});
-    return nullptr;
+    auto& acc = get(addr);
+    if (!acc.nonexistent)
+        return {acc, false};
+    journal_account_flags(addr, acc);
+    // The account is created in place: a nonexistent account holds nothing but the warm status
+    // and the warm storage slots, which must survive (EIP-2929).
+    acc.nonexistent = false;
+    return {acc, true};
 }
 
 Account& State::get(const address& addr) noexcept
 {
-    auto acc = find(addr);
-    assert(acc != nullptr);
-    return *acc;
+    const auto [it, inserted] = m_modified.try_emplace(addr);
+    auto& acc = it->second;
+    if (inserted)
+    {
+        // Load the account from the initial state. A miss is cached as a nonexistent account,
+        // so the initial state is queried once per address rather than once per access.
+        if (const auto cacc = m_initial.get_account(addr); cacc)
+        {
+            acc.nonce = cacc->nonce;
+            acc.balance = cacc->balance;
+            acc.code_hash = cacc->code_hash;
+            acc.has_initial_storage = cacc->has_storage;
+        }
+        else
+            acc.nonexistent = true;
+    }
+    // A nonexistent account is readable: its zero fields are what a missing account holds.
+    assert(!acc.nonexistent ||
+           (acc.is_empty() && !acc.erase_if_empty && !acc.just_created && !acc.code_changed));
+    return acc;
 }
 
-Account& State::get_or_insert(const address& addr, Account account)
+Account& State::get_or_insert(const address& addr)
 {
-    if (const auto acc = find(addr); acc != nullptr)
-        return *acc;
-    return insert(addr, std::move(account));
+    auto& acc = get(addr);
+    if (acc.nonexistent)
+    {
+        acc.nonexistent = false;
+        acc.erase_if_empty = true;
+    }
+    return acc;
 }
 
 bytes_view State::get_code(const address& addr)
 {
-    auto* a = find(addr);
-    if (a == nullptr)
+    // A nonexistent account has the empty code hash, so it needs no separate check.
+    auto& a = get(addr);
+    if (a.code_hash == Account::EMPTY_CODE_HASH)
         return {};
-    if (a->code_hash == Account::EMPTY_CODE_HASH)
-        return {};
-    if (a->code.empty())
-        a->code = m_initial.get_account_code(addr);
-    return a->code;
-}
-
-std::pair<Account&, bool> State::get_or_create(const address& addr)
-{
-    if (auto* const acc = find(addr); acc != nullptr)
-        return {*acc, false};
-    journal_new_account(addr);
-    return {insert(addr), true};
+    if (a.code.empty())
+        a.code = m_initial.get_account_code(addr);
+    return a.code;
 }
 
 Account& State::touch(const address& addr)
 {
-    auto [acc, created] = get_or_create(addr);
-    if (!acc.erase_if_empty && acc.is_empty())
+    auto& acc = get(addr);
+    if (!acc.erase_if_empty && acc.is_empty())  // Also true for a nonexistent account.
     {
-        if (!created)  // Reverting the creation restores the flags too.
-            journal_account_flags(addr, acc);
+        journal_account_flags(addr, acc);
+        acc.nonexistent = false;
         acc.erase_if_empty = true;
     }
     return acc;
@@ -532,17 +537,23 @@ void State::journal_create(const address& addr)
     m_journal.emplace_back(JournalCreate{{addr}});
 }
 
-void State::journal_new_account(const address& addr)
-{
-    // Revert restores the account to "nonexistent". The other flags are irrelevant/default.
-    m_journal.emplace_back(JournalAccountFlags{{addr}, EVMC_ACCESS_COLD, true, false, false});
-}
-
 void State::journal_account_flags(const address& addr, const Account& acc)
 {
     m_journal.emplace_back(JournalAccountFlags{
         {addr}, acc.access_status, acc.nonexistent, acc.destructed, acc.erase_if_empty});
 }
+
+namespace
+{
+/// Resets the account value fields set by a create. The balance and the storage are restored
+/// by their own journal entries, which are always replayed first.
+void clear_value(Account& a) noexcept
+{
+    a.nonce = 0;
+    a.code_hash = Account::EMPTY_CODE_HASH;
+    a.code.clear();
+}
+}  // namespace
 
 void State::rollback(size_t checkpoint)
 {
@@ -553,7 +564,9 @@ void State::rollback(size_t checkpoint)
                 using T = std::decay_t<decltype(e)>;
                 if constexpr (std::is_same_v<T, JournalNonceBump>)
                 {
-                    get(e.addr).nonce -= 1;
+                    auto& a = get(e.addr);
+                    assert(!a.nonexistent);  // Replayed before the flags entry un-creating it.
+                    a.nonce -= 1;
                 }
                 else if constexpr (std::is_same_v<T, JournalAccountFlags>)
                 {
@@ -562,17 +575,22 @@ void State::rollback(size_t checkpoint)
                     a.nonexistent = e.nonexistent;
                     a.destructed = e.destructed;
                     a.erase_if_empty = e.erase_if_empty;
-                    // TODO: On restoring nonexistent (un-created create) the node keeps its
-                    //   code/storage/transient buffers until tx end; could clear them here.
+                    if (e.nonexistent)
+                    {
+                        // An account which did not exist holds nothing.
+                        assert(a.balance == 0);  // Restored by the balance entries replayed first.
+                        clear_value(a);
+                        a.just_created = false;
+                        a.code_changed = false;
+                    }
                 }
                 else if constexpr (std::is_same_v<T, JournalCreate>)
                 {
                     // Revert a create over a pre-existing account.
                     // TODO: Why this account is not always "touched"?
                     auto& a = get(e.addr);
-                    a.nonce = 0;
-                    a.code_hash = Account::EMPTY_CODE_HASH;
-                    a.code.clear();
+                    assert(!a.nonexistent);
+                    clear_value(a);
                 }
                 else if constexpr (std::is_same_v<T, JournalStorageChange>)
                 {
@@ -585,7 +603,9 @@ void State::rollback(size_t checkpoint)
                 }
                 else if constexpr (std::is_same_v<T, JournalBalanceChange>)
                 {
-                    get(e.addr).balance = e.prev_balance;
+                    auto& a = get(e.addr);
+                    assert(!a.nonexistent);  // Replayed before the flags entry un-creating it.
+                    a.balance = e.prev_balance;
                 }
                 else
                 {
@@ -810,8 +830,6 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
             state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
     }
     // EIP-3651: Warm COINBASE.
-    // This may create an empty coinbase account. The account cannot be created unconditionally
-    // because this breaks old revisions.
     if (rev >= EVMC_SHANGHAI)
         host.access_account(block.coinbase);
 
