@@ -65,6 +65,16 @@ constexpr std::array REQUESTS_SYSTEM_CONTRACTS{
         CONSOLIDATION_REQUEST_ADDRESS,
         Requests::Type::consolidation,
     },
+    RequestsSystemContract{
+        EVMC_AMSTERDAM,
+        BUILDER_DEPOSIT_CONTRACT_ADDRESS,
+        Requests::Type::builder_deposit,
+    },
+    RequestsSystemContract{
+        EVMC_AMSTERDAM,
+        BUILDER_EXIT_CONTRACT_ADDRESS,
+        Requests::Type::builder_exit,
+    },
 };
 
 constexpr auto by_rev = [](const auto& a, const auto& b) noexcept { return a.since < b.since; };
