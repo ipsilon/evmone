@@ -657,6 +657,9 @@ std::variant<TransactionProperties, std::error_code> validate_transaction(
     if (rev == EVMC_OSAKA && tx.gas_limit > MAX_TX_GAS_LIMIT)
         return make_error_code(GAS_LIMIT_EXCEEDS_MAXIMUM);
 
+    if (rev >= EVMC_AMSTERDAM && tx.gas_limit > int64_t{MAX_TX_TOTAL_GAS_LIMIT})
+        return make_error_code(GAS_LIMIT_EXCEEDS_MAXIMUM);
+
     if (rev < EVMC_AMSTERDAM)
     {
         if (tx.gas_limit > block_gas_left)

@@ -17,6 +17,9 @@ namespace evmone::state
 /// The maximum allowed gas limit for a transaction (EIP-7825).
 constexpr auto MAX_TX_GAS_LIMIT = 0x1000000;  // 2**24
 
+// The maximum allowed transaction gas limit of both dimensions: execution + state (EIP-8037).
+constexpr auto MAX_TX_TOTAL_GAS_LIMIT = std::numeric_limits<uint32_t>::max();
+
 using AccessList = std::vector<std::pair<address, std::vector<bytes32>>>;
 
 /// Decodes an EIP-7702 authorization.
