@@ -372,19 +372,19 @@ evmc_tx_context Host::get_tx_context() const noexcept
     const auto effective_gas_price = m_block.base_fee + priority_gas_price;
 
     return evmc_tx_context{
-        intx::be::store<uint256be>(effective_gas_price),  // By EIP-1559.
-        m_tx.sender,
-        m_block.coinbase,
-        m_block.number,
-        m_block.timestamp,
-        m_block.gas_limit,
-        m_block.prev_randao,
-        uint256be{m_block.chain_id},
-        uint256be{m_block.base_fee},
-        intx::be::store<uint256be>(m_block.blob_base_fee.value_or(0)),
-        m_tx.blob_hashes.data(),
-        m_tx.blob_hashes.size(),
-        m_block.slot_number.value_or(0),
+        .tx_gas_price = intx::be::store<uint256be>(effective_gas_price),  // By EIP-1559.
+        .tx_origin = m_tx.sender,
+        .block_coinbase = m_block.coinbase,
+        .block_number = m_block.number,
+        .block_timestamp = m_block.timestamp,
+        .block_gas_limit = m_block.gas_limit,
+        .block_prev_randao = m_block.prev_randao,
+        .chain_id = uint256be{m_block.chain_id},
+        .block_base_fee = uint256be{m_block.base_fee},
+        .blob_base_fee = intx::be::store<uint256be>(m_block.blob_base_fee.value_or(0)),
+        .blob_hashes = m_tx.blob_hashes.data(),
+        .blob_hashes_count = m_tx.blob_hashes.size(),
+        .block_slot_number = m_block.slot_number.value_or(0),
     };
 }
 
