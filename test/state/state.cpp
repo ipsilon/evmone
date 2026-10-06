@@ -136,7 +136,7 @@ TransactionCost compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& 
     else if (rev >= EVMC_PRAGUE)  // Cost per token capturing num of zero-nonzero bytes (EIP-7623).
         data_min_cost = TOTAL_COST_FLOOR_PER_TOKEN * num_tokens;
 
-    // Compute "floor" cost (EIP-7623).
+    // Compute the calldata floor cost (EIP-7623), including the access list data (EIP-7981).
     const auto min_cost =
         (rev >= EVMC_PRAGUE) ? base_cost + data_min_cost + access_list_data_cost : 0;
 
@@ -813,7 +813,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
     const auto refund_limit = rev >= EVMC_LONDON ? gas_used_b4_refund / 5 : gas_used_b4_refund / 2;
     const auto refund = std::min(result.gas_refund, refund_limit);
     auto gas_used = gas_used_b4_refund - refund;
-    assert(gas_used > 0);
+    assert(gas_used > 0);  // The refund is capped at a fraction of the gas used.
 
     // The gas used by the transaction must be at least the min_gas_cost (EIP-7623).
     gas_used = std::max(gas_used, tx_props.min_gas_cost);
