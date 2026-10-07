@@ -29,7 +29,8 @@ evmc_storage_status Host::set_storage(
 
     assert(!m_state.get(addr).nonexistent);
     auto& storage_slot = m_state.get_storage(addr, key);
-    const auto& [current, original, _] = storage_slot;
+    const auto& current = storage_slot.current;
+    const auto& original = storage_slot.original;
 
     const auto dirty = original != current;
     const auto restored = original == value;
@@ -391,8 +392,8 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (is_precompile(m_rev, addr))  // Precompiles are always warm. Don't insert to state.
         return EVMC_ACCESS_WARM;
 
-    // A nonexistent account is warmed up as is: the flag keeps it out of the state diff.
-    auto& acc = m_state.get(addr);
+    // Warm the account without loading it: warming is not a read (EIP-7928).
+    auto& acc = m_state.get_for_access(addr);
     if (acc.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;
 
@@ -403,11 +404,13 @@ evmc_access_status Host::access_account(const address& addr) noexcept
 
 evmc_access_status Host::access_storage(const address& addr, const bytes32& key) noexcept
 {
-    auto& storage_slot = m_state.get_storage(addr, key);
-    if (storage_slot.access_status == EVMC_ACCESS_WARM)
+    // Warm the slot without loading its value: warming is not a read (EIP-7928).
+    // SLOAD/SSTORE operate on the message recipient, already loaded to execute its code.
+    auto& slot = m_state.get(addr).storage[key];
+    if (slot.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;  // Nothing changes, skip journaling.
-    m_state.journal_storage_change(storage_slot);
-    storage_slot.access_status = EVMC_ACCESS_WARM;
+    m_state.journal_storage_access(slot);
+    slot.access_status = EVMC_ACCESS_WARM;
     return EVMC_ACCESS_COLD;
 }
 

@@ -24,6 +24,10 @@ struct StorageValue
     bytes32 original;
 
     evmc_access_status access_status = EVMC_ACCESS_COLD;
+
+    /// The value has been loaded from the initial state. A slot only warmed (EIP-2929) is not
+    /// loaded because warming is not a read (EIP-7928).
+    bool loaded = false;
 };
 
 /// The state account.
@@ -91,6 +95,10 @@ struct Account
 
     /// If the account has non-empty initial storage (when accessing the cold account).
     bool has_initial_storage = false;
+
+    /// The account has been loaded from the initial state. An account only warmed (EIP-2929) is
+    /// not loaded because warming is not a read (EIP-7928). Revertible.
+    bool loaded = false;
 
     [[nodiscard]] bool is_empty() const noexcept
     {

@@ -32,6 +32,7 @@ class State
     struct JournalAccountFlags : JournalBase
     {
         evmc_access_status access_status;
+        bool loaded;
         bool nonexistent;
         bool destructed;
         bool erase_if_empty;
@@ -41,7 +42,13 @@ class State
     {
         StorageValue* slot = nullptr;  ///< Storage slot in a node-based container (stable refs).
         bytes32 prev_value;
-        evmc_access_status prev_access_status;
+    };
+
+    /// The cold → warm transition of a storage slot (EIP-2929). Separate from
+    /// JournalStorageChange so the reverted access does not overwrite the slot value.
+    struct JournalStorageAccess
+    {
+        StorageValue* slot = nullptr;  ///< Storage slot in a node-based container (stable refs).
     };
 
     struct JournalTransientStorageChange
@@ -56,8 +63,9 @@ class State
     struct JournalCreate : JournalBase
     {};
 
-    using JournalEntry = std::variant<JournalBalanceChange, JournalAccountFlags,
-        JournalStorageChange, JournalNonceBump, JournalCreate, JournalTransientStorageChange>;
+    using JournalEntry =
+        std::variant<JournalBalanceChange, JournalAccountFlags, JournalStorageChange,
+            JournalStorageAccess, JournalNonceBump, JournalCreate, JournalTransientStorageChange>;
 
     /// The read-only view of the initial (cold) state.
     const StateView& m_initial;
@@ -82,6 +90,10 @@ public:
 
     /// Gets an existing account or creates new erasable account without journaling.
     Account& get_or_insert(const address& addr);
+
+    /// Returns the account at the address without loading it from the initial state:
+    /// for warming (EIP-2929), which is not a read (EIP-7928).
+    Account& get_for_access(const address& addr) noexcept { return m_modified[addr]; }
 
     bytes_view get_code(const address& addr);
 
@@ -109,6 +121,9 @@ public:
     void journal_balance_change(const address& addr, const intx::uint256& prev_balance);
 
     void journal_storage_change(StorageValue& slot);
+
+    /// Journals the cold → warm transition of the storage slot.
+    void journal_storage_access(StorageValue& slot);
 
     void journal_transient_storage_change(bytes32& slot);
 
