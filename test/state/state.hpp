@@ -85,7 +85,7 @@ public:
     /// Gets the account at the address (the account must exist).
     Account& get(const address& addr) noexcept;
 
-    /// Gets an existing account or inserts new account.
+    /// Gets an existing account or inserts new account without journaling.
     Account& get_or_insert(const address& addr, Account account = {});
 
     bytes_view get_code(const address& addr);
@@ -104,7 +104,11 @@ public:
     /// Methods performing changes to the state which can be reverted by rollback().
     /// @{
 
-    /// Touches (as in EIP-161) an existing account or inserts new erasable account.
+    /// Gets the account, creating it if it doesn't exist. The creation is journaled.
+    /// @return The account and whether it has been created.
+    std::pair<Account&, bool> get_or_create(const address& addr);
+
+    /// Touches (as in EIP-161) an existing account or creates new erasable account.
     Account& touch(const address& addr);
 
     void journal_balance_change(const address& addr, const intx::uint256& prev_balance);

@@ -474,12 +474,21 @@ bytes_view State::get_code(const address& addr)
     return a->code;
 }
 
+std::pair<Account&, bool> State::get_or_create(const address& addr)
+{
+    if (auto* const acc = find(addr); acc != nullptr)
+        return {*acc, false};
+    journal_new_account(addr);
+    return {insert(addr), true};
+}
+
 Account& State::touch(const address& addr)
 {
-    auto& acc = get_or_insert(addr, {.erase_if_empty = true});
+    auto [acc, created] = get_or_create(addr);
     if (!acc.erase_if_empty && acc.is_empty())
     {
-        journal_account_flags(addr, acc);
+        if (!created)  // Reverting the creation restores the flags too.
+            journal_account_flags(addr, acc);
         acc.erase_if_empty = true;
     }
     return acc;

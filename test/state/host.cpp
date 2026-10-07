@@ -131,8 +131,6 @@ size_t Host::copy_code(const address& addr, size_t code_offset, uint8_t* buffer_
 
 bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcept
 {
-    if (m_state.find(beneficiary) == nullptr)
-        m_state.journal_new_account(beneficiary);
     auto& acc = m_state.get(addr);
     const auto balance = acc.balance;
     auto& beneficiary_acc = m_state.touch(beneficiary);
@@ -182,36 +180,29 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     assert(msg.kind == EVMC_CREATE || msg.kind == EVMC_CREATE2);
     assert(msg.recipient != address{});  // Must be computed already.
 
-    // TODO: find()+insert() probes m_modified twice for a new recipient.
-    auto* new_acc = m_state.find(msg.recipient);
-    if (new_acc == nullptr)
-    {
-        new_acc = &m_state.insert(msg.recipient);
-        m_state.journal_new_account(msg.recipient);
-    }
-    else
+    auto [new_acc, created] = m_state.get_or_create(msg.recipient);
+    if (!created)
     {
         // TODO: Add EVMC errors for creation failures.
-        if (is_create_collision(*new_acc))
+        if (is_create_collision(new_acc))
             return evmc::Result{EVMC_FAILURE, {.left = msg.state_gas}};
         m_state.journal_create(msg.recipient);
     }
 
-    assert(new_acc != nullptr);
-    assert(new_acc->nonce == 0);
+    assert(new_acc.nonce == 0);
 
     if (m_rev >= EVMC_SPURIOUS_DRAGON)
-        new_acc->nonce = 1;  // No need to journal: create revert will 0 the nonce.
+        new_acc.nonce = 1;  // No need to journal: create revert will 0 the nonce.
 
-    new_acc->just_created = true;
+    new_acc.just_created = true;
 
     auto& sender_acc = m_state.get(msg.sender);  // TODO: Duplicated account lookup.
     const auto value = intx::be::load<intx::uint256>(msg.value);
     assert(sender_acc.balance >= value && "EVM must guarantee balance");
     m_state.journal_balance_change(msg.sender, sender_acc.balance);
-    m_state.journal_balance_change(msg.recipient, new_acc->balance);
+    m_state.journal_balance_change(msg.recipient, new_acc.balance);
     sender_acc.balance -= value;
-    new_acc->balance += value;  // The new account may be prefunded.
+    new_acc.balance += value;  // The new account may be prefunded.
 
     if (m_rev >= EVMC_AMSTERDAM)
         emit_transfer_log(m_logs, msg.sender, msg.recipient, value);
@@ -262,9 +253,9 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
 
     if (!code.empty())
     {
-        new_acc->code_hash = keccak256(code);
-        new_acc->code = code;
-        new_acc->code_changed = true;
+        new_acc.code_hash = keccak256(code);
+        new_acc.code = code;
+        new_acc.code_changed = true;
     }
 
     return evmc::Result{result.status_code, gas_left, result.gas_refund, state_gas};
@@ -277,11 +268,6 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
 
     if (msg.kind == EVMC_CALL)
     {
-        auto* recipient_acc = m_state.find(msg.recipient);
-        if (recipient_acc == nullptr)
-            m_state.journal_new_account(msg.recipient);
-        // TODO: Both branches will insert new account so better to do it in common path.
-
         if (evmc::is_zero(msg.value))
         {
             m_state.touch(msg.recipient);
@@ -291,8 +277,7 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
             // We skip touching if we send value, because account cannot end up empty.
             // It will either have value, or code that transfers this value out, or will be
             // selfdestructed anyway.
-            if (recipient_acc == nullptr)
-                recipient_acc = &m_state.insert(msg.recipient);
+            auto& recipient_acc = m_state.get_or_create(msg.recipient).first;
 
             // Transfer value: sender → recipient.
             // The sender's balance is already checked therefore the sender account must exist.
@@ -300,9 +285,9 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
             auto& sender_acc = m_state.get(msg.sender);
             assert(sender_acc.balance >= value);
             m_state.journal_balance_change(msg.sender, sender_acc.balance);
-            m_state.journal_balance_change(msg.recipient, recipient_acc->balance);
+            m_state.journal_balance_change(msg.recipient, recipient_acc.balance);
             sender_acc.balance -= value;
-            recipient_acc->balance += value;
+            recipient_acc.balance += value;
 
             if (m_rev >= EVMC_AMSTERDAM)
                 emit_transfer_log(m_logs, msg.sender, msg.recipient, value);
