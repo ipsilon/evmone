@@ -75,18 +75,13 @@ public:
     State(State&&) = delete;
     State& operator=(State&&) = delete;
 
-    /// Inserts the new account at the address.
-    /// There must not exist any account under this address before.
-    Account& insert(const address& addr, Account account = {});
-
-    /// Returns the pointer to the account at the address if the account exists. Null otherwise.
-    Account* find(const address& addr) noexcept;
-
-    /// Gets the account at the address (the account must exist).
+    /// Returns the account at the address. An account absent from the state is returned as a
+    /// node flagged nonexistent, so the reference is always valid and the flag is the answer to
+    /// "does this account exist?".
     Account& get(const address& addr) noexcept;
 
-    /// Gets an existing account or inserts new account without journaling.
-    Account& get_or_insert(const address& addr, Account account = {});
+    /// Gets an existing account or creates new erasable account without journaling.
+    Account& get_or_insert(const address& addr);
 
     bytes_view get_code(const address& addr);
 
@@ -121,9 +116,6 @@ public:
 
     /// Journals a create over a pre-existing account; revert resets its nonce and code.
     void journal_create(const address& addr);
-
-    /// Journals a new-account creation; revert un-creates it (restores "does not exist").
-    void journal_new_account(const address& addr);
 
     void journal_account_flags(const address& addr, const Account& acc);
 

@@ -114,8 +114,8 @@ TEST_F(state_transition, touch_revert_nonexistent_istanbul)
 
 TEST_F(state_transition, touch_revert_cold_access_nonexistent)
 {
-    // Accessing a non-existent account warms it up by inserting a temporary empty one (EIP-2929).
-    // Reverting the accessing frame must restore it to non-existent, leaving no state diff entry.
+    // Accessing a non-existent account warms it up without creating it (EIP-2929).
+    // Reverting the accessing frame must leave no state diff entry.
     rev = EVMC_BERLIN;
     block.base_fee = 0;
     static constexpr auto NONEXISTENT = 0x4e_address;
@@ -325,4 +325,36 @@ TEST_F(state_transition, touch_revert_storage_only)
     expect.post[*tx.to].exists = true;
     expect.post[STORAGE_ONLY].exists = true;
     expect.post[STORAGE_ONLY].storage[0x01_bytes32] = 0x01_bytes32;
+}
+
+TEST_F(state_transition, access_nonexistent)
+{
+    // Accessing an account which does not exist warms it up (EIP-2929) without creating it,
+    // so it does not appear in the state diff.
+    static constexpr auto ABSENT = 0xab5e17_address;
+
+    tx.to = To;
+    pre[*tx.to] = {.code = push(ABSENT) + OP_BALANCE + OP_POP};
+
+    expect.post[*tx.to].exists = true;
+    expect.post[ABSENT].exists = false;
+    expect.post[ABSENT].in_diff = false;
+}
+
+TEST_F(state_transition, touch_nonexistent_after_reverted_create2)
+{
+    // The CREATE2 warms the never-existing address and its creation reverts. Then a zero-value
+    // call touches the address, so it ends empty and is erased.
+    const auto initcode = revert(0, 0);
+    const auto created = compute_create2_address(To, {}, initcode);
+
+    tx.to = To;
+    pre[To] = {.code = mstore(0, push(initcode)) +
+                       create2().input(32 - initcode.size(), initcode.size()) + OP_POP +
+                       call(created)};
+
+    expect.post[To].exists = true;
+    expect.post[created].exists = false;
+    // FIXME: A no-op deletion of an account which has never existed (#1718).
+    expect.post[created].in_diff = true;
 }

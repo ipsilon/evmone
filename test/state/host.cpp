@@ -12,8 +12,8 @@ namespace evmone::state
 {
 bool Host::account_exists(const address& addr) const noexcept
 {
-    const auto* const acc = m_state.find(addr);
-    return acc != nullptr && (m_rev < EVMC_SPURIOUS_DRAGON || !acc->is_empty());
+    const auto& acc = m_state.get(addr);
+    return !acc.nonexistent && (m_rev < EVMC_SPURIOUS_DRAGON || !acc.is_empty());
 }
 
 bytes32 Host::get_storage(const address& addr, const bytes32& key) const noexcept
@@ -27,6 +27,7 @@ evmc_storage_status Host::set_storage(
     // Follow EVMC documentation https://evmc.ethereum.org/storagestatus.html#autotoc_md3
     // and EIP-2200 specification https://eips.ethereum.org/EIPS/eip-2200.
 
+    assert(!m_state.get(addr).nonexistent);
     auto& storage_slot = m_state.get_storage(addr, key);
     const auto& [current, original, _] = storage_slot;
 
@@ -70,14 +71,12 @@ evmc_storage_status Host::set_storage(
 
 uint256be Host::get_balance(const address& addr) const noexcept
 {
-    const auto* const acc = m_state.find(addr);
-    return (acc != nullptr) ? intx::be::store<uint256be>(acc->balance) : uint256be{};
+    return intx::be::store<uint256be>(m_state.get(addr).balance);
 }
 
 uint64_t Host::get_nonce(const address& addr) const noexcept
 {
-    const auto* const acc = m_state.find(addr);
-    return (acc != nullptr) ? acc->nonce : 0;
+    return m_state.get(addr).nonce;
 }
 
 namespace
@@ -112,11 +111,11 @@ size_t Host::get_code_size(const address& addr) const noexcept
 
 bytes32 Host::get_code_hash(const address& addr) const noexcept
 {
-    const auto* const acc = m_state.find(addr);
-    if (acc == nullptr || acc->is_empty())
+    const auto& acc = m_state.get(addr);
+    if (acc.is_empty())
         return {};
 
-    return acc->code_hash;
+    return acc.code_hash;
 }
 
 size_t Host::copy_code(const address& addr, size_t code_offset, uint8_t* buffer_data,
@@ -132,6 +131,7 @@ size_t Host::copy_code(const address& addr, size_t code_offset, uint8_t* buffer_
 bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcept
 {
     auto& acc = m_state.get(addr);
+    assert(!acc.nonexistent);
     const auto balance = acc.balance;
     auto& beneficiary_acc = m_state.touch(beneficiary);
 
@@ -197,6 +197,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     new_acc.just_created = true;
 
     auto& sender_acc = m_state.get(msg.sender);  // TODO: Duplicated account lookup.
+    assert(!sender_acc.nonexistent);
     const auto value = intx::be::load<intx::uint256>(msg.value);
     assert(sender_acc.balance >= value && "EVM must guarantee balance");
     m_state.journal_balance_change(msg.sender, sender_acc.balance);
@@ -283,6 +284,7 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
             // The sender's balance is already checked therefore the sender account must exist.
             const auto value = intx::be::load<intx::uint256>(msg.value);
             auto& sender_acc = m_state.get(msg.sender);
+            assert(!sender_acc.nonexistent);
             assert(sender_acc.balance >= value);
             m_state.journal_balance_change(msg.sender, sender_acc.balance);
             m_state.journal_balance_change(msg.recipient, recipient_acc.balance);
@@ -312,6 +314,7 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
     {
         // Bump the creator's nonce (already done for depth 0). Not reverted if creation fails.
         auto& sender_acc = m_state.get(msg.sender);
+        assert(!sender_acc.nonexistent);
         assert(sender_acc.nonce != MAX_NONCE);
         m_state.journal_bump_nonce(msg.sender);
         ++sender_acc.nonce;
@@ -330,12 +333,8 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
         // The 0x03 (RIPEMD-160) touch quirk: a touch on this address is
         // never reverted. It only matters when the account is empty, so gate it by rev range.
         static constexpr auto ADDR_03 = 0x03_address;
-        bool is_03_touched = false;
-        if (m_rev < EVMC_PARIS && m_rev >= EVMC_SPURIOUS_DRAGON) [[unlikely]]
-        {
-            const auto* const acc_03 = m_state.find(ADDR_03);
-            is_03_touched = acc_03 != nullptr && acc_03->erase_if_empty;
-        }
+        const bool is_03_touched = m_rev < EVMC_PARIS && m_rev >= EVMC_SPURIOUS_DRAGON &&
+                                   m_state.get(ADDR_03).erase_if_empty;
 
         // Revert.
         m_state.rollback(state_checkpoint);
@@ -389,25 +388,16 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
-    auto* acc = m_state.find(addr);
-
-    if (acc != nullptr && acc->access_status == EVMC_ACCESS_WARM)
-        return EVMC_ACCESS_WARM;
-
     if (is_precompile(m_rev, addr))  // Precompiles are always warm. Don't insert to state.
         return EVMC_ACCESS_WARM;
 
-    // TODO: On a modified-set miss the account is looked up twice. This can be improved with
-    //   a try_emplace-like API, but the miss happens only in ~39% of the calls on Mainnet.
-    if (acc == nullptr)
-    {
-        acc = &m_state.insert(addr, {.erase_if_empty = true});
-        m_state.journal_new_account(addr);
-    }
-    else
-        m_state.journal_account_flags(addr, *acc);
+    // A nonexistent account is warmed up as is: the flag keeps it out of the state diff.
+    auto& acc = m_state.get(addr);
+    if (acc.access_status == EVMC_ACCESS_WARM)
+        return EVMC_ACCESS_WARM;
 
-    acc->access_status = EVMC_ACCESS_WARM;
+    m_state.journal_account_flags(addr, acc);
+    acc.access_status = EVMC_ACCESS_WARM;
     return EVMC_ACCESS_COLD;
 }
 
@@ -432,7 +422,9 @@ evmc::bytes32 Host::get_transient_storage(const address& addr, const bytes32& ke
 void Host::set_transient_storage(
     const address& addr, const bytes32& key, const bytes32& value) noexcept
 {
-    auto& slot = m_state.get(addr).transient_storage[key];
+    auto& acc = m_state.get(addr);
+    assert(!acc.nonexistent);
+    auto& slot = acc.transient_storage[key];
     m_state.journal_transient_storage_change(slot);
     slot = value;
 }
