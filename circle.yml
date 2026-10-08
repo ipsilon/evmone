@@ -469,7 +469,7 @@ jobs:
       CMAKE_OPTIONS: -DCOVERAGE=1
     steps:
       - build
-      # The development (devnet) tests. Disabled while tests@v21.0.0 covers them.
+      # The development (devnet) tests. Disabled while tests@v21.0.1 covers them.
       # - run_execution_spec_tests:
       #     release: tests-glamsterdam-devnet@v8.1.4
       #     fixtures_suffix: _glamsterdam-devnet
@@ -479,7 +479,7 @@ jobs:
       #     ignore_filename_regex: lib/evmone/(advanced|cpu_check|eof|lru_cache|tracing|vm)|test/(experimental|unittests)
       #     binaries: evmone
       - run_execution_spec_tests:
-          release: tests@v21.0.0
+          release: tests@v21.0.1
           blockchain_ignore: "--ignore for_amsterdam --ignore for_bpo2toamsterdamattime15k"
       - collect_coverage_clang:
           flags: eest-stable
@@ -540,7 +540,7 @@ jobs:
     steps:
       - build
       - download_execution_spec_tests:
-          release: tests@v21.0.0
+          release: tests@v21.0.1
       - run:
           name: "Execution spec tests (state_tests)"
           working_directory: ~/build
@@ -560,7 +560,7 @@ jobs:
           command: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
       - build
       - download_execution_spec_tests:
-          release: tests@v21.0.0
+          release: tests@v21.0.1
       - run:
           name: "Execution spec tests (state_tests)"
           working_directory: ~/build
@@ -617,7 +617,7 @@ jobs:
       - build
       - test
       - run_execution_spec_tests:
-          release: tests@v21.0.0
+          release: tests@v21.0.1
           blockchain_ignore: "--ignore for_amsterdam --ignore for_bpo2toamsterdamattime15k"
 
   clang-tidy:
