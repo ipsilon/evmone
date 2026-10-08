@@ -609,15 +609,15 @@ inline Result extcodecopy(StackTop stack, int64_t gas_left, ExecutionState& stat
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
-    if (s > 0)
-    {
-        const auto src =
-            (max_buffer_size < input_index) ? max_buffer_size : static_cast<size_t>(input_index);
-        const auto dst = static_cast<size_t>(mem_index);
-        const auto num_bytes_copied = state.host.copy_code(addr, src, &state.memory[dst], s);
-        if (const auto num_bytes_to_clear = s - num_bytes_copied; num_bytes_to_clear > 0)
-            std::memset(&state.memory[dst + num_bytes_copied], 0, num_bytes_to_clear);
-    }
+    // The account is read even for a 0-byte copy, whose memory offset may be out of bounds.
+    const auto src =
+        (max_buffer_size < input_index) ? max_buffer_size : static_cast<size_t>(input_index);
+    const auto dst = static_cast<size_t>(mem_index);
+    const auto num_bytes_copied =
+        state.host.copy_code(addr, src, s != 0 ? &state.memory[dst] : nullptr, s);
+    assert(num_bytes_copied <= s);
+    if (const auto num_bytes_to_clear = s - num_bytes_copied; num_bytes_to_clear > 0)
+        std::memset(&state.memory[dst + num_bytes_copied], 0, num_bytes_to_clear);
 
     return {EVMC_SUCCESS, gas_left};
 }
