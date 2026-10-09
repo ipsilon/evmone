@@ -6,6 +6,7 @@
 #include <evmone_precompiles/modarith.hpp>
 
 using namespace intx;
+using evmone::crypto::MontgomeryArith;
 
 namespace
 {
@@ -14,58 +15,58 @@ constexpr auto secp256k1 = 0xfffffffffffffffffffffffffffffffffffffffffffffffffff
 
 // Each pair of operations forms a single dependency chain, so the reported time is the latency.
 
-template <typename UintT, const UintT& Mod>
+template <const auto& Mod>
 void modarith_add(benchmark::State& state)
 {
-    const evmone::crypto::ModArith<UintT> m{Mod};
+    using M = MontgomeryArith<Mod>;
     auto a = Mod / 2;
     auto b = Mod / 3;
 
     while (state.KeepRunningBatch(2))
     {
-        a = m.add(a, b);
-        b = m.add(b, a);
+        a = M::add(a, b);
+        b = M::add(b, a);
     }
     benchmark::DoNotOptimize(a);
     benchmark::DoNotOptimize(b);
 }
 
-template <typename UintT, const UintT& Mod>
+template <const auto& Mod>
 void modarith_sub(benchmark::State& state)
 {
-    const evmone::crypto::ModArith<UintT> m{Mod};
+    using M = MontgomeryArith<Mod>;
     auto a = Mod / 2;
     auto b = Mod / 3;
 
     while (state.KeepRunningBatch(2))
     {
-        a = m.sub(a, b);
-        b = m.sub(b, a);
+        a = M::sub(a, b);
+        b = M::sub(b, a);
     }
     benchmark::DoNotOptimize(a);
     benchmark::DoNotOptimize(b);
 }
 
-template <typename UintT, const UintT& Mod>
+template <const auto& Mod>
 void modarith_mul(benchmark::State& state)
 {
-    const evmone::crypto::ModArith<UintT> m{Mod};
-    auto a = m.to_mont(Mod / 2);
-    auto b = m.to_mont(Mod / 3);
+    using M = MontgomeryArith<Mod>;
+    auto a = M::to_internal(Mod / 2);
+    auto b = M::to_internal(Mod / 3);
 
     while (state.KeepRunningBatch(2))
     {
-        a = m.mul(a, b);
-        b = m.mul(b, a);
+        a = M::mul(a, b);
+        b = M::mul(b, a);
     }
     benchmark::DoNotOptimize(a);
     benchmark::DoNotOptimize(b);
 }
 }  // namespace
 
-BENCHMARK_TEMPLATE(modarith_add, uint256, bn254);
-BENCHMARK_TEMPLATE(modarith_add, uint256, secp256k1);
-BENCHMARK_TEMPLATE(modarith_sub, uint256, bn254);
-BENCHMARK_TEMPLATE(modarith_sub, uint256, secp256k1);
-BENCHMARK_TEMPLATE(modarith_mul, uint256, bn254);
-BENCHMARK_TEMPLATE(modarith_mul, uint256, secp256k1);
+BENCHMARK_TEMPLATE(modarith_add, bn254);
+BENCHMARK_TEMPLATE(modarith_add, secp256k1);
+BENCHMARK_TEMPLATE(modarith_sub, bn254);
+BENCHMARK_TEMPLATE(modarith_sub, secp256k1);
+BENCHMARK_TEMPLATE(modarith_mul, bn254);
+BENCHMARK_TEMPLATE(modarith_mul, secp256k1);
