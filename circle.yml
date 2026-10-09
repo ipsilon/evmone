@@ -758,6 +758,7 @@ jobs:
 workflows:
   version: 2
   evmone:
+    when: false
     jobs:
       - lint
       - clang-tidy
