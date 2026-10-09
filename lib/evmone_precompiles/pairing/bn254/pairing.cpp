@@ -16,13 +16,12 @@ constexpr void multiply_by_lin_func_value(
     Fq12& fr, const std::array<Fq2, 3>& t, const Fq& x, const Fq& y) noexcept
 {
     const Fq12 f = fr;
-    const auto& ksi = Fq6Config::ksi;
 
     const auto t0y = t[0] * y;
     const auto t1x = t[1] * x;
-    const auto t2ksi = t[2] * ksi;
+    const auto t2ksi = mul_by_ksi(t[2]);
 
-    fr.coeffs[0].coeffs[0] = f.coeffs[0].coeffs[0] * t0y + f.coeffs[1].coeffs[2] * t1x * ksi +
+    fr.coeffs[0].coeffs[0] = f.coeffs[0].coeffs[0] * t0y + mul_by_ksi(f.coeffs[1].coeffs[2] * t1x) +
                              f.coeffs[1].coeffs[1] * t2ksi;
     fr.coeffs[0].coeffs[1] =
         f.coeffs[0].coeffs[1] * t0y + f.coeffs[1].coeffs[0] * t1x + f.coeffs[1].coeffs[2] * t2ksi;
