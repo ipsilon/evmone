@@ -332,6 +332,23 @@ TestState from_json<TestState>(const json::json& j)
     return o;
 }
 
+/// Loads the `yParity` of a typed transaction, the name go-ethereum's JSON gives its signature's
+/// `v`. Returns nothing for a legacy transaction, whose `v` also carries the chain id, or when the
+/// key is absent; a `v` given alongside must agree with it.
+static std::optional<uint64_t> load_y_parity(const json::json& j, state::Transaction::Type type)
+{
+    if (type == state::Transaction::Type::legacy)
+        return std::nullopt;
+    const auto y_parity = load_optional<uint64_t>(j, "yParity");
+    if (!y_parity.has_value())
+        return std::nullopt;
+    if (*y_parity > 1)
+        throw std::invalid_argument("invalid transaction: yParity must be 0 or 1");
+    if (const auto v = load_optional<uint64_t>(j, "v"); v.has_value() && *v != *y_parity)
+        throw std::invalid_argument("invalid transaction: v and yParity do not match");
+    return y_parity;
+}
+
 /// Load common parts of Transaction or TestMultiTransaction.
 static void from_json_tx_common(const json::json& j, state::Transaction& o)
 {
@@ -416,7 +433,10 @@ state::Transaction from_json<state::Transaction>(const json::json& j)
 
     o.r = from_json<intx::uint256>(j.at("r"));
     o.s = from_json<intx::uint256>(j.at("s"));
-    o.v = from_json<uint64_t>(j.at("v"));
+    if (const auto y_parity = load_y_parity(j, o.type))
+        o.v = *y_parity;
+    else
+        o.v = from_json<uint64_t>(j.at("v"));
 
     return o;
 }
@@ -442,7 +462,10 @@ static void from_json(const json::json& j, TestMultiTransaction& o)
     for (const auto& j_value : j.at("value"))
         o.values.emplace_back(from_json<intx::uint256>(j_value));
 
-    o.v = load_or<uint64_t>(j, "v", 0);
+    if (const auto y_parity = load_y_parity(j, o.type))
+        o.v = *y_parity;
+    else
+        o.v = load_or<uint64_t>(j, "v", 0);
 }
 
 static void from_json(const json::json& j, TestMultiTransaction::Indexes& o)
