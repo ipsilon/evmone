@@ -66,8 +66,10 @@ std::error_code validate_block(evmc_revision rev, state::BlobParams blob_params,
         return make_error_code(INVALID_BLOCK_TIMESTAMP_OLDER_THAN_PARENT);
 
     if (test_block.block_info.difficulty !=
-        calculate_difficulty(parent_header->difficulty, parent_has_ommers, parent_header->timestamp,
-            test_block.block_info.timestamp, test_block.block_info.number, rev))
+        calculate_difficulty(parent_header->difficulty, parent_has_ommers,
+            static_cast<uint64_t>(parent_header->timestamp),
+            static_cast<uint64_t>(test_block.block_info.timestamp), test_block.block_info.number,
+            rev))
         return make_error_code(INCORRECT_BLOCK_FORMAT);
 
     if (rev >= EVMC_PARIS && !test_block.block_info.ommers.empty())

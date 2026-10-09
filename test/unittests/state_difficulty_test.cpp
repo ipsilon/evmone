@@ -13,9 +13,9 @@ struct DifficultyTest  // NOLINT(clang-analyzer-optin.performance.Padding)
     const char* name;
     int64_t block_number;
     int64_t difficulty;
-    int64_t timestamp;
+    uint64_t timestamp;
     int64_t parent_difficulty;
-    int64_t parent_timestamp;
+    uint64_t parent_timestamp;
     bool parent_has_ommers;
 };
 
@@ -161,6 +161,39 @@ static constexpr DifficultyTest tests[] = {
         10060,
         0x20140,
         10000,
+        false,
+    },
+    {
+        // Timestamp above INT64_MAX (https://github.com/ipsilon/evmone/issues/1492).
+        EVMC_HOMESTEAD,
+        "timestamp_above_int64_max_homestead",
+        1,
+        0x20000,
+        0x8000000000000000,
+        0x20000,
+        0,
+        false,
+    },
+    {
+        // Timestamp above INT64_MAX (https://github.com/ipsilon/evmone/issues/1492).
+        EVMC_BYZANTIUM,
+        "timestamp_above_int64_max_byzantium",
+        1,
+        0x20000,
+        0x8000000000000000,
+        0x20000,
+        0,
+        false,
+    },
+    {
+        // Both timestamps above INT64_MAX, close to each other.
+        EVMC_BYZANTIUM,
+        "timestamps_above_int64_max_small_diff",
+        1,
+        0x20040,
+        0xfffffffffffffff0,
+        0x20000,
+        0xffffffffffffffec,
         false,
     },
 };
