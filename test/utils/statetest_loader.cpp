@@ -528,7 +528,9 @@ void validate_state(const TestState& state, evmc_revision rev)
         if (state::is_precompile(rev, addr) && !acc.code.empty())
             throw std::invalid_argument("unexpected code at precompile address " + hex0x(addr));
 
-        const bool allowedEF = (rev >= EVMC_PRAGUE && is_code_delegated(acc.code)) ||
+        const bool has_delegation_magic =
+            rev >= EVMC_PRAGUE && acc.code.starts_with(DELEGATION_MAGIC);
+        const bool allowedEF = has_delegation_magic ||
                                // exceptions to EIP-3541 rule existing on Mainnet
                                acc.code == "EF"_hex || acc.code == "EFF09f918bf09f9fa9"_hex;
         if (rev >= EVMC_LONDON && !allowedEF && !acc.code.empty() && acc.code[0] == 0xEF)
@@ -538,8 +540,7 @@ void validate_state(const TestState& state, evmc_revision rev)
             !acc.storage.empty())
             throw std::invalid_argument("empty account with non-empty storage at " + hex0x(addr));
 
-        if (rev >= EVMC_PRAGUE && is_code_delegated(acc.code) &&
-            acc.code.size() != std::size(DELEGATION_MAGIC) + sizeof(evmc::address))
+        if (has_delegation_magic && !is_code_delegated(acc.code))
         {
             throw std::invalid_argument(
                 "EIP-7702 delegation designator at " + hex0x(addr) + " has invalid size");
