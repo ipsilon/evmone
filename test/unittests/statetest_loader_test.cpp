@@ -162,6 +162,40 @@ TEST(statetest_loader, load_minimal_test)
     EXPECT_EQ(st.input_labels.size(), 0);
 }
 
+TEST(statetest_loader, sender_from_secret_key)
+{
+    // The first account of ethereum/tests and its secret key.
+    static constexpr auto KEY =
+        "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8";
+    static constexpr auto KEY_OWNER = 0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b_address;
+
+    const auto load_sender = [](const std::string& sender_fields) {
+        std::istringstream s{R"({"test": {
+            "pre": {},
+            "transaction": {"gasPrice": "", "to": "", "data": null, "gasLimit": "0",
+                "value": null, "nonce": "0", )" +
+                             sender_fields + R"(},
+            "post": {},
+            "env": {"currentNumber": "0", "currentTimestamp": "0", "currentGasLimit": "0",
+                "currentCoinbase": ""}
+        }})"};
+        return load_state_tests(s).at(0).multi_tx.sender;
+    };
+
+    EXPECT_EQ(load_sender(R"("secretKey": ")" + std::string{KEY} + '"'), KEY_OWNER);
+    // `sender` takes precedence, as in go-ethereum.
+    EXPECT_EQ(load_sender(R"("sender": "0xa0a1", "secretKey": ")" + std::string{KEY} + '"'),
+        0xa0a1_address);
+    EXPECT_THAT([&] { load_sender(R"("secretKey": "0x00")"); },
+        ThrowsMessage<std::invalid_argument>("invalid secretKey: 0x00"));
+    EXPECT_THAT(
+        [&] {
+            load_sender(
+                R"("secretKey": "0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141")");
+        },
+        ThrowsMessage<std::invalid_argument>(HasSubstr("invalid secretKey")));
+}
+
 TEST(statetest_loader, validate_state_zero_storage_slot)
 {
     TestState state{{0xadd4_address, {.storage = {{0x01_bytes32, 0x00_bytes32}}}}};

@@ -108,6 +108,46 @@ constexpr std::string_view FAILING_TX = R"({"failing_tx": {
     }
 }})";
 
+/// The reproducer from #1490: a value transfer signed by `secretKey`, with no `sender` given.
+/// The expected hash is go-ethereum's.
+constexpr std::string_view SECRET_KEY_ONLY = R"({"secretkey_sender_recovery": {
+    "env": {
+        "currentCoinbase": "0x8888f1f195afa192cfee860698584c030f4c9db1",
+        "currentNumber": "0x01",
+        "currentTimestamp": "0x54c99069",
+        "currentGasLimit": "0x2fefd8",
+        "currentDifficulty": "0x0",
+        "currentRandom": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "currentBaseFee": "0x1",
+        "currentExcessBlobGas": "0x0",
+        "withdrawals": []
+    },
+    "pre": {
+        "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b": {
+            "code": "0x", "nonce": "0x00", "balance": "0xde0b6b3a7640000", "storage": {}
+        },
+        "0x095e7baea6a6c7c4c2dfeb977efac326af552d87": {
+            "code": "0x", "nonce": "0x00", "balance": "0x00", "storage": {}
+        }
+    },
+    "transaction": {
+        "data": ["0x"],
+        "gasLimit": ["0x5208"],
+        "value": ["0x0"],
+        "to": "0x095e7baea6a6c7c4c2dfeb977efac326af552d87",
+        "nonce": "0x0",
+        "chainId": "0x1",
+        "gasPrice": "0x1",
+        "secretKey": "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8"
+    },
+    "post": {"Cancun": [{
+        "indexes": {"data": 0, "gas": 0, "value": 0},
+        "hash": "0x5a605f957d4aa4145411d63287ddf1bae2202c30cc6ec86ae003423bb6343778",
+        "logs": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+    }]}
+}})";
+
 /// A case given as raw txbytes, which the runner decodes and recovers the sender of, in a fixture
 /// that expects it to succeed. The `transaction` beside it is what the loader wants, not what runs.
 std::string txbytes_case(std::string_view txbytes)
@@ -275,4 +315,9 @@ TEST(statetest_runner, txbytes_invalid_encoding)
 
     ASSERT_EQ(failures.size(), 1u);
     EXPECT_EQ(failures[0].detail, "unexpected invalid transaction: invalid transaction encoding");
+}
+
+TEST(statetest_runner, sender_from_secret_key)
+{
+    EXPECT_THAT(run(SECRET_KEY_ONLY).failures, testing::IsEmpty());
 }
