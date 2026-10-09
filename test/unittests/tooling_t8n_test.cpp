@@ -39,8 +39,8 @@ constexpr auto ALLOC_JSON = R"({
 
 // Single legacy CREATE transaction; init code is `PUSH1 0x01 PUSH0 RETURN`,
 // which deploys a one-byte runtime `0x00`. Three opcodes => three trace lines.
-// Matches test/integration/evmone-cli/t8n/cancun_create_tx/txs.json[0]; the tx hash is
-// well-known and used below.
+// Matches test/integration/evmone-cli/t8n/cancun_create_tx/txs.json[0]. Signed by the account
+// ALLOC_JSON funds; t8n ignores `sender`.
 constexpr auto TX_JSON = R"([{
     "to": null,
     "input": "0x60015ff3",
@@ -51,8 +51,8 @@ constexpr auto TX_JSON = R"([{
     "chainId": "0x1",
     "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
     "v": "0x1b",
-    "r": "0x468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665ae",
-    "s": "0x5cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc"
+    "r": "0x5b3bfaf21a50f2d82a624d2220b89f38631e0aa30be189a5aa0e4c63a3b9fa3d",
+    "s": "0x7001087f3f261f606995bea6483b8aec67b8c654213443904750b446723fa35d"
 }])";
 
 /// Runs t8n over the given pre-state and transactions, and returns the result JSON.
@@ -77,8 +77,7 @@ std::string run_t8n(std::string_view alloc_json, std::string_view txs_json, evmc
     return out_result.str();
 }
 
-/// Legacy transaction calling CALLEE. t8n takes `sender` from the JSON and only checks `hash`
-/// when present, so the signature is never recovered.
+/// Legacy transaction calling CALLEE, signed like TX_JSON.
 constexpr auto TX_TO_CALLEE = R"([{
     "to": "0x000000000000000000000000000000000000c0de",
     "input": "0x",
@@ -88,10 +87,21 @@ constexpr auto TX_TO_CALLEE = R"([{
     "gasPrice": "0x32",
     "chainId": "0x1",
     "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
-    "v": "0x1b",
-    "r": "0x468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665ae",
-    "s": "0x5cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc"
+    "v": "0x1c",
+    "r": "0x1059a4656fdf5558d07e5e1e0734e9002f4946f727b45aa52907f76f220735ce",
+    "s": "0x7bf197eb7303fde325d7c24dda50315f155814df4716e1e611ae0e3460231045"
 }])";
+
+/// Runs t8n over ALLOC_JSON and returns the error of the one transaction it must reject.
+std::string rejection(std::string_view txs_json, evmc_revision rev)
+{
+    const auto result = json::parse(run_t8n(ALLOC_JSON, txs_json, rev));
+    EXPECT_EQ(result.at("receipts"), json::array());
+    EXPECT_EQ(result.at("rejected").size(), 1u);
+    if (result.at("rejected").empty())
+        return {};
+    return result.at("rejected")[0].at("error");
+}
 
 /// Runs TX_TO_CALLEE against a callee deployed with the given code.
 std::string run_call_to(std::string_view callee_code, evmc_revision rev)
@@ -196,8 +206,8 @@ TEST(tooling_t8n, blob_transaction_creating_a_contract_is_rejected)
         "nonce": "0x0",
         "value": "0x0",
         "v": "0x0",
-        "r": "0xfc12b67159a3567f8bdbc49e0be369a2e20e09d57a51c41310543a4128409464",
-        "s": "0x2de0cfe5495c4f58ff60645ceda0afd67a4c90a70bc89fe207269435b35e5b67",
+        "r": "0x78ce8eb2b34bb6cce4cedfb5249c29467270c41450fa4a2439797804292cfba6",
+        "s": "0x5437b757e8094f62ca2a3e3a8696cfbd531620bc3c337368db36d0829e073004",
         "maxFeePerGas": "0x32",
         "maxPriorityFeePerGas": "0x2",
         "maxFeePerBlobGas": "0xa",
@@ -207,11 +217,86 @@ TEST(tooling_t8n, blob_transaction_creating_a_contract_is_rejected)
         "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b"
     }])";
 
-    const auto result = json::parse(run_t8n(ALLOC_JSON, BLOB_CREATE_TX, EVMC_CANCUN));
-    EXPECT_EQ(result.at("receipts"), json::array());
-    ASSERT_EQ(result.at("rejected").size(), 1u);
     EXPECT_EQ(
-        result.at("rejected")[0].at("error"), "TransactionException.TYPE_3_TX_CONTRACT_CREATION");
+        rejection(BLOB_CREATE_TX, EVMC_CANCUN), "TransactionException.TYPE_3_TX_CONTRACT_CREATION");
+}
+
+TEST(tooling_t8n, unrecoverable_signature_is_rejected)
+{
+    // r = 5 is in range yet no curve point has x = 5 (5**3 + 7 is a quadratic non-residue), so
+    // only the recovery fails. `sender` names the funded account, so taking it instead of the
+    // signature would execute the transaction.
+    static constexpr auto UNRECOVERABLE_TX = R"([{
+        "to": "0x000000000000000000000000000000000000c0de",
+        "input": "0x",
+        "gas": "0x186a0",
+        "nonce": "0x0",
+        "value": "0x1",
+        "gasPrice": "0x32",
+        "chainId": "0x1",
+        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "v": "0x1b",
+        "r": "0x5",
+        "s": "0x1"
+    }])";
+
+    EXPECT_EQ(
+        rejection(UNRECOVERABLE_TX, EVMC_SHANGHAI), "TransactionException.INVALID_SIGNATURE_VRS");
+}
+
+TEST(tooling_t8n, transaction_with_an_impossible_v_is_rejected)
+{
+    // 34 is neither 27, 28 nor EIP-155's 35+; 2 is not a y parity.
+    static constexpr auto LEGACY_BAD_V = R"([{
+        "to": "0x000000000000000000000000000000000000c0de",
+        "input": "0x",
+        "gas": "0x186a0",
+        "nonce": "0x0",
+        "value": "0x0",
+        "gasPrice": "0x32",
+        "chainId": "0x1",
+        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "v": "0x22",
+        "r": "0x1",
+        "s": "0x1"
+    }])";
+    static constexpr auto TYPED_BAD_V = R"([{
+        "to": "0x000000000000000000000000000000000000c0de",
+        "input": "0x",
+        "gas": "0x186a0",
+        "nonce": "0x0",
+        "value": "0x0",
+        "maxFeePerGas": "0x32",
+        "maxPriorityFeePerGas": "0x2",
+        "chainId": "0x1",
+        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "v": "0x2",
+        "r": "0x1",
+        "s": "0x1"
+    }])";
+
+    EXPECT_EQ(rejection(LEGACY_BAD_V, EVMC_SHANGHAI), "TransactionException.INVALID_SIGNATURE_VRS");
+    EXPECT_EQ(rejection(TYPED_BAD_V, EVMC_SHANGHAI), "TransactionException.INVALID_SIGNATURE_VRS");
+}
+
+TEST(tooling_t8n, transaction_signed_for_another_chain_is_rejected)
+{
+    // Signed for chain 2 (v = 35 + 2 * 2 + 0), run on chain 1.
+    static constexpr auto TX_FOR_CHAIN_2 = R"([{
+        "to": null,
+        "input": "0x60015ff3",
+        "gas": "0x186a0",
+        "nonce": "0x0",
+        "value": "0x0",
+        "gasPrice": "0x32",
+        "chainId": "0x2",
+        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "v": "0x27",
+        "r": "0xf38f7d563c747b90705401b348a87bc0fbd94def6b31675f09ef74539504050a",
+        "s": "0x4c6b5cce6e4a4cd2c70e5d41dffab7a9c067f292b4c9b827487ed04ba7d175c6"
+    }])";
+
+    EXPECT_EQ(rejection(TX_FOR_CHAIN_2, EVMC_SHANGHAI), "TransactionException.INVALID_CHAINID");
 }
 
 TEST(tooling_t8n, a_block_requesting_nothing_reports_the_empty_requests_hash)
@@ -372,8 +457,8 @@ TEST(tooling_t8n, mismatched_tx_hash_throws)
         "chainId": "0x1",
         "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
         "v": "0x1b",
-        "r": "0x468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665ae",
-        "s": "0x5cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc",
+        "r": "0x5b3bfaf21a50f2d82a624d2220b89f38631e0aa30be189a5aa0e4c63a3b9fa3d",
+        "s": "0x7001087f3f261f606995bea6483b8aec67b8c654213443904750b446723fa35d",
         "hash": "0xdeadbeef00000000000000000000000000000000000000000000000000000000"
     }])";
 
@@ -408,8 +493,8 @@ TEST(tooling_t8n, max_chain_id)
         "chainId": "0xffffffffffffffff",
         "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
         "v": "0x1b",
-        "r": "0x468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665ae",
-        "s": "0x5cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc"
+        "r": "0x5b3bfaf21a50f2d82a624d2220b89f38631e0aa30be189a5aa0e4c63a3b9fa3d",
+        "s": "0x7001087f3f261f606995bea6483b8aec67b8c654213443904750b446723fa35d"
     }])";
 
     std::istringstream env{ENV_JSON};
@@ -437,18 +522,20 @@ TEST(tooling_t8n, max_v)
     // The maximum `v` (uint64 max = 0xffffffffffffffff) must be parsed and executed without
     // overflow; regression test for `v` being loaded as `uint8_t`, which threw
     // `from_json<uint8_t>: value > 0xFF`.
+    // Only chain id 0x7fffffffffffffee with y parity 0 produces such a `v`, so the transaction
+    // is signed for that chain; its gas is 0x186a1 because that preimage signs with parity 0.
     static constexpr auto TX_MAX_V = R"([{
         "to": null,
         "input": "0x60015ff3",
-        "gas": "0x186a0",
+        "gas": "0x186a1",
         "nonce": "0x0",
         "value": "0x0",
         "gasPrice": "0x32",
-        "chainId": "0x1",
+        "chainId": "0x7fffffffffffffee",
         "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
         "v": "0xffffffffffffffff",
-        "r": "0x468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665ae",
-        "s": "0x5cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc"
+        "r": "0x463a1ed30b21771a94e83a0ded54cce75850152b18dcd13a1a068d31a5599270",
+        "s": "0x4f1a132cab35ed35cebe2512004572b1e2bede650ae75a3923be03327ae600c2"
     }])";
 
     std::istringstream env{ENV_JSON};
@@ -458,7 +545,7 @@ TEST(tooling_t8n, max_v)
 
     tooling::T8NArgs args;
     args.rev = EVMC_SHANGHAI;
-    args.chain_id = 1;
+    args.chain_id = 0x7fffffffffffffee;
     args.alloc = &alloc;
     args.env = &env;
     args.txs = &txs;

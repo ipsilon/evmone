@@ -292,7 +292,7 @@ void run_blockchain_test(const BlockchainTest& test, evmc::VM& vm, TestReport& r
             const auto& pre_state = parent_data_it->second.post_state;
 
             auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
-                blob_gas_limit, {.block_reward = mining_reward(rev)});
+                blob_gas_limit, {.block_reward = mining_reward(rev), .recover_senders = false});
 
             if (res.requests_error)
             {
@@ -379,8 +379,9 @@ void run_blockchain_test(const BlockchainTest& test, evmc::VM& vm, TestReport& r
             const auto sender_not_recovered = contains_any(
                 test_block.expected_exception, "TransactionException.INVALID_SIGNATURE_VRS");
 
-            const auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions,
-                rev, blob_gas_limit, {.block_reward = mining_reward(rev)});
+            const auto res =
+                apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
+                    blob_gas_limit, {.block_reward = mining_reward(rev), .recover_senders = false});
             if (!res.rejected.empty())
             {
                 // A transaction was rejected: the fixture must name that reason, not merely
