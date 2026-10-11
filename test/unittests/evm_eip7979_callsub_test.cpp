@@ -17,7 +17,7 @@ constexpr auto REV = EVMC_EXPERIMENTAL;
 TEST_P(evm, callsub_undefined_before_experimental)
 {
     rev = EVMC_AMSTERDAM;
-    execute("6004B000B1B2");
+    execute("6004BC00BBBF");
     EXPECT_STATUS(EVMC_UNDEFINED_INSTRUCTION);
 }
 
@@ -26,8 +26,8 @@ TEST_P(evm, calldest_not_a_jumpdest_before_experimental)
     if (is_advanced())
         return;
     rev = EVMC_AMSTERDAM;
-    // PUSH1 4, JUMP, STOP, 0xB1, STOP: before EIP-7979 a 0xB1 byte is not a jump destination.
-    execute("60045600B100");
+    // PUSH1 4, JUMP, STOP, 0xBB, STOP: before EIP-7979 a 0xBB byte is not a jump destination.
+    execute("60045600BB00");
     EXPECT_STATUS(EVMC_BAD_JUMP_DESTINATION);
 }
 
@@ -39,7 +39,7 @@ TEST_P(evm, eip7979_simple_routine)
         return;
     rev = REV;
     // PUSH1 4, CALLSUB, STOP, CALLDEST, RETURNSUB
-    execute("6004B000B1B2");
+    execute("6004BC00BBBF");
     EXPECT_GAS_USED(EVMC_SUCCESS, 17);
 }
 
@@ -48,7 +48,7 @@ TEST_P(evm, eip7979_two_levels_of_subroutines)
     if (is_advanced())
         return;
     rev = REV;
-    execute("6004B000B16009B0B2B1B2");
+    execute("6004BC00BB6009BCBFBBBF");
     EXPECT_GAS_USED(EVMC_SUCCESS, 34);
 }
 
@@ -57,7 +57,7 @@ TEST_P(evm, eip7979_invalid_destination)
     if (is_advanced())
         return;
     rev = REV;
-    execute("60FFB000B1B2");
+    execute("60FFBC00BBBF");
     EXPECT_STATUS(EVMC_BAD_JUMP_DESTINATION);
 }
 
@@ -76,7 +76,7 @@ TEST_P(evm, eip7979_subroutine_at_end_of_code)
         return;
     rev = REV;
     // PUSH1 5, JUMP, CALLDEST, RETURNSUB, JUMPDEST, PUSH1 3, CALLSUB: returns to the implicit STOP.
-    execute("600556B1B25B6003B0");
+    execute("600556BBBF5B6003BC");
     EXPECT_GAS_USED(EVMC_SUCCESS, 29);
 }
 
@@ -87,7 +87,7 @@ TEST_P(evm, callsub_to_jumpdest)
     if (is_advanced())
         return;
     rev = REV;
-    execute("6004B0005B");
+    execute("6004BC005B");
     EXPECT_STATUS(EVMC_BAD_JUMP_DESTINATION);
 }
 
@@ -96,8 +96,8 @@ TEST_P(evm, callsub_into_push_data)
     if (is_advanced())
         return;
     rev = REV;
-    // Destination 5 is the 0xB1 byte inside the PUSH1 immediate.
-    execute("6005B00060B100");
+    // Destination 5 is the 0xBB byte inside the PUSH1 immediate.
+    execute("6005BC0060BB00");
     EXPECT_STATUS(EVMC_BAD_JUMP_DESTINATION);
 }
 
@@ -106,7 +106,7 @@ TEST_P(evm, callsub_destination_overflows_uint64)
     if (is_advanced())
         return;
     rev = REV;
-    execute(push(~intx::uint256{}) + "B000B1B2");
+    execute(push(~intx::uint256{}) + "BC00BBBF");
     EXPECT_STATUS(EVMC_BAD_JUMP_DESTINATION);
 }
 
@@ -115,7 +115,7 @@ TEST_P(evm, callsub_stack_underflow)
     if (is_advanced())
         return;
     rev = REV;
-    execute("B000B1B2");
+    execute("BC00BBBF");
     EXPECT_STATUS(EVMC_STACK_UNDERFLOW);
 }
 
@@ -127,7 +127,7 @@ TEST_P(evm, jump_to_calldest)
         return;
     rev = REV;
     // PUSH1 4, JUMP, STOP, CALLDEST, STOP
-    execute("60045600B100");
+    execute("60045600BB00");
     EXPECT_GAS_USED(EVMC_SUCCESS, 12);
 }
 
@@ -137,7 +137,7 @@ TEST_P(evm, jumpi_to_calldest)
         return;
     rev = REV;
     // PUSH1 1, PUSH1 6, JUMPI, STOP, CALLDEST, STOP
-    execute("600160065700B100");
+    execute("600160065700BB00");
     EXPECT_GAS_USED(EVMC_SUCCESS, 17);
 }
 
@@ -147,7 +147,7 @@ TEST_P(evm, returnsub_after_unframed_jump)
         return;
     rev = REV;
     // Entering a subroutine by JUMP pushes no return address.
-    execute("60045600B1B2");
+    execute("60045600BBBF");
     EXPECT_STATUS(EVMC_STACK_UNDERFLOW);
 }
 
@@ -157,7 +157,7 @@ TEST_P(evm, tail_call)
         return;
     rev = REV;
     // main: PUSH1 4, CALLSUB, STOP; f: CALLDEST, PUSH1 8, JUMP; g: CALLDEST, RETURNSUB
-    execute("6004B000B1600856B1B2");
+    execute("6004BC00BB600856BBBF");
     EXPECT_GAS_USED(EVMC_SUCCESS, 29);
 }
 
@@ -166,7 +166,7 @@ TEST_P(evm, calldest_reached_by_fall_through)
     if (is_advanced())
         return;
     rev = REV;
-    execute("B1B100");
+    execute("BBBB00");
     EXPECT_GAS_USED(EVMC_SUCCESS, 2);
 }
 
@@ -193,7 +193,7 @@ TEST_P(evm, return_stack_overflow)
         return;
     rev = REV;
     // Recursion with no base case: PUSH1 4, CALLSUB, STOP; CALLDEST, PUSH1 4, CALLSUB, RETURNSUB
-    execute("6004B000B16004B0B2");
+    execute("6004BC00BB6004BCBF");
     EXPECT_STATUS(EVMC_STACK_OVERFLOW);
 }
 
@@ -231,7 +231,7 @@ TEST_P(evm, return_stack_reset_between_executions)
     rev = REV;
     // A frame that halts with return addresses pending leaves nothing behind for the
     // next execution: the return stack belongs to the frame.
-    execute("6004B000B16004B0B2");
+    execute("6004BC00BB6004BCBF");
     EXPECT_STATUS(EVMC_STACK_OVERFLOW);
     execute("B2");
     EXPECT_STATUS(EVMC_STACK_UNDERFLOW);
