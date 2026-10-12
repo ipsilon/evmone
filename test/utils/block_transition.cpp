@@ -87,6 +87,8 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         }
     }
 
+    finalize(block_state, rev, block.coinbase, opts.block_reward, block.ommers, block.withdrawals);
+
     std::vector<state::Requests> requests;
     std::error_code requests_error;
     if (!opts.skip_system_calls)
@@ -108,8 +110,6 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
                     std::back_inserter(requests));
         }
     }
-
-    finalize(block_state, rev, block.coinbase, opts.block_reward, block.ommers, block.withdrawals);
 
     // Both counters start at block.gas_limit, so this is max(execution used, state used):
     // the block's gas used is its bottleneck dimension (EIP-8037).

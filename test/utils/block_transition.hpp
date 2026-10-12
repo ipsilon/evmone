@@ -59,8 +59,8 @@ struct TransitionResult
 };
 
 /// Applies a block of transactions to a copy of @p state: block-start system call, the
-/// transactions, request collection, block-end system call, and finalization. The system calls
-/// and request collection are skipped when `opts.skip_system_calls` is set.
+/// transactions, finalization (incl. the withdrawals), request collection and block-end system
+/// call. The system calls and request collection are skipped when `opts.skip_system_calls` is set.
 ///
 /// Shared block-transition core for the blockchain test runner and the t8n tool. It performs
 /// no validation/assertions and produces no output; callers interpret the returned result.
