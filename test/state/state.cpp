@@ -567,13 +567,15 @@ void State::journal_account_flags(Account& acc)
 
 namespace
 {
-/// Resets the account value fields set by a create. The balance and the storage are restored
-/// by their own journal entries, which are always replayed first.
+/// Resets the account value fields and flags set by a create. The balance and the storage are
+/// restored by their own journal entries, which are always replayed first.
 void clear_value(Account& a) noexcept
 {
     a.nonce = 0;
     a.code_hash = Account::EMPTY_CODE_HASH;
     a.code.clear();
+    a.just_created = false;
+    a.code_changed = false;
 }
 }  // namespace
 
@@ -603,8 +605,6 @@ void State::rollback(size_t checkpoint)
                         a.nonexistent = true;
                         assert(a.balance == 0);  // Restored by the balance entries replayed first.
                         clear_value(a);
-                        a.just_created = false;
-                        a.code_changed = false;
                     }
                 }
                 else if constexpr (std::is_same_v<T, JournalCreate>)

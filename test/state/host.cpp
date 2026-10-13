@@ -191,6 +191,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     }
 
     assert(new_acc.nonce == 0);
+    assert(!new_acc.just_created && !new_acc.code_changed);  // The create rollback clears them.
 
     if (m_rev >= EVMC_SPURIOUS_DRAGON)
         new_acc.nonce = 1;  // No need to journal: create revert will 0 the nonce.

@@ -88,15 +88,9 @@ struct Account
     bool erase_if_empty = false;
 
     /// The account has been created in the current transaction.
-    ///
-    /// FIXME: Not reverted on the rollback of a CREATE over a pre-existing account; a leaked
-    /// value suppresses the EIP-161 touch-delete of the now-empty account (state-root divergence).
     bool just_created = false;
 
     /// This account's code has been modified.
-    ///
-    /// FIXME: Not reverted on the rollback of a CREATE over a pre-existing account; a leaked
-    /// value adds a false-positive code entry to the state diff.
     bool code_changed = false;
 
     /// If the account has non-empty initial storage (set when the account is loaded).

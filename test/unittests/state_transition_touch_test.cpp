@@ -358,3 +358,22 @@ TEST_F(state_transition, touch_nonexistent_after_reverted_create2)
     // FIXME: A no-op deletion of an account which has never existed (#1718).
     expect.post[created].in_diff = true;
 }
+
+TEST_F(state_transition, touch_empty_after_reverted_create2)
+{
+    // The CREATE2 over a pre-existing empty account reverts. Then a zero-value call touches the
+    // account, so it ends empty and is deleted (EIP-161). Empty accounts exist before EIP-7523.
+    rev = EVMC_LONDON;
+    const auto initcode = revert(0, 0);
+    const auto created = compute_create2_address(To, {}, initcode);
+
+    tx.to = To;
+    pre[To] = {.code = mstore(0, push(initcode)) +
+                       create2().input(32 - initcode.size(), initcode.size()) + OP_POP +
+                       call(created)};
+    pre[created] = {};
+
+    expect.post[To].exists = true;
+    expect.post[created].exists = false;
+    expect.post[created].in_diff = true;
+}
