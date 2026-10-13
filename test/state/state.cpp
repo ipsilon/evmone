@@ -444,7 +444,7 @@ std::pair<Account&, bool> State::get_or_create(const address& addr)
     auto& acc = get(addr);
     if (!acc.nonexistent)
         return {acc, false};
-    journal_account_flags(addr, acc);
+    journal_account_flags(acc);
     // The account is created in place: a nonexistent account holds nothing but the warm status
     // and the warm storage slots, which must survive (EIP-2929).
     acc.nonexistent = false;
@@ -505,7 +505,7 @@ Account& State::touch(const address& addr)
     auto& acc = get(addr);
     if (!acc.erase_if_empty && acc.is_empty())  // Also true for a nonexistent account.
     {
-        journal_account_flags(addr, acc);
+        journal_account_flags(acc);
         acc.nonexistent = false;
         acc.erase_if_empty = true;
     }
@@ -533,9 +533,9 @@ StorageValue& State::get_storage(const address& addr, const bytes32& key)
     return slot;
 }
 
-void State::journal_balance_change(const address& addr, const intx::uint256& prev_balance)
+void State::journal_balance_change(Account& acc)
 {
-    m_journal.emplace_back(JournalBalanceChange{{addr}, prev_balance});
+    m_journal.emplace_back(JournalBalanceChange{{&acc}, acc.balance});
 }
 
 void State::journal_storage_change(StorageValue& slot)
@@ -549,20 +549,20 @@ void State::journal_transient_storage_change(bytes32& slot)
     m_journal.emplace_back(JournalTransientStorageChange{&slot, slot});
 }
 
-void State::journal_bump_nonce(const address& addr)
+void State::journal_bump_nonce(Account& acc)
 {
-    m_journal.emplace_back(JournalNonceBump{addr});
+    m_journal.emplace_back(JournalNonceBump{{&acc}});
 }
 
-void State::journal_create(const address& addr)
+void State::journal_create(Account& acc)
 {
-    m_journal.emplace_back(JournalCreate{{addr}});
+    m_journal.emplace_back(JournalCreate{{&acc}});
 }
 
-void State::journal_account_flags(const address& addr, const Account& acc)
+void State::journal_account_flags(Account& acc)
 {
     m_journal.emplace_back(JournalAccountFlags{
-        {addr}, acc.access_status, acc.nonexistent, acc.destructed, acc.erase_if_empty});
+        {&acc}, acc.access_status, acc.nonexistent, acc.destructed, acc.erase_if_empty});
 }
 
 namespace
@@ -582,17 +582,17 @@ void State::rollback(size_t checkpoint)
     while (m_journal.size() != checkpoint)
     {
         std::visit(
-            [this](const auto& e) {
+            [](const auto& e) {
                 using T = std::decay_t<decltype(e)>;
                 if constexpr (std::is_same_v<T, JournalNonceBump>)
                 {
-                    auto& a = get(e.addr);
+                    auto& a = *e.acc;
                     assert(!a.nonexistent);  // Replayed before the flags entry un-creating it.
                     a.nonce -= 1;
                 }
                 else if constexpr (std::is_same_v<T, JournalAccountFlags>)
                 {
-                    auto& a = access(e.addr);
+                    auto& a = *e.acc;
                     a.access_status = e.access_status;
                     a.destructed = e.destructed;
                     a.erase_if_empty = e.erase_if_empty;
@@ -611,7 +611,7 @@ void State::rollback(size_t checkpoint)
                 {
                     // Revert a create over a pre-existing account.
                     // TODO: Why this account is not always "touched"?
-                    auto& a = get(e.addr);
+                    auto& a = *e.acc;
                     assert(!a.nonexistent);
                     clear_value(a);
                 }
@@ -629,7 +629,7 @@ void State::rollback(size_t checkpoint)
                 }
                 else if constexpr (std::is_same_v<T, JournalBalanceChange>)
                 {
-                    auto& a = get(e.addr);
+                    auto& a = *e.acc;
                     assert(!a.nonexistent);  // Replayed before the flags entry un-creating it.
                     a.balance = e.prev_balance;
                 }

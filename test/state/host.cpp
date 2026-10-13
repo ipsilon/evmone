@@ -136,8 +136,8 @@ bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcep
     const auto balance = acc.balance;
     auto& beneficiary_acc = m_state.touch(beneficiary);
 
-    m_state.journal_balance_change(beneficiary, beneficiary_acc.balance);
-    m_state.journal_balance_change(addr, balance);
+    m_state.journal_balance_change(beneficiary_acc);
+    m_state.journal_balance_change(acc);
 
     if (m_rev >= EVMC_CANCUN && !acc.just_created)
     {
@@ -169,7 +169,7 @@ bool Host::selfdestruct(const address& addr, const address& beneficiary) noexcep
     // Mark the destruction if not done already.
     if (!acc.destructed)
     {
-        m_state.journal_account_flags(addr, acc);
+        m_state.journal_account_flags(acc);
         acc.destructed = true;
         return true;
     }
@@ -187,7 +187,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         // TODO: Add EVMC errors for creation failures.
         if (is_create_collision(new_acc))
             return evmc::Result{EVMC_FAILURE, {.left = msg.state_gas}};
-        m_state.journal_create(msg.recipient);
+        m_state.journal_create(new_acc);
     }
 
     assert(new_acc.nonce == 0);
@@ -201,8 +201,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     assert(!sender_acc.nonexistent);
     const auto value = intx::be::load<intx::uint256>(msg.value);
     assert(sender_acc.balance >= value && "EVM must guarantee balance");
-    m_state.journal_balance_change(msg.sender, sender_acc.balance);
-    m_state.journal_balance_change(msg.recipient, new_acc.balance);
+    m_state.journal_balance_change(sender_acc);
+    m_state.journal_balance_change(new_acc);
     sender_acc.balance -= value;
     new_acc.balance += value;  // The new account may be prefunded.
 
@@ -287,8 +287,8 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
             auto& sender_acc = m_state.get(msg.sender);
             assert(!sender_acc.nonexistent);
             assert(sender_acc.balance >= value);
-            m_state.journal_balance_change(msg.sender, sender_acc.balance);
-            m_state.journal_balance_change(msg.recipient, recipient_acc.balance);
+            m_state.journal_balance_change(sender_acc);
+            m_state.journal_balance_change(recipient_acc);
             sender_acc.balance -= value;
             recipient_acc.balance += value;
 
@@ -317,7 +317,7 @@ evmc::Result Host::call(const evmc_message& msg) noexcept
         auto& sender_acc = m_state.get(msg.sender);
         assert(!sender_acc.nonexistent);
         assert(sender_acc.nonce != MAX_NONCE);
-        m_state.journal_bump_nonce(msg.sender);
+        m_state.journal_bump_nonce(sender_acc);
         ++sender_acc.nonce;
     }
 
@@ -396,7 +396,7 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (acc.access_status == EVMC_ACCESS_WARM)
         return EVMC_ACCESS_WARM;
 
-    m_state.journal_account_flags(addr, acc);
+    m_state.journal_account_flags(acc);
     acc.access_status = EVMC_ACCESS_WARM;
     return EVMC_ACCESS_COLD;
 }

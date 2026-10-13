@@ -21,7 +21,7 @@ class State
 {
     struct JournalBase
     {
-        address addr;
+        Account* acc = nullptr;  ///< Account in a node-based container (stable refs).
     };
 
     struct JournalBalanceChange : JournalBase
@@ -117,18 +117,18 @@ public:
     /// Touches (as in EIP-161) an existing account or creates new erasable account.
     Account& touch(const address& addr);
 
-    void journal_balance_change(const address& addr, const intx::uint256& prev_balance);
+    void journal_balance_change(Account& acc);
 
     void journal_storage_change(StorageValue& slot);
 
     void journal_transient_storage_change(bytes32& slot);
 
-    void journal_bump_nonce(const address& addr);
+    void journal_bump_nonce(Account& acc);
 
     /// Journals a create over a pre-existing account; revert resets its nonce and code.
-    void journal_create(const address& addr);
+    void journal_create(Account& acc);
 
-    void journal_account_flags(const address& addr, const Account& acc);
+    void journal_account_flags(Account& acc);
 
     /// @}
 };
