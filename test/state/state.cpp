@@ -421,9 +421,7 @@ StateDiff State::build_diff(evmc_revision rev) const
         // Unconditionally report nonce and balance as modified.
         // TODO: We don't have information if the balance/nonce has actually changed.
         //   One option is to just keep the original values. This may be handy for RPC.
-        // TODO(clang): In AppleClang 15 emplace_back without StateDiff::Entry doesn't compile.
-        //   NOLINTNEXTLINE(modernize-use-emplace)
-        auto& a = diff.modified_accounts.emplace_back(StateDiff::Entry{addr, m.nonce, m.balance});
+        auto& a = diff.modified_accounts.emplace_back(addr, m.nonce, m.balance);
 
         // Output only the new code.
         // TODO: Output also the code hash. It will be needed for DB update and MPT hash.

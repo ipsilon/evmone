@@ -151,9 +151,7 @@ public:
                 // After successful insertion also create the LRU list entry and connect it with
                 // the map entry. This reference is valid and unchanged through
                 // the whole cache lifetime.
-                // TODO(clang): no matching constructor for initialization of 'LRUEntry'
-                it->second =
-                    lru_list_.emplace(lru_list_.end(), LRUEntry{it->first, std::move(value)});
+                it->second = lru_list_.emplace(lru_list_.end(), it->first, std::move(value));
             }
         }
     }
