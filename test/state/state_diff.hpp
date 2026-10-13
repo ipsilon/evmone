@@ -44,8 +44,11 @@ struct StateDiff
     /// List of deleted accounts.
     ///
     /// This list doesn't have common addresses with modified_accounts.
-    /// Note that from the Cancun revision (because of the modification to the SELFDESTRUCT)
-    /// accounts cannot be deleted and this list is always empty.
+    /// From Cancun only an account self-destructed in the transaction creating it (EIP-6780)
+    /// and an empty touched account (EIP-161) are deleted.
     std::vector<address> deleted_accounts;
+
+    /// The accounts read and their storage slots read, from Amsterdam (EIP-7928).
+    std::vector<std::pair<address, std::vector<bytes32>>> reads;
 };
 }  // namespace evmone::state

@@ -4,6 +4,8 @@
 
 #include "block_transition.hpp"
 #include <test/state/errors.hpp>
+#include <test/state/state.hpp>
+#include <test/state/system_contracts.hpp>
 #include <test/utils/mpt_hash.hpp>
 #include <test/utils/rlp.hpp>
 #include <test/utils/rlp_encode.hpp>
@@ -42,8 +44,18 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         vm.set_option("trace", "1");  // This actually appends a new tracer on each set_option().
 
     TestState block_state(state);
+
+    // The block access list (EIP-7928) records the reads and the state changes at their block
+    // access index.
+    state::BalBuilder bal_builder;
+    const auto apply = [&](size_t index, const state::StateDiff& diff) {
+        if (rev >= EVMC_AMSTERDAM)
+            bal_builder.record_diff(static_cast<uint32_t>(index), diff, state);
+        block_state.apply(diff);
+    };
+
     if (!opts.skip_system_calls)
-        system_call_block_start(block_state, block, block_hashes, rev, vm);
+        apply(0, state::system_call_block_start(block_state, block, block_hashes, rev, vm));
 
     std::vector<RejectedTransaction> rejected_txs;
     std::vector<state::TransactionReceipt> receipts;
@@ -62,16 +74,18 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         if (trace_enabled)
             trace_guard.emplace(std::clog, opts.open_trace(i, computed_tx_hash).rdbuf());
 
-        auto res = transition(block_state, block, block_hashes, tx, rev, vm, block_gas_left,
-            block_state_gas_left, blob_gas_left);
-
-        if (holds_alternative<std::error_code>(res))
+        const auto tx_props_or_err = state::validate_transaction(
+            block_state, block, tx, rev, block_gas_left, block_state_gas_left, blob_gas_left);
+        if (std::holds_alternative<std::error_code>(tx_props_or_err))
         {
-            rejected_txs.push_back({computed_tx_hash, i, std::get<std::error_code>(res)});
+            rejected_txs.push_back(
+                {computed_tx_hash, i, std::get<std::error_code>(tx_props_or_err)});
         }
         else
         {
-            auto& receipt = get<state::TransactionReceipt>(res);
+            auto receipt = state::transition(block_state, block, block_hashes, tx, rev, vm,
+                std::get<state::TransactionProperties>(tx_props_or_err));
+            apply(i + 1, receipt.state_diff);
 
             cumulative_gas_used += receipt.gas_used;
             receipt.cumulative_gas_used = cumulative_gas_used;
@@ -87,7 +101,9 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         }
     }
 
-    finalize(block_state, rev, block.coinbase, opts.block_reward, block.ommers, block.withdrawals);
+    // The withdrawals share the last index with the block-end system calls (EIP-7928).
+    apply(txs.size() + 1, state::finalize(block_state, rev, block.coinbase, opts.block_reward,
+                              block.ommers, block.withdrawals));
 
     std::vector<state::Requests> requests;
     std::error_code requests_error;
@@ -102,12 +118,16 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         }
         if (!requests_error)
         {
-            auto block_end = system_call_block_end(block_state, block, block_hashes, rev, vm);
+            auto block_end =
+                state::system_call_block_end(block_state, block, block_hashes, rev, vm);
             if (const auto* ec = std::get_if<std::error_code>(&block_end))
                 requests_error = *ec;
             else
-                std::ranges::move(std::get<std::vector<state::Requests>>(block_end),
-                    std::back_inserter(requests));
+            {
+                auto& rr = std::get<state::RequestsResult>(block_end);
+                apply(txs.size() + 1, rr.state_diff);
+                std::ranges::move(rr.requests, std::back_inserter(requests));
+            }
         }
     }
 
@@ -117,6 +137,6 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
     const auto bloom = compute_bloom_filter(receipts);
 
     return {std::move(receipts), std::move(rejected_txs), std::move(requests), requests_error,
-        block_gas_used, bloom, blob_gas_left, std::move(block_state)};
+        block_gas_used, bloom, blob_gas_left, std::move(block_state), bal_builder.build()};
 }
 }  // namespace evmone::test

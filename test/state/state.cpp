@@ -378,6 +378,16 @@ StateDiff State::build_diff(evmc_revision rev) const
     diff.modified_accounts.reserve(m_modified.size());
     for (const auto& [addr, m] : m_modified)
     {
+        if (rev >= EVMC_AMSTERDAM && m.loaded)
+        {
+            // Loading is reading (EIP-7928): warming doesn't load and rollback doesn't unload.
+            auto& keys = diff.reads.emplace_back(addr, std::vector<bytes32>{}).second;
+            for (const auto& [k, v] : m.storage)
+            {
+                if (v.loaded)
+                    keys.emplace_back(k);
+            }
+        }
         if (!m.loaded || m.nonexistent)
         {
             // A not-loaded or nonexistent account holds no change.
