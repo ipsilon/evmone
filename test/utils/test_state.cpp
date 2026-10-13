@@ -7,6 +7,13 @@
 
 namespace evmone::test
 {
+bytes32 TestAccount::get_code_hash() const noexcept
+{
+    if (code_hash.has_value())
+        return *code_hash;
+    return code.empty() ? state::Account::EMPTY_CODE_HASH : keccak256(code);
+}
+
 std::optional<state::StateView::Account> TestState::get_account(const address& addr) const noexcept
 {
     const auto it = find(addr);
@@ -14,8 +21,7 @@ std::optional<state::StateView::Account> TestState::get_account(const address& a
         return std::nullopt;
 
     const auto& acc = it->second;
-    // TODO: Cache code hash for MTP root hash calculation?
-    return Account{acc.nonce, acc.balance, keccak256(acc.code), !acc.storage.empty()};
+    return Account{acc.nonce, acc.balance, acc.get_code_hash(), !acc.storage.empty()};
 }
 
 bytes TestState::get_account_code(const address& addr) const noexcept
@@ -35,7 +41,10 @@ void TestState::apply(const state::StateDiff& diff)
         a.nonce = m.nonce;
         a.balance = m.balance;
         if (m.code.has_value())
+        {
             a.code = *m.code;  // TODO: Consider taking rvalue ref to avoid code copy.
+            a.code_hash = keccak256(a.code);
+        }
         for (const auto& [k, v] : m.modified_storage)
         {
             if (v)

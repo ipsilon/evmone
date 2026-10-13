@@ -30,7 +30,7 @@ hash256 mpt_hash(const test::TestState& state)
     for (const auto& [addr, acc] : state)
     {
         trie.insert(keccak256(addr),
-            rlp::encode_tuple(acc.nonce, acc.balance, mpt_hash(acc.storage), keccak256(acc.code)));
+            rlp::encode_tuple(acc.nonce, acc.balance, mpt_hash(acc.storage), acc.get_code_hash()));
     }
     return trie.hash();
 }

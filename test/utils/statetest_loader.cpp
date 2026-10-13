@@ -319,6 +319,7 @@ TestState from_json<TestState>(const json::json& j)
             o[from_json<address>(j_addr)] = {.nonce = from_json<uint64_t>(j_acc.at("nonce")),
                 .balance = from_json<intx::uint256>(j_acc.at("balance")),
                 .code = from_json<bytes>(j_acc.at("code"))};
+        acc.code_hash = keccak256(acc.code);
 
         if (const auto storage_it = j_acc.find("storage"); storage_it != j_acc.end())
         {

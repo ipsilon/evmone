@@ -39,7 +39,16 @@ struct TestAccount
     std::map<bytes32, bytes32> storage;
     bytes code;
 
-    bool operator==(const TestAccount&) const noexcept = default;
+    /// The cached hash of the code. If absent, the hash is computed from the code when needed.
+    std::optional<bytes32> code_hash;
+
+    [[nodiscard]] bytes32 get_code_hash() const noexcept;
+
+    /// Compares the accounts ignoring the cached code hash.
+    bool operator==(const TestAccount& o) const noexcept
+    {
+        return nonce == o.nonce && balance == o.balance && storage == o.storage && code == o.code;
+    }
 };
 
 /// Ethereum State representation for tests.
