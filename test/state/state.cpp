@@ -579,7 +579,8 @@ void clear_value(Account& a) noexcept
 
 void State::rollback(size_t checkpoint)
 {
-    while (m_journal.size() != checkpoint)
+    assert(checkpoint <= m_journal.size());
+    for (const auto& entry : m_journal | std::views::drop(checkpoint) | std::views::reverse)
     {
         std::visit(
             [](const auto& e) {
@@ -639,9 +640,9 @@ void State::rollback(size_t checkpoint)
                     static_assert(std::is_void_v<T>, "unhandled journal entry type");
                 }
             },
-            m_journal.back());
-        m_journal.pop_back();
+            entry);
     }
+    m_journal.resize(checkpoint);
 }
 
 /// Validates transaction and computes the gas limits it provides to the EVM.
