@@ -42,6 +42,7 @@ class State
         StorageValue* slot = nullptr;  ///< Storage slot in a node-based container (stable refs).
         bytes32 prev_value;
         evmc_access_status prev_access_status;
+        bool prev_loaded;  ///< A slot warmed before loading has no value to restore.
     };
 
     struct JournalTransientStorageChange
@@ -62,7 +63,7 @@ class State
     /// The read-only view of the initial (cold) state.
     const StateView& m_initial;
 
-    /// The accounts loaded from the initial state and potentially modified.
+    /// The accounts warmed, loaded from the initial state or modified.
     std::unordered_map<address, Account> m_modified;
 
     /// The state journal: the list of changes made to the state
@@ -75,6 +76,13 @@ public:
     State(State&&) = delete;
     State& operator=(State&&) = delete;
 
+    // TODO: [[gnu::flatten]] on get(), get_storage() and access_storage() makes GCC inline the
+    //   hash map lookups: up to ~10% fewer instructions on warm storage access. try_emplace() is
+    //   an alternative to operator[] with different inlining hints: GCC 15/16 inline its lookup.
+
+    /// Returns the account at the address without loading it from the initial state.
+    Account& access(const address& addr) noexcept { return m_modified[addr]; }
+
     /// Returns the account at the address. An account absent from the state is returned as a
     /// node flagged nonexistent, so the reference is always valid and the flag is the answer to
     /// "does this account exist?".
@@ -84,6 +92,9 @@ public:
     Account& get_or_insert(const address& addr);
 
     bytes_view get_code(const address& addr);
+
+    /// Returns the storage slot without loading its value from the initial state.
+    StorageValue& access_storage(const address& addr, const bytes32& key);
 
     StorageValue& get_storage(const address& addr, const bytes32& key);
 

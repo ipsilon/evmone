@@ -24,6 +24,10 @@ struct StorageValue
     bytes32 original;
 
     evmc_access_status access_status = EVMC_ACCESS_COLD;
+
+    /// The value has been loaded from the initial state.
+    /// A slot may be warmed (EIP-2929) but not read (EIP-7928).
+    bool loaded = false;
 };
 
 /// The state account.
@@ -59,8 +63,14 @@ struct Account
     /// Revertible.
     evmc_access_status access_status = EVMC_ACCESS_COLD;
 
+    /// The account has been loaded from the initial state by its first read.
+    /// Warming (EIP-2929) is not a read (EIP-7928).
+    /// Not revertible: a read stays a read.
+    bool loaded = false;
+
     /// The account does not exist in the state: it is missing from the initial state or its
-    /// creation has been reverted. Revertible, cleared when the account is created.
+    /// creation has been reverted. Meaningful only for a loaded account.
+    /// Revertible, cleared when the account is created.
     bool nonexistent = false;
 
     /// The account has been destructed and should be erased at the end of a transaction.
@@ -89,7 +99,7 @@ struct Account
     /// value adds a false-positive code entry to the state diff.
     bool code_changed = false;
 
-    /// If the account has non-empty initial storage (when accessing the cold account).
+    /// If the account has non-empty initial storage (set when the account is loaded).
     bool has_initial_storage = false;
 
     [[nodiscard]] bool is_empty() const noexcept

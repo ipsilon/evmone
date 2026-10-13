@@ -378,9 +378,9 @@ StateDiff State::build_diff(evmc_revision rev) const
     diff.modified_accounts.reserve(m_modified.size());
     for (const auto& [addr, m] : m_modified)
     {
-        if (m.nonexistent)
+        if (!m.loaded || m.nonexistent)
         {
-            // A nonexistent account holds no change: anything else would be dropped silently.
+            // A not-loaded or nonexistent account holds no change.
             assert(m.is_empty() && !m.destructed && !m.erase_if_empty && !m.just_created &&
                    !m.code_changed);
             assert(std::ranges::all_of(m.storage | std::views::values,
@@ -443,12 +443,13 @@ std::pair<Account&, bool> State::get_or_create(const address& addr)
 
 Account& State::get(const address& addr) noexcept
 {
-    const auto [it, inserted] = m_modified.try_emplace(addr);
-    auto& acc = it->second;
-    if (inserted)
+    auto& acc = access(addr);
+    if (!acc.loaded) [[unlikely]]
     {
         // Load the account from the initial state. A miss is cached as a nonexistent account,
         // so the initial state is queried once per address rather than once per access.
+        assert(acc.is_empty() && !acc.nonexistent && !acc.destructed && !acc.erase_if_empty);
+        acc.loaded = true;
         if (const auto cacc = m_initial.get_account(addr); cacc)
         {
             acc.nonce = cacc->nonce;
@@ -457,7 +458,9 @@ Account& State::get(const address& addr) noexcept
             acc.has_initial_storage = cacc->has_storage;
         }
         else
+        {
             acc.nonexistent = true;
+        }
     }
     // A nonexistent account is readable: its zero fields are what a missing account holds.
     assert(!acc.nonexistent ||
@@ -499,17 +502,25 @@ Account& State::touch(const address& addr)
     return acc;
 }
 
+StorageValue& State::access_storage(const address& addr, const bytes32& key)
+{
+    return access(addr).storage[key];
+}
+
 StorageValue& State::get_storage(const address& addr, const bytes32& key)
 {
     // TODO: Avoid account lookup by giving the reference to the account's storage to Host.
-    auto& acc = get(addr);
-    const auto [it, missing] = acc.storage.try_emplace(key);
-    if (missing)
+    auto& acc = access(addr);
+    assert(acc.loaded);  // The storage of the executing account, loaded to run its code.
+    auto& slot = acc.storage[key];
+    if (!slot.loaded)
     {
-        const auto initial_value = m_initial.get_storage(addr, key);
-        it->second = {initial_value, initial_value};
+        // Load the value from the initial state. A slot only warmed keeps its access status.
+        slot.loaded = true;
+        slot.original = m_initial.get_storage(addr, key);
+        slot.current = slot.original;
     }
-    return it->second;
+    return slot;
 }
 
 void State::journal_balance_change(const address& addr, const intx::uint256& prev_balance)
@@ -519,7 +530,8 @@ void State::journal_balance_change(const address& addr, const intx::uint256& pre
 
 void State::journal_storage_change(StorageValue& slot)
 {
-    m_journal.emplace_back(JournalStorageChange{&slot, slot.current, slot.access_status});
+    m_journal.emplace_back(
+        JournalStorageChange{&slot, slot.current, slot.access_status, slot.loaded});
 }
 
 void State::journal_transient_storage_change(bytes32& slot)
@@ -570,14 +582,15 @@ void State::rollback(size_t checkpoint)
                 }
                 else if constexpr (std::is_same_v<T, JournalAccountFlags>)
                 {
-                    auto& a = get(e.addr);
+                    auto& a = access(e.addr);
                     a.access_status = e.access_status;
-                    a.nonexistent = e.nonexistent;
                     a.destructed = e.destructed;
                     a.erase_if_empty = e.erase_if_empty;
                     if (e.nonexistent)
                     {
-                        // An account which did not exist holds nothing.
+                        // An account which did not exist holds nothing. Only the non-existence
+                        // is restored: the existence is set by journaled creation or by loading.
+                        a.nonexistent = true;
                         assert(a.balance == 0);  // Restored by the balance entries replayed first.
                         clear_value(a);
                         a.just_created = false;
@@ -594,7 +607,10 @@ void State::rollback(size_t checkpoint)
                 }
                 else if constexpr (std::is_same_v<T, JournalStorageChange>)
                 {
-                    e.slot->current = e.prev_value;
+                    if (e.prev_loaded)
+                        e.slot->current = e.prev_value;
+                    else  // Warmed before loading: any later value change is already reverted.
+                        assert(e.slot->current == e.slot->original);
                     e.slot->access_status = e.prev_access_status;
                 }
                 else if constexpr (std::is_same_v<T, JournalTransientStorageChange>)
@@ -827,7 +843,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         if (is_precompile(rev, a))  // Precompile storage is never accessed.
             continue;
         for (const auto& key : storage_keys)
-            state.get_storage(a, key).access_status = EVMC_ACCESS_WARM;
+            state.access_storage(a, key).access_status = EVMC_ACCESS_WARM;
     }
     // EIP-3651: Warm COINBASE.
     if (rev >= EVMC_SHANGHAI)
