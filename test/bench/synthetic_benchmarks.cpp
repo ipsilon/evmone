@@ -4,10 +4,13 @@
 
 #include "synthetic_benchmarks.hpp"
 #include "helpers.hpp"
+#include "mainnet_shift_amounts.hpp"
 #include "test/utils/bytecode.hpp"
 #include <evmone/instructions_traits.hpp>
+#include <span>
 
 using namespace benchmark;
+using namespace intx::literals;
 
 namespace evmone::test
 {
@@ -213,6 +216,36 @@ bytes_view generate_code(CodeParams params)
     code = generate_loop_v2(generate_loop_inner_code(params));  // Cache it.
     return code;
 }
+
+/// Generates the 64 KiB code executing the shift instruction with the given sequence of shift
+/// amounts in a loop. The loop runs as many times as fits in the gas of a transaction at the
+/// EIP-7825 gas limit cap.
+///
+/// The result of each shift is the shifted value of the next one, starting with the seed.
+/// The loop counter is kept below the value on the stack.
+bytecode generate_mainnet_shifts_code(
+    Opcode opcode, std::span<const uint8_t> amounts, const intx::uint256& seed)
+{
+    constexpr int64_t gas_budget = 16'777'216 - 21'000;    // EIP-7825 cap minus intrinsic tx cost.
+    constexpr int64_t prologue_gas = 2 * 3;                // PUSH32 PUSH32
+    constexpr int64_t loop_overhead_gas = 1 + 6 * 3 + 10;  // JUMPDEST ... JUMPI
+
+    bytecode body;
+    for (const auto a : amounts)
+        body += push(a) + opcode;
+    const auto loop_gas = loop_overhead_gas + static_cast<int64_t>(amounts.size()) * (3 + 3);
+    const auto num_iterations = (gas_budget - prologue_gas) / loop_gas;
+
+    const auto counter = push(-intx::uint256{static_cast<uint64_t>(num_iterations)});
+    const auto loop_offset = counter.size() + push(seed).size();
+    auto code = counter + push(seed) + OP_JUMPDEST + body +  // loop label + shifts
+                OP_SWAP1 + push(1) + OP_ADD + OP_SWAP1 +     // counter += 1
+                OP_DUP2 + push(loop_offset) + OP_JUMPI +     // jump to loop if counter != 0
+                OP_STOP;
+    if (code.size() > 0x10000)
+        throw std::length_error{"mainnet shifts code exceeds 64 KiB"};
+    return code;
+}
 }  // namespace
 
 void register_synthetic_benchmarks()
@@ -266,6 +299,33 @@ void register_synthetic_benchmarks()
                 bench_name(std::string{vm_name} + "/total/synth/" + to_string(params)),
                 [&vm, params](
                     State& state) { bench_evmc_execute(state, vm, generate_code(params)); })
+                ->Unit(kMicrosecond);
+        }
+    }
+
+    // Shifts with the shift amounts in the order observed on mainnet.
+    // For SAR, the negative seed keeps the sign bits set while the non-negative one drains to 0.
+    constexpr auto seed = 0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef_u256;
+    const struct
+    {
+        const char* name;
+        Opcode opcode;
+        std::span<const uint8_t> amounts;
+        intx::uint256 seed;
+    } mainnet_shifts[]{
+        {"SHL", OP_SHL, mainnet_shift_amounts::shl, seed},
+        {"SHR", OP_SHR, mainnet_shift_amounts::shr, seed},
+        {"SAR_pos", OP_SAR, mainnet_shift_amounts::sar, seed},
+        {"SAR_neg", OP_SAR, mainnet_shift_amounts::sar, ~seed},
+    };
+    for (const auto& [name, opcode, amounts, seed_value] : mainnet_shifts)
+    {
+        bytes code = generate_mainnet_shifts_code(opcode, amounts, seed_value);
+        for (auto& [vm_name, vm] : registered_vms)
+        {
+            RegisterBenchmark(
+                bench_name(std::string{vm_name} + "/total/synth/mainnet_shifts/" + name),
+                [&vm, code](State& state) { bench_evmc_execute(state, vm, code); })
                 ->Unit(kMicrosecond);
         }
     }
