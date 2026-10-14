@@ -5,9 +5,12 @@
 #include "synthetic_benchmarks.hpp"
 #include "helpers.hpp"
 #include "mainnet_shift_amounts.hpp"
-#include "synth_shift_amounts.hpp"
+#include "mainnet_shift_model.hpp"
 #include "test/utils/bytecode.hpp"
 #include <evmone/instructions_traits.hpp>
+#include <algorithm>
+#include <numeric>
+#include <random>
 #include <span>
 
 using namespace benchmark;
@@ -247,6 +250,42 @@ bytecode generate_mainnet_shifts_code(
         throw std::length_error{"mainnet shifts code exceeds 64 KiB"};
     return code;
 }
+
+/// Picks a shift amount at random with probability proportional to its count.
+///
+/// std::discrete_distribution is not used because its results are implementation-defined,
+/// unlike the std::mt19937_64 sequence. This keeps the generated code the same everywhere.
+uint8_t pick_amount(std::span<const mainnet_shift_model::AmountCount> choices, std::mt19937_64& rng)
+{
+    std::vector<uint64_t> cumulative(choices.size());
+    std::transform_inclusive_scan(
+        choices.begin(), choices.end(), cumulative.begin(), std::plus{},
+        [](const auto& c) { return uint64_t{c.count}; }, uint64_t{0});
+    const auto r = rng() % cumulative.back();
+    const auto i = std::ranges::upper_bound(cumulative, r) - cumulative.begin();
+    return choices[static_cast<size_t>(i)].amount;
+}
+
+/// Samples n shift amounts from the model: independent draws from the histogram
+/// or the first-order Markov chain.
+std::vector<uint8_t> sample_shift_amounts(
+    const mainnet_shift_model::Model& model, size_t n, bool markov)
+{
+    std::mt19937_64 rng;  // Default seed for reproducibility.
+    std::vector<uint8_t> amounts;
+    amounts.reserve(n);
+    amounts.push_back(pick_amount(model.histogram, rng));
+    while (amounts.size() < n)
+    {
+        const auto prev = amounts.back();
+        const size_t row_begin = model.row_offsets[prev];
+        const size_t row_end = model.row_offsets[prev + 1u];
+        const auto row = model.transitions.subspan(row_begin, row_end - row_begin);
+        // Fall back to the histogram for an amount never followed by another one.
+        amounts.push_back(pick_amount(markov && !row.empty() ? row : model.histogram, rng));
+    }
+    return amounts;
+}
 }  // namespace
 
 void register_synthetic_benchmarks()
@@ -307,27 +346,29 @@ void register_synthetic_benchmarks()
     // Shifts with the shift amounts in the order observed on mainnet.
     // For SAR, the negative seed keeps the sign bits set while the non-negative one drains to 0.
     constexpr auto seed = 0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef_u256;
+    // The _iid and _m1 variants use the same number of shift amounts sampled from the models
+    // fitted on the whole mainnet trace: independent draws and the first-order Markov chain.
+    namespace window = mainnet_shift_amounts;
+    namespace model = mainnet_shift_model;
+    constexpr auto n = std::size(window::shl);
+    const auto copy = [](std::span<const uint8_t> a) { return std::vector(a.begin(), a.end()); };
     const struct
     {
         const char* name;
         Opcode opcode;
-        std::span<const uint8_t> amounts;
+        std::vector<uint8_t> amounts;
         intx::uint256 seed;
     } mainnet_shifts[]{
-        {"SHL", OP_SHL, mainnet_shift_amounts::shl, seed},
-        {"SHR", OP_SHR, mainnet_shift_amounts::shr, seed},
-        {"SAR_pos", OP_SAR, mainnet_shift_amounts::sar, seed},
-        {"SAR_neg", OP_SAR, mainnet_shift_amounts::sar, ~seed},
-        // Synthetic sequences from models fitted on the whole mainnet trace.
-        {"SHL_iid", OP_SHL, synth_shift_amounts::shl_iid, seed},
-        {"SHL_m1", OP_SHL, synth_shift_amounts::shl_m1, seed},
-        {"SHL_m2", OP_SHL, synth_shift_amounts::shl_m2, seed},
-        {"SHR_iid", OP_SHR, synth_shift_amounts::shr_iid, seed},
-        {"SHR_m1", OP_SHR, synth_shift_amounts::shr_m1, seed},
-        {"SHR_m2", OP_SHR, synth_shift_amounts::shr_m2, seed},
-        {"SAR_neg_iid", OP_SAR, synth_shift_amounts::sar_iid, ~seed},
-        {"SAR_neg_m1", OP_SAR, synth_shift_amounts::sar_m1, ~seed},
-        {"SAR_neg_m2", OP_SAR, synth_shift_amounts::sar_m2, ~seed},
+        {"SHL", OP_SHL, copy(window::shl), seed},
+        {"SHR", OP_SHR, copy(window::shr), seed},
+        {"SAR_pos", OP_SAR, copy(window::sar), seed},
+        {"SAR_neg", OP_SAR, copy(window::sar), ~seed},
+        {"SHL_iid", OP_SHL, sample_shift_amounts(model::shl, n, false), seed},
+        {"SHL_m1", OP_SHL, sample_shift_amounts(model::shl, n, true), seed},
+        {"SHR_iid", OP_SHR, sample_shift_amounts(model::shr, n, false), seed},
+        {"SHR_m1", OP_SHR, sample_shift_amounts(model::shr, n, true), seed},
+        {"SAR_neg_iid", OP_SAR, sample_shift_amounts(model::sar, n, false), ~seed},
+        {"SAR_neg_m1", OP_SAR, sample_shift_amounts(model::sar, n, true), ~seed},
     };
     for (const auto& [name, opcode, amounts, seed_value] : mainnet_shifts)
     {

@@ -35,6 +35,8 @@ Shift amounts greater than 255 (6 SHL, 135 SHR) are skipped by the scripts.
 - `select_shift_windows.py <trace_dir> <out.hpp>` generates `mainnet_shift_amounts.hpp`:
   for each instruction, the window of consecutive amounts filling the 64 KiB benchmark code
   with the amount distribution closest to the overall one.
-- `gen_synth_shifts.py <trace_dir> <out.hpp>` generates `synth_shift_amounts.hpp`:
-  sequences of the same length sampled from models fitted on the whole trace
-  (independent draws, first- and second-order Markov chains).
+- `gen_shift_amount_model.py <trace_dir> <out.hpp>` generates `mainnet_shift_model.hpp`:
+  models fitted on the whole trace, the shift amount histogram and the first-order Markov
+  chain (for each amount, the counts of the amounts directly following it, keeping the most
+  frequent ones covering 99% of the row). The benchmarks sample sequences from these models
+  with `std::mt19937_64`, so the generated code is the same with every standard library.
