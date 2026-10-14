@@ -35,11 +35,27 @@ jobs:
             cl /nologo /O1 /EHsc ci-cpu-probe\cpuprobe.cpp
             .\cpuprobe.exe
 
+  probe-machine:
+    parameters:
+      rc:
+        type: string
+    machine:
+      image: ubuntu-2404:current
+    resource_class: << parameters.rc >>
+    parallelism: 6
+    steps:
+      - checkout
+      - run:
+          name: "Probe"
+          command: |
+            echo "KERNEL $(grep -m1 'model name' /proc/cpuinfo) | $(for f in avx2 bmi2 adx; do grep -qw $f /proc/cpuinfo && printf '%s=1 ' $f || printf '%s=0 ' $f; done)"
+            g++ -O1 -o cpuprobe ci-cpu-probe/cpuprobe.cpp && ./cpuprobe
+
 workflows:
   probe:
     jobs:
-      - probe-linux:
+      # The docker and Windows probes ran in the previous commit.
+      - probe-machine:
           matrix:
             parameters:
-              rc: [small, medium, large, xlarge]
-      - probe-windows
+              rc: [medium, large, xlarge, 2xlarge]

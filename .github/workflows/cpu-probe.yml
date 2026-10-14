@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ci/cpu-probe
+    paths:
+      - .github/workflows/cpu-probe.yml
+      - ci-cpu-probe/**
 
 permissions:
   contents: read
