@@ -5,6 +5,7 @@
 #include "synthetic_benchmarks.hpp"
 #include "helpers.hpp"
 #include "mainnet_shift_amounts.hpp"
+#include "synth_shift_amounts.hpp"
 #include "test/utils/bytecode.hpp"
 #include <evmone/instructions_traits.hpp>
 #include <span>
@@ -317,6 +318,16 @@ void register_synthetic_benchmarks()
         {"SHR", OP_SHR, mainnet_shift_amounts::shr, seed},
         {"SAR_pos", OP_SAR, mainnet_shift_amounts::sar, seed},
         {"SAR_neg", OP_SAR, mainnet_shift_amounts::sar, ~seed},
+        // Synthetic sequences from models fitted on the whole mainnet trace.
+        {"SHL_iid", OP_SHL, synth_shift_amounts::shl_iid, seed},
+        {"SHL_m1", OP_SHL, synth_shift_amounts::shl_m1, seed},
+        {"SHL_m2", OP_SHL, synth_shift_amounts::shl_m2, seed},
+        {"SHR_iid", OP_SHR, synth_shift_amounts::shr_iid, seed},
+        {"SHR_m1", OP_SHR, synth_shift_amounts::shr_m1, seed},
+        {"SHR_m2", OP_SHR, synth_shift_amounts::shr_m2, seed},
+        {"SAR_neg_iid", OP_SAR, synth_shift_amounts::sar_iid, ~seed},
+        {"SAR_neg_m1", OP_SAR, synth_shift_amounts::sar_m1, ~seed},
+        {"SAR_neg_m2", OP_SAR, synth_shift_amounts::sar_m2, ~seed},
     };
     for (const auto& [name, opcode, amounts, seed_value] : mainnet_shifts)
     {

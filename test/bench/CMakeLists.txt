@@ -10,6 +10,7 @@ target_sources(
     bench.cpp
     helpers.hpp
     mainnet_shift_amounts.hpp
+    synth_shift_amounts.hpp
     synthetic_benchmarks.cpp synthetic_benchmarks.hpp
 )
 
