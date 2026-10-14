@@ -1,0 +1,48 @@
+name: CPU probe
+
+on:
+  push:
+    branches:
+      - ci/cpu-probe
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-22.04, windows-2025, windows-2022, macos-15-intel]
+        n: [1, 2, 3, 4, 5, 6]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Probe (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          echo "KERNEL $(grep -m1 'model name' /proc/cpuinfo) | $(for f in avx2 bmi2 adx; do grep -qw $f /proc/cpuinfo && printf '%s=1 ' $f || printf '%s=0 ' $f; done)"
+          g++ -O1 -o cpuprobe ci-cpu-probe/cpuprobe.cpp && ./cpuprobe
+      - name: Probe (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          clang++ -O1 -o cpuprobe ci-cpu-probe/cpuprobe.cpp && ./cpuprobe
+      - name: Probe (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          & "$vs\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -SkipAutomaticLocation
+          cl /nologo /O1 /EHsc ci-cpu-probe\cpuprobe.cpp
+          .\cpuprobe.exe
+
+  valgrind:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Probe under Valgrind
+        run: |
+          sudo apt-get install -y -q valgrind > /dev/null
+          g++ -O1 -o cpuprobe ci-cpu-probe/cpuprobe.cpp
+          ./cpuprobe
+          valgrind -q --tool=none ./cpuprobe | sed 's/^PROBE/VALGRIND/'
