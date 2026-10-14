@@ -118,16 +118,11 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         }
         if (!requests_error)
         {
-            auto block_end =
-                state::system_call_block_end(block_state, block, block_hashes, rev, vm);
-            if (const auto* ec = std::get_if<std::error_code>(&block_end))
-                requests_error = *ec;
-            else
-            {
-                auto& rr = std::get<state::RequestsResult>(block_end);
-                apply(txs.size() + 1, rr.state_diff);
-                std::ranges::move(rr.requests, std::back_inserter(requests));
-            }
+            // A failure keeps the reads and changes of the calls before it.
+            auto rr = state::system_call_block_end(block_state, block, block_hashes, rev, vm);
+            apply(txs.size() + 1, rr.state_diff);
+            requests_error = rr.error;
+            std::ranges::move(rr.requests, std::back_inserter(requests));
         }
     }
 

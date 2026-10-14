@@ -255,6 +255,9 @@ TEST(tooling_t8n, block_access_list_over_the_gas_limit_fails_the_block)
     const auto no_requests =
         json::parse(run_t8n(ALLOC_WITH_BEACON_ROOTS_JSON, "[]", EVMC_AMSTERDAM, env));
     EXPECT_EQ(no_requests.at("blockException"), "BlockException.SYSTEM_CONTRACT_EMPTY");
+    // The block access list keeps the read of the missing withdrawal request contract.
+    EXPECT_THAT(no_requests.at("blockAccessList").get<std::string>(),
+        HasSubstr("00000961ef480eb55e80d19ad83579a64c007002"));
 }
 
 TEST(tooling_t8n, no_inputs_no_outputs)

@@ -7,7 +7,6 @@
 #include "transaction.hpp"
 #include <evmc/evmc.hpp>
 #include <system_error>
-#include <variant>
 
 namespace evmone::state
 {
@@ -52,6 +51,7 @@ struct RequestsResult
 {
     StateDiff state_diff;            ///< State diff of the system contracts execution.
     std::vector<Requests> requests;  ///< Collected requests.
+    std::error_code error;           ///< Why the requests collection failed, if it did.
 };
 
 /// Performs the system call: invokes system contracts that have to be executed
@@ -60,10 +60,9 @@ struct RequestsResult
 /// Executes code of pre-defined accounts via pseudo-transaction from the system sender (0xff...fe).
 /// The sender's nonce is not increased.
 /// @return The collected requests and state diff, or the error code identifying why the block
-///         requests collection failed.
-[[nodiscard]] std::variant<RequestsResult, std::error_code> system_call_block_end(
-    const StateView& state_view, const BlockInfo& block, const BlockHashes& block_hashes,
-    evmc_revision rev, evmc::VM& vm);
+///         requests collection failed and the state diff of the calls made before the failure.
+[[nodiscard]] RequestsResult system_call_block_end(const StateView& state_view,
+    const BlockInfo& block, const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm);
 
 /// Emit an ETH transfer log (LOG3) from SYSTEM_ADDRESS for a value transfer (EIP-7708).
 void emit_transfer_log(
