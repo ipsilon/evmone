@@ -12,6 +12,54 @@
 
 namespace evmone::test
 {
+StateCaseResult execute_state_case(const StateTransitionTest& test, evmc_revision rev,
+    const state::BlockInfo& block, const StateTransitionTest::Case::Expectation& expected,
+    evmc::VM& vm)
+{
+    StateCaseResult result;
+    std::error_code error;
+    if (expected.txbytes.has_value())
+    {
+        result.tx = state::decode_transaction(*expected.txbytes);
+        if (!result.tx.has_value())
+        {
+            error = make_error_code(state::INVALID_ENCODING);
+        }
+        else
+        {
+            // Recover the signer, as a node does, instead of taking it from JSON.
+            const auto sender = state::recover_sender(*result.tx, *expected.txbytes);
+            if (sender.has_value())
+                result.tx->sender = *sender;
+            else
+                error = make_error_code(state::INVALID_SIGNATURE);
+        }
+    }
+    else
+    {
+        result.tx = test.multi_tx.get(expected.indexes);
+    }
+
+    auto state = test.pre_state;
+    const auto blob_params = get_blob_params(rev, test.blob_schedule);
+    result.result = error ? error :
+                            transition(state, block, test.block_hashes, *result.tx, rev, vm,
+                                block.gas_limit, block.gas_limit,
+                                static_cast<int64_t>(state::max_blob_gas_per_block(blob_params)));
+
+    if (holds_alternative<state::TransactionReceipt>(result.result))
+    {
+        // If the transaction is valid, follow the state test convention and do minimal
+        // block post-processing with the block reward of 0.
+        finalize(state, rev, block.coinbase, 0, {}, {});
+    }
+
+    result.state_root = state::mpt_hash(state);
+    const auto* const receipt = get_if<state::TransactionReceipt>(&result.result);
+    result.logs_hash = receipt != nullptr ? logs_hash(receipt->logs) : logs_hash({});
+    return result;
+}
+
 void run_state_test(const StateTransitionTest& test, evmc::VM& vm, const StateTestOptions& options,
     TestReport& report)
 {
@@ -28,54 +76,12 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, const StateTe
             //     continue;
 
             const auto& expected = cases[case_index];
-            auto state = test.pre_state;
-            const auto blob_params = get_blob_params(rev, test.blob_schedule);
+            const auto [tx, res, state_root, logs_hash] =
+                execute_state_case(test, rev, block, expected, vm);
 
-            std::optional<state::Transaction> tx;
-            std::error_code error;
-            if (expected.txbytes.has_value())
-            {
-                tx = state::decode_transaction(*expected.txbytes);
-                if (!tx.has_value())
-                {
-                    error = make_error_code(state::INVALID_ENCODING);
-                }
-                else
-                {
-                    // Decoding is the inverse of encoding: what decoded must encode back exactly.
-                    report.check_eq("transaction re-encoding", rlp::encode(*tx), *expected.txbytes);
-
-                    // Recover the signer, as a node does, instead of taking it from JSON.
-                    const auto sender = state::recover_sender(*tx, *expected.txbytes);
-                    if (sender.has_value())
-                        tx->sender = *sender;
-                    else
-                        error = make_error_code(state::INVALID_SIGNATURE);
-                }
-            }
-            else
-            {
-                tx = test.multi_tx.get(expected.indexes);
-            }
-
-            const auto res =
-                error ? error :
-                        transition(state, block, test.block_hashes, *tx, rev, vm, block.gas_limit,
-                            block.gas_limit,
-                            static_cast<int64_t>(state::max_blob_gas_per_block(blob_params)));
-
-            if (holds_alternative<state::TransactionReceipt>(res))
-            {
-                // If the transaction is valid, follow the state test convention and do minimal
-                // block post-processing with the block reward of 0.
-                finalize(state, rev, block.coinbase, 0, {}, {});
-            }
-
-            const auto state_root = state::mpt_hash(state);
-
-            const auto* const receipt = get_if<state::TransactionReceipt>(&res);
-            const auto logs_hash =
-                receipt != nullptr ? test::logs_hash(receipt->logs) : test::logs_hash({});
+            // Decoding is the inverse of encoding: what decoded must encode back exactly.
+            if (expected.txbytes.has_value() && tx.has_value())
+                report.check_eq("transaction re-encoding", rlp::encode(*tx), *expected.txbytes);
 
             if (options.trace_summary || options.state_diff)
             {
