@@ -645,7 +645,7 @@ TEST_P(evm, undefined_instructions)
             if (evmone::instr::gas_costs[r][opcode] != evmone::instr::undefined)
                 continue;
 
-            auto res = vm.execute(host, r, {}, &opcode, sizeof(opcode));
+            auto res = vm.execute(execution_context, host, r, {}, &opcode, sizeof(opcode));
             EXPECT_EQ(res.status_code, EVMC_UNDEFINED_INSTRUCTION)
                 << " for opcode " << hex(opcode) << " on revision " << r;
         }
@@ -685,7 +685,8 @@ TEST_P(evm, abort)
     for (auto r = 0; r <= EVMC_MAX_REVISION; ++r)
     {
         auto opcode = uint8_t{0xfe};
-        auto res = vm.execute(host, evmc_revision(r), {}, &opcode, sizeof(opcode));
+        auto res =
+            vm.execute(execution_context, host, evmc_revision(r), {}, &opcode, sizeof(opcode));
         EXPECT_EQ(res.status_code, EVMC_INVALID_INSTRUCTION);
     }
 }

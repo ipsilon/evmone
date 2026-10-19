@@ -81,15 +81,16 @@ bytes32 TestBlockHashes::get_block_hash(int64_t block_number) const noexcept
 
 [[nodiscard]] std::variant<state::TransactionReceipt, std::error_code> transition(TestState& state,
     const state::BlockInfo& block, const state::BlockHashes& block_hashes,
-    const state::Transaction& tx, evmc_revision rev, evmc::VM& vm, int64_t block_gas_left,
-    int64_t block_state_gas_left, int64_t blob_gas_left)
+    const state::Transaction& tx, evmc_revision rev, evmc::VM& vm,
+    evmc_execution_context& execution_context, int64_t block_gas_left, int64_t block_state_gas_left,
+    int64_t blob_gas_left)
 {
     const auto tx_props_or_error = state::validate_transaction(
         state, block, tx, rev, block_gas_left, block_state_gas_left, blob_gas_left);
     if (const auto err = get_if<std::error_code>(&tx_props_or_error))
         return *err;
 
-    auto receipt = state::transition(state, block, block_hashes, tx, rev, vm,
+    auto receipt = state::transition(state, block, block_hashes, tx, rev, vm, execution_context,
         get<state::TransactionProperties>(tx_props_or_error));
     state.apply(receipt.state_diff);
     return receipt;
@@ -104,17 +105,20 @@ void finalize(TestState& state, evmc_revision rev, const address& coinbase,
 }
 
 void system_call_block_start(TestState& state, const state::BlockInfo& block,
-    const state::BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm)
+    const state::BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm,
+    evmc_execution_context& execution_context)
 {
-    const auto diff = state::system_call_block_start(state, block, block_hashes, rev, vm);
+    const auto diff =
+        state::system_call_block_start(state, block, block_hashes, rev, vm, execution_context);
     state.apply(diff);
 }
 
 std::variant<std::vector<state::Requests>, std::error_code> system_call_block_end(TestState& state,
     const state::BlockInfo& block, const state::BlockHashes& block_hashes, evmc_revision rev,
-    evmc::VM& vm)
+    evmc::VM& vm, evmc_execution_context& execution_context)
 {
-    auto result = state::system_call_block_end(state, block, block_hashes, rev, vm);
+    auto result =
+        state::system_call_block_end(state, block, block_hashes, rev, vm, execution_context);
     if (const auto* error = std::get_if<std::error_code>(&result))
         return *error;
     auto& requests_result = std::get<state::RequestsResult>(result);
