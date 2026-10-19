@@ -181,8 +181,8 @@ struct StateTestOptions
 };
 
 /// Execute the state @p test using the @p vm, recording what does not match into @p report.
-void run_state_test(const StateTransitionTest& test, evmc::VM& vm, const StateTestOptions& options,
-    TestReport& report);
+void run_state_test(const StateTransitionTest& test, evmc::VM& vm,
+    evmc_execution_context& execution_context, const StateTestOptions& options, TestReport& report);
 
 /// Computes the hash of the RLP-encoded list of transaction logs.
 /// This method is only used in tests.

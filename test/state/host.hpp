@@ -16,6 +16,7 @@ class Host : public evmc::Host
 {
     evmc_revision m_rev;
     evmc::VM& m_vm;
+    evmc_execution_context& m_execution_context;
     State& m_state;
     const BlockInfo& m_block;
     const BlockHashes& m_block_hashes;
@@ -23,9 +24,15 @@ class Host : public evmc::Host
     std::vector<Log> m_logs;
 
 public:
-    Host(evmc_revision rev, evmc::VM& vm, State& state, const BlockInfo& block,
-        const BlockHashes& block_hashes, const Transaction& tx) noexcept
-      : m_rev{rev}, m_vm{vm}, m_state{state}, m_block{block}, m_block_hashes{block_hashes}, m_tx{tx}
+    Host(evmc_revision rev, evmc::VM& vm, evmc_execution_context& execution_context, State& state,
+        const BlockInfo& block, const BlockHashes& block_hashes, const Transaction& tx) noexcept
+      : m_rev{rev},
+        m_vm{vm},
+        m_execution_context{execution_context},
+        m_state{state},
+        m_block{block},
+        m_block_hashes{block_hashes},
+        m_tx{tx}
     {}
 
     [[nodiscard]] std::vector<Log>&& take_logs() noexcept { return std::move(m_logs); }

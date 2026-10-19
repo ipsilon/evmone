@@ -48,5 +48,5 @@ struct T8NArgs
 ///
 /// @param vm    The VM instance. The command may modify/overwrite its config (depends on args).
 /// @param args  The command arguments.
-void t8n(evmc::VM& vm, const T8NArgs& args);
+void t8n(evmc::VM& vm, evmc_execution_context& execution_context, const T8NArgs& args);
 }  // namespace evmone::tooling

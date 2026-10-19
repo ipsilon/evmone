@@ -24,10 +24,10 @@ void ignore_test_files(std::vector<std::filesystem::path>& files, const std::fil
 /// is not a directory. The tests hold @p options and @p vm by reference, so both must outlive
 /// them.
 void collect_tests(std::vector<TestCase>& cases, const std::filesystem::path& root,
-    const RunOptions& options, evmc::VM& vm);
+    const RunOptions& options, evmc::VM& vm, evmc_execution_context& execution_context);
 
 /// Runs the Ethereum tests collected under every path in @p roots, reporting to @p out.
 /// Returns the process exit code.
-[[nodiscard]] int test(evmc::VM& vm, std::span<const std::filesystem::path> roots,
-    const RunOptions& options, std::ostream& out);
+[[nodiscard]] int test(evmc::VM& vm, evmc_execution_context& execution_context,
+    std::span<const std::filesystem::path> roots, const RunOptions& options, std::ostream& out);
 }  // namespace evmone::test

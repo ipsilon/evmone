@@ -5,6 +5,7 @@
 #include <CLI/CLI.hpp>
 #include <evmc/hex.hpp>
 #include <evmone/evmone.h>
+#include <evmone/execution_context.hpp>
 #include <test/utils/run.hpp>
 #include <test/utils/t8n.hpp>
 #include <test/utils/test_collector.hpp>
@@ -94,7 +95,7 @@ const CLI::App& setup_t8n_cmd(CLI::App& app, T8nOptions& opts)
     return cmd;
 }
 
-int exec_t8n_cmd(evmc::VM& vm, const T8nOptions& opts)
+int exec_t8n_cmd(evmc::VM& vm, evmc_execution_context& execution_context, const T8nOptions& opts)
 {
     evmone::tooling::T8NArgs args;
     args.rev = evmone::test::to_rev(opts.state_fork);
@@ -149,7 +150,7 @@ int exec_t8n_cmd(evmc::VM& vm, const T8nOptions& opts)
         };
     }
 
-    evmone::tooling::t8n(vm, args);
+    evmone::tooling::t8n(vm, execution_context, args);
     return 0;
 }
 
@@ -180,8 +181,8 @@ const CLI::App& setup_test_cmd(
     return cmd;
 }
 
-int exec_test_cmd(evmc::VM& vm, std::span<const fs::path> paths, evmone::test::RunOptions opts,
-    bool trace, bool histogram)
+int exec_test_cmd(evmc::VM& vm, evmc_execution_context& execution_context,
+    std::span<const fs::path> paths, evmone::test::RunOptions opts, bool trace, bool histogram)
 {
     // main() has switched the tracer on already. Its line per instruction is worth
     // unsynchronising the streams for, and anything it writes per test would run into the
@@ -191,7 +192,7 @@ int exec_test_cmd(evmc::VM& vm, std::span<const fs::path> paths, evmone::test::R
     opts.trace_summary |= trace;
     opts.progress = !(opts.trace_summary || opts.state_diff || histogram);
 
-    return evmone::test::test(vm, paths, opts, std::cout);
+    return evmone::test::test(vm, execution_context, paths, opts, std::cout);
 }
 
 }  // namespace
@@ -214,6 +215,7 @@ int main(int argc, const char* const* argv) noexcept
         auto histogram = false;
 
         VM vm{evmc_create_evmone()};
+        evmone::ExecutionContext execution_context;
 
         CLI::App app{"evmone EVM tool"};
         app.require_subcommand(0, 1);  // Forbid multiple subcommands: run would hijack the rest.
@@ -259,14 +261,16 @@ int main(int argc, const char* const* argv) noexcept
                 // If code_arg or input_arg contains invalid hex string, an exception is thrown.
                 const auto code = load_from_hex(code_arg);
                 const auto input = load_from_hex(input_arg);
-                return evmone::tooling::run(vm, rev, gas, code, input, create, bench, std::cout);
+                return evmone::tooling::run(
+                    vm, execution_context, rev, gas, code, input, create, bench, std::cout);
             }
 
             if (t8n_cmd)
-                return exec_t8n_cmd(vm, t8n_opts);
+                return exec_t8n_cmd(vm, execution_context, t8n_opts);
 
             if (test_cmd)
-                return exec_test_cmd(vm, test_paths, test_opts, trace, histogram);
+                return exec_test_cmd(
+                    vm, execution_context, test_paths, test_opts, trace, histogram);
 
             return 0;
         }

@@ -82,5 +82,6 @@ std::vector<BlockchainTest> load_blockchain_tests(std::istream& input);
 BlockchainTest make_blockchain_test(const std::string& name, const json::json& j);
 
 /// Execute the blockchain @p test using the @p vm, recording what does not match into @p report.
-void run_blockchain_test(const BlockchainTest& test, evmc::VM& vm, TestReport& report);
+void run_blockchain_test(const BlockchainTest& test, evmc::VM& vm,
+    evmc_execution_context& execution_context, TestReport& report);
 }  // namespace evmone::test

@@ -809,7 +809,7 @@ StateDiff finalize(const StateView& state_view, evmc_revision rev, const address
 
 TransactionReceipt transition(const StateView& state_view, const BlockInfo& block,
     const BlockHashes& block_hashes, const Transaction& tx, evmc_revision rev, evmc::VM& vm,
-    const TransactionProperties& tx_props)
+    evmc_execution_context& execution_context, const TransactionProperties& tx_props)
 {
     State state{state_view};
 
@@ -840,7 +840,7 @@ TransactionReceipt transition(const StateView& state_view, const BlockInfo& bloc
         sender_acc.balance -= intx::uint256(blob_fee);
     }
 
-    Host host{rev, vm, state, block, block_hashes, tx};
+    Host host{rev, vm, execution_context, state, block, block_hashes, tx};
 
     const auto message = build_message(tx, tx_props);
 
