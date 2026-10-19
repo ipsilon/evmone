@@ -221,7 +221,8 @@ std::string print_state(const TestState& s)
 }
 }  // namespace
 
-void run_blockchain_test(const BlockchainTest& test, evmc::VM& vm, TestReport& report)
+void run_blockchain_test(const BlockchainTest& test, evmc::VM& vm,
+    evmc_execution_context& execution_context, TestReport& report)
 {
     const auto rev_schedule = to_rev_schedule(test.network);
     report.start_case(test.name);
@@ -300,8 +301,8 @@ void run_blockchain_test(const BlockchainTest& test, evmc::VM& vm, TestReport& r
             assert(parent_data_it != block_data.end());
             const auto& pre_state = parent_data_it->second.post_state;
 
-            auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions, rev,
-                blob_gas_limit, {.block_reward = mining_reward(rev)});
+            auto res = apply_block(pre_state, vm, execution_context, bi, block_hashes,
+                test_block.transactions, rev, blob_gas_limit, {.block_reward = mining_reward(rev)});
 
             if (res.requests_error)
             {
@@ -396,8 +397,8 @@ void run_blockchain_test(const BlockchainTest& test, evmc::VM& vm, TestReport& r
             const auto sender_not_recovered = contains_any(
                 test_block.expected_exception, "TransactionException.INVALID_SIGNATURE_VRS");
 
-            const auto res = apply_block(pre_state, vm, bi, block_hashes, test_block.transactions,
-                rev, blob_gas_limit, {.block_reward = mining_reward(rev)});
+            const auto res = apply_block(pre_state, vm, execution_context, bi, block_hashes,
+                test_block.transactions, rev, blob_gas_limit, {.block_reward = mining_reward(rev)});
             if (!res.rejected.empty())
             {
                 // A transaction was rejected: the fixture must name that reason, not merely

@@ -4,6 +4,7 @@
 
 #include "baseline.hpp"
 #include "baseline_instruction_table.hpp"
+#include "execution_context.hpp"
 #include "execution_state.hpp"
 #include "instructions.hpp"
 #include "vm.hpp"
@@ -262,14 +263,15 @@ TARGET_OP_UNDEFINED:
 #endif
 }  // namespace
 
-evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* ctx,
-    evmc_revision rev, const evmc_message& msg, const CodeAnalysis& analysis) noexcept
+evmc_result execute(VM& vm, ExecutionContext& execution_context, const evmc_host_interface& host,
+    evmc_host_context* ctx, evmc_revision rev, const evmc_message& msg,
+    const CodeAnalysis& analysis) noexcept
 {
     const auto code = analysis.code();
     const auto code_begin = code.data();
     auto gas = msg.gas;
 
-    auto& state = vm.get_execution_state(static_cast<size_t>(msg.depth));
+    auto& state = execution_context.get_execution_state(static_cast<size_t>(msg.depth));
     state.reset(msg, rev, host, ctx, code);
 
     state.analysis.baseline = &analysis;  // Assign code analysis for instruction implementations.
@@ -300,13 +302,15 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
     return result;
 }
 
-evmc_result execute(evmc_vm* c_vm, const evmc_host_interface* host, evmc_host_context* ctx,
-    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size) noexcept
+evmc_result execute(evmc_vm* c_vm, evmc_execution_context* execution_context,
+    const evmc_host_interface* host, evmc_host_context* ctx, evmc_revision rev,
+    const evmc_message* msg, const uint8_t* code, size_t code_size) noexcept
 {
     auto vm = static_cast<VM*>(c_vm);
     const bytes_view container{code, code_size};
 
     const auto code_analysis = analyze(container);
-    return execute(*vm, *host, ctx, rev, *msg, code_analysis);
+    return execute(*vm, static_cast<ExecutionContext&>(*execution_context), *host, ctx, rev, *msg,
+        code_analysis);
 }
 }  // namespace evmone::baseline
