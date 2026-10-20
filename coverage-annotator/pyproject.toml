@@ -1,0 +1,18 @@
+[project]
+name = "coverage-annotator"
+version = "0.1.0"
+description = "Add annotation column to HTML coverage reports using a JSON mapping"
+authors = [{ name = "Your Name" }]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.9"
+
+dependencies = [
+    "beautifulsoup4>=4.12",
+]
+
+[project.scripts]
+add-annotations = "coverage_annotator.add_annotations_to_coverage_html:main"
+
+[tool.uv]
+package = true
