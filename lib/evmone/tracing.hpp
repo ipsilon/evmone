@@ -63,6 +63,11 @@ private:
 /// @return     Histogram tracer object.
 EVMC_EXPORT std::unique_ptr<Tracer> create_histogram_tracer(std::ostream& out);
 
+/// Creates an instruction counter which reports opcode counts in JSON format when destroyed.
+///
+/// @param out  Report output stream. Must outlive the returned tracer.
+EVMC_EXPORT std::unique_ptr<Tracer> create_instruction_counter(std::ostream& out);
+
 EVMC_EXPORT std::unique_ptr<Tracer> create_instruction_counter(std::string_view out_file_path);
 
 EVMC_EXPORT std::unique_ptr<Tracer> create_instruction_tracer(std::ostream& out);
