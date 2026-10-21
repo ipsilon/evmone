@@ -1,0 +1,47 @@
+# evmone: Fast Ethereum Virtual Machine implementation
+# Copyright 2026 The evmone Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+name: RISC-V
+
+on:
+  push:
+    branches:
+      - master
+      - ci/riscv64-probe
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  riscv64:
+    # Native build on the RISE project runners (4 T-Head C910 cores):
+    # https://riscv-runners.riseproject.dev.
+    # Debug without debug info builds fastest; the precompiles still get -O1.
+    runs-on: ubuntu-24.04-riscv
+    timeout-minutes: 60
+    env:
+      CC: clang-18
+      CXX: clang++-18
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_FLAGS_DEBUG=-g0
+          -DCMAKE_CXX_FLAGS_DEBUG=-g0
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=TRUE
+          -DEVMONE_TESTING=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --no-tests=error --parallel $(nproc)
