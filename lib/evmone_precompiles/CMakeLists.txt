@@ -20,7 +20,7 @@ target_sources(
     hash_types.h
     keccak.h
     keccak.hpp
-    keccak.c
+    keccak.cpp
     pairing/bn254/fields.hpp
     pairing/bn254/pairing.cpp
     pairing/bn254/utils.hpp
