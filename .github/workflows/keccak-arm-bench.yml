@@ -1,0 +1,26 @@
+name: Keccak ARM benchmark
+
+on:
+  push:
+    branches:
+      - ci/keccak-arm-bench
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build and run the Keccak benchmark
+        run: |
+          for cxx in clang++ g++; do
+            command -v $cxx >/dev/null || continue
+            echo "### $cxx: $($cxx --version | head -1)"
+            $cxx -std=c++20 -O3 bench_keccak_arm.cpp -o bench_$cxx && ./bench_$cxx 2000000 9
+          done
