@@ -89,6 +89,8 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
 
     uint64_t Ba, Be, Bi, Bo, Bu;
 
+    uint64_t Ca, Ce, Ci, Co, Cu;
+
     uint64_t Da, De, Di, Do, Du;
 
     Aba = state[0];
@@ -117,21 +119,21 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
     Aso = state[23];
     Asu = state[24];
 
+    Ca = Aba ^ Aga ^ Aka ^ Ama ^ Asa;
+    Ce = Abe ^ Age ^ Ake ^ Ame ^ Ase;
+    Ci = Abi ^ Agi ^ Aki ^ Ami ^ Asi;
+    Co = Abo ^ Ago ^ Ako ^ Amo ^ Aso;
+    Cu = Abu ^ Agu ^ Aku ^ Amu ^ Asu;
+
     for (size_t n = 0; n < 24; n += 2)
     {
         // Round (n + 0): Axx -> Exx
 
-        Ba = Aba ^ Aga ^ Aka ^ Ama ^ Asa;
-        Be = Abe ^ Age ^ Ake ^ Ame ^ Ase;
-        Bi = Abi ^ Agi ^ Aki ^ Ami ^ Asi;
-        Bo = Abo ^ Ago ^ Ako ^ Amo ^ Aso;
-        Bu = Abu ^ Agu ^ Aku ^ Amu ^ Asu;
-
-        Da = Bu ^ rol(Be, 1);
-        De = Ba ^ rol(Bi, 1);
-        Di = Be ^ rol(Bo, 1);
-        Do = Bi ^ rol(Bu, 1);
-        Du = Bo ^ rol(Ba, 1);
+        Da = Cu ^ rol(Ce, 1);
+        De = Ca ^ rol(Ci, 1);
+        Di = Ce ^ rol(Co, 1);
+        Do = Ci ^ rol(Cu, 1);
+        Du = Co ^ rol(Ca, 1);
 
         Ba = Aba ^ Da;
         Be = rol(Age ^ De, 44);
@@ -139,10 +141,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bo = rol(Amo ^ Do, 21);
         Bu = rol(Asu ^ Du, 14);
         Eba = Ba ^ (~Be & Bi) ^ round_constants[n];
+        Ca = Eba;
         Ebe = Be ^ (~Bi & Bo);
+        Ce = Ebe;
         Ebi = Bi ^ (~Bo & Bu);
+        Ci = Ebi;
         Ebo = Bo ^ (~Bu & Ba);
+        Co = Ebo;
         Ebu = Bu ^ (~Ba & Be);
+        Cu = Ebu;
 
         Ba = rol(Abo ^ Do, 28);
         Be = rol(Agu ^ Du, 20);
@@ -150,10 +157,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bo = rol(Ame ^ De, 45);
         Bu = rol(Asi ^ Di, 61);
         Ega = Ba ^ (~Be & Bi);
+        Ca ^= Ega;
         Ege = Be ^ (~Bi & Bo);
+        Ce ^= Ege;
         Egi = Bi ^ (~Bo & Bu);
+        Ci ^= Egi;
         Ego = Bo ^ (~Bu & Ba);
+        Co ^= Ego;
         Egu = Bu ^ (~Ba & Be);
+        Cu ^= Egu;
 
         Ba = rol(Abe ^ De, 1);
         Be = rol(Agi ^ Di, 6);
@@ -161,10 +173,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bo = rol(Amu ^ Du, 8);
         Bu = rol(Asa ^ Da, 18);
         Eka = Ba ^ (~Be & Bi);
+        Ca ^= Eka;
         Eke = Be ^ (~Bi & Bo);
+        Ce ^= Eke;
         Eki = Bi ^ (~Bo & Bu);
+        Ci ^= Eki;
         Eko = Bo ^ (~Bu & Ba);
+        Co ^= Eko;
         Eku = Bu ^ (~Ba & Be);
+        Cu ^= Eku;
 
         Ba = rol(Abu ^ Du, 27);
         Be = rol(Aga ^ Da, 36);
@@ -172,10 +189,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bo = rol(Ami ^ Di, 15);
         Bu = rol(Aso ^ Do, 56);
         Ema = Ba ^ (~Be & Bi);
+        Ca ^= Ema;
         Eme = Be ^ (~Bi & Bo);
+        Ce ^= Eme;
         Emi = Bi ^ (~Bo & Bu);
+        Ci ^= Emi;
         Emo = Bo ^ (~Bu & Ba);
+        Co ^= Emo;
         Emu = Bu ^ (~Ba & Be);
+        Cu ^= Emu;
 
         Ba = rol(Abi ^ Di, 62);
         Be = rol(Ago ^ Do, 55);
@@ -183,25 +205,24 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bo = rol(Ama ^ Da, 41);
         Bu = rol(Ase ^ De, 2);
         Esa = Ba ^ (~Be & Bi);
+        Ca ^= Esa;
         Ese = Be ^ (~Bi & Bo);
+        Ce ^= Ese;
         Esi = Bi ^ (~Bo & Bu);
+        Ci ^= Esi;
         Eso = Bo ^ (~Bu & Ba);
+        Co ^= Eso;
         Esu = Bu ^ (~Ba & Be);
+        Cu ^= Esu;
 
 
         // Round (n + 1): Exx -> Axx
 
-        Ba = Eba ^ Ega ^ Eka ^ Ema ^ Esa;
-        Be = Ebe ^ Ege ^ Eke ^ Eme ^ Ese;
-        Bi = Ebi ^ Egi ^ Eki ^ Emi ^ Esi;
-        Bo = Ebo ^ Ego ^ Eko ^ Emo ^ Eso;
-        Bu = Ebu ^ Egu ^ Eku ^ Emu ^ Esu;
-
-        Da = Bu ^ rol(Be, 1);
-        De = Ba ^ rol(Bi, 1);
-        Di = Be ^ rol(Bo, 1);
-        Do = Bi ^ rol(Bu, 1);
-        Du = Bo ^ rol(Ba, 1);
+        Da = Cu ^ rol(Ce, 1);
+        De = Ca ^ rol(Ci, 1);
+        Di = Ce ^ rol(Co, 1);
+        Do = Ci ^ rol(Cu, 1);
+        Du = Co ^ rol(Ca, 1);
 
         Ba = Eba ^ Da;
         Be = rol(Ege ^ De, 44);
@@ -209,10 +230,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bo = rol(Emo ^ Do, 21);
         Bu = rol(Esu ^ Du, 14);
         Aba = Ba ^ (~Be & Bi) ^ round_constants[n + 1];
+        Ca = Aba;
         Abe = Be ^ (~Bi & Bo);
+        Ce = Abe;
         Abi = Bi ^ (~Bo & Bu);
+        Ci = Abi;
         Abo = Bo ^ (~Bu & Ba);
+        Co = Abo;
         Abu = Bu ^ (~Ba & Be);
+        Cu = Abu;
 
         Ba = rol(Ebo ^ Do, 28);
         Be = rol(Egu ^ Du, 20);
@@ -220,10 +246,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bo = rol(Eme ^ De, 45);
         Bu = rol(Esi ^ Di, 61);
         Aga = Ba ^ (~Be & Bi);
+        Ca ^= Aga;
         Age = Be ^ (~Bi & Bo);
+        Ce ^= Age;
         Agi = Bi ^ (~Bo & Bu);
+        Ci ^= Agi;
         Ago = Bo ^ (~Bu & Ba);
+        Co ^= Ago;
         Agu = Bu ^ (~Ba & Be);
+        Cu ^= Agu;
 
         Ba = rol(Ebe ^ De, 1);
         Be = rol(Egi ^ Di, 6);
@@ -231,10 +262,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bo = rol(Emu ^ Du, 8);
         Bu = rol(Esa ^ Da, 18);
         Aka = Ba ^ (~Be & Bi);
+        Ca ^= Aka;
         Ake = Be ^ (~Bi & Bo);
+        Ce ^= Ake;
         Aki = Bi ^ (~Bo & Bu);
+        Ci ^= Aki;
         Ako = Bo ^ (~Bu & Ba);
+        Co ^= Ako;
         Aku = Bu ^ (~Ba & Be);
+        Cu ^= Aku;
 
         Ba = rol(Ebu ^ Du, 27);
         Be = rol(Ega ^ Da, 36);
@@ -242,10 +278,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bo = rol(Emi ^ Di, 15);
         Bu = rol(Eso ^ Do, 56);
         Ama = Ba ^ (~Be & Bi);
+        Ca ^= Ama;
         Ame = Be ^ (~Bi & Bo);
+        Ce ^= Ame;
         Ami = Bi ^ (~Bo & Bu);
+        Ci ^= Ami;
         Amo = Bo ^ (~Bu & Ba);
+        Co ^= Amo;
         Amu = Bu ^ (~Ba & Be);
+        Cu ^= Amu;
 
         Ba = rol(Ebi ^ Di, 62);
         Be = rol(Ego ^ Do, 55);
@@ -253,10 +294,15 @@ static inline ALWAYS_INLINE void keccakf1600_implementation(uint64_t state[25])
         Bo = rol(Ema ^ Da, 41);
         Bu = rol(Ese ^ De, 2);
         Asa = Ba ^ (~Be & Bi);
+        Ca ^= Asa;
         Ase = Be ^ (~Bi & Bo);
+        Ce ^= Ase;
         Asi = Bi ^ (~Bo & Bu);
+        Ci ^= Asi;
         Aso = Bo ^ (~Bu & Ba);
+        Co ^= Aso;
         Asu = Bu ^ (~Ba & Be);
+        Cu ^= Asu;
     }
 
     state[0] = Aba;
