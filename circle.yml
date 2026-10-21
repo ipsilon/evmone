@@ -1,34 +1,39 @@
 version: 2.1
 
-commands:
-  bench:
+jobs:
+  macos:
+    parameters:
+      rc: {type: string}
+      xcode: {type: string}
+    resource_class: << parameters.rc >>
+    macos:
+      xcode: << parameters.xcode >>
     steps:
       - checkout
-      - run:
-          name: "Build and run the Keccak benchmark"
-          command: |
-            for cxx in clang++ g++; do
-              command -v $cxx >/dev/null || continue
-              echo "### $cxx: $($cxx --version | head -1)"
-              (lscpu 2>/dev/null | grep -E "Model name|Vendor") || true; $cxx -std=c++20 -O3 bench_keccak_arm.cpp -o bench_$cxx && ./bench_$cxx 2000000 9
-            done
-
-jobs:
-  macos-m4pro:
-    resource_class: m4pro.medium
-    macos:
-      xcode: 26.5
-    steps:
-      - bench
+      - run: kbench/run.sh
   linux-arm:
+    parameters:
+      rc: {type: string}
     machine:
       image: ubuntu-2404:current
-    resource_class: arm.medium
+    resource_class: << parameters.rc >>
     steps:
-      - bench
+      - checkout
+      - run: kbench/run.sh
 
 workflows:
   keccak-arm-bench:
     jobs:
-      - macos-m4pro
-      - linux-arm
+      - macos:
+          matrix:
+            parameters:
+              rc: [m4pro.medium, m4pro.large]
+              xcode: ["26.5"]
+      - macos:
+          name: macos-m2pro
+          rc: m2pro.medium
+          xcode: "16.4.0"
+      - linux-arm:
+          matrix:
+            parameters:
+              rc: [arm.medium, arm.large, arm.xlarge, arm.2xlarge]

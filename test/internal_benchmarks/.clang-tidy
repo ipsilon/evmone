@@ -1,3 +1,0 @@
-InheritParentConfig: true
-Checks: >
-  -clang-analyzer-unix.Malloc
