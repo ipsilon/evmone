@@ -22,5 +22,5 @@ jobs:
           for cxx in clang++ g++; do
             command -v $cxx >/dev/null || continue
             echo "### $cxx: $($cxx --version | head -1)"
-            grep -m1 -E "model name|Hardware" /proc/cpuinfo 2>/dev/null; lscpu 2>/dev/null | grep -E "Model name|Vendor"; $cxx -std=c++20 -O3 bench_keccak_arm.cpp -o bench_$cxx && ./bench_$cxx 2000000 9
+            (lscpu 2>/dev/null | grep -E "Model name|Vendor") || true; $cxx -std=c++20 -O3 bench_keccak_arm.cpp -o bench_$cxx && ./bench_$cxx 2000000 9
           done
