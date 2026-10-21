@@ -9,18 +9,11 @@ permissions:
   contents: read
 
 jobs:
-  tools:
-    runs-on: ubuntu-24.04-riscv
-    steps:
-      - run: |
-          uname -a; nproc; free -g; cat /etc/os-release | head -3
-          ls /usr/bin | grep -E '^(g\+\+|clang\+\+|clang)(-[0-9]+)?$' || true
-          apt-cache policy clang clang-19 clang-20 clang-21 g++-14 g++-15 mold lld 2>/dev/null | grep -E '^[a-z]|Candidate' || true
   build:
     strategy:
       fail-fast: false
       matrix:
-        cxx: [g++-13, g++-14, clang++-18, clang++-19, clang++-20]
+        cxx: [g++-13, clang++-18, clang++-19, clang++-20]
     runs-on: ubuntu-24.04-riscv
     timeout-minutes: 120
     steps:
@@ -29,7 +22,7 @@ jobs:
           submodules: recursive
       - name: Install
         run: |
-          cc=$(echo ${{ matrix.cxx }} | sed 's/g++/gcc/; s/clang++/clang/')
+          cc=$(echo ${{ matrix.cxx }} | sed 's/^clang++/clang/; s/^g++/gcc/')
           pkg=$(echo ${{ matrix.cxx }} | sed 's/clang++/clang/')
           command -v ${{ matrix.cxx }} || (sudo apt-get update -q && sudo apt-get install -y -q $pkg)
           echo "CC=$cc" >> $GITHUB_ENV; echo "CXX=${{ matrix.cxx }}" >> $GITHUB_ENV
