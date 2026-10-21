@@ -1,0 +1,42 @@
+name: RISC-V probe
+
+on:
+  push:
+    branches:
+      - ci/riscv64-probe
+
+permissions:
+  contents: read
+
+jobs:
+  tools:
+    runs-on: ubuntu-24.04-riscv
+    steps:
+      - run: |
+          uname -a; nproc; free -g; cat /etc/os-release | head -3
+          ls /usr/bin | grep -E '^(g\+\+|clang\+\+|clang)(-[0-9]+)?$' || true
+          apt-cache policy clang clang-19 clang-20 clang-21 g++-14 g++-15 mold lld 2>/dev/null | grep -E '^[a-z]|Candidate' || true
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        cxx: [g++-13, g++-14, clang++-18, clang++-19, clang++-20]
+    runs-on: ubuntu-24.04-riscv
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Install
+        run: |
+          cc=$(echo ${{ matrix.cxx }} | sed 's/g++/gcc/; s/clang++/clang/')
+          pkg=$(echo ${{ matrix.cxx }} | sed 's/clang++/clang/')
+          command -v ${{ matrix.cxx }} || (sudo apt-get update -q && sudo apt-get install -y -q $pkg)
+          echo "CC=$cc" >> $GITHUB_ENV; echo "CXX=${{ matrix.cxx }}" >> $GITHUB_ENV
+          ${{ matrix.cxx }} --version | head -1
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DEVMONE_TESTING=ON
+      - name: Build
+        run: time cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --no-tests=error --parallel $(nproc)
