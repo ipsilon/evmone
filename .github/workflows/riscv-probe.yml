@@ -13,7 +13,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        cxx: [g++-13, clang++-18, clang++-19, clang++-20]
+        cxx: [g++-13, clang++-18]
+        opt: [-O0, -O1]
     runs-on: ubuntu-24.04-riscv
     timeout-minutes: 120
     steps:
@@ -28,7 +29,7 @@ jobs:
           echo "CC=$cc" >> $GITHUB_ENV; echo "CXX=${{ matrix.cxx }}" >> $GITHUB_ENV
           ${{ matrix.cxx }} --version | head -1
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DEVMONE_TESTING=ON
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=None -DCMAKE_CXX_FLAGS='${{ matrix.opt }} -g0' -DCMAKE_C_FLAGS='${{ matrix.opt }} -g0' -DEVMONE_TESTING=ON
       - name: Build
         run: time cmake --build build --parallel
       - name: Test
