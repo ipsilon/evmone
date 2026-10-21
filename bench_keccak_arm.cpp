@@ -20,7 +20,7 @@
 #if defined(__ARM_FEATURE_SHA3)
 #define SHA3_TARGET
 #else
-#define SHA3_TARGET [[gnu::target("sha3")]]
+#define SHA3_TARGET [[gnu::target("+sha3")]]
 #endif
 
 namespace {
@@ -665,7 +665,10 @@ int main(int argc, char** argv)
 #else
     std::ifstream ci("/proc/cpuinfo"); std::string line;
     while (std::getline(ci, line))
-        if (line.rfind("CPU part", 0) == 0 || line.rfind("CPU implementer", 0) == 0 || line.rfind("Features", 0) == 0) { std::cout << line << "\n"; if (line.rfind("Features",0)==0) break; }
+    {
+        if (line.rfind("processor", 0) == 0 && line.find(": 0") == std::string::npos) break;
+        if (line.rfind("CPU part", 0) == 0 || line.rfind("CPU implementer", 0) == 0 || line.rfind("CPU variant", 0) == 0) std::cout << line << "\n";
+    }
 #endif
     const bool sha3 = has_sha3();
     std::printf("sha3: %d\n", sha3);
