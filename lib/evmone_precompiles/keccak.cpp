@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "keccak.h"
+#include <bit>
 
 // Provide __has_builtin macro if not defined.
 #ifndef __has_builtin
@@ -33,13 +34,6 @@ namespace
     uint64_t word = 0;
     __builtin_memcpy(&word, data, sizeof(word));
     return to_le64(word);
-}
-
-/// Rotates the bits of x left by the count value specified by s.
-/// The s must be in range <0, 64> exclusively, otherwise the result is undefined.
-inline uint64_t rol(uint64_t x, unsigned s)
-{
-    return (x << s) | (x >> (64 - s));
 }
 
 constexpr uint64_t ROUND_CONSTANTS[24] = {  //
@@ -99,17 +93,17 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
     {
         // Round (n + 0): Axx -> Exx
 
-        auto Da = Cu ^ rol(Ce, 1);
-        auto De = Ca ^ rol(Ci, 1);
-        auto Di = Ce ^ rol(Co, 1);
-        auto Do = Ci ^ rol(Cu, 1);
-        auto Du = Co ^ rol(Ca, 1);
+        auto Da = Cu ^ std::rotl(Ce, 1);
+        auto De = Ca ^ std::rotl(Ci, 1);
+        auto Di = Ce ^ std::rotl(Co, 1);
+        auto Do = Ci ^ std::rotl(Cu, 1);
+        auto Du = Co ^ std::rotl(Ca, 1);
 
         auto Ba = Aba ^ Da;
-        auto Be = rol(Age ^ De, 44);
-        auto Bi = rol(Aki ^ Di, 43);
-        auto Bo = rol(Amo ^ Do, 21);
-        auto Bu = rol(Asu ^ Du, 14);
+        auto Be = std::rotl(Age ^ De, 44);
+        auto Bi = std::rotl(Aki ^ Di, 43);
+        auto Bo = std::rotl(Amo ^ Do, 21);
+        auto Bu = std::rotl(Asu ^ Du, 14);
         const auto Eba = Ba ^ (~Be & Bi) ^ ROUND_CONSTANTS[n];
         Ca = Eba;
         const auto Ebe = Be ^ (~Bi & Bo);
@@ -121,11 +115,11 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
         const auto Ebu = Bu ^ (~Ba & Be);
         Cu = Ebu;
 
-        Ba = rol(Abo ^ Do, 28);
-        Be = rol(Agu ^ Du, 20);
-        Bi = rol(Aka ^ Da, 3);
-        Bo = rol(Ame ^ De, 45);
-        Bu = rol(Asi ^ Di, 61);
+        Ba = std::rotl(Abo ^ Do, 28);
+        Be = std::rotl(Agu ^ Du, 20);
+        Bi = std::rotl(Aka ^ Da, 3);
+        Bo = std::rotl(Ame ^ De, 45);
+        Bu = std::rotl(Asi ^ Di, 61);
         const auto Ega = Ba ^ (~Be & Bi);
         Ca ^= Ega;
         const auto Ege = Be ^ (~Bi & Bo);
@@ -137,11 +131,11 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
         const auto Egu = Bu ^ (~Ba & Be);
         Cu ^= Egu;
 
-        Ba = rol(Abe ^ De, 1);
-        Be = rol(Agi ^ Di, 6);
-        Bi = rol(Ako ^ Do, 25);
-        Bo = rol(Amu ^ Du, 8);
-        Bu = rol(Asa ^ Da, 18);
+        Ba = std::rotl(Abe ^ De, 1);
+        Be = std::rotl(Agi ^ Di, 6);
+        Bi = std::rotl(Ako ^ Do, 25);
+        Bo = std::rotl(Amu ^ Du, 8);
+        Bu = std::rotl(Asa ^ Da, 18);
         const auto Eka = Ba ^ (~Be & Bi);
         Ca ^= Eka;
         const auto Eke = Be ^ (~Bi & Bo);
@@ -153,11 +147,11 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
         const auto Eku = Bu ^ (~Ba & Be);
         Cu ^= Eku;
 
-        Ba = rol(Abu ^ Du, 27);
-        Be = rol(Aga ^ Da, 36);
-        Bi = rol(Ake ^ De, 10);
-        Bo = rol(Ami ^ Di, 15);
-        Bu = rol(Aso ^ Do, 56);
+        Ba = std::rotl(Abu ^ Du, 27);
+        Be = std::rotl(Aga ^ Da, 36);
+        Bi = std::rotl(Ake ^ De, 10);
+        Bo = std::rotl(Ami ^ Di, 15);
+        Bu = std::rotl(Aso ^ Do, 56);
         const auto Ema = Ba ^ (~Be & Bi);
         Ca ^= Ema;
         const auto Eme = Be ^ (~Bi & Bo);
@@ -169,11 +163,11 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
         const auto Emu = Bu ^ (~Ba & Be);
         Cu ^= Emu;
 
-        Ba = rol(Abi ^ Di, 62);
-        Be = rol(Ago ^ Do, 55);
-        Bi = rol(Aku ^ Du, 39);
-        Bo = rol(Ama ^ Da, 41);
-        Bu = rol(Ase ^ De, 2);
+        Ba = std::rotl(Abi ^ Di, 62);
+        Be = std::rotl(Ago ^ Do, 55);
+        Bi = std::rotl(Aku ^ Du, 39);
+        Bo = std::rotl(Ama ^ Da, 41);
+        Bu = std::rotl(Ase ^ De, 2);
         const auto Esa = Ba ^ (~Be & Bi);
         Ca ^= Esa;
         const auto Ese = Be ^ (~Bi & Bo);
@@ -188,17 +182,17 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
 
         // Round (n + 1): Exx -> Axx
 
-        Da = Cu ^ rol(Ce, 1);
-        De = Ca ^ rol(Ci, 1);
-        Di = Ce ^ rol(Co, 1);
-        Do = Ci ^ rol(Cu, 1);
-        Du = Co ^ rol(Ca, 1);
+        Da = Cu ^ std::rotl(Ce, 1);
+        De = Ca ^ std::rotl(Ci, 1);
+        Di = Ce ^ std::rotl(Co, 1);
+        Do = Ci ^ std::rotl(Cu, 1);
+        Du = Co ^ std::rotl(Ca, 1);
 
         Ba = Eba ^ Da;
-        Be = rol(Ege ^ De, 44);
-        Bi = rol(Eki ^ Di, 43);
-        Bo = rol(Emo ^ Do, 21);
-        Bu = rol(Esu ^ Du, 14);
+        Be = std::rotl(Ege ^ De, 44);
+        Bi = std::rotl(Eki ^ Di, 43);
+        Bo = std::rotl(Emo ^ Do, 21);
+        Bu = std::rotl(Esu ^ Du, 14);
         Aba = Ba ^ (~Be & Bi) ^ ROUND_CONSTANTS[n + 1];
         Ca = Aba;
         Abe = Be ^ (~Bi & Bo);
@@ -210,11 +204,11 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
         Abu = Bu ^ (~Ba & Be);
         Cu = Abu;
 
-        Ba = rol(Ebo ^ Do, 28);
-        Be = rol(Egu ^ Du, 20);
-        Bi = rol(Eka ^ Da, 3);
-        Bo = rol(Eme ^ De, 45);
-        Bu = rol(Esi ^ Di, 61);
+        Ba = std::rotl(Ebo ^ Do, 28);
+        Be = std::rotl(Egu ^ Du, 20);
+        Bi = std::rotl(Eka ^ Da, 3);
+        Bo = std::rotl(Eme ^ De, 45);
+        Bu = std::rotl(Esi ^ Di, 61);
         Aga = Ba ^ (~Be & Bi);
         Ca ^= Aga;
         Age = Be ^ (~Bi & Bo);
@@ -226,11 +220,11 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
         Agu = Bu ^ (~Ba & Be);
         Cu ^= Agu;
 
-        Ba = rol(Ebe ^ De, 1);
-        Be = rol(Egi ^ Di, 6);
-        Bi = rol(Eko ^ Do, 25);
-        Bo = rol(Emu ^ Du, 8);
-        Bu = rol(Esa ^ Da, 18);
+        Ba = std::rotl(Ebe ^ De, 1);
+        Be = std::rotl(Egi ^ Di, 6);
+        Bi = std::rotl(Eko ^ Do, 25);
+        Bo = std::rotl(Emu ^ Du, 8);
+        Bu = std::rotl(Esa ^ Da, 18);
         Aka = Ba ^ (~Be & Bi);
         Ca ^= Aka;
         Ake = Be ^ (~Bi & Bo);
@@ -242,11 +236,11 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
         Aku = Bu ^ (~Ba & Be);
         Cu ^= Aku;
 
-        Ba = rol(Ebu ^ Du, 27);
-        Be = rol(Ega ^ Da, 36);
-        Bi = rol(Eke ^ De, 10);
-        Bo = rol(Emi ^ Di, 15);
-        Bu = rol(Eso ^ Do, 56);
+        Ba = std::rotl(Ebu ^ Du, 27);
+        Be = std::rotl(Ega ^ Da, 36);
+        Bi = std::rotl(Eke ^ De, 10);
+        Bo = std::rotl(Emi ^ Di, 15);
+        Bu = std::rotl(Eso ^ Do, 56);
         Ama = Ba ^ (~Be & Bi);
         Ca ^= Ama;
         Ame = Be ^ (~Bi & Bo);
@@ -258,11 +252,11 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
         Amu = Bu ^ (~Ba & Be);
         Cu ^= Amu;
 
-        Ba = rol(Ebi ^ Di, 62);
-        Be = rol(Ego ^ Do, 55);
-        Bi = rol(Eku ^ Du, 39);
-        Bo = rol(Ema ^ Da, 41);
-        Bu = rol(Ese ^ De, 2);
+        Ba = std::rotl(Ebi ^ Di, 62);
+        Be = std::rotl(Ego ^ Do, 55);
+        Bi = std::rotl(Eku ^ Du, 39);
+        Bo = std::rotl(Ema ^ Da, 41);
+        Bu = std::rotl(Ese ^ De, 2);
         Asa = Ba ^ (~Be & Bi);
         Ca ^= Asa;
         Ase = Be ^ (~Bi & Bo);
