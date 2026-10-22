@@ -3,42 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "keccak.h"
+#include "int_bytes.hpp"
 #include <bit>
-
-// Provide __has_builtin macro if not defined.
-#ifndef __has_builtin
-#define __has_builtin(x) 0
-#endif
-
-#if !__has_builtin(__builtin_memcpy) && !defined(__GNUC__)
-#include <string.h>
-#define __builtin_memcpy memcpy
-#endif
 
 #if defined(__APPLE__) && defined(__ARM_FEATURE_SHA3)
 #include <arm_neon.h>
 #endif
 
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#define to_le64(X) __builtin_bswap64(X)
-#else
-#define to_le64(X) X
-#endif
-
 namespace
 {
-/// Loads 64-bit integer from given memory location as little-endian number.
-[[gnu::always_inline]] inline uint64_t load_le(const uint8_t* data)
-{
-    /* memcpy is the best way of expressing the intention. Every compiler will
-       optimize is to single load instruction if the target architecture
-       supports unaligned memory access (GCC and clang even in O0).
-       This is great trick because we are violating C/C++ memory alignment
-       restrictions with no performance penalty. */
-    uint64_t word = 0;
-    __builtin_memcpy(&word, data, sizeof(word));
-    return to_le64(word);
-}
+using evmone::crypto::load_le;
+using evmone::crypto::to_le;
 
 constexpr uint64_t ROUND_CONSTANTS[24] = {  //
     0x0000000000000001, 0x0000000000008082, 0x800000000000808a, 0x8000000080008000,
@@ -439,12 +414,12 @@ void keccakf1600_generic(uint64_t state[25])
     keccakf1600_implementation(state);
 }
 
+
+#if !defined(_MSC_VER) && defined(__x86_64__) && __has_cpp_attribute(gnu::target)
 /// The pointer to the best Keccak-f[1600] function implementation,
 /// selected during runtime initialization.
 auto keccakf1600_best = keccakf1600_generic;
 
-
-#if !defined(_MSC_VER) && defined(__x86_64__) && __has_cpp_attribute(gnu::target)
 [[gnu::target("bmi,bmi2")]] void keccakf1600_bmi(uint64_t state[25])
 {
     keccakf1600_implementation(state);
@@ -461,12 +436,15 @@ auto keccakf1600_best = keccakf1600_generic;
     if (__builtin_cpu_supports("bmi") && __builtin_cpu_supports("bmi2"))
         keccakf1600_best = keccakf1600_bmi;
 }
+#else
+/// The pointer to the Keccak-f[1600] function implementation.
+constexpr auto keccakf1600_best = keccakf1600_generic;
 #endif
 #endif
 
 
 [[gnu::always_inline]] inline void keccak(
-    uint64_t* out, size_t bits, const uint8_t* data, size_t size)
+    uint64_t* out, size_t bits, const std::byte* data, size_t size)
 {
     constexpr auto WORD_SIZE = sizeof(uint64_t);
     const auto hash_size = bits / 8;
@@ -478,7 +456,7 @@ auto keccakf1600_best = keccakf1600_generic;
     {
         for (size_t i = 0; i < (block_size / WORD_SIZE); ++i)
         {
-            state[i] ^= load_le(data);
+            state[i] ^= load_le<uint64_t>(data);
             data += WORD_SIZE;
         }
 
@@ -491,7 +469,7 @@ auto keccakf1600_best = keccakf1600_generic;
 
     while (size >= WORD_SIZE)
     {
-        *state_iter ^= load_le(data);
+        *state_iter ^= load_le<uint64_t>(data);
         ++state_iter;
         data += WORD_SIZE;
         size -= WORD_SIZE;
@@ -500,7 +478,7 @@ auto keccakf1600_best = keccakf1600_generic;
     // Absorb last 0–7 bytes of input + the padding byte.
     auto last_word = uint64_t{0x01} << (size * 8);
     for (size_t i = 0; i < size; ++i)
-        last_word |= uint64_t{data[i]} << (i * 8);
+        last_word |= std::to_integer<uint64_t>(data[i]) << (i * 8);
     *state_iter ^= last_word;
 
     state[(block_size / WORD_SIZE) - 1] ^= 0x8000000000000000;  // Last block bit flip.
@@ -508,13 +486,13 @@ auto keccakf1600_best = keccakf1600_generic;
     keccakf1600_best(state);
 
     for (size_t i = 0; i < (hash_size / WORD_SIZE); ++i)
-        out[i] = to_le64(state[i]);
+        out[i] = to_le(state[i]);
 }
 }  // namespace
 
 ethash_hash256 ethash_keccak256(const uint8_t* data, size_t size) noexcept
 {
     ethash_hash256 hash = {};
-    keccak(hash.word64s, 256, data, size);
+    keccak(hash.word64s, 256, reinterpret_cast<const std::byte*>(data), size);
     return hash;
 }
