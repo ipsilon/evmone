@@ -1,0 +1,92 @@
+# evmone: Fast Ethereum Virtual Machine implementation
+# Copyright 2026 The evmone Authors.
+# SPDX-License-Identifier: Apache-2.0
+
+name: RISC-V
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  riscv64:
+    # Native build on the RISE project runners (4 T-Head C910 cores):
+    # https://riscv-runners.riseproject.dev.
+    # Debug without debug info builds fastest; the precompiles still get -O1.
+    # The benchmark smoke tests are skipped: they take minutes unoptimized.
+    runs-on: ubuntu-24.04-riscv
+    timeout-minutes: 60
+    env:
+      CC: clang-18
+      CXX: clang++-18
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - name: Install coverage tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libclang-rt-18-dev llvm-18
+      - uses: actions/cache/restore@v4
+        id: hunter-cache
+        with:
+          path: ~/.hunter/_Base/Cache
+          key: hunter-riscv64-${{ hashFiles('cmake/Hunter/*.cmake') }}
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_FLAGS_DEBUG=-g0
+          -DCMAKE_CXX_FLAGS_DEBUG=-g0
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=TRUE
+          -DEVMONE_TESTING=ON
+          -DCOVERAGE=ON
+      - uses: actions/cache/save@v4
+        if: steps.hunter-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/.hunter/_Base/Cache
+          key: ${{ steps.hunter-cache.outputs.cache-primary-key }}
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --no-tests=error --parallel $(nproc) -E ^evmone/bench/
+      - name: Collect coverage
+        # The Codecov uploader has no riscv64 build, so the report is uploaded by the next job.
+        working-directory: build
+        run: |
+          llvm-profdata-18 merge -sparse *.profraw -o evmone.profdata
+          ARGS="lib/libevmone.so -object bin/evmone -object bin/evmone-unittests -instr-profile=evmone.profdata -ignore-filename-regex=include/evmc"
+          llvm-cov-18 export -format=lcov $ARGS -skip-expansions > coverage.lcov
+          llvm-cov-18 report $ARGS | tail -1
+      - uses: actions/upload-artifact@v5
+        with:
+          name: riscv64-coverage
+          path: build/coverage.lcov
+          if-no-files-found: error
+
+  riscv64-coverage-upload:
+    needs: riscv64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Codecov OIDC upload
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: riscv64-coverage
+      - uses: codecov/codecov-action@v5
+        with:
+          use_oidc: true
+          files: coverage.lcov
+          disable_search: true
+          flags: riscv64
+          fail_ci_if_error: true
