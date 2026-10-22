@@ -15,6 +15,10 @@
 #define __builtin_memcpy memcpy
 #endif
 
+#if defined(__APPLE__) && defined(__ARM_FEATURE_SHA3)
+#include <arm_neon.h>
+#endif
+
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #define to_le64(X) __builtin_bswap64(X)
 #else
@@ -45,6 +49,140 @@ constexpr uint64_t ROUND_CONSTANTS[24] = {  //
     0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008};
 
 
+#if defined(__APPLE__) && defined(__ARM_FEATURE_SHA3)
+/// The Keccak-f[1600] implementation using the Armv8.2 SHA3 instructions,
+/// enabled by default by Clang for arm64 macOS.
+/// Neoverse N2, V1 and V2 execute the SHA3 instructions in a single pipeline,
+/// where this is ~2x slower than the scalar implementation; newer cores are
+/// at best on par.
+[[gnu::noinline]] void keccakf1600_sha3(uint64_t state[25])
+{
+    // Each lane occupies the low half of a vector register. Theta uses EOR3 and RAX1,
+    // rho and pi are combined into XAR, chi is BCAX. The statement order follows
+    // the XKCP implementation by Hanno Becker and Matthias Kannwischer, so that
+    // the compiler needs no register copies. Iota is applied after chi and Aba goes
+    // to the second EOR3 of theta to keep iota off the critical path.
+    uint64x2_t Aba = {state[0]};
+    uint64x2_t Abe = {state[1]};
+    uint64x2_t Abi = {state[2]};
+    uint64x2_t Abo = {state[3]};
+    uint64x2_t Abu = {state[4]};
+    uint64x2_t Aga = {state[5]};
+    uint64x2_t Age = {state[6]};
+    uint64x2_t Agi = {state[7]};
+    uint64x2_t Ago = {state[8]};
+    uint64x2_t Agu = {state[9]};
+    uint64x2_t Aka = {state[10]};
+    uint64x2_t Ake = {state[11]};
+    uint64x2_t Aki = {state[12]};
+    uint64x2_t Ako = {state[13]};
+    uint64x2_t Aku = {state[14]};
+    uint64x2_t Ama = {state[15]};
+    uint64x2_t Ame = {state[16]};
+    uint64x2_t Ami = {state[17]};
+    uint64x2_t Amo = {state[18]};
+    uint64x2_t Amu = {state[19]};
+    uint64x2_t Asa = {state[20]};
+    uint64x2_t Ase = {state[21]};
+    uint64x2_t Asi = {state[22]};
+    uint64x2_t Aso = {state[23]};
+    uint64x2_t Asu = {state[24]};
+
+    for (const auto rc : ROUND_CONSTANTS)
+    {
+        const auto Ca = veor3q_u64(veor3q_u64(Aga, Aka, Ama), Asa, Aba);
+        const auto Ce = veor3q_u64(veor3q_u64(Abe, Age, Ake), Ame, Ase);
+        const auto Ci = veor3q_u64(veor3q_u64(Abi, Agi, Aki), Ami, Asi);
+        const auto Co = veor3q_u64(veor3q_u64(Abo, Ago, Ako), Amo, Aso);
+        const auto Cu = veor3q_u64(veor3q_u64(Abu, Agu, Aku), Amu, Asu);
+        const auto Da = vrax1q_u64(Cu, Ce);
+        const auto De = vrax1q_u64(Ca, Ci);
+        const auto Di = vrax1q_u64(Ce, Co);
+        const auto Do = vrax1q_u64(Ci, Cu);
+        const auto Du = vrax1q_u64(Co, Ca);
+        const auto Bba = veorq_u64(Aba, Da);
+        const auto Bsa = vxarq_u64(Abi, Di, 2);
+        const auto Bbi = vxarq_u64(Aki, Di, 21);
+        const auto Bki = vxarq_u64(Ako, Do, 39);
+        const auto Bko = vxarq_u64(Amu, Du, 56);
+        const auto Bmu = vxarq_u64(Aso, Do, 8);
+        const auto Bso = vxarq_u64(Ama, Da, 23);
+        const auto Bka = vxarq_u64(Abe, De, 63);
+        const auto Bse = vxarq_u64(Ago, Do, 9);
+        const auto Bgo = vxarq_u64(Ame, De, 19);
+        const auto Bke = vxarq_u64(Agi, Di, 58);
+        const auto Bgi = vxarq_u64(Aka, Da, 61);
+        const auto Bga = vxarq_u64(Abo, Do, 36);
+        const auto Bbo = vxarq_u64(Amo, Do, 43);
+        const auto Bmo = vxarq_u64(Ami, Di, 49);
+        const auto Bmi = vxarq_u64(Ake, De, 54);
+        const auto Bge = vxarq_u64(Agu, Du, 44);
+        const auto Bgu = vxarq_u64(Asi, Di, 3);
+        const auto Bsi = vxarq_u64(Aku, Du, 25);
+        const auto Bku = vxarq_u64(Asa, Da, 46);
+        const auto Bma = vxarq_u64(Abu, Du, 37);
+        const auto Bbu = vxarq_u64(Asu, Du, 50);
+        const auto Bsu = vxarq_u64(Ase, De, 62);
+        const auto Bme = vxarq_u64(Aga, Da, 28);
+        const auto Bbe = vxarq_u64(Age, De, 20);
+        Aba = vbcaxq_u64(Bba, Bbi, Bbe);
+        Abe = vbcaxq_u64(Bbe, Bbo, Bbi);
+        Abi = vbcaxq_u64(Bbi, Bbu, Bbo);
+        Abo = vbcaxq_u64(Bbo, Bba, Bbu);
+        Abu = vbcaxq_u64(Bbu, Bbe, Bba);
+        Aga = vbcaxq_u64(Bga, Bgi, Bge);
+        Age = vbcaxq_u64(Bge, Bgo, Bgi);
+        Agi = vbcaxq_u64(Bgi, Bgu, Bgo);
+        Ago = vbcaxq_u64(Bgo, Bga, Bgu);
+        Agu = vbcaxq_u64(Bgu, Bge, Bga);
+        Aka = vbcaxq_u64(Bka, Bki, Bke);
+        Ake = vbcaxq_u64(Bke, Bko, Bki);
+        Aki = vbcaxq_u64(Bki, Bku, Bko);
+        Ako = vbcaxq_u64(Bko, Bka, Bku);
+        Aku = vbcaxq_u64(Bku, Bke, Bka);
+        Ama = vbcaxq_u64(Bma, Bmi, Bme);
+        Ame = vbcaxq_u64(Bme, Bmo, Bmi);
+        Ami = vbcaxq_u64(Bmi, Bmu, Bmo);
+        Amo = vbcaxq_u64(Bmo, Bma, Bmu);
+        Amu = vbcaxq_u64(Bmu, Bme, Bma);
+        Asa = vbcaxq_u64(Bsa, Bsi, Bse);
+        Ase = vbcaxq_u64(Bse, Bso, Bsi);
+        Asi = vbcaxq_u64(Bsi, Bsu, Bso);
+        Aso = vbcaxq_u64(Bso, Bsa, Bsu);
+        Asu = vbcaxq_u64(Bsu, Bse, Bsa);
+        Aba = veorq_u64(Aba, uint64x2_t{rc});
+    }
+
+    state[0] = vgetq_lane_u64(Aba, 0);
+    state[1] = vgetq_lane_u64(Abe, 0);
+    state[2] = vgetq_lane_u64(Abi, 0);
+    state[3] = vgetq_lane_u64(Abo, 0);
+    state[4] = vgetq_lane_u64(Abu, 0);
+    state[5] = vgetq_lane_u64(Aga, 0);
+    state[6] = vgetq_lane_u64(Age, 0);
+    state[7] = vgetq_lane_u64(Agi, 0);
+    state[8] = vgetq_lane_u64(Ago, 0);
+    state[9] = vgetq_lane_u64(Agu, 0);
+    state[10] = vgetq_lane_u64(Aka, 0);
+    state[11] = vgetq_lane_u64(Ake, 0);
+    state[12] = vgetq_lane_u64(Aki, 0);
+    state[13] = vgetq_lane_u64(Ako, 0);
+    state[14] = vgetq_lane_u64(Aku, 0);
+    state[15] = vgetq_lane_u64(Ama, 0);
+    state[16] = vgetq_lane_u64(Ame, 0);
+    state[17] = vgetq_lane_u64(Ami, 0);
+    state[18] = vgetq_lane_u64(Amo, 0);
+    state[19] = vgetq_lane_u64(Amu, 0);
+    state[20] = vgetq_lane_u64(Asa, 0);
+    state[21] = vgetq_lane_u64(Ase, 0);
+    state[22] = vgetq_lane_u64(Asi, 0);
+    state[23] = vgetq_lane_u64(Aso, 0);
+    state[24] = vgetq_lane_u64(Asu, 0);
+}
+
+/// The pointer to the best Keccak-f[1600] function implementation.
+constexpr auto keccakf1600_best = keccakf1600_sha3;
+#else
 /// The Keccak-f[1600] function.
 ///
 /// The implementation of the Keccak-f function with 1600-bit width of the permutation (b).
@@ -323,6 +461,7 @@ auto keccakf1600_best = keccakf1600_generic;
     if (__builtin_cpu_supports("bmi") && __builtin_cpu_supports("bmi2"))
         keccakf1600_best = keccakf1600_bmi;
 }
+#endif
 #endif
 
 
