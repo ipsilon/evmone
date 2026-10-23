@@ -459,20 +459,29 @@ inline void callvalue(StackTop stack, ExecutionState& state) noexcept
 
 inline void calldataload(StackTop stack, ExecutionState& state) noexcept
 {
-    auto& index = stack.top();
+    auto& index256 = stack.top();
+    const auto index = index256[0];
+    const auto high = index256[3] | index256[2] | index256[1];
+    const auto input_size = state.msg->input_size;
 
-    if (state.msg->input_size < index)
-        index = 0;
+    if (high != 0 || index >= input_size) [[unlikely]]
+    {
+        index256 = 0;
+    }
+    else if (input_size - index >= 32) [[likely]]
+    {
+        // The whole word is in the input.
+        index256 = intx::be::unsafe::load<uint256>(&state.msg->input_data[index]);
+    }
     else
     {
+        // The input ends inside the word: the rest of it is zeros.
+        // TODO: If we can cheaply add or guarantee padding after the input,
+        // the tail can be loaded as a full word and masked.
         const auto begin = static_cast<size_t>(index);
-        const auto end = std::min(begin + 32, state.msg->input_size);
-
         uint8_t data[32] = {};
-        for (size_t i = 0; i < (end - begin); ++i)
-            data[i] = state.msg->input_data[begin + i];
-
-        index = intx::be::load<uint256>(data);
+        std::memcpy(data, &state.msg->input_data[begin], input_size - begin);
+        index256 = intx::be::load<uint256>(data);
     }
 }
 
