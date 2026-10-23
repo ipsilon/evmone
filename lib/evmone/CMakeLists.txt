@@ -59,6 +59,30 @@ if(CABLE_COMPILER_GNULIKE)
         # RTTI can be disabled except for UBSan which checks vptr integrity.
         target_compile_options(evmone PRIVATE -fno-rtti)
     endif()
+
+    # On Linux x86-64 build with -fcf-protection=return: only the shadow stack part of Intel CET.
+    # The branch part (IBT), which e.g. Ubuntu's GCC enables by default (-fcf-protection=full), puts
+    # an ENDBR64 at every indirect branch target: at each instruction of the Baseline interpreter,
+    # executed on every dispatch, while Linux does not enforce IBT in user space. The shadow stack
+    # costs no instructions, and the linker marks a binary shadow-stack compatible only if all its
+    # objects are. A -fcf-protection in the CMake flags (of any configuration) is kept.
+    # TODO: Keep the compiler's default when it has no branch part instead of always setting it.
+    if(CMAKE_SYSTEM_NAME STREQUAL Linux AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+        set(flags "${CMAKE_CXX_FLAGS}")
+        if(CMAKE_CONFIGURATION_TYPES)
+            set(configs ${CMAKE_CONFIGURATION_TYPES})
+        else()
+            set(configs ${CMAKE_BUILD_TYPE})
+        endif()
+        foreach(config IN LISTS configs)
+            string(TOUPPER ${config} config)
+            string(APPEND flags " ${CMAKE_CXX_FLAGS_${config}}")
+        endforeach()
+        if(NOT flags MATCHES "-fcf-protection")
+            # The option is in GCC 8 and Clang 7, older than the minimum compilers (see circle.yml).
+            target_compile_options(evmone PRIVATE -fcf-protection=return)
+        endif()
+    endif()
 endif()
 set_target_properties(
     evmone
