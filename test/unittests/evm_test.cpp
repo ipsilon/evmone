@@ -460,6 +460,31 @@ TEST_P(evm, calldataload_outofrange)
     EXPECT_EQ(std::count(result.output_data, result.output_data + result.output_size, 0), 32);
 }
 
+TEST_P(evm, calldataload_input_end)
+{
+    // The input is followed by a non-zero byte, which a load past its end would read.
+    const auto buffer =
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+        "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+        "ff"_hex;
+    const bytes_view input{buffer.data(), buffer.size() - 1};
+
+    // The word ending with the input, the one past it by a byte, the one at its end,
+    // the one at the largest 64-bit index, where the index plus 32 overflows 64 bits,
+    // and the ones at indexes with the low word inside the input but a high word not zero.
+    execute(mstore(0, calldataload(32)) + mstore(32, calldataload(33)) +
+                mstore(64, calldataload(64)) + mstore(96, calldataload(0xffffffffffffffff)) +
+                mstore(128, calldataload(push((intx::uint256{1} << 64) + 1))) +
+                mstore(160, calldataload(push((intx::uint256{1} << 128) + 1))) +
+                mstore(192, calldataload(push((intx::uint256{1} << 192) + 1))) + ret(0, 224),
+        input);
+    EXPECT_EQ(result.status_code, EVMC_SUCCESS);
+    EXPECT_EQ(hex({result.output_data, result.output_size}),
+        "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+        "2122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f00" +
+            std::string(5 * 64, '0'));
+}
+
 TEST_P(evm, address)
 {
     msg.recipient.bytes[0] = 0xcc;
