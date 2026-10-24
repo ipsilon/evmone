@@ -64,12 +64,18 @@ private:
 
     BitsetSpan m_jumpdest_bitset{nullptr};
 
+    /// EIP-7979: the positions of CALLDEST instructions, the only valid CALLSUB targets
+    /// and, from the revision that has them, also valid jump destinations.
+    BitsetSpan m_calldest_bitset{nullptr};
+
 public:
     /// Constructor for legacy code.
-    CodeAnalysis(std::unique_ptr<uint8_t[]> padded_code, size_t code_size, BitsetSpan map)
+    CodeAnalysis(std::unique_ptr<uint8_t[]> padded_code, size_t code_size, BitsetSpan jumpdest_map,
+        BitsetSpan calldest_map)
       : m_code{padded_code.get(), code_size},
         m_padded_code{std::move(padded_code)},
-        m_jumpdest_bitset{map}
+        m_jumpdest_bitset{jumpdest_map},
+        m_calldest_bitset{calldest_map}
     {}
 
     /// The executable code. This is where the interpreter should start execution.
@@ -81,6 +87,14 @@ public:
         if (position >= m_code.size())
             return false;
         return m_jumpdest_bitset.test(static_cast<size_t>(position));
+    }
+
+    /// Check if given position is a CALLDEST, i.e. a valid CALLSUB destination (EIP-7979).
+    [[nodiscard]] bool check_calldest(uint64_t position) const noexcept
+    {
+        if (position >= m_code.size())
+            return false;
+        return m_calldest_bitset.test(static_cast<size_t>(position));
     }
 };
 
