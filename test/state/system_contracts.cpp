@@ -85,8 +85,9 @@ static_assert(std::ranges::is_sorted(REQUESTS_SYSTEM_CONTRACTS, by_rev),
 
 
 evmc::Result execute_system_call(State& state, const BlockInfo& block,
-    const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm, const address& addr,
-    bytes_view code, bytes_view input)
+    const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm,
+    evmc_execution_context& execution_context, const address& addr, bytes_view code,
+    bytes_view input)
 {
     const evmc_message msg{
         .kind = EVMC_CALL,
@@ -99,13 +100,14 @@ evmc::Result execute_system_call(State& state, const BlockInfo& block,
     };
 
     const Transaction empty_tx{};
-    Host host{rev, vm, state, block, block_hashes, empty_tx};
-    return vm.execute(host, rev, msg, code.data(), code.size());
+    Host host{rev, vm, execution_context, state, block, block_hashes, empty_tx};
+    return vm.execute(execution_context, host, rev, msg, code.data(), code.size());
 }
 }  // namespace
 
 StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& block,
-    const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm)
+    const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm,
+    evmc_execution_context& execution_context)
 {
     State state{state_view};
     for (const auto& [since, addr, get_input] : STORAGE_SYSTEM_CONTRACTS)
@@ -122,8 +124,8 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
         // The call is unchecked: a failure only reverts its state changes for testing.
         const auto input32 = get_input(block, block_hashes);
         const auto checkpoint = state.checkpoint();
-        const auto res =
-            execute_system_call(state, block, block_hashes, rev, vm, addr, code, input32);
+        const auto res = execute_system_call(
+            state, block, block_hashes, rev, vm, execution_context, addr, code, input32);
         if (res.status_code != EVMC_SUCCESS) [[unlikely]]
             state.rollback(checkpoint);
     }
@@ -132,7 +134,8 @@ StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& 
 }
 
 std::variant<RequestsResult, std::error_code> system_call_block_end(const StateView& state_view,
-    const BlockInfo& block, const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm)
+    const BlockInfo& block, const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm,
+    evmc_execution_context& execution_context)
 {
     State state{state_view};
     std::vector<Requests> requests;
@@ -146,7 +149,8 @@ std::variant<RequestsResult, std::error_code> system_call_block_end(const StateV
         if (code.empty())
             return make_error_code(SYSTEM_CONTRACT_EMPTY);
 
-        const auto res = execute_system_call(state, block, block_hashes, rev, vm, addr, code, {});
+        const auto res = execute_system_call(
+            state, block, block_hashes, rev, vm, execution_context, addr, code, {});
         if (res.status_code != EVMC_SUCCESS)
             return make_error_code(SYSTEM_CONTRACT_CALL_FAILED);
         requests.emplace_back(request_type, bytes_view{res.output_data, res.output_size});

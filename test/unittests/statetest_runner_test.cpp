@@ -7,6 +7,7 @@
 
 #include <evmc/evmc.hpp>
 #include <evmone/evmone.h>
+#include <evmone/execution_context.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <test/utils/statetest.hpp>
@@ -155,8 +156,9 @@ Run run(std::string_view fixture, bool trace_summary = false, bool state_diff = 
     std::vector<Failure> failures;
     TestReport report{[&](const Failure& failure) { failures.push_back(failure); }};
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
     for (const auto& t : tests)
-        run_state_test(t, vm,
+        run_state_test(t, vm, execution_context,
             {.output = output, .trace_summary = trace_summary, .state_diff = state_diff}, report);
     return {std::move(failures), std::move(output).str()};
 }

@@ -21,6 +21,7 @@ add_library(evmone
     create_address.hpp
     delegation.cpp
     delegation.hpp
+    execution_context.hpp
     instructions.hpp
     instructions_calls.cpp
     instructions_opcodes.hpp

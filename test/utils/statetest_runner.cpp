@@ -12,8 +12,8 @@
 
 namespace evmone::test
 {
-void run_state_test(const StateTransitionTest& test, evmc::VM& vm, const StateTestOptions& options,
-    TestReport& report)
+void run_state_test(const StateTransitionTest& test, evmc::VM& vm,
+    evmc_execution_context& execution_context, const StateTestOptions& options, TestReport& report)
 {
     report.start_case(test.name);
     for (const auto& [rev, cases, block] : test.cases)
@@ -60,8 +60,8 @@ void run_state_test(const StateTransitionTest& test, evmc::VM& vm, const StateTe
 
             const auto res =
                 error ? error :
-                        transition(state, block, test.block_hashes, *tx, rev, vm, block.gas_limit,
-                            block.gas_limit,
+                        transition(state, block, test.block_hashes, *tx, rev, vm, execution_context,
+                            block.gas_limit, block.gas_limit,
                             static_cast<int64_t>(state::max_blob_gas_per_block(blob_params)));
 
             if (holds_alternative<state::TransactionReceipt>(res))

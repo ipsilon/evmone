@@ -5,6 +5,7 @@
 
 #include "exportable_fixture.hpp"
 #include <evmone/evmone.h>
+#include <evmone/execution_context.hpp>
 #include <test/state/errors.hpp>
 #include <test/state/host.hpp>
 #include <test/utils/test_state.hpp>
@@ -41,6 +42,7 @@ protected:
 
     static inline evmc::VM vm{evmc_create_evmone()};
     static inline evmc::VM tracing_vm{evmc_create_evmone(), {{"trace", "1"}}};
+    evmone::ExecutionContext execution_context;
 
     struct ExpectedAccount
     {
