@@ -117,6 +117,46 @@ json::json load_fixture_file(const fs::path& path)
     return contents;
 }
 
+#ifdef CODSPEED_WALLTIME
+/// The rounds a test is timed in, and the least time a round takes: shorter than
+/// google/benchmark's 0.5 s, as the tests are many.
+constexpr int WALLTIME_ROUNDS = 5;
+constexpr std::chrono::duration<double, std::nano> WALLTIME_MIN_ROUND_TIME =
+    std::chrono::milliseconds{100};
+
+/// The walltime of every test measured, reported to CodSpeed when the run ends.
+std::vector<codspeed::RawWalltimeBenchmark> walltime_benchmarks;
+
+/// Times the blockchain test in rounds of repeated runs, as google/benchmark does. It is
+/// timed after it has been run and checked, so its failures are not reported again.
+void measure_walltime(const std::string& name, const BlockchainTest& test, evmc::VM& vm)
+{
+    TestReport unchecked{[](const Failure&) {}};
+    const auto time = [&](uint64_t iterations) {
+        const auto start = std::chrono::steady_clock::now();
+        for (uint64_t i = 0; i < iterations; ++i)
+            run_blockchain_test(test, vm, unchecked);
+        return std::chrono::duration<double, std::nano>{std::chrono::steady_clock::now() - start};
+    };
+
+    codspeed::CodSpeed::getInstance();  // Sets up the hooks and the integration name, once.
+    measurement_start();
+    const auto iterations =
+        std::max(static_cast<uint64_t>(WALLTIME_MIN_ROUND_TIME / time(1)), uint64_t{1});
+    const auto sep = name.rfind("::");
+    codspeed::RawWalltimeBenchmark benchmark{
+        .name = sep == std::string::npos ? name : name.substr(sep + 2), .uri = name};
+    for (int i = 0; i < WALLTIME_ROUNDS; ++i)
+    {
+        benchmark.iters_per_round.push_back(iterations);
+        benchmark.times_per_round_ns.push_back(time(iterations).count());
+    }
+    measurement_stop();
+    measurement_set_executed_benchmark(name);
+    walltime_benchmarks.push_back(std::move(benchmark));
+}
+#endif
+
 /// Runs one fixture of a fixture file.
 void run_fixture(const std::string& name, const json::json& fixture, const RunOptions& options,
     evmc::VM& vm, TestReport& report)
@@ -135,14 +175,17 @@ void run_fixture(const std::string& name, const json::json& fixture, const RunOp
     case Format::blockchain_test:
     {
         const auto test = make_blockchain_test(name, fixture);
-#ifdef CODSPEED_ENABLED
+#if defined(CODSPEED_ENABLED) && !defined(CODSPEED_WALLTIME)
         codspeed::CodSpeed::getInstance();  // Sets up the hooks and the integration name, once.
         measurement_start();
 #endif
         run_blockchain_test(test, vm, report);
-#ifdef CODSPEED_ENABLED
+#if defined(CODSPEED_ENABLED) && !defined(CODSPEED_WALLTIME)
         measurement_stop();
         measurement_set_executed_benchmark(name);  // The fixture's name is the benchmark's URI.
+#endif
+#ifdef CODSPEED_WALLTIME
+        measure_walltime(name, test, vm);
 #endif
         break;
     }
@@ -295,6 +338,11 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
             }
         }
     }
+
+#ifdef CODSPEED_WALLTIME
+    if (!walltime_benchmarks.empty())
+        codspeed::generate_codspeed_walltime_report(walltime_benchmarks);
+#endif
 
     const std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - started;
     std::ostringstream summary;
