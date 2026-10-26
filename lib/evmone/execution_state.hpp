@@ -78,11 +78,20 @@ class Memory
 
     [[noreturn, gnu::cold]] static void handle_out_of_memory() noexcept { std::terminate(); }
 
+    // TODO: Allocate the data aligned to 32 bytes, with allocate_at_least(), instead of realloc().
     void allocate_capacity() noexcept
     {
         m_data.reset(static_cast<uint8_t*>(std::realloc(m_data.release(), m_capacity)));
         if (!m_data) [[unlikely]]
             handle_out_of_memory();
+    }
+
+    /// Returns the pointer to the data at the offset, a multiple of 32, so aligned as the data.
+    [[nodiscard, gnu::returns_nonnull]] uint8_t* aligned_at(size_t offset) noexcept
+    {
+        assert(offset % 32 == 0);
+        assert(offset < m_capacity);
+        return std::assume_aligned<alignof(std::max_align_t)>(&m_data[offset]);
     }
 
 public:
@@ -116,7 +125,7 @@ public:
 
             allocate_capacity();
         }
-        std::memset(&m_data[m_size], 0, new_size - m_size);
+        std::memset(aligned_at(m_size), 0, new_size - m_size);
         m_size = new_size;
     }
 
