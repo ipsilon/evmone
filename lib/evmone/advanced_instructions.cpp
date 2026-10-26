@@ -31,23 +31,6 @@ inline void impl(AdvancedExecutionState& state) noexcept
     state.adjust_stack_size(instr::traits[Op].stack_height_change);
 }
 
-template <Opcode Op, evmc_status_code CoreFn(StackTop, ExecutionState&) noexcept = core::impl<Op>>
-inline evmc_status_code impl(AdvancedExecutionState& state) noexcept
-{
-    const auto status = CoreFn(state.stack, state);
-    state.adjust_stack_size(instr::traits[Op].stack_height_change);
-    return status;
-}
-
-template <Opcode Op,
-    evmc_status_code CoreFn(StackTop, int64_t&, ExecutionState&) noexcept = core::impl<Op>>
-inline evmc_status_code impl(AdvancedExecutionState& state) noexcept
-{
-    const auto status = CoreFn(state.stack, state.gas_left, state);
-    state.adjust_stack_size(instr::traits[Op].stack_height_change);
-    return status;
-}
-
 template <Opcode Op, Result CoreFn(StackTop, int64_t, ExecutionState&) noexcept = core::impl<Op>>
 inline evmc_status_code impl(AdvancedExecutionState& state) noexcept
 {
@@ -81,14 +64,6 @@ inline code_iterator impl(AdvancedExecutionState& state, code_iterator pos) noex
 /// implementation. Definition not provided.
 template <code_iterator InstrFn(AdvancedExecutionState&, code_iterator)>
 const Instruction* op(const Instruction* /*instr*/, AdvancedExecutionState& state) noexcept;
-
-/// Wraps the generic instruction implementation to advanced instruction function signature.
-template <Result InstrFn(AdvancedExecutionState&, code_iterator) noexcept>
-const Instruction* op(const Instruction* instr, AdvancedExecutionState& state) noexcept;
-
-/// Wraps the generic instruction implementation to advanced instruction function signature.
-template <TermResult InstrFn(AdvancedExecutionState&, code_iterator) noexcept>
-const Instruction* op(const Instruction* instr, AdvancedExecutionState& state) noexcept;
 
 namespace
 {
