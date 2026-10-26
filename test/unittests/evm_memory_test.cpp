@@ -80,6 +80,18 @@ TEST_P(evm, memory_grow_mstore8)
         EXPECT_EQ(result.output_data[i], 0);
 }
 
+TEST_P(evm, memory_grow_by_word_zeros)
+{
+    // The words the memory grows by are zeros. An execution leaves 4 words of ones in the memory
+    // buffer, which the Baseline interpreter reuses for the next one: that one grows its memory
+    // word by word with MLOAD at MSIZE.
+    execute(4 * mstore(OP_MSIZE, push(~uint256{})));
+    ASSERT_EQ(result.status_code, EVMC_SUCCESS);
+    execute(push(0) + 4 * (mload(OP_MSIZE) + OP_OR) + ret_top());
+    EXPECT_STATUS(EVMC_SUCCESS);
+    EXPECT_OUTPUT_INT(0);
+}
+
 TEST_P(evm, mstore8_memory_cost)
 {
     auto code = push(0) + mstore8(0);
