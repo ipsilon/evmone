@@ -803,35 +803,43 @@ Result sload(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept;
 Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept;
 
 /// Internal jump implementation for JUMP/JUMPI instructions.
-inline code_iterator jump_impl(ExecutionState& state, const uint256& dst) noexcept
+inline code_iterator jump_impl(
+    ExecutionState& state, const baseline::JumpBase& jb, const uint256& dst) noexcept
 {
     const auto hi_part_is_nonzero = (dst[3] | dst[2] | dst[1]) != 0;
-    if (hi_part_is_nonzero || !state.analysis.baseline->check_jumpdest(dst[0])) [[unlikely]]
+    if (hi_part_is_nonzero || !jb.check_jumpdest(dst[0])) [[unlikely]]
     {
         state.status = EVMC_BAD_JUMP_DESTINATION;
         return nullptr;
     }
 
-    return &state.analysis.baseline->code()[static_cast<size_t>(dst[0])];
+    const auto target = &jb.code[static_cast<size_t>(dst[0])];
+    // A code position is never null. Without this the dispatch loop tests every jump's
+    // target for the error return.
+    INTX_REQUIRE(target != nullptr);
+    return target;
 }
 
-/// JUMP instruction implementation using baseline::CodeAnalysis.
-inline code_iterator jump(StackTop stack, ExecutionState& state, code_iterator /*pos*/) noexcept
+/// JUMP instruction implementation using baseline::JumpBase.
+inline code_iterator jump(StackTop stack, ExecutionState& state, const baseline::JumpBase& jb,
+    code_iterator /*pos*/) noexcept
 {
-    return jump_impl(state, stack.pop());
+    return jump_impl(state, jb, stack.pop());
 }
 
-/// JUMPI instruction implementation using baseline::CodeAnalysis.
-inline code_iterator jumpi(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
+/// JUMPI instruction implementation using baseline::JumpBase.
+inline code_iterator jumpi(
+    StackTop stack, ExecutionState& state, const baseline::JumpBase& jb, code_iterator pos) noexcept
 {
     const auto& dst = stack.pop();
     const auto& cond = stack.pop();
-    return cond ? jump_impl(state, dst) : pos + 1;
+    return cond ? jump_impl(state, jb, dst) : pos + 1;
 }
 
-inline code_iterator pc(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
+inline code_iterator pc(StackTop stack, ExecutionState& /*state*/, const baseline::JumpBase& jb,
+    code_iterator pos) noexcept
 {
-    stack.push(static_cast<uint64_t>(pos - state.analysis.baseline->code().data()));
+    stack.push(static_cast<uint64_t>(pos - jb.code));
     return pos + 1;
 }
 

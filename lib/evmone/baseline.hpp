@@ -63,12 +63,37 @@ public:
     /// The executable code. This is where the interpreter should start execution.
     [[nodiscard]] bytes_view code() const noexcept { return m_code; }
 
+    /// The bitset of the code positions that are valid jump destinations.
+    [[nodiscard]] BitsetSpan jumpdest_bitset() const noexcept { return m_jumpdest_bitset; }
+
     /// Check if given position is valid jump destination. Use only for legacy code.
     [[nodiscard]] bool check_jumpdest(uint64_t position) const noexcept
     {
         if (position >= m_code.size())
             return false;
         return m_jumpdest_bitset.test(static_cast<size_t>(position));
+    }
+};
+
+/// The code analysis as the jump instructions use it. The interpreter loop keeps this copy, in
+/// registers or in its own frame, instead of loading the analysis through ExecutionState on every
+/// jump.
+struct JumpBase
+{
+    const uint8_t* code;  ///< The executable code.
+    size_t code_size;     ///< The code size, which bounds the jump destinations.
+    BitsetSpan jumpdest_bitset;
+
+    explicit JumpBase(const CodeAnalysis& analysis) noexcept
+      : code{analysis.code().data()},
+        code_size{analysis.code().size()},
+        jumpdest_bitset{analysis.jumpdest_bitset()}
+    {}
+
+    /// Check if given position is valid jump destination. Use only for legacy code.
+    [[nodiscard]] bool check_jumpdest(uint64_t position) const noexcept
+    {
+        return position < code_size && jumpdest_bitset.test(static_cast<size_t>(position));
     }
 };
 
