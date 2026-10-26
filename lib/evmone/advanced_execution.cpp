@@ -16,7 +16,7 @@ evmc_result execute(AdvancedExecutionState& state, const AdvancedCodeAnalysis& a
     while (instr != nullptr)
         instr = instr->fn(instr, state);
 
-    return make_execution_result(state, state.gas_left);
+    return make_execution_result(state);
 }
 
 evmc_result execute(evmc_vm* /*unused*/, const evmc_host_interface* host, evmc_host_context* ctx,

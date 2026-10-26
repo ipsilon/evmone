@@ -157,6 +157,9 @@ public:
     size_t output_offset = 0;
     size_t output_size = 0;
 
+    /// The gas left set by a terminating instruction (STOP, RETURN, REVERT, etc.).
+    int64_t final_gas_left = 0;
+
 private:
     evmc_tx_context m_tx = {};
 
@@ -205,6 +208,7 @@ public:
         status = EVMC_SUCCESS;
         output_offset = 0;
         output_size = 0;
+        final_gas_left = 0;
         m_tx = {};
     }
 
@@ -218,13 +222,14 @@ public:
     }
 };
 
-/// Builds the execution result for a finished frame from its final @p state and @p gas_left.
+/// Builds the execution result for a finished frame from its final @p state.
 ///
 /// Applies the frame-exit rules shared by the baseline and advanced interpreters: an exceptional
 /// halt consumes all gas (only a success or revert keeps it), the gas refund counts only on
 /// success, and the output is the memory range recorded in the state.
-inline evmc_result make_execution_result(ExecutionState& state, int64_t gas_left) noexcept
+inline evmc_result make_execution_result(ExecutionState& state) noexcept
 {
+    auto gas_left = state.final_gas_left;
     if (state.rev >= EVMC_AMSTERDAM && state.status != EVMC_SUCCESS)
     {
         // Unsuccessful frame doesn't commit any state changes, roll-back all state-gas costs.

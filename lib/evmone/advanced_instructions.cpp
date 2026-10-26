@@ -116,7 +116,7 @@ template <TermResult InstrFn(AdvancedExecutionState&) noexcept>
 const Instruction* op(const Instruction* /*instr*/, AdvancedExecutionState& state) noexcept
 {
     const auto result = InstrFn(state);
-    state.gas_left = result.gas_left;
+    state.final_gas_left = result.gas_left;
     return state.exit(result.status);
 }
 
