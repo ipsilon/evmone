@@ -68,6 +68,8 @@ class Memory
     };
 
     /// Owned pointer to allocated memory.
+    // TODO: Use a dedicated byte type for the data, e.g. enum class Byte : uint8_t. Stores through
+    // uint8_t or std::byte may alias any object, the memory size included; such stores cannot.
     std::unique_ptr<uint8_t[], FreeDeleter> m_data;
 
     /// The "virtual" size of the memory.
@@ -101,6 +103,9 @@ public:
     uint8_t& operator[](size_t index) noexcept { return m_data[index]; }
 
     [[nodiscard]] size_t size() const noexcept { return m_size; }
+
+    /// Returns the size of the allocated memory.
+    [[nodiscard]] size_t capacity() const noexcept { return m_capacity; }
 
     /// Grows the memory to the given size. The extent is filled with zeros.
     ///

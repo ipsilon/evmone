@@ -115,14 +115,8 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     return num_words(size_in_bytes) * WordCopyCost;
 }
 
-/// Grows EVM memory and checks its cost.
-///
-/// This function should not be inlined because this may affect other inlining decisions:
-/// - making check_memory() too costly to inline,
-/// - making mload()/mstore()/mstore8() too costly to inline.
-///
-/// TODO: This function should be moved to Memory class.
-[[gnu::noinline]] inline int64_t grow_memory(
+/// Grows EVM memory and checks its cost: any growth, the general case of grow_memory().
+[[gnu::noinline]] inline int64_t grow_memory_general(
     int64_t gas_left, Memory& memory, uint64_t new_size) noexcept
 {
     // This implementation recomputes memory.size(). This value is already known to the caller
@@ -138,6 +132,38 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     if (gas_left >= 0) [[likely]]
         memory.grow(static_cast<size_t>(new_words * word_size));
     return gas_left;
+}
+
+/// Grows EVM memory and checks its cost.
+///
+/// This function should not be inlined because this may affect other inlining decisions:
+/// - making check_memory() too costly to inline,
+/// - making mload()/mstore()/mstore8() too costly to inline.
+///
+/// The most common growth, by one word within the capacity, is made here. Any other goes to
+/// grow_memory_general(), out of line, so that this function saves no callee-saved registers.
+///
+/// @param new_size  The memory size needed, larger than the current one.
+///
+/// TODO: This function should be moved to Memory class.
+[[gnu::noinline]] inline int64_t grow_memory(
+    int64_t gas_left, Memory& memory, uint64_t new_size) noexcept
+{
+    const auto size = memory.size();
+    assert(new_size > size);
+    if (new_size <= size + word_size && size + word_size <= memory.capacity()) [[likely]]
+    {
+        // From n to n + 1 words the memory cost grows by 3 + (n + 1)^2 / 512 - n^2 / 512.
+        const auto n = uint64_t{size} / word_size;  // 64-bit: n^2 overflows a 32-bit size_t.
+        gas_left -= static_cast<int64_t>(3 + ((n + 1) * (n + 1) / 512 - n * n / 512));
+        // TODO: An MSTORE starting at the memory end overwrites the whole new word, so its growth
+        // could skip the zeroing, in a path of its own that knows the offset. MSTORE makes nearly
+        // all the growths (MLOAD rarely grows the memory).
+        if (gas_left >= 0) [[likely]]
+            memory.grow(size + word_size);
+        return gas_left;
+    }
+    return grow_memory_general(gas_left, memory, new_size);
 }
 
 /// Check memory requirements of a reasonable size.
