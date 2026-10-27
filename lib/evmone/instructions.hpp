@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "baseline.hpp"
 #include "constants.hpp"
 #include "execution_state.hpp"
 #include "instructions_traits.hpp"
@@ -806,22 +805,25 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept;
 inline code_iterator jump_impl(ExecutionState& state, const uint256& dst) noexcept
 {
     const auto hi_part_is_nonzero = (dst[3] | dst[2] | dst[1]) != 0;
-    if (hi_part_is_nonzero || !state.analysis.baseline->check_jumpdest(dst[0])) [[unlikely]]
+    if (hi_part_is_nonzero || dst[0] >= state.code.size() ||
+        !state.jumpdest_bitset.test(static_cast<size_t>(dst[0]))) [[unlikely]]
     {
         state.status = EVMC_BAD_JUMP_DESTINATION;
         return nullptr;
     }
 
-    return &state.analysis.baseline->code()[static_cast<size_t>(dst[0])];
+    // The code is never null, so the dispatch loop need not test the returned target for null.
+    INTX_REQUIRE(state.code.data() != nullptr);
+    return &state.code[static_cast<size_t>(dst[0])];
 }
 
-/// JUMP instruction implementation using baseline::CodeAnalysis.
+/// JUMP instruction implementation.
 inline code_iterator jump(StackTop stack, ExecutionState& state, code_iterator /*pos*/) noexcept
 {
     return jump_impl(state, stack.pop());
 }
 
-/// JUMPI instruction implementation using baseline::CodeAnalysis.
+/// JUMPI instruction implementation.
 inline code_iterator jumpi(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
     const auto& dst = stack.pop();
@@ -831,7 +833,7 @@ inline code_iterator jumpi(StackTop stack, ExecutionState& state, code_iterator 
 
 inline code_iterator pc(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
-    stack.push(static_cast<uint64_t>(pos - state.analysis.baseline->code().data()));
+    stack.push(static_cast<uint64_t>(pos - state.code.data()));
     return pos + 1;
 }
 

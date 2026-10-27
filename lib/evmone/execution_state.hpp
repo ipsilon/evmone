@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include "bitset_span.hpp"
 #include "state_gas.hpp"
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
@@ -14,15 +15,6 @@
 
 namespace evmone
 {
-namespace advanced
-{
-struct AdvancedCodeAnalysis;
-}
-namespace baseline
-{
-class CodeAnalysis;
-}
-
 using evmc::bytes;
 using evmc::bytes_view;
 using intx::uint256;
@@ -143,17 +135,19 @@ public:
 class ExecutionState
 {
 public:
+    /// The executed code, without the padding Baseline adds after it.
+    bytes_view code;
+
+    /// The bitset of the valid jump destinations in the code, set by Baseline's execute().
+    BitsetSpan jumpdest_bitset{nullptr};
+
     int64_t gas_refund = 0;
     Memory memory;
     const evmc_message* msg = nullptr;
     evmc::HostContext host;
     evmc_revision rev = {};
-    bytes return_data;
-
-    /// The executed code, without the padding Baseline adds after it.
-    bytes_view code;
-
     evmc_status_code status = EVMC_SUCCESS;
+    bytes return_data;
     size_t output_offset = 0;
     size_t output_size = 0;
 
@@ -161,14 +155,6 @@ private:
     evmc_tx_context m_tx = {};
 
 public:
-    /// Pointer to code analysis.
-    /// This should be set and used internally by execute() function of a particular interpreter.
-    union
-    {
-        const baseline::CodeAnalysis* baseline = nullptr;
-        const advanced::AdvancedCodeAnalysis* advanced;
-    } analysis{};
-
     /// The frame's state-gas counters (EIP-8037).
     StateGas state_gas;
 
@@ -182,10 +168,10 @@ public:
     ExecutionState(const evmc_message& message, evmc_revision revision,
         const evmc_host_interface& host_interface, evmc_host_context* host_ctx,
         bytes_view _code) noexcept
-      : msg{&message},
+      : code{_code},
+        msg{&message},
         host{host_interface, host_ctx},
         rev{revision},
-        code{_code},
         state_gas{{.left = message.state_gas}}
     {}
 

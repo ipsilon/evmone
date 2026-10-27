@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include "bitset_span.hpp"
 #include <evmc/evmc.hpp>
 #include <evmc/utils.h>
 #include <memory>
@@ -12,32 +13,6 @@ namespace evmone
 using evmc::bytes_view;
 class ExecutionState;
 class VM;
-
-/// A span type for a bitset.
-struct BitsetSpan
-{
-    using word_type = uint64_t;
-    static constexpr size_t WORD_BITS = sizeof(word_type) * 8;
-
-    word_type* m_array = nullptr;
-
-    explicit BitsetSpan(word_type* array) noexcept : m_array{array} {}
-
-    [[nodiscard]] bool test(size_t index) const noexcept
-    {
-        const auto word_index = index / WORD_BITS;
-        const auto bit_index = index % WORD_BITS;
-        return ((m_array[word_index] >> bit_index) & 1) != 0;
-    }
-
-    void set(size_t index) const noexcept
-    {
-        const auto word_index = index / WORD_BITS;
-        const auto bit_index = index % WORD_BITS;
-        const auto bit_mask = word_type{1} << bit_index;
-        m_array[word_index] |= bit_mask;
-    }
-};
 
 namespace baseline
 {
@@ -62,6 +37,9 @@ public:
 
     /// The executable code. This is where the interpreter should start execution.
     [[nodiscard]] bytes_view code() const noexcept { return m_code; }
+
+    /// The bitset of the code positions that are valid jump destinations.
+    [[nodiscard]] BitsetSpan jumpdest_bitset() const noexcept { return m_jumpdest_bitset; }
 
     /// Check if given position is valid jump destination. Use only for legacy code.
     [[nodiscard]] bool check_jumpdest(uint64_t position) const noexcept

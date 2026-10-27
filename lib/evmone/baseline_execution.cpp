@@ -272,7 +272,7 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
     auto& state = vm.get_execution_state(static_cast<size_t>(msg.depth));
     state.reset(msg, rev, host, ctx, code);
 
-    state.analysis.baseline = &analysis;  // Assign code analysis for instruction implementations.
+    state.jumpdest_bitset = analysis.jumpdest_bitset();
 
     const auto& cost_table = get_baseline_cost_table(state.rev);
 

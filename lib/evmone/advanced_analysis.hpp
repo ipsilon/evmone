@@ -16,6 +16,7 @@
 namespace evmone::advanced
 {
 struct Instruction;
+struct AdvancedCodeAnalysis;
 
 /// Compressed information about instruction basic block.
 struct BlockInfo
@@ -44,6 +45,9 @@ struct AdvancedExecutionState : ExecutionState
     ///
     /// This is only needed to correctly calculate the "current gas left" value.
     uint32_t current_block_cost = 0;
+
+    /// The code analysis, set by execute() for the instructions to use.
+    const AdvancedCodeAnalysis* analysis = nullptr;
 
     AdvancedExecutionState() noexcept = default;
 
@@ -77,7 +81,7 @@ struct AdvancedExecutionState : ExecutionState
         ExecutionState::reset(message, revision, host_interface, host_ctx, _code);
         gas_left = message.gas;
         stack = stack_space.bottom();
-        analysis.advanced = nullptr;  // For consistency with previous behavior.
+        analysis = nullptr;  // For consistency with previous behavior.
         current_block_cost = 0;
     }
 };
