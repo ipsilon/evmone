@@ -176,7 +176,7 @@ int64_t dispatch(const CostTable& cost_table, ExecutionState& state, int64_t gas
         {
             const auto offset = static_cast<uint32_t>(position.code_it - code);
             const auto stack_height = static_cast<int>(position.stack_end - stack_bottom);
-            if (offset < state.original_code.size())  // Skip STOP from code padding.
+            if (offset < state.code.size())  // Skip STOP from code padding.
             {
                 tracer->notify_instruction_start(
                     offset, position.stack_end - 1, stack_height, gas, state);
@@ -272,7 +272,7 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
     auto& state = vm.get_execution_state(static_cast<size_t>(msg.depth));
     state.reset(msg, rev, host, ctx, code);
 
-    state.analysis.baseline = &analysis;  // Assign code analysis for instruction implementations.
+    state.jumpdest_bitset = analysis.jumpdest_bitset();
 
     const auto& cost_table = get_baseline_cost_table(state.rev);
 

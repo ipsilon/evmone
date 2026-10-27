@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "baseline.hpp"
 #include "constants.hpp"
 #include "execution_state.hpp"
 #include "instructions_traits.hpp"
@@ -552,7 +551,7 @@ inline Result calldatacopy(StackTop stack, int64_t gas_left, ExecutionState& sta
 
 inline void codesize(StackTop stack, ExecutionState& state) noexcept
 {
-    stack.push(state.original_code.size());
+    stack.push(state.code.size());
 }
 
 inline Result codecopy(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
@@ -566,7 +565,7 @@ inline Result codecopy(StackTop stack, int64_t gas_left, ExecutionState& state) 
     if (!check_memory(gas_left, state.memory, mem_index, size))
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    const auto code_size = state.original_code.size();
+    const auto code_size = state.code.size();
     const auto dst = static_cast<size_t>(mem_index);
     const auto src = code_size < input_index ? code_size : static_cast<size_t>(input_index);
     const auto s = static_cast<size_t>(size);
@@ -577,7 +576,7 @@ inline Result codecopy(StackTop stack, int64_t gas_left, ExecutionState& state) 
 
     // TODO: Add unit tests for each combination of conditions.
     if (copy_size > 0)
-        std::memcpy(&state.memory[dst], &state.original_code[src], copy_size);
+        std::memcpy(&state.memory[dst], &state.code[src], copy_size);
 
     if (s - copy_size > 0)
         std::memset(&state.memory[dst + copy_size], 0, s - copy_size);
@@ -806,22 +805,25 @@ Result sstore(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept;
 inline code_iterator jump_impl(ExecutionState& state, const uint256& dst) noexcept
 {
     const auto hi_part_is_nonzero = (dst[3] | dst[2] | dst[1]) != 0;
-    if (hi_part_is_nonzero || !state.analysis.baseline->check_jumpdest(dst[0])) [[unlikely]]
+    if (hi_part_is_nonzero || dst[0] >= state.code.size() ||
+        !state.jumpdest_bitset.test(static_cast<size_t>(dst[0]))) [[unlikely]]
     {
         state.status = EVMC_BAD_JUMP_DESTINATION;
         return nullptr;
     }
 
-    return &state.analysis.baseline->code()[static_cast<size_t>(dst[0])];
+    // The code is never null, so the dispatch loop need not test the returned target for null.
+    INTX_REQUIRE(state.code.data() != nullptr);
+    return &state.code[static_cast<size_t>(dst[0])];
 }
 
-/// JUMP instruction implementation using baseline::CodeAnalysis.
+/// JUMP instruction implementation.
 inline code_iterator jump(StackTop stack, ExecutionState& state, code_iterator /*pos*/) noexcept
 {
     return jump_impl(state, stack.pop());
 }
 
-/// JUMPI instruction implementation using baseline::CodeAnalysis.
+/// JUMPI instruction implementation.
 inline code_iterator jumpi(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
     const auto& dst = stack.pop();
@@ -831,7 +833,7 @@ inline code_iterator jumpi(StackTop stack, ExecutionState& state, code_iterator 
 
 inline code_iterator pc(StackTop stack, ExecutionState& state, code_iterator pos) noexcept
 {
-    stack.push(static_cast<uint64_t>(pos - state.analysis.baseline->code().data()));
+    stack.push(static_cast<uint64_t>(pos - state.code.data()));
     return pos + 1;
 }
 

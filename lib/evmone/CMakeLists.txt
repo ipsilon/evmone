@@ -16,6 +16,7 @@ add_library(evmone
     baseline_execution.cpp
     baseline_instruction_table.cpp
     baseline_instruction_table.hpp
+    bitset_span.hpp
     constants.hpp
     create_address.cpp
     create_address.hpp
