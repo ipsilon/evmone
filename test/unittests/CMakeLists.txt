@@ -20,6 +20,7 @@ target_sources(
     evm_eip2929_test.cpp
     evm_eip3198_basefee_test.cpp
     evm_eip3855_push0_test.cpp
+    evm_eip7979_callsub_test.cpp
     evm_eip3860_initcode_test.cpp
     evm_eip4844_blobhash_test.cpp
     evm_eip7516_blobbasefee_test.cpp
