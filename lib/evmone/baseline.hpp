@@ -25,29 +25,16 @@ struct BitsetSpan
 
     [[nodiscard]] bool test(size_t index) const noexcept
     {
-        const auto [word, bit_mask] = get_ref(index);
-        return (word & bit_mask) != 0;
+        // Shift the bit down instead of masking it: GCC then tests it with BT.
+        return ((m_array[index / WORD_BITS] >> (index % WORD_BITS)) & 1) != 0;
     }
 
     void set(size_t index) const noexcept
     {
-        const auto& [word, bit_mask] = get_ref(index);
-        word |= bit_mask;
-    }
-
-private:
-    struct Ref
-    {
-        word_type& word_ref;
-        word_type bit_mask;
-    };
-
-    [[nodiscard, gnu::always_inline, msvc::forceinline]] Ref get_ref(size_t index) const noexcept
-    {
         const auto word_index = index / WORD_BITS;
         const auto bit_index = index % WORD_BITS;
         const auto bit_mask = word_type{1} << bit_index;
-        return {m_array[word_index], bit_mask};
+        m_array[word_index] |= bit_mask;
     }
 };
 
