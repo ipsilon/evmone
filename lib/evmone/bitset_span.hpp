@@ -11,7 +11,7 @@ namespace evmone
 /// A span type for a bitset.
 struct BitsetSpan
 {
-    using word_type = uint64_t;
+    using word_type = size_t;
     static constexpr size_t WORD_BITS = sizeof(word_type) * 8;
 
     word_type* m_array = nullptr;
