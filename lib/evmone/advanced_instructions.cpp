@@ -56,6 +56,13 @@ inline code_iterator impl(AdvancedExecutionState& state, code_iterator pos) noex
     state.adjust_stack_size(instr::traits[Op].stack_height_change);
     return new_pos;
 }
+
+/// Fake adapter for the generic JUMP, JUMPI and PC, which take Baseline's jump base.
+/// This is to make op<...> compile, but pointers must be replaced with Advanced-specific
+/// implementation. Definition not provided.
+template <Opcode Op, code_iterator CoreFn(StackTop, ExecutionState&, const baseline::JumpBase&,
+                         code_iterator) noexcept = core::impl<Op>>
+code_iterator impl(AdvancedExecutionState& state, code_iterator pos) noexcept;
 /// @}
 }  // namespace instr
 
@@ -217,23 +224,11 @@ const Instruction* op_undefined(const Instruction*, AdvancedExecutionState& stat
 }
 
 
-/// The wrapped generic implementation of the instruction, if Advanced uses it.
-template <Opcode Op>
-constexpr instruction_exec_fn generic_op = op<instr::impl<Op>>;
-
-// The generic JUMP, JUMPI and PC take Baseline's jump base. Advanced has its own.
-template <>
-constexpr instruction_exec_fn generic_op<OP_JUMP> = nullptr;
-template <>
-constexpr instruction_exec_fn generic_op<OP_JUMPI> = nullptr;
-template <>
-constexpr instruction_exec_fn generic_op<OP_PC> = nullptr;
-
 constexpr std::array<instruction_exec_fn, 256> instruction_implementations = []() noexcept {
     std::array<instruction_exec_fn, 256> table{};
 
     // Init table with wrapped generic implementations.
-#define ON_OPCODE(OPCODE) table[OPCODE] = generic_op<(OPCODE)>;
+#define ON_OPCODE(OPCODE) table[OPCODE] = op<instr::impl<(OPCODE)>>;
     MAP_OPCODES
 #undef ON_OPCODE
 
