@@ -4,6 +4,8 @@
 #pragma once
 
 #include "execution_state.hpp"
+#include <cassert>
+#include <memory>
 #include <vector>
 
 /// The EVMC execution context type. Defined by evmone as the base of evmone::ExecutionContext.
@@ -33,8 +35,12 @@ public:
     [[nodiscard]] ExecutionState& get_execution_state(size_t depth) noexcept
     {
         // The ExecutionStates are lazily created because they pre-allocate EVM memory and stack.
-        if (depth < m_execution_states.size()) [[likely]]
-            return m_execution_states[depth];
+        // The depth is within the reserved capacity, so the pointer is too. Comparing it with
+        // the end is cheaper than size(), which divides by sizeof(ExecutionState).
+        assert(depth < m_execution_states.capacity());
+        auto* const state = m_execution_states.data() + depth;
+        if (state < std::to_address(m_execution_states.end())) [[likely]]
+            return *state;
         return create_execution_states(depth);
     }
 };
