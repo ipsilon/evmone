@@ -129,6 +129,8 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     const auto cost = new_cost - current_cost;
 
     gas_left -= cost;
+    // TODO: With 32-bit size_t, a new size of 2^32 bytes or more wraps around here and the memory
+    // access goes out of bounds. This needs about 3.5e13 gas, far above real gas limits.
     if (gas_left >= 0) [[likely]]
         memory.grow(static_cast<size_t>(new_words * word_size));
     return gas_left;
@@ -154,8 +156,13 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     if (new_size <= size + word_size && size + word_size <= memory.capacity()) [[likely]]
     {
         // From n to n + 1 words the memory cost grows by 3 + (n + 1)^2 / 512 - n^2 / 512.
-        const auto n = uint64_t{size} / word_size;  // 64-bit: n^2 overflows a 32-bit size_t.
-        gas_left -= static_cast<int64_t>(3 + ((n + 1) * (n + 1) / 512 - n * n / 512));
+        // With n^2 = 512q + r, (n + 1)^2 = 512q + r + 2n + 1, so the growth is
+        // (r + 2n + 1 + 3 * 512) / 512. Only r = n^2 % 512 is needed, so n^2 may wrap around
+        // and 32-bit arithmetic is exact: offsets and sizes are limited to 32 bits, so the
+        // memory has at most 2^28 words.
+        const auto n = static_cast<uint32_t>(size / word_size);
+        const auto cost = (n * n % 512 + 2 * n + 1 + 3 * 512) / 512;
+        gas_left -= int64_t{cost};
         // TODO: An MSTORE starting at the memory end overwrites the whole new word, so its growth
         // could skip the zeroing, in a path of its own that knows the offset. MSTORE makes nearly
         // all the growths (MLOAD rarely grows the memory).
