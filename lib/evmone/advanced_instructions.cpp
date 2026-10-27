@@ -219,20 +219,21 @@ const Instruction* op_undefined(const Instruction*, AdvancedExecutionState& stat
 
 /// The wrapped generic implementation of the instruction, if Advanced uses it.
 template <Opcode Op>
-constexpr instruction_exec_fn generic_op() noexcept
-{
-    // The generic JUMP, JUMPI and PC take Baseline's jump base. Advanced has its own.
-    if constexpr (Op == OP_JUMP || Op == OP_JUMPI || Op == OP_PC)
-        return nullptr;
-    else
-        return op<instr::impl<Op>>;
-}
+constexpr instruction_exec_fn generic_op = op<instr::impl<Op>>;
+
+// The generic JUMP, JUMPI and PC take Baseline's jump base. Advanced has its own.
+template <>
+constexpr instruction_exec_fn generic_op<OP_JUMP> = nullptr;
+template <>
+constexpr instruction_exec_fn generic_op<OP_JUMPI> = nullptr;
+template <>
+constexpr instruction_exec_fn generic_op<OP_PC> = nullptr;
 
 constexpr std::array<instruction_exec_fn, 256> instruction_implementations = []() noexcept {
     std::array<instruction_exec_fn, 256> table{};
 
     // Init table with wrapped generic implementations.
-#define ON_OPCODE(OPCODE) table[OPCODE] = generic_op<(OPCODE)>();
+#define ON_OPCODE(OPCODE) table[OPCODE] = generic_op<(OPCODE)>;
     MAP_OPCODES
 #undef ON_OPCODE
 
