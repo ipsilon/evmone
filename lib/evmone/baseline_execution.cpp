@@ -153,6 +153,7 @@ template <Opcode Op>
         status != EVMC_SUCCESS)
     {
         state.status = status;
+        gas = Gas{0};  // An exceptional halt consumes all gas.
         return {nullptr, pos.stack_end};
     }
     const auto new_pos = invoke(instr::core::impl<Op>, pos, gas, state);
