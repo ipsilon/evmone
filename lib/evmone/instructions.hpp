@@ -552,7 +552,7 @@ inline Result calldatacopy(StackTop stack, int64_t gas_left, ExecutionState& sta
 
 inline void codesize(StackTop stack, ExecutionState& state) noexcept
 {
-    stack.push(state.original_code.size());
+    stack.push(state.code.size());
 }
 
 inline Result codecopy(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
@@ -566,7 +566,7 @@ inline Result codecopy(StackTop stack, int64_t gas_left, ExecutionState& state) 
     if (!check_memory(gas_left, state.memory, mem_index, size))
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    const auto code_size = state.original_code.size();
+    const auto code_size = state.code.size();
     const auto dst = static_cast<size_t>(mem_index);
     const auto src = code_size < input_index ? code_size : static_cast<size_t>(input_index);
     const auto s = static_cast<size_t>(size);
@@ -577,7 +577,7 @@ inline Result codecopy(StackTop stack, int64_t gas_left, ExecutionState& state) 
 
     // TODO: Add unit tests for each combination of conditions.
     if (copy_size > 0)
-        std::memcpy(&state.memory[dst], &state.original_code[src], copy_size);
+        std::memcpy(&state.memory[dst], &state.code[src], copy_size);
 
     if (s - copy_size > 0)
         std::memset(&state.memory[dst + copy_size], 0, s - copy_size);

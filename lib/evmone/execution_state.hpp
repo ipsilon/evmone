@@ -150,8 +150,8 @@ public:
     evmc_revision rev = {};
     bytes return_data;
 
-    /// Reference to original EVM code.
-    bytes_view original_code;
+    /// The executed code, without the padding Baseline adds after it.
+    bytes_view code;
 
     evmc_status_code status = EVMC_SUCCESS;
     size_t output_offset = 0;
@@ -185,7 +185,7 @@ public:
       : msg{&message},
         host{host_interface, host_ctx},
         rev{revision},
-        original_code{_code},
+        code{_code},
         state_gas{{.left = message.state_gas}}
     {}
 
@@ -201,7 +201,7 @@ public:
         host = {host_interface, host_ctx};
         rev = revision;
         return_data.clear();
-        original_code = _code;
+        code = _code;
         status = EVMC_SUCCESS;
         output_offset = 0;
         output_size = 0;
