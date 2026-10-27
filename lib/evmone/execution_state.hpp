@@ -14,15 +14,6 @@
 
 namespace evmone
 {
-namespace advanced
-{
-struct AdvancedCodeAnalysis;
-}
-namespace baseline
-{
-class CodeAnalysis;
-}
-
 using evmc::bytes;
 using evmc::bytes_view;
 using intx::uint256;
@@ -161,14 +152,6 @@ private:
     evmc_tx_context m_tx = {};
 
 public:
-    /// Pointer to code analysis.
-    /// This should be set and used internally by execute() function of a particular interpreter.
-    union
-    {
-        const baseline::CodeAnalysis* baseline = nullptr;
-        const advanced::AdvancedCodeAnalysis* advanced;
-    } analysis{};
-
     /// The frame's state-gas counters (EIP-8037).
     StateGas state_gas;
 
