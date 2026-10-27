@@ -127,10 +127,9 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     const auto current_cost = 3 * current_words + current_words * current_words / 512;
     const auto cost = new_cost - current_cost;
 
-    gas_left -= cost;
     // TODO: With 32-bit size_t, a new size of 2^32 bytes or more wraps around here and the memory
     // access goes out of bounds. This needs about 3.5e13 gas, far above real gas limits.
-    if (gas_left >= 0) [[likely]]
+    if (gas_left.charge(cost)) [[likely]]
         memory.grow(static_cast<size_t>(new_words * word_size));
     return gas_left;
 }
@@ -160,11 +159,10 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
         // memory has at most 2^28 words.
         const auto n = static_cast<uint32_t>(size / word_size);
         const auto cost = (n * n % 512 + 2 * n + 1 + 3 * 512) / 512;
-        gas_left -= int64_t{cost};
         // TODO: An MSTORE starting at the memory end overwrites the whole new word, so its growth
         // could skip the zeroing, in a path of its own that knows the offset. MSTORE makes nearly
         // all the growths (MLOAD rarely grows the memory).
-        if (gas_left >= 0) [[likely]]
+        if (gas_left.charge(int64_t{cost})) [[likely]]
             memory.grow(size + word_size);
         return gas_left;
     }
@@ -295,7 +293,7 @@ inline Result exp(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
         static_cast<int>(intx::count_significant_bytes(exponent));
     const auto exponent_cost = state.rev >= EVMC_SPURIOUS_DRAGON ? 50 : 10;
     const auto additional_cost = exponent_significant_bytes * exponent_cost;
-    if ((gas_left -= additional_cost) < 0)
+    if (!gas_left.charge(additional_cost))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     exponent = intx::exp(base, exponent);
@@ -443,7 +441,7 @@ inline Result keccak256(StackTop stack, Gas gas_left, ExecutionState& state) noe
     const auto s = static_cast<size_t>(size);
     const auto w = num_words(s);
     const auto cost = w * 6;
-    if ((gas_left -= cost) < 0)
+    if (!gas_left.charge(cost))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     auto data = s != 0 ? &state.memory[i] : nullptr;
@@ -464,7 +462,7 @@ inline Result balance(StackTop stack, Gas gas_left, ExecutionState& state) noexc
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
+        if (!gas_left.charge(additional_cold_account_access(state.rev)))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -535,7 +533,7 @@ inline Result calldatacopy(StackTop stack, Gas gas_left, ExecutionState& state) 
     auto s = static_cast<size_t>(size);
     auto copy_size = std::min(s, state.msg->input_size - src);
 
-    if (const auto cost = copy_cost(s); (gas_left -= cost) < 0)
+    if (const auto cost = copy_cost(s); !gas_left.charge(cost))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     if (copy_size > 0)
@@ -569,7 +567,7 @@ inline Result codecopy(StackTop stack, Gas gas_left, ExecutionState& state) noex
     const auto s = static_cast<size_t>(size);
     const auto copy_size = std::min(s, code_size - src);
 
-    if (const auto cost = copy_cost(s); (gas_left -= cost) < 0)
+    if (const auto cost = copy_cost(s); !gas_left.charge(cost))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     // TODO: Add unit tests for each combination of conditions.
@@ -620,7 +618,7 @@ inline Result extcodesize(StackTop stack, Gas gas_left, ExecutionState& state) n
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
+        if (!gas_left.charge(additional_cold_account_access(state.rev)))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -639,12 +637,12 @@ inline Result extcodecopy(StackTop stack, Gas gas_left, ExecutionState& state) n
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto s = static_cast<size_t>(size);
-    if (const auto cost = copy_cost(s); (gas_left -= cost) < 0)
+    if (const auto cost = copy_cost(s); !gas_left.charge(cost))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
+        if (!gas_left.charge(additional_cold_account_access(state.rev)))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -685,7 +683,7 @@ inline Result returndatacopy(StackTop stack, Gas gas_left, ExecutionState& state
     if (src + s > state.return_data.size())
         return {EVMC_INVALID_MEMORY_ACCESS, gas_left};
 
-    if (const auto cost = copy_cost(s); (gas_left -= cost) < 0)
+    if (const auto cost = copy_cost(s); !gas_left.charge(cost))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     if (s > 0)
@@ -701,7 +699,7 @@ inline Result extcodehash(StackTop stack, Gas gas_left, ExecutionState& state) n
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(addr) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
+        if (!gas_left.charge(additional_cold_account_access(state.rev)))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -1031,7 +1029,7 @@ inline Result mcopy(StackTop stack, Gas gas_left, ExecutionState& state) noexcep
     const auto src = static_cast<size_t>(src_u256);
     const auto size = static_cast<size_t>(size_u256);
 
-    if (const auto cost = copy_cost(size); (gas_left -= cost) < 0)
+    if (const auto cost = copy_cost(size); !gas_left.charge(cost))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     if (size > 0)
@@ -1058,7 +1056,7 @@ inline Result log(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
     const auto s = static_cast<size_t>(size);
 
     const auto cost = int64_t(s) * 8;
-    if ((gas_left -= cost) < 0)
+    if (!gas_left.charge(cost))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     std::array<evmc::bytes32, NumTopics> topics;  // NOLINT(cppcoreguidelines-pro-type-member-init)
@@ -1112,7 +1110,7 @@ inline TermResult selfdestruct(StackTop stack, Gas gas_left, ExecutionState& sta
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(beneficiary) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= cold_account_access(state.rev)) < 0)
+        if (!gas_left.charge(cold_account_access(state.rev)))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -1128,14 +1126,14 @@ inline TermResult selfdestruct(StackTop stack, Gas gas_left, ExecutionState& sta
                 {
                     // Balance update costs ACCOUNT_WRITE, charged first so in case of OOG
                     // the state-gas is not consumed.
-                    if ((gas_left -= ACCOUNT_WRITE) < 0)
+                    if (!gas_left.charge(ACCOUNT_WRITE))
                         return {EVMC_OUT_OF_GAS, gas_left};
                     if (!state.state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS))
                         return {EVMC_OUT_OF_GAS, gas_left};
                 }
                 else
                 {
-                    if ((gas_left -= 25000) < 0)
+                    if (!gas_left.charge(25000))
                         return {EVMC_OUT_OF_GAS, gas_left};
                 }
             }

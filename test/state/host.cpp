@@ -237,16 +237,14 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         // The code deposit splits into an execution-gas and a state-gas component (EIP-8037).
         const auto execution_cost = 6 * ((std::ssize(code) + 31) / 32);
         const auto state_cost = std::ssize(code) * COST_PER_STATE_BYTE;
-        gas_left -= execution_cost;
-        if (gas_left < 0 || !state_gas.charge(gas_left, state_cost))
+        if (!gas_left.charge(execution_cost) || !state_gas.charge(gas_left, state_cost))
             return evmc::Result{EVMC_FAILURE, {.left = msg.state_gas}};
     }
     else
     {
         // Code deployment cost.
         const auto cost = std::ssize(code) * 200;
-        gas_left -= cost;
-        if (gas_left < 0)
+        if (!gas_left.charge(cost))
         {
             return (m_rev == EVMC_FRONTIER) ?
                        evmc::Result{EVMC_SUCCESS, result.gas_left, result.gas_refund} :

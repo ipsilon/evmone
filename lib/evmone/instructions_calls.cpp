@@ -35,7 +35,7 @@ inline std::variant<evmc::address, Result> get_target_address(
                 cold_account_access(state.rev) :
                 WARM_ACCESS);
 
-    if ((gas_left -= delegate_account_access_cost) < 0)
+    if (!gas_left.charge(delegate_account_access_cost))
         return Result{EVMC_OUT_OF_GAS, gas_left};
 
     // From Amsterdam the delegate is read even if the call then fails on the balance (EIP-7928).
@@ -136,13 +136,13 @@ Result call_impl(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
     {
         const auto call_value_cost =
             state.rev >= EVMC_AMSTERDAM ? CALL_VALUE_COST_AMSTERDAM : CALL_VALUE_COST;
-        if (has_value && (gas_left -= call_value_cost) < 0)
+        if (has_value && !gas_left.charge(call_value_cost))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
     if (state.rev >= EVMC_BERLIN && state.host.access_account(dst) == EVMC_ACCESS_COLD)
     {
-        if ((gas_left -= additional_cold_account_access(state.rev)) < 0)
+        if (!gas_left.charge(additional_cold_account_access(state.rev)))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -163,7 +163,7 @@ Result call_impl(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
                     return {EVMC_OUT_OF_GAS, gas_left};
                 new_account_charged = true;
             }
-            else if ((gas_left -= ACCOUNT_CREATION_COST) < 0)
+            else if (!gas_left.charge(ACCOUNT_CREATION_COST))
                 return {EVMC_OUT_OF_GAS, gas_left};
         }
     }
@@ -281,7 +281,7 @@ Result create_impl(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
 
     const auto init_code_word_cost = 6 * (Op == OP_CREATE2) + 2 * (state.rev >= EVMC_SHANGHAI);
     const auto init_code_cost = num_words(init_code_size) * init_code_word_cost;
-    if ((gas_left -= init_code_cost) < 0)
+    if (!gas_left.charge(init_code_cost))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     if (state.rev < EVMC_OSAKA && state.msg->depth >= 1024)
