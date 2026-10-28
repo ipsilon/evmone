@@ -294,10 +294,17 @@ constexpr ecc::ProjPoint<E2> lin_func_and_dbl(
     return ecc::ProjPoint<E2>{Xp, Yp, Zp};
 }
 
-/// Computes points P0 and P1 addition for twisted curve + line defined by untwisted P1 and P2
-/// points on the curve (not twisted curve) evaluated at point P. Formula is simplified for P1.z
-/// == 1. For more details see https://notes.ethereum.org/@ipsilon/Hkn2a2qk0
-[[nodiscard]] constexpr ecc::ProjPoint<E2> lin_func_and_add(
+/// The line terms that the point addition of lin_func_and_add() needs as well.
+struct LineTerms
+{
+    Fq2 H;  ///< x1·z0² − x0
+    Fq2 R;  ///< y1·z0³ − y0
+};
+
+/// Computes the line defined by the untwisted P0 and P1 points on the curve (not twisted curve),
+/// evaluated at point P and returned in `t`. Formula is simplified for P1.z == 1.
+/// For more details see https://notes.ethereum.org/@ipsilon/Hkn2a2qk0
+[[gnu::always_inline]] constexpr LineTerms lin_func(
     const ecc::ProjPoint<E2>& P0, const ecc::AffinePoint<E2>& P1, std::array<Fq2, 3>& t) noexcept
 {
     const auto& x0 = P0.x;
@@ -315,45 +322,31 @@ constexpr ecc::ProjPoint<E2> lin_func_and_dbl(
     const auto H = U2 - x0;  // x1 * z0^2 - x0 * z1^2
     const auto R = S2 - y0;  // y1 * z0^3 - y0 * z1^3
 
-    const auto H_squared = H * H;
-    const auto H_cubed = H * H_squared;
-    const auto R_squared = R * R;
-
-    const auto V = x0 * H_squared;
-
-    const auto X3 = R_squared - H_cubed - (V + V);
-    const auto Y3 = R * (V - X3) - y0 * H_cubed;
-    const auto Z3 = H * z0;
-
     t[0] = -H * z0_cubed;   // = x0·z0³ − U2·z0³
     t[1] = R * z0_squared;  // = S2·z0² − y0·z0²
     t[2] = y0 * U2 - x0 * S2;
 
-    return ecc::ProjPoint<E2>{X3, Y3, Z3};
+    return {H, R};
 }
 
-/// Computes points P0 and P1 addition for twisted curve + line defined by untwisted P1 and P2
-/// points on the curve (not twisted curve) evaluated at point P. Formula is simplified for P1.z
-/// == 1. For more details see https://notes.ethereum.org/@ipsilon/Hkn2a2qk0
-constexpr void lin_func(
+/// Computes points P0 and P1 addition on the twisted curve, along with the line of lin_func().
+/// For more details see https://notes.ethereum.org/@ipsilon/Hkn2a2qk0
+[[nodiscard]] constexpr ecc::ProjPoint<E2> lin_func_and_add(
     const ecc::ProjPoint<E2>& P0, const ecc::AffinePoint<E2>& P1, std::array<Fq2, 3>& t) noexcept
 {
-    const auto& x0 = P0.x;
-    const auto& y0 = P0.y;
-    const auto& z0 = P0.z;
+    const auto [H, R] = lin_func(P0, P1, t);
 
-    const auto& x1 = P1.x;
-    const auto& y1 = P1.y;
+    const auto H_squared = H * H;
+    const auto H_cubed = H * H_squared;
+    const auto R_squared = R * R;
 
-    const auto z0_squared = z0 * z0;
-    const auto z0_cubed = z0 * z0_squared;
+    const auto V = P0.x * H_squared;
 
-    const auto U2 = x1 * z0_squared;
-    const auto S2 = y1 * z0_cubed;
+    const auto X3 = R_squared - H_cubed - (V + V);
+    const auto Y3 = R * (V - X3) - P0.y * H_cubed;
+    const auto Z3 = H * P0.z;
 
-    t[0] = (x0 - U2) * z0_cubed;    // = x0·z0³ − U2·z0³
-    t[1] = (S2 - y0) * z0_squared;  // = S2·z0² − y0·z0²
-    t[2] = y0 * U2 - x0 * S2;
+    return ecc::ProjPoint<E2>{X3, Y3, Z3};
 }
 
 /// Computes f^2 for f in Fq12. For more ref https://eprint.iacr.org/2010/354.pdf Algorithm 22
