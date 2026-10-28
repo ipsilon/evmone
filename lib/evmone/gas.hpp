@@ -35,7 +35,15 @@ public:
     {
         assert(m_value >= 0);
         assert(cost >= 0);
+#ifdef __clang__
+        // Clang 21 folds the signed check to m_value < cost for a constant cost, and then computes
+        // the new value separately. The wrapping subtraction prevents the fold.
+        m_value =
+            static_cast<int64_t>(static_cast<uint64_t>(m_value) - static_cast<uint64_t>(cost));
+        return m_value >= 0;
+#else
         return (m_value -= cost) >= 0;
+#endif
     }
 };
 
