@@ -82,7 +82,7 @@ inline evmc_status_code check_requirements(const CostTable& cost_table, Gas& gas
 
     if constexpr (!instr::has_const_gas_cost(Op) || instr::gas_costs[EVMC_FRONTIER][Op] > 0)
     {
-        if (INTX_UNLIKELY((gas_left -= gas_cost) < 0))
+        if (INTX_UNLIKELY(!gas_left.charge(gas_cost)))
             return EVMC_OUT_OF_GAS;
     }
 
@@ -267,6 +267,7 @@ evmc_result execute(VM& vm, const evmc_host_interface& host, evmc_host_context* 
 {
     const auto code = analysis.code();
     const auto code_begin = code.data();
+    assert(msg.gas >= 0);
     auto gas = Gas{msg.gas};
 
     auto& state = vm.get_execution_state(static_cast<size_t>(msg.depth));

@@ -204,7 +204,7 @@ struct AppliedAuthorization
             if (authority_addr != tx.sender && (tx.value == 0 || tx.to != authority_addr) &&
                 !already_applied)
             {
-                if ((gas_left -= instr::ACCOUNT_WRITE) < 0)
+                if (!gas_left.charge(instr::ACCOUNT_WRITE))
                     return std::nullopt;
             }
             // A new account and a net-new delegation indicator: no code at the transaction start
@@ -328,8 +328,7 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
         if (rev < EVMC_AMSTERDAM)
             return true;
         // The delegation target access (EIP-2780).
-        gas_left -= warm ? instr::WARM_ACCESS : instr::COLD_ACCOUNT_ACCESS_AMSTERDAM;
-        return gas_left >= 0;
+        return gas_left.charge(warm ? instr::WARM_ACCESS : instr::COLD_ACCOUNT_ACCESS_AMSTERDAM);
     };
 
     if (!delegation_refund.has_value() || !prepare_call())

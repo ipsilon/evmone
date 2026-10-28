@@ -103,7 +103,7 @@ const Instruction* op_sstore(const Instruction* instr, AdvancedExecutionState& s
     if (status != EVMC_SUCCESS)
         return state.exit(status);
 
-    if ((state.gas_left -= gas_left_correction) < 0)
+    if (!state.gas_left.charge(gas_left_correction))
         return state.exit(EVMC_OUT_OF_GAS);
 
     return ++instr;
@@ -113,7 +113,7 @@ const Instruction* opx_beginblock(const Instruction* instr, AdvancedExecutionSta
 {
     auto& block = instr->arg.block;
 
-    if ((state.gas_left -= block.gas_cost) < 0)
+    if (!state.gas_left.charge(block.gas_cost))
         return state.exit(EVMC_OUT_OF_GAS);
 
     if (const auto stack_size = state.stack_size(); stack_size < block.stack_req)
@@ -188,7 +188,7 @@ const Instruction* op_call(const Instruction* instr, AdvancedExecutionState& sta
     if (status != EVMC_SUCCESS)
         return state.exit(status);
 
-    if ((state.gas_left -= gas_left_correction) < 0)
+    if (!state.gas_left.charge(gas_left_correction))
         return state.exit(EVMC_OUT_OF_GAS);
 
     return ++instr;
@@ -204,7 +204,7 @@ const Instruction* op_create(const Instruction* instr, AdvancedExecutionState& s
     if (status != EVMC_SUCCESS)
         return state.exit(status);
 
-    if ((state.gas_left -= gas_left_correction) < 0)
+    if (!state.gas_left.charge(gas_left_correction))
         return state.exit(EVMC_OUT_OF_GAS);
 
     return ++instr;

@@ -28,6 +28,15 @@ public:
         assert(m_value >= 0);
         return static_cast<uint64_t>(m_value);
     }
+
+    /// Charges the cost from the gas counter.
+    /// Returns false if out of gas, the gas counter is then negative.
+    [[nodiscard]] constexpr bool charge(int64_t cost) noexcept
+    {
+        assert(m_value >= 0);
+        assert(cost >= 0);
+        return (m_value -= cost) >= 0;
+    }
 };
 
 constexpr Gas& operator-=(Gas& gas, int64_t cost) noexcept

@@ -112,7 +112,7 @@ Result sload(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
     {
         // The warm storage access cost is already applied (from the cost table).
         // Here we need to apply additional cold storage access cost.
-        if ((gas_left -= ADDITIONAL_COLD_STORAGE_ACCESS) < 0)
+        if (!gas_left.charge(ADDITIONAL_COLD_STORAGE_ACCESS))
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -141,7 +141,7 @@ Result sstore(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
 
     const auto [gas_cost_warm, gas_refund] = SSTORE_COSTS[state.rev][status];
     const auto gas_cost = gas_cost_warm + gas_cost_cold;
-    if ((gas_left -= gas_cost) < 0)
+    if (!gas_left.charge(gas_cost))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     if (state.rev >= EVMC_AMSTERDAM)
