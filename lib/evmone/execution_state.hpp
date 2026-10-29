@@ -88,6 +88,29 @@ class Memory
         return std::assume_aligned<alignof(std::max_align_t)>(&m_data[offset]);
     }
 
+    /// grow() within the capacity.
+    void grow_within_capacity(size_t new_size) noexcept
+    {
+        std::memset(aligned_at(m_size), 0, new_size - m_size);
+        m_size = new_size;
+    }
+
+    /// grow() past the capacity. Out of line, so that the growths within the capacity pay nothing
+    /// for the realloc() call.
+    [[gnu::noinline]] void grow_capacity(size_t new_size) noexcept
+    {
+        m_capacity *= 2;  // Double the capacity.
+
+        if (m_capacity < new_size)  // If not enough.
+        {
+            // Set capacity to required size rounded to multiple of page_size.
+            m_capacity = ((new_size + (page_size - 1)) / page_size) * page_size;
+        }
+
+        allocate_capacity();
+        grow_within_capacity(new_size);
+    }
+
 public:
     /// Creates Memory object with initial capacity allocation.
     Memory() noexcept { allocate_capacity(); }
@@ -110,20 +133,10 @@ public:
         // Allow only growing memory. Include hint for optimizing compiler.
         INTX_REQUIRE(new_size > m_size);
 
-        if (new_size > m_capacity)
-        {
-            m_capacity *= 2;  // Double the capacity.
-
-            if (m_capacity < new_size)  // If not enough.
-            {
-                // Set capacity to required size rounded to multiple of page_size.
-                m_capacity = ((new_size + (page_size - 1)) / page_size) * page_size;
-            }
-
-            allocate_capacity();
-        }
-        std::memset(aligned_at(m_size), 0, new_size - m_size);
-        m_size = new_size;
+        if (new_size > m_capacity) [[unlikely]]
+            grow_capacity(new_size);
+        else
+            grow_within_capacity(new_size);
     }
 
     /// Virtually clears the memory by setting its size to 0. The capacity stays unchanged.
