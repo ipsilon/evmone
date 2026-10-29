@@ -100,10 +100,12 @@ class Memory
             std::memset(aligned_at(size), 0, written_begin - size);
     }
 
-    /// grow() past the capacity. Out of line, so that the growths within the capacity pay nothing
-    /// for the realloc() call.
+    /// grow() past the capacity, with the words left unzeroed ending tail_size bytes before
+    /// new_size. Out of line, so that the growths within the capacity pay nothing for the
+    /// realloc() call. The tail size, unlike written_end, is a constant for each caller, so those
+    /// growths compute nothing for the call either.
     [[gnu::noinline]] void grow_capacity(
-        size_t new_size, size_t written_begin, size_t written_end) noexcept
+        size_t new_size, size_t written_begin, size_t tail_size) noexcept
     {
         m_capacity *= 2;  // Double the capacity.
 
@@ -114,7 +116,7 @@ class Memory
         }
 
         allocate_capacity();
-        grow_within_capacity(new_size, written_begin, written_end);
+        grow_within_capacity(new_size, written_begin, new_size - tail_size);
     }
 
 public:
@@ -149,7 +151,7 @@ public:
         assert(written_end % 32 == 0 && written_end >= m_size && written_end <= new_size);
 
         if (new_size > m_capacity) [[unlikely]]
-            grow_capacity(new_size, written_begin, written_end);
+            grow_capacity(new_size, written_begin, new_size - written_end);
         else
             grow_within_capacity(new_size, written_begin, written_end);
     }
