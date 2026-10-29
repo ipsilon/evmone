@@ -89,15 +89,21 @@ class Memory
     }
 
     /// grow() within the capacity.
-    void grow_within_capacity(size_t new_size) noexcept
+    void grow_within_capacity(size_t new_size, size_t written_begin, size_t written_end) noexcept
     {
-        std::memset(aligned_at(m_size), 0, new_size - m_size);
+        const auto size = m_size;
         m_size = new_size;
+        // The tail first: nothing is then needed after the memset of the gap.
+        if (written_end != new_size)
+            std::memset(aligned_at(written_end), 0, new_size - written_end);
+        if (written_begin > size)
+            std::memset(aligned_at(size), 0, written_begin - size);
     }
 
     /// grow() past the capacity. Out of line, so that the growths within the capacity pay nothing
     /// for the realloc() call.
-    [[gnu::noinline]] void grow_capacity(size_t new_size) noexcept
+    [[gnu::noinline]] void grow_capacity(
+        size_t new_size, size_t written_begin, size_t written_end) noexcept
     {
         m_capacity *= 2;  // Double the capacity.
 
@@ -108,7 +114,7 @@ class Memory
         }
 
         allocate_capacity();
-        grow_within_capacity(new_size);
+        grow_within_capacity(new_size, written_begin, written_end);
     }
 
 public:
@@ -122,10 +128,16 @@ public:
     /// Returns the size of the allocated memory.
     [[nodiscard]] size_t capacity() const noexcept { return m_capacity; }
 
-    /// Grows the memory to the given size. The extent is filled with zeros.
+    /// Grows the memory to the given size. The extent is filled with zeros, except the words in
+    /// [written_begin, written_end), which the caller overwrites right after.
     ///
-    /// @param new_size  New memory size. Must be larger than the current size and multiple of 32.
-    void grow(size_t new_size) noexcept
+    /// @param new_size       New memory size. Must be larger than the current size and multiple
+    ///                       of 32.
+    /// @param written_begin  The start of the words the caller overwrites, a multiple of 32 up to
+    ///                       new_size. It may be below the current size.
+    /// @param written_end    Their end, a multiple of 32 from the current size to new_size. The
+    ///                       range is empty if it is not above written_begin.
+    void grow(size_t new_size, size_t written_begin, size_t written_end) noexcept
     {
         // Restriction for future changes. EVM always has memory size as multiple of 32 bytes.
         INTX_REQUIRE(new_size % 32 == 0);
@@ -133,11 +145,19 @@ public:
         // Allow only growing memory. Include hint for optimizing compiler.
         INTX_REQUIRE(new_size > m_size);
 
+        assert(written_begin % 32 == 0 && written_begin <= new_size);
+        assert(written_end % 32 == 0 && written_end >= m_size && written_end <= new_size);
+
         if (new_size > m_capacity) [[unlikely]]
-            grow_capacity(new_size);
+            grow_capacity(new_size, written_begin, written_end);
         else
-            grow_within_capacity(new_size);
+            grow_within_capacity(new_size, written_begin, written_end);
     }
+
+    /// Grows the memory to the given size. The extent is filled with zeros.
+    ///
+    /// @param new_size  New memory size. Must be larger than the current size and multiple of 32.
+    void grow(size_t new_size) noexcept { grow(new_size, new_size, new_size); }
 
     /// Virtually clears the memory by setting its size to 0. The capacity stays unchanged.
     void clear() noexcept { m_size = 0; }

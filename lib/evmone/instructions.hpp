@@ -114,24 +114,54 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     return num_words(size_in_bytes) * WordCopyCost;
 }
 
+/// The gas cost of growing the memory of the given size in bytes by one word.
+///
+/// From n to n + 1 words the memory cost grows by 3 + (n + 1)^2 / 512 - n^2 / 512.
+/// With n^2 = 512q + r, (n + 1)^2 = 512q + r + 2n + 1, so the growth is
+/// (r + 2n + 1 + 3 * 512) / 512. Only r = n^2 % 512 is needed, so n^2 may wrap around
+/// and 32-bit arithmetic is exact: offsets and sizes are limited to 32 bits, so the
+/// memory has at most 2^28 words.
+constexpr int64_t memory_word_growth_cost(size_t size) noexcept
+{
+    const auto n = static_cast<uint32_t>(size / word_size);
+    return int64_t{(n * n % 512 + 2 * n + 1 + 3 * 512) / 512};
+}
+
+/// The gas cost of growing the memory from the size to new_size bytes.
+constexpr int64_t memory_growth_cost(size_t size, uint64_t new_size) noexcept
+{
+    const auto new_words = num_words(new_size);
+    const auto current_words = static_cast<int64_t>(size / word_size);
+    const auto new_cost = 3 * new_words + new_words * new_words / 512;
+    const auto current_cost = 3 * current_words + current_words * current_words / 512;
+    return new_cost - current_cost;
+}
+
 /// Grows EVM memory and checks its cost: any growth, the general case of grow_memory().
 [[gnu::noinline]] inline int64_t grow_memory_general(
     int64_t gas_left, Memory& memory, uint64_t new_size) noexcept
 {
     // This implementation recomputes memory.size(). This value is already known to the caller
     // and can be passed as a parameter, but this makes no difference to the performance.
-
-    const auto new_words = num_words(new_size);
-    const auto current_words = static_cast<int64_t>(memory.size() / word_size);
-    const auto new_cost = 3 * new_words + new_words * new_words / 512;
-    const auto current_cost = 3 * current_words + current_words * current_words / 512;
-    const auto cost = new_cost - current_cost;
-
-    gas_left -= cost;
+    gas_left -= memory_growth_cost(memory.size(), new_size);
     // TODO: With 32-bit size_t, a new size of 2^32 bytes or more wraps around here and the memory
     // access goes out of bounds. This needs about 3.5e13 gas, far above real gas limits.
     if (gas_left >= 0) [[likely]]
-        memory.grow(static_cast<size_t>(new_words * word_size));
+        memory.grow(static_cast<size_t>(num_words(new_size) * word_size));
+    return gas_left;
+}
+
+/// grow_memory_general() for a copy to [offset, new_size), which overwrites it right after.
+/// It zeroes only the words the copy does not cover whole, and the last word in any case.
+[[gnu::noinline]] inline int64_t grow_memory_general_for_copy(
+    Memory& memory, uint64_t new_size, uint64_t offset, int64_t gas_left) noexcept
+{
+    gas_left -= memory_growth_cost(memory.size(), new_size);
+    if (gas_left >= 0) [[likely]]
+    {
+        const auto end = static_cast<size_t>(num_words(new_size) * word_size);
+        memory.grow(end, static_cast<size_t>(num_words(offset) * word_size), end - word_size);
+    }
     return gas_left;
 }
 
@@ -154,17 +184,7 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     assert(new_size > size);
     if (new_size <= size + word_size && size + word_size <= memory.capacity()) [[likely]]
     {
-        // From n to n + 1 words the memory cost grows by 3 + (n + 1)^2 / 512 - n^2 / 512.
-        // With n^2 = 512q + r, (n + 1)^2 = 512q + r + 2n + 1, so the growth is
-        // (r + 2n + 1 + 3 * 512) / 512. Only r = n^2 % 512 is needed, so n^2 may wrap around
-        // and 32-bit arithmetic is exact: offsets and sizes are limited to 32 bits, so the
-        // memory has at most 2^28 words.
-        const auto n = static_cast<uint32_t>(size / word_size);
-        const auto cost = (n * n % 512 + 2 * n + 1 + 3 * 512) / 512;
-        gas_left -= int64_t{cost};
-        // TODO: An MSTORE starting at the memory end overwrites the whole new word, so its growth
-        // could skip the zeroing, in a path of its own that knows the offset. MSTORE makes nearly
-        // all the growths (MLOAD rarely grows the memory).
+        gas_left -= memory_word_growth_cost(size);
         if (gas_left >= 0) [[likely]]
             memory.grow(size + word_size);
         return gas_left;
@@ -172,7 +192,74 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
     return grow_memory_general(gas_left, memory, new_size);
 }
 
+/// grow_memory() for an MSTORE, which overwrites the 32 bytes up to new_size right after:
+/// when they are the new word, the word is left unzeroed. A store straddling the memory end and
+/// one starting at it take separate paths, so that the straddling one tests new_size only once,
+/// as in grow_memory().
+[[gnu::noinline]] inline int64_t grow_memory_for_store(
+    int64_t gas_left, Memory& memory, uint64_t new_size) noexcept
+{
+    const auto size = memory.size();
+    const auto end = size + word_size;
+    assert(new_size > size);
+    if (new_size < end)  // The store straddles the memory end.
+    {
+        if (end <= memory.capacity()) [[likely]]
+        {
+            gas_left -= memory_word_growth_cost(size);
+            if (gas_left >= 0) [[likely]]
+                memory.grow(end);
+            return gas_left;
+        }
+    }
+    else if (new_size == end)  // The store starts at the memory end.
+    {
+        if (end <= memory.capacity()) [[likely]]
+        {
+            gas_left -= memory_word_growth_cost(size);
+            if (gas_left >= 0) [[likely]]
+                memory.grow(end, end - word_size, end);
+            return gas_left;
+        }
+    }
+    return grow_memory_general(gas_left, memory, new_size);
+}
+
+/// grow_memory() for a copy to [offset, new_size), which overwrites it right after.
+/// A growth by one word is zeroed whole, any other goes to grow_memory_general_for_copy().
+///
+/// gas_left goes last: as the first argument, it costs GCC an instruction in the out-of-line
+/// returndatacopy().
+[[gnu::noinline]] inline int64_t grow_memory_for_copy(
+    Memory& memory, uint64_t new_size, uint64_t offset, int64_t gas_left) noexcept
+{
+    const auto size = memory.size();
+    const auto end = size + word_size;
+    assert(new_size > size);
+    if (new_size > end || end > memory.capacity()) [[unlikely]]
+        return grow_memory_general_for_copy(memory, new_size, offset, gas_left);
+    gas_left -= memory_word_growth_cost(size);
+    if (gas_left >= 0) [[likely]]
+        memory.grow(end);
+    return gas_left;
+}
+
+/// How an instruction overwrites the memory it checks, right after the check grows it.
+/// The growth may leave unzeroed the new words the instruction overwrites whole. An instruction
+/// that fails before writing them ends the execution, whose memory is not read again.
+enum class MemoryOverwrite
+{
+    none,   ///< Any other: the reads, MSTORE8, MCOPY (its source may lie in the new memory), the
+            ///< calls, etc.
+    store,  ///< MSTORE: the 32 bytes at the offset.
+    copy,   ///< CALLDATACOPY, CODECOPY, EXTCODECOPY and RETURNDATACOPY: all the bytes, with
+            ///< zeros past the end of the source.
+};
+
 /// Check memory requirements of a reasonable size.
+///
+/// @tparam Overwrite  How the instruction overwrites the memory it checks, see MemoryOverwrite.
+template <MemoryOverwrite Overwrite = MemoryOverwrite::none>
 inline bool check_memory(
     int64_t& gas_left, Memory& memory, const uint256& offset, uint64_t size) noexcept
 {
@@ -185,7 +272,20 @@ inline bool check_memory(
     const auto new_size = static_cast<uint64_t>(offset) + size;
     if (new_size > memory.size())
     {
-        gas_left = grow_memory(gas_left, memory, new_size);
+        if constexpr (Overwrite == MemoryOverwrite::store)
+        {
+            assert(size == word_size);
+            gas_left = grow_memory_for_store(gas_left, memory, new_size);
+        }
+        else if constexpr (Overwrite == MemoryOverwrite::copy)
+        {
+            gas_left =
+                grow_memory_for_copy(memory, new_size, static_cast<uint64_t>(offset), gas_left);
+        }
+        else
+        {
+            gas_left = grow_memory(gas_left, memory, new_size);
+        }
         if (gas_left < 0) [[unlikely]]
             return false;
     }
@@ -194,6 +294,7 @@ inline bool check_memory(
 }
 
 /// Check memory requirements for "copy" instructions.
+template <MemoryOverwrite Overwrite = MemoryOverwrite::none>
 inline bool check_memory(
     int64_t& gas_left, Memory& memory, const uint256& offset, const uint256& size) noexcept
 {
@@ -206,7 +307,7 @@ inline bool check_memory(
     if (((size[3] | size[2] | size[1]) != 0) || (size[0] > max_buffer_size))
         return false;
 
-    return check_memory(gas_left, memory, offset, static_cast<uint64_t>(size));
+    return check_memory<Overwrite>(gas_left, memory, offset, static_cast<uint64_t>(size));
 }
 
 namespace instr::core
@@ -528,7 +629,7 @@ inline Result calldatacopy(StackTop stack, int64_t gas_left, ExecutionState& sta
     const auto& input_index = stack.pop();
     const auto& size = stack.pop();
 
-    if (!check_memory(gas_left, state.memory, mem_index, size))
+    if (!check_memory<MemoryOverwrite::copy>(gas_left, state.memory, mem_index, size))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     auto dst = static_cast<size_t>(mem_index);
@@ -562,7 +663,7 @@ inline Result codecopy(StackTop stack, int64_t gas_left, ExecutionState& state) 
     const auto& input_index = stack.pop();
     const auto& size = stack.pop();
 
-    if (!check_memory(gas_left, state.memory, mem_index, size))
+    if (!check_memory<MemoryOverwrite::copy>(gas_left, state.memory, mem_index, size))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto code_size = state.code.size();
@@ -637,7 +738,7 @@ inline Result extcodecopy(StackTop stack, int64_t gas_left, ExecutionState& stat
     const auto& input_index = stack.pop();
     const auto& size = stack.pop();
 
-    if (!check_memory(gas_left, state.memory, mem_index, size))
+    if (!check_memory<MemoryOverwrite::copy>(gas_left, state.memory, mem_index, size))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     const auto s = static_cast<size_t>(size);
@@ -674,7 +775,7 @@ inline Result returndatacopy(StackTop stack, int64_t gas_left, ExecutionState& s
     const auto& input_index = stack.pop();
     const auto& size = stack.pop();
 
-    if (!check_memory(gas_left, state.memory, mem_index, size))
+    if (!check_memory<MemoryOverwrite::copy>(gas_left, state.memory, mem_index, size))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     auto dst = static_cast<size_t>(mem_index);
@@ -778,7 +879,7 @@ inline Result mstore(StackTop stack, int64_t gas_left, ExecutionState& state) no
     const auto& index = stack.pop();
     const auto& value = stack.pop();
 
-    if (!check_memory(gas_left, state.memory, index, 32))
+    if (!check_memory<MemoryOverwrite::store>(gas_left, state.memory, index, 32))
         return {EVMC_OUT_OF_GAS, gas_left};
 
     intx::be::unsafe::store(&state.memory[static_cast<size_t>(index)], value);
