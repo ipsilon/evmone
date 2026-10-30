@@ -171,6 +171,10 @@ const CLI::App& setup_test_cmd(
         ->allow_extra_args(false);
     cmd.add_flag(
         "--collect-only", opts.collect_only, "List each collected test, one per line, and exit.");
+    cmd.add_flag("-v,--verbose", opts.verbose,
+        "Name each fixture, as <file>::<name>, as it runs and what it came to, in place of the "
+        "progress characters. What the fixture writes itself, a trace or a histogram, comes "
+        "between the two.");
     cmd.add_flag("--trace-summary", opts.trace_summary,
         "Report each state test's execution summary, as --trace also does, on the trace stream. "
         "Blockchain tests have no summary to report.");

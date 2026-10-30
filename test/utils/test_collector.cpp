@@ -64,8 +64,9 @@ void collect_tests(
     for (const auto& path : files)
     {
         // Loaded when the test runs: loading a whole tree up front costs far more.
-        cases.push_back(
-            {path.string(), [path, &options, &vm] { return run_fixture_file(path, options, vm); }});
+        cases.push_back({path.string(), [path, &options, &vm](const Observer& observer) {
+                             return run_fixture_file(path, options, vm, observer);
+                         }});
     }
 }
 
