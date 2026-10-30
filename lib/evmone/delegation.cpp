@@ -2,17 +2,17 @@
 // Copyright 2025 The evmone Authors.
 // SPDX-License-Identifier: Apache-2.0
 #include "delegation.hpp"
-#include <cassert>
 
 namespace evmone
 {
 std::optional<evmc::address> get_delegate_address(
     const evmc::HostInterface& host, const evmc::address& addr) noexcept
 {
-    // Load the code prefix up to the delegation designation size.
+    // Load the code prefix one byte past the delegation designator size.
     // The HostInterface::copy_code() copies up to the addr's code size
-    // and returns the number of bytes copied.
-    uint8_t designation_buffer[std::size(DELEGATION_MAGIC) + sizeof(evmc::address)];
+    // and returns the number of bytes copied, so code longer than the designator
+    // fills the extra byte and is rejected as ordinary code.
+    uint8_t designation_buffer[DELEGATION_DESIGNATOR_SIZE + 1];
     const auto size = host.copy_code(addr, 0, designation_buffer, std::size(designation_buffer));
     const bytes_view designation{designation_buffer, size};
 
@@ -21,8 +21,6 @@ std::optional<evmc::address> get_delegate_address(
 
     // Copy the delegate address from the designation buffer.
     evmc::address delegate_address;
-    // Assume the designation with the valid magic has also valid length.
-    assert(designation.size() == std::size(designation_buffer));
     std::ranges::copy(designation.substr(std::size(DELEGATION_MAGIC)), delegate_address.bytes);
     return delegate_address;
 }
