@@ -146,7 +146,7 @@ public:
 /// @return Transaction receipt with state diff.
 TransactionReceipt transition(const StateView& state, const BlockInfo& block,
     const BlockHashes& block_hashes, const Transaction& tx, evmc_revision rev, evmc::VM& vm,
-    const TransactionProperties& tx_props);
+    evmc_execution_context& execution_context, const TransactionProperties& tx_props);
 
 /// Validate a transaction.
 ///

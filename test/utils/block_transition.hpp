@@ -70,7 +70,7 @@ struct TransitionResult
 ///
 /// @param blob_gas_limit  The per-block blob-gas budget set by the protocol maximum.
 [[nodiscard]] TransitionResult apply_block(const TestState& state, evmc::VM& vm,
-    const state::BlockInfo& block, const state::BlockHashes& block_hashes,
-    const std::vector<state::Transaction>& txs, evmc_revision rev, int64_t blob_gas_limit,
-    const BlockTransitionOptions& opts = {});
+    evmc_execution_context& execution_context, const state::BlockInfo& block,
+    const state::BlockHashes& block_hashes, const std::vector<state::Transaction>& txs,
+    evmc_revision rev, int64_t blob_gas_limit, const BlockTransitionOptions& opts = {});
 }  // namespace evmone::test
