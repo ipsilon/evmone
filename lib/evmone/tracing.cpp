@@ -71,6 +71,7 @@ class InstructionCounter : public Tracer
     std::stack<bytes_view> m_codes;
     std::array<unsigned, 256> m_counters{};
     std::string m_out_file_path;
+    std::ostream* m_out = nullptr;
 
     void on_execution_start(
         evmc_revision /*rev*/, const evmc_message& /*msg*/, bytes_view code) noexcept override
@@ -88,13 +89,18 @@ class InstructionCounter : public Tracer
     void on_execution_end(const evmc_result& /*result*/) noexcept override { m_codes.pop(); }
 
 public:
+    explicit InstructionCounter(std::ostream& out) noexcept : m_out{&out} {}
+
     explicit InstructionCounter(std::string_view out_file_path) noexcept
       : m_out_file_path{out_file_path}
     {}
 
     ~InstructionCounter() noexcept override
     {
-        std::ofstream out{m_out_file_path};
+        std::ofstream out_file;
+        if (m_out == nullptr)
+            out_file.open(m_out_file_path);
+        auto& out = m_out != nullptr ? *m_out : out_file;
         out << "{\n";
         bool first = true;
         for (size_t i = 0; i < std::size(m_counters); ++i)
@@ -105,7 +111,8 @@ public:
                 first = false;
             else
                 out << ",\n";
-            out << "  \"" << get_name(static_cast<uint8_t>(i)) << "\": " << m_counters[i];
+            out << "  \"" << get_name(static_cast<uint8_t>(i))
+                << "\": " << std::to_string(m_counters[i]);
         }
         out << "\n}\n";
     }
@@ -186,6 +193,11 @@ public:
 std::unique_ptr<Tracer> create_histogram_tracer(std::ostream& out)
 {
     return std::make_unique<HistogramTracer>(out);
+}
+
+std::unique_ptr<Tracer> create_instruction_counter(std::ostream& out)
+{
+    return std::make_unique<InstructionCounter>(out);
 }
 
 std::unique_ptr<Tracer> create_instruction_counter(std::string_view out_file_path)

@@ -30,6 +30,8 @@ protected:
         vm{*static_cast<evmone::VM*>(m_baseline_vm.get_raw_pointer())}
     {}
 
+    ~tracing() override { vm.remove_tracers(); }
+
     std::string trace(
         bytes_view code, int32_t depth = 0, uint32_t flags = 0, evmc_revision rev = EVMC_BERLIN)
     {
@@ -179,6 +181,58 @@ PUSH1,1
 DUP1,1
 SWAP1,1
 )");
+}
+
+TEST_F(tracing, instruction_counter_stream)
+{
+    vm.add_tracer(evmone::create_instruction_counter(trace_stream));
+
+    EXPECT_EQ(trace(add(2, 3)), "");
+    vm.remove_tracers();
+
+    EXPECT_EQ(trace_stream.str(), "{\n  \"ADD\": 1,\n  \"PUSH1\": 2\n}\n");
+}
+
+TEST_F(tracing, instruction_counter_stream_empty)
+{
+    vm.add_tracer(evmone::create_instruction_counter(trace_stream));
+    EXPECT_EQ(trace_stream.str(), "");
+
+    vm.remove_tracers();
+    EXPECT_EQ(trace_stream.str(), "{\n\n}\n");
+}
+
+TEST_F(tracing, instruction_counter_stream_accumulates)
+{
+    trace_stream << std::hex;
+    const auto flags = trace_stream.flags();
+    vm.add_tracer(evmone::create_instruction_counter(trace_stream));
+
+    for (int i = 0; i < 12; ++i)
+        EXPECT_EQ(trace(add(2, 3)), "");
+
+    vm.remove_tracers();
+    EXPECT_EQ(trace_stream.str(), "{\n  \"ADD\": 12,\n  \"PUSH1\": 24\n}\n");
+    EXPECT_EQ(trace_stream.flags(), flags);
+}
+
+TEST_F(tracing, instruction_counter_stream_vm_destruction)
+{
+    std::ostringstream output;
+    {
+        evmc::MockedHost local_host;
+        evmc::VM owner{evmc_create_evmone()};
+        auto& local_vm = *static_cast<evmone::VM*>(owner.get_raw_pointer());
+        local_vm.add_tracer(evmone::create_instruction_counter(output));
+
+        evmc_message msg{};
+        msg.gas = 1000000;
+        const auto code = add(2, 3);
+        const auto result = owner.execute(local_host, EVMC_BERLIN, msg, code.data(), code.size());
+        EXPECT_EQ(result.status_code, EVMC_SUCCESS);
+        EXPECT_EQ(output.str(), "");
+    }
+    EXPECT_EQ(output.str(), "{\n  \"ADD\": 1,\n  \"PUSH1\": 2\n}\n");
 }
 
 TEST_F(tracing, trace)
