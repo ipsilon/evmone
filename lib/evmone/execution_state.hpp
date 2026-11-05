@@ -47,8 +47,8 @@ public:
 
 /// The EVM memory.
 ///
-/// The implementations uses initial allocation of 4k and then grows capacity with 2x factor.
-/// Some benchmarks have been done to confirm 4k is ok-ish value.
+/// The memory is allocated by the first growth, in whole 4k pages, and its capacity then grows
+/// with 2x factor. Some benchmarks have been done to confirm 4k is ok-ish value.
 class Memory
 {
     /// The size of allocation "page".
@@ -67,18 +67,10 @@ class Memory
     /// The "virtual" size of the memory.
     size_t m_size = 0;
 
-    /// The size of allocated memory. The initialization value is the initial capacity.
-    size_t m_capacity = page_size;
+    /// The size of allocated memory.
+    size_t m_capacity = 0;
 
     [[noreturn, gnu::cold]] static void handle_out_of_memory() noexcept { std::terminate(); }
-
-    // TODO: Allocate the data aligned to 32 bytes, with allocate_at_least(), instead of realloc().
-    void allocate_capacity() noexcept
-    {
-        m_data.reset(static_cast<uint8_t*>(std::realloc(m_data.release(), m_capacity)));
-        if (!m_data) [[unlikely]]
-            handle_out_of_memory();
-    }
 
     /// Returns the pointer to the data at the offset, a multiple of 32, so aligned as the data.
     [[nodiscard, gnu::returns_nonnull]] uint8_t* aligned_at(size_t offset) noexcept
@@ -107,14 +99,16 @@ class Memory
             m_capacity = ((new_size + (page_size - 1)) / page_size) * page_size;
         }
 
-        allocate_capacity();
+        // TODO: Allocate the data aligned to 32 bytes, with allocate_at_least(), instead of
+        // realloc().
+        m_data.reset(static_cast<uint8_t*>(std::realloc(m_data.release(), m_capacity)));
+        if (!m_data) [[unlikely]]
+            handle_out_of_memory();
+
         grow_within_capacity(new_size);
     }
 
 public:
-    /// Creates Memory object with initial capacity allocation.
-    Memory() noexcept { allocate_capacity(); }
-
     uint8_t& operator[](size_t index) noexcept { return m_data[index]; }
 
     [[nodiscard]] size_t size() const noexcept { return m_size; }
