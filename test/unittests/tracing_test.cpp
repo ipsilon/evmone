@@ -6,6 +6,7 @@
 #include <evmc/evmc.hpp>
 #include <evmc/mocked_host.hpp>
 #include <evmone/evmone.h>
+#include <evmone/execution_context.hpp>
 #include <evmone/instructions_traits.hpp>
 #include <evmone/tracing.hpp>
 #include <evmone/vm.hpp>
@@ -18,6 +19,7 @@ class tracing : public Test
 {
 private:
     evmc::VM m_baseline_vm;
+    evmone::ExecutionContext m_execution_context;
 
 protected:
     evmone::VM& vm;
@@ -37,7 +39,7 @@ protected:
         msg.depth = depth;
         msg.flags = flags;
         msg.gas = 1000000;
-        m_baseline_vm.execute(host, rev, msg, code.data(), code.size());
+        m_baseline_vm.execute(m_execution_context, host, rev, msg, code.data(), code.size());
         auto result = trace_stream.str();
         trace_stream.str({});
         return result;

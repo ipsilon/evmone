@@ -45,7 +45,7 @@ enum
      *
      * @see @ref versioning
      */
-    EVMC_ABI_VERSION = 19
+    EVMC_ABI_VERSION = 20
 };
 
 
@@ -220,6 +220,15 @@ struct evmc_tx_context
  * @see evmc_execute_fn().
  */
 struct evmc_host_context;
+
+/**
+ * @struct evmc_execution_context
+ * The opaque data type representing the VM execution context:
+ * the VM resources (e.g. the EVM stack and memory) reused by executions.
+ * The VM defines this type and documents how to create it.
+ * @see evmc_execute_fn().
+ */
+struct evmc_execution_context;
 
 /**
  * Get transaction context callback function.
@@ -1067,6 +1076,9 @@ enum evmc_revision
  * This function MAY be invoked multiple times for a single VM instance.
  *
  * @param vm         The VM instance. This argument MUST NOT be NULL.
+ * @param execution_context  The VM execution context. This argument MUST NOT be NULL.
+ *                   The context MUST NOT be used by other executions at the same time,
+ *                   except the executions nested in this one.
  * @param host       The Host interface. This argument MUST NOT be NULL.
  * @param context    The opaque pointer to the Host execution context.
  *                   This argument MAY be NULL. The VM MUST pass the same
@@ -1079,6 +1091,7 @@ enum evmc_revision
  * @return           The execution result.
  */
 typedef struct evmc_result (*evmc_execute_fn)(struct evmc_vm* vm,
+                                              struct evmc_execution_context* execution_context,
                                               const struct evmc_host_interface* host,
                                               struct evmc_host_context* context,
                                               enum evmc_revision rev,

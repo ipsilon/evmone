@@ -19,8 +19,9 @@ evmc_result execute(AdvancedExecutionState& state, const AdvancedCodeAnalysis& a
     return make_execution_result(state, state.gas_left);
 }
 
-evmc_result execute(evmc_vm* /*unused*/, const evmc_host_interface* host, evmc_host_context* ctx,
-    evmc_revision rev, const evmc_message* msg, const uint8_t* code, size_t code_size) noexcept
+evmc_result execute(evmc_vm* /*unused*/, evmc_execution_context* /*unused*/,
+    const evmc_host_interface* host, evmc_host_context* ctx, evmc_revision rev,
+    const evmc_message* msg, const uint8_t* code, size_t code_size) noexcept
 {
     const bytes_view container{code, code_size};
     const auto analysis = analyze(rev, container);

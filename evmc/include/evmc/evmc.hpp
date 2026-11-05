@@ -714,24 +714,28 @@ public:
     }
 
     /// @copydoc evmc_execute()
-    Result execute(const evmc_host_interface& host,
+    Result execute(evmc_execution_context& execution_context,
+                   const evmc_host_interface& host,
                    evmc_host_context* ctx,
                    evmc_revision rev,
                    const evmc_message& msg,
                    const uint8_t* code,
                    size_t code_size) noexcept
     {
-        return Result{m_instance->execute(m_instance, &host, ctx, rev, &msg, code, code_size)};
+        return Result{m_instance->execute(m_instance, &execution_context, &host, ctx, rev, &msg,
+                                          code, code_size)};
     }
 
     /// Convenient variant of the VM::execute() that takes reference to evmc::Host class.
-    Result execute(Host& host,
+    Result execute(evmc_execution_context& execution_context,
+                   Host& host,
                    evmc_revision rev,
                    const evmc_message& msg,
                    const uint8_t* code,
                    size_t code_size) noexcept
     {
-        return execute(Host::get_interface(), host.to_context(), rev, msg, code, code_size);
+        return execute(execution_context, Host::get_interface(), host.to_context(), rev, msg, code,
+                       code_size);
     }
 
     /// Returns the pointer to C EVMC struct representing the VM.

@@ -214,7 +214,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     create_msg.input_data = nullptr;
     create_msg.input_size = 0;
     const bytes_view initcode{msg.input_data, msg.input_size};
-    auto result = m_vm.execute(*this, m_rev, create_msg, initcode.data(), initcode.size());
+    auto result = m_vm.execute(
+        m_execution_context, *this, m_rev, create_msg, initcode.data(), initcode.size());
     if (result.status_code != EVMC_SUCCESS)
         return result;
 
@@ -307,7 +308,7 @@ evmc::Result Host::execute_message(const evmc_message& msg) noexcept
     if (code.empty())  // Skip trivial execution.
         return evmc::Result{EVMC_SUCCESS, msg.gas, 0, {.left = msg.state_gas}};
 
-    return m_vm.execute(*this, m_rev, msg, code.data(), code.size());
+    return m_vm.execute(m_execution_context, *this, m_rev, msg, code.data(), code.size());
 }
 
 evmc::Result Host::call(const evmc_message& msg) noexcept

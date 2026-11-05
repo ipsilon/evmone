@@ -4,6 +4,7 @@
 
 #include <evmc/mocked_host.hpp>
 #include <evmone/evmone.h>
+#include <evmone/execution_context.hpp>
 #include <test/utils/bytecode.hpp>
 #include <test/utils/utils.hpp>
 #include <cstring>
@@ -57,6 +58,8 @@ static auto print_input = std::getenv("PRINT");
 
 /// The reference VM: evmone Baseline
 static auto ref_vm = evmc::VM{evmc_create_evmone()};
+
+static evmone::ExecutionContext execution_context;
 
 static evmc::VM external_vms[] = {
     evmc::VM{evmc_create_evmone(), {{"advanced", ""}}},
@@ -314,7 +317,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t data_size) noe
         std::cout << "chainid: " << in.host.tx_context.chain_id << "\n";
     }
 
-    const auto ref_res = ref_vm.execute(ref_host, in.rev, in.msg, code.data(), code.size());
+    const auto ref_res =
+        ref_vm.execute(execution_context, ref_host, in.rev, in.msg, code.data(), code.size());
     const auto ref_status = check_and_normalize(ref_res.status_code);
     if (ref_status == EVMC_FAILURE)
         ASSERT_EQ(ref_res.gas_left, 0);
@@ -322,7 +326,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t data_size) noe
     for (auto& vm : external_vms)
     {
         auto host = in.host;  // Copy Host.
-        const auto res = vm.execute(host, in.rev, in.msg, code.data(), code.size());
+        const auto res =
+            vm.execute(execution_context, host, in.rev, in.msg, code.data(), code.size());
 
         const auto status = check_and_normalize(res.status_code);
         ASSERT_EQ(status, ref_status);

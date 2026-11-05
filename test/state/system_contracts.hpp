@@ -46,7 +46,8 @@ class StateView;
 /// Executes code of pre-defined accounts via pseudo-transaction from the system sender (0xff...fe).
 /// The sender's nonce is not increased.
 [[nodiscard]] StateDiff system_call_block_start(const StateView& state_view, const BlockInfo& block,
-    const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm);
+    const BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm,
+    evmc_execution_context& execution_context);
 
 struct RequestsResult
 {
@@ -63,7 +64,7 @@ struct RequestsResult
 ///         requests collection failed.
 [[nodiscard]] std::variant<RequestsResult, std::error_code> system_call_block_end(
     const StateView& state_view, const BlockInfo& block, const BlockHashes& block_hashes,
-    evmc_revision rev, evmc::VM& vm);
+    evmc_revision rev, evmc::VM& vm, evmc_execution_context& execution_context);
 
 /// Emit an ETH transfer log (LOG3) from SYSTEM_ADDRESS for a value transfer (EIP-7708).
 void emit_transfer_log(

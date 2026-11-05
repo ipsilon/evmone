@@ -4,6 +4,7 @@
 #pragma once
 
 #include <evmc/mocked_host.hpp>
+#include <evmone/execution_context.hpp>
 #include <gtest/gtest.h>
 #include <intx/intx.hpp>
 #include <test/utils/bytecode.hpp>
@@ -57,6 +58,8 @@ protected:
 
     evmc::MockedHost host;
 
+    evmone::ExecutionContext execution_context;
+
     evm() noexcept : vm{*GetParam()} {}
 
 
@@ -79,7 +82,7 @@ protected:
             host.access_account(msg.recipient);
         }
 
-        result = vm.execute(host, rev, msg, code.data(), code.size());
+        result = vm.execute(execution_context, host, rev, msg, code.data(), code.size());
         output = {result.output_data, result.output_size};
         gas_used = msg.gas - result.gas_left;
     }

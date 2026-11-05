@@ -51,8 +51,8 @@ void ignore_test_files(
     });
 }
 
-void collect_tests(
-    std::vector<TestCase>& cases, const fs::path& root, const RunOptions& options, evmc::VM& vm)
+void collect_tests(std::vector<TestCase>& cases, const fs::path& root, const RunOptions& options,
+    evmc::VM& vm, evmc_execution_context& execution_context)
 {
     // A file named directly is its own collection; the ignored paths are relative to the
     // directory holding it, as they are to a directory named directly.
@@ -64,17 +64,18 @@ void collect_tests(
     for (const auto& path : files)
     {
         // Loaded when the test runs: loading a whole tree up front costs far more.
-        cases.push_back(
-            {path.string(), [path, &options, &vm] { return run_fixture_file(path, options, vm); }});
+        cases.push_back({path.string(), [path, &options, &vm, &execution_context] {
+                             return run_fixture_file(path, options, vm, execution_context);
+                         }});
     }
 }
 
-int test(
-    evmc::VM& vm, std::span<const fs::path> roots, const RunOptions& options, std::ostream& out)
+int test(evmc::VM& vm, evmc_execution_context& execution_context, std::span<const fs::path> roots,
+    const RunOptions& options, std::ostream& out)
 {
     std::vector<TestCase> cases;
     for (const auto& root : roots)
-        collect_tests(cases, root, options, vm);
+        collect_tests(cases, root, options, vm, execution_context);
     return run_tests(cases, out, options);
 }
 }  // namespace evmone::test

@@ -99,7 +99,7 @@ struct RunOptions
 
 /// Runs every selected fixture of one fixture file, which together are one test, and returns
 /// what each produced. A file which holds no fixture, or does not parse, is the one result.
-[[nodiscard]] std::vector<Result> run_fixture_file(
-    const std::filesystem::path& path, const RunOptions& options, evmc::VM& vm);
+[[nodiscard]] std::vector<Result> run_fixture_file(const std::filesystem::path& path,
+    const RunOptions& options, evmc::VM& vm, evmc_execution_context& execution_context);
 
 }  // namespace evmone::test

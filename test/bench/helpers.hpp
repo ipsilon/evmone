@@ -10,6 +10,7 @@
 #include <evmone/advanced_analysis.hpp>
 #include <evmone/advanced_execution.hpp>
 #include <evmone/baseline.hpp>
+#include <evmone/execution_context.hpp>
 #include <evmone/vm.hpp>
 #include <source_location>
 
@@ -43,9 +44,6 @@ template <typename AnalysisT>
 using AnalyseFn = AnalysisT(evmc_revision, bytes_view);
 
 
-struct FakeExecutionState
-{};
-
 struct FakeCodeAnalysis
 {};
 
@@ -73,20 +71,20 @@ inline evmc::Result advanced_execute(evmc::VM& /*vm*/, advanced::AdvancedExecuti
     return evmc::Result{execute(exec_state, analysis)};
 }
 
-inline evmc::Result baseline_execute(evmc::VM& c_vm, [[maybe_unused]] ExecutionState& exec_state,
+inline evmc::Result baseline_execute(evmc::VM& c_vm, ExecutionContext& execution_context,
     const baseline::CodeAnalysis& analysis, const evmc_message& msg, evmc_revision rev,
     evmc::Host& host, [[maybe_unused]] bytes_view code)
 {
     auto& vm = *static_cast<evmone::VM*>(c_vm.get_raw_pointer());
-    return evmc::Result{
-        baseline::execute(vm, host.get_interface(), host.to_context(), rev, msg, analysis)};
+    return evmc::Result{baseline::execute(
+        vm, execution_context, host.get_interface(), host.to_context(), rev, msg, analysis)};
 }
 
-inline evmc::Result evmc_execute(evmc::VM& vm, FakeExecutionState& /*exec_state*/,
+inline evmc::Result evmc_execute(evmc::VM& vm, ExecutionContext& execution_context,
     const FakeCodeAnalysis& /*analysis*/, const evmc_message& msg, evmc_revision rev,
     evmc::Host& host, bytes_view code) noexcept
 {
-    return vm.execute(host, rev, msg, code.data(), code.size());
+    return vm.execute(execution_context, host, rev, msg, code.data(), code.size());
 }
 
 
@@ -166,12 +164,12 @@ inline auto bench_advanced_execute = bench_execute<advanced::AdvancedExecutionSt
 
 // TODO(C++23): use constexpr.
 inline auto bench_baseline_execute =
-    bench_execute<ExecutionState, baseline::CodeAnalysis, baseline_execute, baseline_analyse>;
+    bench_execute<ExecutionContext, baseline::CodeAnalysis, baseline_execute, baseline_analyse>;
 
 inline void bench_evmc_execute(benchmark::State& state, evmc::VM& vm, bytes_view code,
     bytes_view input = {}, bytes_view expected_output = {})
 {
-    bench_execute<FakeExecutionState, FakeCodeAnalysis, evmc_execute, evmc_analyse>(
+    bench_execute<ExecutionContext, FakeCodeAnalysis, evmc_execute, evmc_analyse>(
         state, vm, code, input, expected_output);
 }
 
