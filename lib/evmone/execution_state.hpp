@@ -4,6 +4,7 @@
 #pragma once
 
 #include "bitset_span.hpp"
+#include "gas.hpp"
 #include "state_gas.hpp"
 #include <evmc/evmc.hpp>
 #include <intx/intx.hpp>
@@ -222,7 +223,7 @@ public:
 /// Applies the frame-exit rules shared by the baseline and advanced interpreters: an exceptional
 /// halt consumes all gas (only a success or revert keeps it), the gas refund counts only on
 /// success, and the output is the memory range recorded in the state.
-inline evmc_result make_execution_result(ExecutionState& state, int64_t gas_left) noexcept
+inline evmc_result make_execution_result(ExecutionState& state, Gas gas_left) noexcept
 {
     if (state.rev >= EVMC_AMSTERDAM && state.status != EVMC_SUCCESS)
     {
@@ -234,11 +235,11 @@ inline evmc_result make_execution_result(ExecutionState& state, int64_t gas_left
 
     // An exceptional halt consumes all gas; only a success or revert keeps gas_left.
     if (state.status != EVMC_SUCCESS && state.status != EVMC_REVERT)
-        gas_left = 0;
+        gas_left = Gas{0};
     const auto gas_refund = (state.status == EVMC_SUCCESS) ? state.gas_refund : 0;
 
     assert(state.output_size != 0 || state.output_offset == 0);
-    return evmc::Result{state.status, gas_left, gas_refund,
+    return evmc::Result{state.status, static_cast<int64_t>(gas_left), gas_refund,
         state.output_size != 0 ? &state.memory[state.output_offset] : nullptr, state.output_size,
         state.state_gas}
         .release_raw();

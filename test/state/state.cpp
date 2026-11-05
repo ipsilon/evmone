@@ -154,7 +154,7 @@ struct AppliedAuthorization
 /// charges the state-dependent costs instead of the refund and records the applied authorizations
 /// to revert them on halt; returns nullopt when out of gas (EIP-2780).
 [[nodiscard]] std::optional<int64_t> process_authorization_list(State& state, const Transaction& tx,
-    evmc_revision rev, int64_t& gas_left, StateGas& state_gas,
+    evmc_revision rev, Gas& gas_left, StateGas& state_gas,
     std::vector<AppliedAuthorization>& applied)
 {
     int64_t delegation_refund = 0;
@@ -299,9 +299,10 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
     const auto state_gas_limit = msg.state_gas;
     StateGas state_gas{{.left = state_gas_limit}};
 
+    Gas gas_left{msg.gas};
     std::vector<AppliedAuthorization> applied;
     const auto delegation_refund =
-        process_authorization_list(state, tx, rev, msg.gas, state_gas, applied);
+        process_authorization_list(state, tx, rev, gas_left, state_gas, applied);
 
     // The authorizations' state-gas (left and spilled) stays consumed even if the call fails
     // (EIP-2780).
@@ -313,12 +314,12 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
         // Creating the recipient account costs state-gas, refilled if the call fails (EIP-8037).
         if (!tx.to.has_value())
             return rev < EVMC_AMSTERDAM || host.account_exists(msg.recipient) ||
-                   state_gas.charge(msg.gas, NEW_ACCOUNT_STATE_GAS);
+                   state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS);
 
         const auto delegate = get_delegate_address(host, *tx.to);
         if (!delegate.has_value())
             return rev < EVMC_AMSTERDAM || tx.value == 0 || host.account_exists(*tx.to) ||
-                   state_gas.charge(msg.gas, NEW_ACCOUNT_STATE_GAS);
+                   state_gas.charge(gas_left, NEW_ACCOUNT_STATE_GAS);
 
         assert(host.account_exists(*tx.to));
         msg.code_address = *delegate;
@@ -327,8 +328,8 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
         if (rev < EVMC_AMSTERDAM)
             return true;
         // The delegation target access (EIP-2780).
-        msg.gas -= warm ? instr::WARM_ACCESS : instr::COLD_ACCOUNT_ACCESS_AMSTERDAM;
-        return msg.gas >= 0;
+        gas_left -= warm ? instr::WARM_ACCESS : instr::COLD_ACCOUNT_ACCESS_AMSTERDAM;
+        return gas_left >= 0;
     };
 
     if (!delegation_refund.has_value() || !prepare_call())
@@ -352,6 +353,7 @@ evmc_message build_message(const Transaction& tx, const TransactionProperties& t
         return evmc::Result{EVMC_OUT_OF_GAS, {.left = state_gas_limit}};
     }
 
+    msg.gas = static_cast<int64_t>(gas_left);
     msg.state_gas = state_gas.left;
     auto result = host.call(msg);
     if (result.status_code == EVMC_SUCCESS)

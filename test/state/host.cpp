@@ -218,7 +218,7 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     if (result.status_code != EVMC_SUCCESS)
         return result;
 
-    auto gas_left = result.gas_left;
+    auto gas_left = Gas{result.gas_left};
     assert(gas_left >= 0);
 
     const bytes_view code{result.output_data, result.output_size};
@@ -261,7 +261,8 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
         new_acc.code_changed = true;
     }
 
-    return evmc::Result{result.status_code, gas_left, result.gas_refund, state_gas};
+    return evmc::Result{
+        result.status_code, static_cast<int64_t>(gas_left), result.gas_refund, state_gas};
 }
 
 evmc::Result Host::execute_message(const evmc_message& msg) noexcept
