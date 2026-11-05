@@ -68,6 +68,43 @@ constexpr std::pair<uint64_t, uint64_t> addmul(
 #endif
 }
 
+/// Computes (9x + y) % mod. Requires x < mod, y ≤ mod and mod ≥ 2⁶⁴.
+/// The result keeps the form of the arguments: 9⋅aR + bR = (9a + b)R,
+/// so this also works for arguments in Montgomery form.
+template <typename UintT>
+[[gnu::always_inline]] constexpr UintT modmuladd9(
+    const UintT& x, const UintT& y, const UintT& mod) noexcept
+{
+    assert(x < mod);
+    assert(y <= mod);
+
+    constexpr auto S = UintT::num_words;  // TODO(C++23): Make it static
+    using WideT = intx::uint<UintT::num_bits + 64>;
+
+    WideT t;
+    uint64_t c = 0;
+    for (size_t i = 0; i != S; ++i)
+        std::tie(c, t[i]) = addmul(y[i], x[i], 9, c);
+    t[S] = c;
+
+    // Estimate the quotient t / mod from the top bits: the shift s makes t >> s fit in a word
+    // because t < 10⋅mod < 2⁴⋅mod. The estimate is the exact quotient or one less,
+    // so a single conditional subtraction completes the reduction.
+    const auto s = UintT::num_bits - intx::clz(mod) - 64 + 4;
+    const auto d = static_cast<uint64_t>(mod >> s) + 1;
+    const auto q = static_cast<uint64_t>(t >> s) / d;
+
+    c = 0;
+    WideT qm;
+    for (size_t i = 0; i != S; ++i)
+        std::tie(c, qm[i]) = addmul(0, mod[i], q, c);
+    qm[S] = c;
+
+    t -= qm;
+    const auto [r, borrow] = intx::subc(t, WideT{mod});
+    return static_cast<UintT>(borrow ? t : r);
+}
+
 /// Performs a modular addition. Requires x < mod and y < mod.
 template <typename UintT>
 constexpr UintT modadd(const UintT& x, const UintT& y, const UintT& mod) noexcept

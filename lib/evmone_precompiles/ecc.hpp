@@ -88,6 +88,20 @@ public:
         return wrap(Fp.mul(a.value_, b.value_));
     }
 
+    /// Computes 9a + b.
+    [[gnu::always_inline]] friend constexpr auto mul9_add(
+        const FieldElement& a, const FieldElement& b) noexcept
+    {
+        return wrap(modmuladd9(a.value_, b.value_, ORDER));
+    }
+
+    /// Computes 9a - b.
+    [[gnu::always_inline]] friend constexpr auto mul9_sub(
+        const FieldElement& a, const FieldElement& b) noexcept
+    {
+        return wrap(modmuladd9(a.value_, ORDER - b.value_, ORDER));
+    }
+
     friend constexpr auto operator+(const FieldElement& a, const FieldElement& b) noexcept
     {
         return wrap(Fp.add(a.value_, b.value_));
