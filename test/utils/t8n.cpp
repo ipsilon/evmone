@@ -91,8 +91,8 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
         j_result["receipts"] = JSON::array();
         j_result["rejected"] = JSON::array();
 
-        // Parse the transactions, assign the chain ID and validate any provided hash. A non-array
-        // `txs` value yields zero transactions but still produces a full, finalized block result.
+        // Parse the transactions and validate any provided hash. A non-array `txs` value yields
+        // zero transactions but still produces a full, finalized block result.
         std::vector<state::Transaction> txs;
         if (j_txs.is_array())
         {
@@ -100,7 +100,12 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
             for (const auto& j_tx : j_txs)
             {
                 auto tx = from_json<state::Transaction>(j_tx);
-                tx.chain_id = args.chain_id;
+
+                // A legacy transaction's chain id is the one its v encodes (EIP-155), as
+                // decode_transaction() reads it; taking --state.chainid made the chain id
+                // check vacuous.
+                if (tx.type == state::Transaction::Type::legacy)
+                    tx.chain_id = tx.v >= 35 ? (tx.v - 35) / 2 : 0;
 
                 if (const auto loaded_tx_hash = load_optional<hash256>(j_tx, "hash"))
                 {

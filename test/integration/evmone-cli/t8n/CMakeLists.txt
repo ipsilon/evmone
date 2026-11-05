@@ -248,7 +248,7 @@ set_tests_properties(
 add_test(
     NAME ${PREFIX}/${TEST_CASE}/trace-0.jsonl
     COMMAND ${CMAKE_COMMAND} -E cat
-    ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}/trace-0-0x03141f8608bc78c8b8fb23275febeb6bf40bd348bd68b703a92bf2ce8ac8bdc0.jsonl
+    ${CMAKE_CURRENT_BINARY_DIR}/${TEST_CASE}/trace-0-0x2ea18c1067829310d4eae2d89bbd2200d2f525d529484d46f53d5b42a53260f8.jsonl
 )
 set_tests_properties(
     ${PREFIX}/${TEST_CASE}/trace-0.jsonl PROPERTIES
@@ -319,7 +319,7 @@ set_tests_properties(
     # The whole encoding: an empty transaction list is hex too, and is what a run which never read
     # --input.txs writes.
     PASS_REGULAR_EXPRESSION
-    "^0xf84ef84c8032830186a08080801ba0468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665aea05cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc"
+    "^0xf84ef84c8032830186a08080801ba0118e6dc7beddd8c4fe1c2daa896c030f7cf7983b244113bf358d239f615ae084a02eee90a3198ef1d59e390db04dd385bd1cd27bddcacbf843c17a7dd46bc9700b"
 )
 
 
