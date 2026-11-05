@@ -92,6 +92,82 @@ TEST_P(evm, memory_grow_by_word_zeros)
     EXPECT_OUTPUT_INT(0);
 }
 
+TEST_P(evm, memory_grow_by_write_zeros)
+{
+    // The growth for a write leaves unzeroed only the words the write covers whole. An execution
+    // leaves 256 words of ones, twice the initial capacity, in the memory buffer. The Baseline
+    // interpreter reuses the buffer for the next execution, and the allocator likely gives it to
+    // Advanced's. That execution grows its memory with a write and returns all of it: every byte
+    // outside the write must be zero.
+    const auto dirty = 256 * mstore(OP_MSIZE, push(~uint256{}));
+    const auto ret_memory = ret(0, OP_MSIZE);
+    const auto check = [&](const bytecode& code, bytes_view input,
+                           std::initializer_list<std::pair<size_t, bytes>> written,
+                           size_t memory_size) {
+        execute(dirty);
+        ASSERT_EQ(result.status_code, EVMC_SUCCESS);
+        execute(code + ret_memory, input);
+        EXPECT_STATUS(EVMC_SUCCESS);
+        bytes expected(memory_size, 0);
+        for (const auto& [offset, data] : written)
+            std::ranges::copy(data, expected.begin() + static_cast<ptrdiff_t>(offset));
+        EXPECT_EQ(hex(output), hex(expected));
+    };
+    const bytes a(32, 0xaa);
+    const bytes b(32, 0x55);
+    const bytes data(100, 0x55);
+
+    // MSTORE at the memory end: the new word is written whole.
+    check(mstore(0, push(a)) + mstore(32, push(b)), {}, {{0, a}, {32, b}}, 64);
+    // MSTORE straddling the memory end.
+    check(mstore(0, push(a)) + mstore(16, push(b)), {}, {{0, a}, {16, b}}, 64);
+    // MSTORE past the memory end, at a word start and inside a word.
+    check(mstore(64, push(b)), {}, {{64, b}}, 96);
+    check(mstore(40, push(b)), {}, {{40, b}}, 96);
+
+    // CALLDATACOPY past the memory end, with a gap and a tail, and with its zero padding.
+    check(calldatacopy(40, 0, 100), data, {{40, data}}, 160);
+    const auto half = data.substr(0, 50);
+    check(calldatacopy(32, 0, 100), half, {{32, half}}, 160);
+    // CALLDATACOPY shorter than a word at the memory end, and longer ones starting before it.
+    check(
+        mstore(0, push(a)) + calldatacopy(32, 0, 20), data, {{0, a}, {32, data.substr(0, 20)}}, 64);
+    check(mstore(0, push(a)) + calldatacopy(16, 0, 100), data, {{0, a}, {16, data}}, 128);
+    check(mstore(0, push(a)) + mstore(32, push(b)) + calldatacopy(8, 0, 100), data,
+        {{0, a}, {32, b}, {8, data}}, 128);
+    // CALLDATACOPY within the last word of a longer growth: the growth zeroes all of it.
+    check(calldatacopy(100, 0, 20), data, {{100, data.substr(0, 20)}}, 128);
+    // CALLDATACOPY growing the memory past its initial capacity, which Advanced starts each
+    // execution with: by more than a word and by one.
+    check(calldatacopy(4000, 0, 100), data, {{4000, data}}, 4128);
+    check(mstore(4064, push(a)) + calldatacopy(4096, 0, 20), data,
+        {{4064, a}, {4096, data.substr(0, 20)}}, 4128);
+
+    // CODECOPY of the whole code and past its end.
+    const auto codecopy_code = push(100) + push(0) + push(40) + OP_CODECOPY;
+    check(codecopy_code, {}, {{40, codecopy_code + ret_memory}}, 160);
+
+    // RETURNDATACOPY of a call's output.
+    host.call_result.output_data = data.data();
+    host.call_result.output_size = data.size();
+    check(staticcall(0) + returndatacopy(40, 0, 100), {}, {{40, data}}, 160);
+
+    // EXTCODECOPY of an account's code and past its end.
+    constexpr evmc::address addr{0xca11ee};
+    host.accounts[addr].code = half;
+    check(push(100) + push(0) + push(40) + push(addr) + OP_EXTCODECOPY, {}, {{40, half}}, 160);
+}
+
+TEST_P(evm, mstore_memory_cost)
+{
+    // The second MSTORE straddles the memory end.
+    const auto code = mstore(0, 0) + mstore(16, 0);
+    execute(24, code);
+    EXPECT_GAS_USED(EVMC_SUCCESS, 24);
+    execute(23, code);
+    EXPECT_EQ(result.status_code, EVMC_OUT_OF_GAS);
+}
+
 TEST_P(evm, mstore8_memory_cost)
 {
     auto code = push(0) + mstore8(0);
@@ -114,6 +190,8 @@ TEST_P(evm, calldatacopy_memory_cost)
     const auto code = calldatacopy(0, 0, 1);
     execute(18, code);
     EXPECT_GAS_USED(EVMC_SUCCESS, 18);
+    execute(14, code);  // Out of gas for the memory growth, not the copy.
+    EXPECT_EQ(result.status_code, EVMC_OUT_OF_GAS);
 }
 
 
