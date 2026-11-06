@@ -4,7 +4,9 @@
 
 #include <evmone_precompiles/modarith.hpp>
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <array>
+#include <random>
 
 using namespace intx;
 using namespace evmone::crypto;
@@ -13,6 +15,12 @@ constexpr auto P23 = 23_u256;
 constexpr auto BN254Mod = 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47_u256;
 constexpr auto Secp256k1Mod =
     0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f_u256;
+constexpr auto SECP256K1_ORDER =
+    0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141_u256;
+constexpr auto SECP256R1_MOD =
+    0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff_u256;
+constexpr auto SECP256R1_ORDER =
+    0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551_u256;
 constexpr auto M256 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff_u256;
 constexpr auto BLS12384Mod =
     0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab_u384;
@@ -30,7 +38,8 @@ class modarith_test : public testing::Test
 {};
 
 using test_types = testing::Types<ModA<uint256, P23>, ModA<uint256, BN254Mod>,
-    ModA<uint256, Secp256k1Mod>, ModA<uint256, M256>, ModA<uint384, BLS12384Mod>>;
+    ModA<uint256, Secp256k1Mod>, ModA<uint256, SECP256K1_ORDER>, ModA<uint256, SECP256R1_MOD>,
+    ModA<uint256, SECP256R1_ORDER>, ModA<uint256, M256>, ModA<uint384, BLS12384Mod>>;
 TYPED_TEST_SUITE(modarith_test, test_types);
 
 TYPED_TEST(modarith_test, to_from_mont)
@@ -145,6 +154,73 @@ TYPED_TEST(modarith_test, mul)
             const auto p = m.from_mont(pm);
             EXPECT_EQ(p, expected);
         }
+    }
+}
+
+template <typename Mod>
+static bool is_invertible(const typename Mod::uint& x) noexcept
+{
+    // The prime factors of M256 = 2²⁵⁶ - 1, the only modulus here with non-invertible values > 0.
+    static constexpr std::array M256_FACTORS{3_u256, 5_u256, 17_u256, 257_u256, 641_u256,
+        65537_u256, 274177_u256, 6700417_u256, 67280421310721_u256, 59649589127497217_u256,
+        5704689200685129054721_u256};
+
+    if constexpr (std::is_same_v<Mod, ModA<uint256, M256>>)
+        return std::ranges::none_of(M256_FACTORS, [&](auto p) { return x % p == 0; });
+    else
+        return x != 0;
+}
+
+TYPED_TEST(modarith_test, inv_random)
+{
+    using Uint = TypeParam::uint;
+    const TypeParam m;
+    std::mt19937_64 rng{2};  // NOLINT(cert-msc51-cpp)
+    for (size_t i = 0; i < 1000; ++i)
+    {
+        Uint x;
+        for (size_t j = 0; j < Uint::num_words; ++j)
+            x[j] = rng();
+        x %= m.mod();
+
+        const auto xm_inv = m.inv(m.to_mont(x));
+        if (!is_invertible<TypeParam>(x))
+        {
+            EXPECT_EQ(xm_inv, 0);
+            continue;
+        }
+        EXPECT_LT(xm_inv, m.mod());
+        EXPECT_EQ(m.from_mont(m.mul(m.to_mont(x), xm_inv)), 1);
+    }
+}
+
+TYPED_TEST(modarith_test, modinv_structured)
+{
+    // modinv_scaled() of small values and values near powers of 2, whose runs of equal bits drive
+    // the divsteps to their limits; ModArith::inv() only sees Montgomery forms, which look random.
+    // For M256, 2⁶⁴ + 1 is not invertible but its gcd with M256 is 1 modulo 2⁶⁴.
+    using Uint = TypeParam::uint;
+    const TypeParam m;
+    const auto check = [&](const Uint& x) {
+        if (x >= m.mod())
+            return;
+        const auto x_inv = modinv_scaled(x, Uint{1}, m.mod());
+        if (!is_invertible<TypeParam>(x))
+            EXPECT_EQ(x_inv, 0) << hex(x);
+        else
+            EXPECT_EQ(udivrem(umul(x, x_inv), m.mod()).rem, 1) << hex(x);
+    };
+    for (uint64_t j = 1; j < 1024; ++j)
+        check(j);
+    for (unsigned k = 10; k < Uint::num_bits; ++k)
+    {
+        const auto p = Uint{1} << k;
+        for (uint64_t j = 0; j <= 8; ++j)
+        {
+            check(p + j);
+            check(p - j);
+        }
+        check(m.mod() - p);
     }
 }
 
