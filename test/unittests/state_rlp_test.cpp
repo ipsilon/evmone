@@ -600,3 +600,39 @@ TEST(state_rlp, tx_to_rlp_blob_invalid_to_value)
         "0a"                                                                    // sig_s
     );
 }
+
+TEST(state_rlp, encode_length_short_form)
+{
+    EXPECT_EQ(rlp::internal::encode_length<rlp::SHORT_STRING_BASE>(0), bytes{0x80});
+    EXPECT_EQ(rlp::internal::encode_length<rlp::SHORT_STRING_BASE>(55), bytes{0xb7});
+    EXPECT_EQ(rlp::internal::encode_length<rlp::SHORT_LIST_BASE>(0), bytes{0xc0});
+    EXPECT_EQ(rlp::internal::encode_length<rlp::SHORT_LIST_BASE>(55), bytes{0xf7});
+}
+
+TEST(state_rlp, encode_length_long_form)
+{
+    const auto string = [](size_t l) {
+        return rlp::internal::encode_length<rlp::SHORT_STRING_BASE>(l);
+    };
+    const auto list = [](size_t l) {
+        return rlp::internal::encode_length<rlp::SHORT_LIST_BASE>(l);
+    };
+
+    EXPECT_EQ(string(56), (bytes{0xb8, 0x38}));
+    EXPECT_EQ(list(56), (bytes{0xf8, 0x38}));
+    EXPECT_EQ(string(0xff), (bytes{0xb8, 0xff}));
+    EXPECT_EQ(list(0xff), (bytes{0xf8, 0xff}));
+    EXPECT_EQ(string(0x100), (bytes{0xb9, 0x01, 0x00}));
+    EXPECT_EQ(list(0x100), (bytes{0xf9, 0x01, 0x00}));
+    EXPECT_EQ(string(0xffff), (bytes{0xb9, 0xff, 0xff}));
+    EXPECT_EQ(list(0xffff), (bytes{0xf9, 0xff, 0xff}));
+    EXPECT_EQ(string(0x10000), (bytes{0xba, 0x01, 0x00, 0x00}));
+    EXPECT_EQ(list(0x10000), (bytes{0xfa, 0x01, 0x00, 0x00}));
+    EXPECT_EQ(string(0xffffff), (bytes{0xba, 0xff, 0xff, 0xff}));
+    EXPECT_EQ(list(0xffffff), (bytes{0xfa, 0xff, 0xff, 0xff}));
+    EXPECT_EQ(string(0x1000000), (bytes{0xbb, 0x01, 0x00, 0x00, 0x00}));
+    EXPECT_EQ(list(0x1000000), (bytes{0xfb, 0x01, 0x00, 0x00, 0x00}));
+
+    EXPECT_EQ(string(0xffffffff), (bytes{0xbb, 0xff, 0xff, 0xff, 0xff}));
+    EXPECT_EQ(list(0xffffffff), (bytes{0xfb, 0xff, 0xff, 0xff, 0xff}));
+}
