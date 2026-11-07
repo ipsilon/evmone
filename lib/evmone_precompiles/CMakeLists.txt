@@ -27,6 +27,7 @@ target_sources(
     pairing/bn254/utils.hpp
     pairing/field_template.hpp
     modarith.hpp
+    modarith.cpp
     modexp.hpp
     modexp.cpp
     mulmod.hpp
