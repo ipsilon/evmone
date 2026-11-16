@@ -50,6 +50,15 @@ if(EVMONE_X86_64_ARCH_LEVEL GREATER_EQUAL 2)
     set_source_files_properties(cpu_check.cpp PROPERTIES COMPILE_DEFINITIONS EVMONE_X86_64_ARCH_LEVEL=${EVMONE_X86_64_ARCH_LEVEL})
 endif()
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+    # GCC stops inlining in a file once it has grown by inline-unit-growth (40%) and lets a large
+    # function grow by large-function-growth (100%). The interpreter loops reach these limits:
+    # some instructions are called out of line and any code size change (e.g. in intx) moves
+    # instructions in or out of the loops. Raise the limits above what the loops need.
+    set_source_files_properties(baseline_execution.cpp PROPERTIES COMPILE_OPTIONS
+        "--param=inline-unit-growth=100;--param=large-function-growth=200")
+endif()
+
 if(CABLE_COMPILER_GNULIKE)
     target_compile_options(
         evmone PRIVATE
