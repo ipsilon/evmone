@@ -18,7 +18,7 @@ using evmc::from_hex;
 template <>
 uint8_t from_json<uint8_t>(const json::json& j)
 {
-    const auto ret = std::stoul(j.get<std::string>(), nullptr, 16);
+    const auto ret = std::stoul(j.get_ref<const std::string&>(), nullptr, 16);
     if (ret > std::numeric_limits<uint8_t>::max())
         throw std::out_of_range("from_json<uint8_t>: value > 0xFF");
 
@@ -28,7 +28,7 @@ uint8_t from_json<uint8_t>(const json::json& j)
 template <>
 uint16_t from_json<uint16_t>(const json::json& j)
 {
-    const auto ret = std::stoul(j.get<std::string>(), nullptr, 16);
+    const auto ret = std::stoul(j.get_ref<const std::string&>(), nullptr, 16);
     if (ret > std::numeric_limits<uint16_t>::max())
         throw std::out_of_range("from_json<uint16_t>: value > 0xFFFF");
 
@@ -38,7 +38,7 @@ uint16_t from_json<uint16_t>(const json::json& j)
 template <>
 uint32_t from_json<uint32_t>(const json::json& j)
 {
-    const auto ret = std::stoul(j.get<std::string>(), nullptr, 16);
+    const auto ret = std::stoul(j.get_ref<const std::string&>(), nullptr, 16);
     if (ret > std::numeric_limits<uint32_t>::max())
         throw std::out_of_range("from_json<uint32_t>: value > 0xFFFFFFFF");
 
@@ -54,7 +54,7 @@ static std::optional<T> integer_from_json(const json::json& j)
     if (!j.is_string())
         return {};
 
-    const auto s = j.get<std::string>();
+    const auto& s = j.get_ref<const std::string&>();
 
     // Always load integers as unsigned and cast to the required type.
     // This will work for cases where a test case uses uint64 timestamps while we use int64.
@@ -87,13 +87,13 @@ uint64_t from_json<uint64_t>(const json::json& j)
 template <>
 bytes from_json<bytes>(const json::json& j)
 {
-    return from_hex(j.get<std::string>()).value();
+    return from_hex(j.get_ref<const std::string&>()).value();
 }
 
 template <>
 address from_json<address>(const json::json& j)
 {
-    const auto v = evmc::from_hex<address>(j.get<std::string>());
+    const auto v = evmc::from_hex<address>(j.get_ref<const std::string&>());
     if (!v.has_value())
         throw std::invalid_argument("from_json<address>: must be hexadecimal string");
     return *v;
@@ -102,7 +102,7 @@ address from_json<address>(const json::json& j)
 template <>
 hash256 from_json<hash256>(const json::json& j)
 {
-    const auto s = j.get<std::string>();
+    const auto& s = j.get_ref<const std::string&>();
     if (s == "0" || s == "0x0")  // Special case to handle "0". Required by exec-spec-tests.
         return 0x00_bytes32;     // TODO: Get rid of it.
 
@@ -115,7 +115,7 @@ hash256 from_json<hash256>(const json::json& j)
 template <>
 intx::uint256 from_json<intx::uint256>(const json::json& j)
 {
-    const auto s = j.get<std::string>();
+    const auto& s = j.get_ref<const std::string&>();
     if (s.starts_with("0x:bigint "))
         return std::numeric_limits<intx::uint256>::max();  // Fake it
     return intx::from_string<intx::uint256>(s);
@@ -343,7 +343,7 @@ static void from_json_tx_common(const json::json& j, state::Transaction& o)
 
     if (const auto to_it = j.find("to"); to_it != j.end())
     {
-        if (!to_it->is_null() && !to_it->get<std::string>().empty())
+        if (!to_it->is_null() && !to_it->get_ref<const std::string&>().empty())
             o.to = from_json<evmc::address>(*to_it);
     }
 
@@ -459,7 +459,7 @@ static void from_json(const json::json& j, StateTransitionTest::Case::Expectatio
     o.state_hash = from_json<hash256>(j.at("hash"));
     o.logs_hash = from_json<hash256>(j.at("logs"));
     if (const auto it = j.find("expectException"); it != j.end())
-        o.exception = map_legacy_exception(it->get<std::string>());
+        o.exception = map_legacy_exception(it->get_ref<const std::string&>());
     o.txbytes = load_optional<bytes>(j, "txbytes");
 }
 
