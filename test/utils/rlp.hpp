@@ -21,27 +21,54 @@ using evmc::bytes_view;
 
 namespace internal
 {
+/// The RLP length prefix, left-aligned in a 64-bit word.
+struct LengthPrefix
+{
+    uint64_t word;  ///< The prefix bytes in big-endian order, starting from the top byte.
+    unsigned size;  ///< The prefix length in bytes: 1 for the short form, up to 8.
+};
+
+/// Computes the RLP length prefix of a payload of @p l bytes.
+/// Lengths up to 2^56-1 are supported (up to 7 length bytes).
 template <uint8_t ShortBase>
-inline bytes encode_length(size_t l)
+constexpr LengthPrefix length_prefix(size_t l) noexcept
 {
     static_assert(ShortBase + SHORT_LENGTH_LIMIT <= std::numeric_limits<uint8_t>::max(),
         "long base must fit uint8_t");
-    static constexpr uint8_t LONG_BASE = ShortBase + SHORT_LENGTH_LIMIT;
-    assert(l <= 0xffffff);
+    constexpr uint8_t LONG_BASE = ShortBase + SHORT_LENGTH_LIMIT;
+    assert(uint64_t{l} < (uint64_t{1} << 56));
 
-    if (l <= SHORT_LENGTH_LIMIT)
-        return {static_cast<uint8_t>(ShortBase + l)};
-    else if (const auto l0 = static_cast<uint8_t>(l); l <= 0xff)
-        return {LONG_BASE + 1, l0};
-    else if (const auto l1 = static_cast<uint8_t>(l >> 8); l <= 0xffff)
-        return {LONG_BASE + 2, l1, l0};
-    else
-        return {LONG_BASE + 3, static_cast<uint8_t>(l >> 16), l1, l0};
+    auto word = uint64_t{ShortBase + l} << 56;
+    unsigned n = 0;  // The number of length bytes.
+    if (l > SHORT_LENGTH_LIMIT)
+    {
+        n = (static_cast<unsigned>(std::bit_width(l)) + 7) / 8;
+        word = (uint64_t{LONG_BASE + n} << 56) | (uint64_t{l} << (56 - 8 * n));
+    }
+    return {word, n + 1};
+}
+
+/// Encodes the RLP length prefix of the @p payload followed by the payload.
+template <uint8_t ShortBase>
+inline bytes encode_with_length(bytes_view payload)
+{
+    const auto prefix = length_prefix<ShortBase>(payload.size());
+
+    // Store the whole prefix word into a 9-byte string and shrink it to the prefix length.
+    // The compiler cannot use the assert and only knows prefix.size <= 9 (from bit_width),
+    // so the 9-byte size lets it drop the erase() range check.
+    // TODO(C++23): Use resize_and_overwrite() and std::byteswap().
+    bytes r(sizeof(prefix.word) + 1, 0);
+    r.reserve(prefix.size + payload.size());  // Allocate once for the prefix and the payload.
+    intx::be::unsafe::store(r.data(), prefix.word);
+    r.erase(prefix.size);
+    r += payload;
+    return r;
 }
 
 inline bytes wrap_list(const bytes& content)
 {
-    return internal::encode_length<SHORT_LIST_BASE>(content.size()) + content;
+    return encode_with_length<SHORT_LIST_BASE>(content);
 }
 
 template <typename InputIterator>
@@ -65,7 +92,7 @@ inline bytes encode(bytes_view data)
     if (data.size() == 1 && data[0] < SHORT_STRING_BASE)
         return {data[0]};
 
-    return internal::encode_length<SHORT_STRING_BASE>(data.size()) += data;  // Op + not available.
+    return internal::encode_with_length<SHORT_STRING_BASE>(data);
 }
 
 inline bytes encode(uint64_t x)

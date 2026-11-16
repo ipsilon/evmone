@@ -46,7 +46,7 @@ TEST(state_rlp, encode_string_short)
 
 TEST(state_rlp, encode_string_long)
 {
-    const auto buffer = std::make_unique<uint8_t[]>(0xffffff);
+    const auto buffer = std::make_unique<uint8_t[]>(0x1000000);
 
     const auto r1 = rlp::encode({buffer.get(), 0xaabb});
     EXPECT_EQ(r1.size(), 0xaabb + 3);
@@ -63,6 +63,10 @@ TEST(state_rlp, encode_string_long)
     const auto r4 = rlp::encode({buffer.get(), 0xffffff});
     EXPECT_EQ(r4.size(), 0xffffff + 4);
     EXPECT_EQ(hex({r4.data(), 10}), "baffffff000000000000");
+
+    const auto r5 = rlp::encode({buffer.get(), 0x1000000});
+    EXPECT_EQ(r5.size(), 0x1000000 + 5);
+    EXPECT_EQ(hex({r5.data(), 10}), "bb010000000000000000");
 }
 
 TEST(state_rlp, encode_vector)
@@ -599,4 +603,75 @@ TEST(state_rlp, tx_to_rlp_blob_invalid_to_value)
         "09"                                                                    // sig_r
         "0a"                                                                    // sig_s
     );
+}
+
+TEST(state_rlp, length_prefix)
+{
+    const auto to_bytes = [](rlp::internal::LengthPrefix prefix) {
+        uint8_t b[sizeof(prefix.word)];
+        intx::be::store(b, prefix.word);
+        return bytes{b, prefix.size};
+    };
+    const auto string = [&](size_t l) {
+        return to_bytes(rlp::internal::length_prefix<rlp::SHORT_STRING_BASE>(l));
+    };
+    const auto list = [&](size_t l) {
+        return to_bytes(rlp::internal::length_prefix<rlp::SHORT_LIST_BASE>(l));
+    };
+
+    EXPECT_EQ(string(0), "80"_hex);
+    EXPECT_EQ(list(0), "c0"_hex);
+    EXPECT_EQ(string(55), "b7"_hex);
+    EXPECT_EQ(list(55), "f7"_hex);
+    EXPECT_EQ(string(56), "b838"_hex);
+    EXPECT_EQ(list(56), "f838"_hex);
+    EXPECT_EQ(string(0xff), "b8ff"_hex);
+    EXPECT_EQ(list(0xff), "f8ff"_hex);
+    EXPECT_EQ(string(0x100), "b90100"_hex);
+    EXPECT_EQ(list(0x100), "f90100"_hex);
+    EXPECT_EQ(string(0xffff), "b9ffff"_hex);
+    EXPECT_EQ(list(0xffff), "f9ffff"_hex);
+    EXPECT_EQ(string(0x10000), "ba010000"_hex);
+    EXPECT_EQ(list(0x10000), "fa010000"_hex);
+    EXPECT_EQ(string(0xffffff), "baffffff"_hex);
+    EXPECT_EQ(list(0xffffff), "faffffff"_hex);
+    EXPECT_EQ(string(0x1000000), "bb01000000"_hex);
+    EXPECT_EQ(list(0x1000000), "fb01000000"_hex);
+    EXPECT_EQ(string(0xffffffff), "bbffffffff"_hex);
+    EXPECT_EQ(list(0xffffffff), "fbffffffff"_hex);
+
+#if SIZE_MAX > 0xffffffff
+    EXPECT_EQ(string(0x100000000), "bc0100000000"_hex);
+    EXPECT_EQ(list(0x100000000), "fc0100000000"_hex);
+    EXPECT_EQ(string(0xffffffffff), "bcffffffffff"_hex);
+    EXPECT_EQ(list(0x10000000000), "fd010000000000"_hex);
+    EXPECT_EQ(string(0xffffffffffff), "bdffffffffffff"_hex);
+    EXPECT_EQ(list(0x1000000000000), "fe01000000000000"_hex);
+    EXPECT_EQ(string(0x00ffffffffffffff), "beffffffffffffff"_hex);
+    EXPECT_EQ(list(0x00ffffffffffffff), "feffffffffffffff"_hex);
+#endif
+}
+
+TEST(state_rlp, encode_with_length)
+{
+    // Sizes around the SSO buffer capacity and the prefix size boundaries.
+    const std::pair<size_t, bytes> cases[] = {{0, "c0"_hex}, {1, "c1"_hex}, {14, "ce"_hex},
+        {15, "cf"_hex}, {22, "d6"_hex}, {23, "d7"_hex}, {55, "f7"_hex}, {56, "f838"_hex},
+        {0xff, "f8ff"_hex}, {0x100, "f90100"_hex}, {0xffff, "f9ffff"_hex},
+        {0x10000, "fa010000"_hex}};
+    for (const auto& [size, prefix] : cases)
+    {
+        const bytes payload(size, 0xaa);
+        EXPECT_EQ(rlp::internal::wrap_list(payload), prefix + payload) << size;
+
+        // The string prefix differs from the list one by the base: 0x80 vs 0xc0.
+        auto string_prefix = prefix;
+        string_prefix[0] = static_cast<uint8_t>(string_prefix[0] - 0x40);
+        EXPECT_EQ(rlp::encode(payload), string_prefix + payload) << size;
+    }
+
+    // A single byte below 0x80 is its own encoding.
+    EXPECT_EQ(rlp::encode("00"_hex), "00"_hex);
+    EXPECT_EQ(rlp::encode("7f"_hex), "7f"_hex);
+    EXPECT_EQ(rlp::encode("80"_hex), "8180"_hex);
 }
