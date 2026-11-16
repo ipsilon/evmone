@@ -65,7 +65,9 @@ inline bytes encode(bytes_view data)
     if (data.size() == 1 && data[0] < SHORT_STRING_BASE)
         return {data[0]};
 
-    return internal::encode_length<SHORT_STRING_BASE>(data.size()) += data;  // Op + not available.
+    auto encoded = internal::encode_length<SHORT_STRING_BASE>(data.size());
+    encoded += data;
+    return encoded;
 }
 
 inline bytes encode(uint64_t x)
