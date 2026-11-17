@@ -143,7 +143,8 @@ struct TransitionMatrix
 
 /// Runs BATCH divsteps (§8) from delta and the low 62 bits of f and g, f odd.
 /// Updates delta and returns the transition matrix of the batch.
-constexpr TransitionMatrix divsteps(int64_t& delta, uint64_t f, uint64_t g) noexcept
+[[gnu::noinline]] constexpr TransitionMatrix divsteps(
+    int64_t& delta, uint64_t f, uint64_t g) noexcept
 {
     assert((f & 1) == 1);
 
