@@ -234,19 +234,20 @@ void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uin
 
     if (dn.size() == 1)
     {
-        const uint64_t rem_words[1]{intx::internal::udivrem_by1(un, dn[0])};
+        const uint64_t rem_words[1]{intx::internal::udivrem_by1(un, un, dn[0])};
         denormalize(rem_words);
     }
     else if (dn.size() == 2)
     {
-        const auto rem2 = intx::internal::udivrem_by2(un, uint128{dn[0], dn[1]});
+        const auto rem2 =
+            intx::internal::udivrem_by2(un.first(un.size() - 1), un, uint128{dn[0], dn[1]});
         denormalize(as_words(rem2));
     }
     else
     {
         // General case: Knuth's algorithm. The quotient is stored in q_buf;
-        // we don't use it, but udivrem_knuth requires storage for it.
-        intx::internal::udivrem_knuth(q_buf.data(), un, dn);
+        // we don't use it, but udivrem_knuth_normalized() requires storage for it.
+        intx::internal::udivrem_knuth_normalized(q_buf.data(), un, dn);
         denormalize(un.subspan(0, dn.size()));
     }
 }
