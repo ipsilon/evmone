@@ -38,7 +38,7 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     if (!is_on_curve(Q))
         return false;
 
-    const ModArith n{Curve::ORDER};
+    static constexpr ModArith n{Curve::ORDER};
 
     // 3. Let z be the Lₙ leftmost bits of e = HASH(m).
     static_assert(Curve::ORDER > 1_u256 << 255);
