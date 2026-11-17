@@ -11,76 +11,6 @@
 #include <type_traits>
 #include <utility>
 
-// TODO: The signed 128-bit integer and smul() are the prototype of their intx counterparts.
-namespace intx
-{
-#if INTX_HAS_BUILTIN_INT128
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpedantic"  // Usage of __int128 triggers a pedantic warning.
-
-/// The signed 128-bit integer.
-using int128 = __int128;
-
-#pragma GCC diagnostic pop
-#else
-/// The signed 128-bit integer, for the compilers without __int128: two's complement words.
-class int128
-{
-    uint128 value_;
-
-    constexpr explicit int128(const uint128& value) noexcept : value_{value} {}
-
-public:
-    constexpr int128(int64_t x) noexcept  // NOLINT(*-explicit-*)
-      : value_{static_cast<uint64_t>(x), static_cast<uint64_t>(x >> 63)}
-    {}
-
-    friend constexpr int128 operator+(const int128& x, const int128& y) noexcept
-    {
-        return int128{x.value_ + y.value_};
-    }
-
-    friend constexpr int128 operator-(const int128& x, const int128& y) noexcept
-    {
-        return int128{x.value_ - y.value_};
-    }
-
-    friend constexpr bool operator==(const int128& x, const int128& y) noexcept = default;
-
-    /// Arithmetic right shift by s, 0 < s < 64.
-    friend constexpr int128 operator>>(const int128& x, int s) noexcept
-    {
-        assert(s > 0 && s < 64);
-        const auto hi = x.value_[1];
-        return int128{uint128{(x.value_[0] >> s) | (hi << (64 - s)),
-            static_cast<uint64_t>(static_cast<int64_t>(hi) >> s)}};
-    }
-
-    constexpr int128& operator+=(const int128& y) noexcept { return *this = *this + y; }
-    constexpr int128& operator>>=(int s) noexcept { return *this = *this >> s; }
-
-    constexpr explicit operator uint64_t() const noexcept { return value_[0]; }
-    constexpr explicit operator int64_t() const noexcept { return static_cast<int64_t>(value_[0]); }
-
-    friend constexpr int128 smul(int64_t x, int64_t y) noexcept;
-};
-#endif
-
-/// Full signed multiplication 64 x 64 -> 128.
-constexpr int128 smul(int64_t x, int64_t y) noexcept
-{
-#if INTX_HAS_BUILTIN_INT128
-    return int128{x} * y;
-#else
-    // The unsigned product minus 2⁶⁴⋅y for negative x and 2⁶⁴⋅x for negative y.
-    auto p = umul(static_cast<uint64_t>(x), static_cast<uint64_t>(y));
-    p[1] -= (static_cast<uint64_t>(x >> 63) & static_cast<uint64_t>(y)) +
-            (static_cast<uint64_t>(y >> 63) & static_cast<uint64_t>(x));
-    return int128{p};
-#endif
-}
-}  // namespace intx
-
 namespace evmone::crypto
 {
 /// Computes the modular inverse of a modulo 2³², satisfying a⋅inv = 1 mod 2³².
@@ -186,6 +116,9 @@ constexpr UintT modsub(const UintT& x, const UintT& y, const UintT& mod) noexcep
 // https://github.com/bitcoin-core/secp256k1/blob/master/doc/safegcd_implementation.md.
 namespace safegcd
 {
+using intx::int128;
+using intx::smul;
+
 /// The number of divsteps in a batch, which is also the number of bits of a limb.
 constexpr int BATCH = 62;
 
@@ -261,33 +194,34 @@ constexpr TransitionMatrix divsteps(int64_t& delta, uint64_t f, uint64_t g) noex
     }
     // The matrices T(δ, f, g) of §8.1 have determinant 1/2,
     // so the matrix 2⁶²⋅T⋯T of the batch has determinant 2⁶².
-    assert(intx::smul(u, r) - intx::smul(v, q) == intx::int128{int64_t{1} << BATCH});
+    assert(smul(u, r) - smul(v, q) == int128{1} << BATCH);
     assert((u < 0 ? -u : u) + (v < 0 ? -v : v) <= int64_t{1} << BATCH);
     assert((q < 0 ? -q : q) + (r < 0 ? -r : r) <= int64_t{1} << BATCH);
     return {u, v, q, r};
 }
 
 /// The low limb of x.
-constexpr int64_t low_limb(const intx::int128& x) noexcept
+constexpr int64_t low_limb(const int128& x) noexcept
 {
-    return static_cast<int64_t>(static_cast<uint64_t>(x) & LIMB_MASK);
+    return static_cast<int64_t>(x & LIMB_MASK);
 }
 
 /// Computes [f, g] = t⋅[f, g] / 2⁶² for f and g of len limbs and the matrix t of the divsteps from
 /// their low limbs, which makes the division exact and the results fit in len limbs (§8.3).
 template <size_t N>
-constexpr void update_fg(size_t len, Limbs<N>& f, Limbs<N>& g, const TransitionMatrix& t) noexcept
+[[gnu::always_inline]] constexpr void update_fg(
+    size_t len, Limbs<N>& f, Limbs<N>& g, const TransitionMatrix& t) noexcept
 {
     const auto [u, v, q, r] = t;
-    auto cf = intx::smul(u, f[0]) + intx::smul(v, g[0]);
-    auto cg = intx::smul(q, f[0]) + intx::smul(r, g[0]);
+    auto cf = smul(u, f[0]) + smul(v, g[0]);
+    auto cg = smul(q, f[0]) + smul(r, g[0]);
     assert(low_limb(cf) == 0 && low_limb(cg) == 0);
     cf >>= BATCH;
     cg >>= BATCH;
     for (size_t i = 1; i < len; ++i)
     {
-        cf += intx::smul(u, f[i]) + intx::smul(v, g[i]);
-        cg += intx::smul(q, f[i]) + intx::smul(r, g[i]);
+        cf += smul(u, f[i]) + smul(v, g[i]);
+        cg += smul(q, f[i]) + smul(r, g[i]);
         f[i - 1] = low_limb(cf);
         g[i - 1] = low_limb(cg);
         cf >>= BATCH;
@@ -301,8 +235,8 @@ constexpr void update_fg(size_t len, Limbs<N>& f, Limbs<N>& g, const TransitionM
 /// exact. Requires vn and rn in (−2⋅mod, mod), the row sums of t at most 2⁶², and
 /// mod_inv⋅mod ≡ 1 (mod 2⁶⁴). The results are in (−2⋅mod, mod).
 template <size_t N>
-constexpr void update_vr(Limbs<N>& vn, Limbs<N>& rn, const TransitionMatrix& t, const Limbs<N>& mod,
-    uint64_t mod_inv) noexcept
+[[gnu::always_inline]] constexpr void update_vr(Limbs<N>& vn, Limbs<N>& rn,
+    const TransitionMatrix& t, const Limbs<N>& mod, uint64_t mod_inv) noexcept
 {
     const auto [u, v, q, r] = t;
 
@@ -313,25 +247,25 @@ constexpr void update_vr(Limbs<N>& vn, Limbs<N>& rn, const TransitionMatrix& t, 
     const auto rn_sign = rn[N - 1] >> 63;
     auto mv = (u & vn_sign) + (v & rn_sign);
     auto mr = (q & vn_sign) + (r & rn_sign);
-    auto cv = intx::smul(u, vn[0]) + intx::smul(v, rn[0]);
-    auto cr = intx::smul(q, vn[0]) + intx::smul(r, rn[0]);
+    auto cv = smul(u, vn[0]) + smul(v, rn[0]);
+    auto cr = smul(q, vn[0]) + smul(r, rn[0]);
 
     // Subtract from mv the residue modulo 2⁶² that cancels the low limb of cv + mod⋅mv.
-    const auto cancel = [mod_inv](const intx::int128& c, int64_t m) noexcept {
+    const auto cancel = [mod_inv](const int128& c, int64_t m) noexcept {
         const auto residue = (mod_inv * static_cast<uint64_t>(c) + static_cast<uint64_t>(m));
         return m - static_cast<int64_t>(residue & LIMB_MASK);
     };
     mv = cancel(cv, mv);
     mr = cancel(cr, mr);
-    cv += intx::smul(mod[0], mv);
-    cr += intx::smul(mod[0], mr);
+    cv += smul(mod[0], mv);
+    cr += smul(mod[0], mr);
     assert(low_limb(cv) == 0 && low_limb(cr) == 0);
     cv >>= BATCH;
     cr >>= BATCH;
     for (size_t i = 1; i < N; ++i)
     {
-        cv += intx::smul(u, vn[i]) + intx::smul(v, rn[i]) + intx::smul(mod[i], mv);
-        cr += intx::smul(q, vn[i]) + intx::smul(r, rn[i]) + intx::smul(mod[i], mr);
+        cv += smul(u, vn[i]) + smul(v, rn[i]) + smul(mod[i], mv);
+        cr += smul(q, vn[i]) + smul(r, rn[i]) + smul(mod[i], mr);
         vn[i - 1] = low_limb(cv);
         rn[i - 1] = low_limb(cr);
         cv >>= BATCH;
@@ -347,18 +281,17 @@ constexpr Limbs<N> to_limbs(const UintT& x) noexcept
 {
     Limbs<N> r{};
     for (size_t i = 0; i < N; ++i)
-        r[i] = static_cast<int64_t>(static_cast<uint64_t>(x >> (i * BATCH)) & LIMB_MASK);
+        r[i] = static_cast<int64_t>((x >> (i * BATCH))[0] & LIMB_MASK);
     return r;
 }
 
-/// The value of the first len limbs of a, in two's complement of the unsigned type WideT.
-template <typename WideT, size_t N>
-constexpr WideT from_limbs(const Limbs<N>& a, size_t len) noexcept
+/// The value of the first len limbs of a.
+template <typename SintT, size_t N>
+constexpr SintT from_limbs(const Limbs<N>& a, size_t len) noexcept
 {
-    const auto top = a[len - 1];
-    auto r = top < 0 ? -WideT{static_cast<uint64_t>(-top)} : WideT{static_cast<uint64_t>(top)};
+    SintT r = a[len - 1];
     for (size_t i = len - 1; i != 0; --i)
-        r = (r << BATCH) | WideT{static_cast<uint64_t>(a[i - 1])};
+        r = (r << BATCH) | SintT{a[i - 1]};
     return r;
 }
 
@@ -414,22 +347,22 @@ constexpr UintT modinv_scaled(const UintT& x, const UintT& scale, const UintT& m
     }
 
     // Now f = ±gcd(x, mod), and vn ≡ ±scale⋅x⁻¹ (mod mod) if the gcd is 1.
-    using WideT = intx::uint<UintT::num_bits + 64>;
-    const auto f_value = from_limbs<WideT>(f, len);
-    if (f_value != 1 && f_value != -WideT{1})
+    using SintT = intx::sint<UintT::num_bits + 64>;
+    const auto f_value = from_limbs<SintT>(f, len);
+    if (f_value != 1 && f_value != -1)
         return 0;
 
     // Move vn from (−2⋅mod, mod) to [0, mod), negated if f = −1.
-    const WideT mod_value{mod};
-    auto vn_value = from_limbs<WideT>(vn, N);
-    if (intx::slt(vn_value, {}))
+    const auto mod_value = from_limbs<SintT>(m, N);
+    auto vn_value = from_limbs<SintT>(vn, N);
+    if (vn_value < 0)
         vn_value += mod_value;
-    if (f_value != 1)
+    if (f_value == -1)
         vn_value = -vn_value;
-    if (intx::slt(vn_value, {}))
+    if (vn_value < 0)
         vn_value += mod_value;
-    assert(vn_value < mod_value);
-    return static_cast<UintT>(vn_value);
+    assert(vn_value >= 0 && vn_value < mod_value);
+    return static_cast<UintT>(static_cast<intx::uint<SintT::num_bits>>(vn_value));
 }
 
 extern template intx::uint256 modinv_scaled(
