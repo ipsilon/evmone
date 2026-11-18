@@ -16,10 +16,15 @@ using evmc::bytes_view;
 constexpr uint8_t DELEGATION_MAGIC_BYTES[] = {0xef, 0x01, 0x00};
 constexpr bytes_view DELEGATION_MAGIC{DELEGATION_MAGIC_BYTES, std::size(DELEGATION_MAGIC_BYTES)};
 
-/// Check if code contains EIP-7702 delegation designator
+/// Size of EIP-7702 delegation designation: the magic followed by the delegate address.
+constexpr auto DELEGATION_DESIGNATION_SIZE = std::size(DELEGATION_MAGIC) + sizeof(evmc::address);
+
+/// Check if code is EIP-7702 delegation designation.
+///
+/// Code of other size starting with the magic is not a designation.
 constexpr bool is_code_delegated(bytes_view code) noexcept
 {
-    return code.starts_with(DELEGATION_MAGIC);
+    return code.size() == DELEGATION_DESIGNATION_SIZE && code.starts_with(DELEGATION_MAGIC);
 }
 
 /// Get EIP-7702 delegate address from the code of addr, if it is delegated.
