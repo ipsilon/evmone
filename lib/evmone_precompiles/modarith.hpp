@@ -263,6 +263,7 @@ template <size_t N>
     assert(low_limb(cv) == 0 && low_limb(cr) == 0);
     cv >>= BATCH;
     cr >>= BATCH;
+#pragma GCC unroll N
     for (size_t i = 1; i < N; ++i)
     {
         cv += smul(u, vn[i]) + smul(v, rn[i]) + smul(mod[i], mv);
