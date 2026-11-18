@@ -204,7 +204,7 @@ struct TransitionMatrix
 /// The low limb of x.
 constexpr int64_t low_limb(const int128& x) noexcept
 {
-    return static_cast<int64_t>(x & LIMB_MASK);
+    return static_cast<int64_t>(x[0] & LIMB_MASK);
 }
 
 /// Computes [f, g] = t⋅[f, g] / 2⁶² for f and g of len limbs and the matrix t of the divsteps from
@@ -253,7 +253,7 @@ template <size_t N>
 
     // Subtract from mv the residue modulo 2⁶² that cancels the low limb of cv + mod⋅mv.
     const auto cancel = [mod_inv](const int128& c, int64_t m) noexcept {
-        const auto residue = (mod_inv * static_cast<uint64_t>(c) + static_cast<uint64_t>(m));
+        const auto residue = mod_inv * c[0] + static_cast<uint64_t>(m);
         return m - static_cast<int64_t>(residue & LIMB_MASK);
     };
     mv = cancel(cv, mv);
@@ -354,7 +354,7 @@ constexpr UintT modinv_scaled(const UintT& x, const UintT& scale, const UintT& m
         return 0;
 
     // Move vn from (−2⋅mod, mod) to [0, mod), negated if f = −1.
-    const auto mod_value = from_limbs<SintT>(m, N);
+    const SintT mod_value{mod};
     auto vn_value = from_limbs<SintT>(vn, N);
     if (vn_value < 0)
         vn_value += mod_value;
@@ -363,7 +363,7 @@ constexpr UintT modinv_scaled(const UintT& x, const UintT& scale, const UintT& m
     if (vn_value < 0)
         vn_value += mod_value;
     assert(vn_value >= 0 && vn_value < mod_value);
-    return static_cast<UintT>(static_cast<intx::uint<SintT::num_bits>>(vn_value));
+    return static_cast<UintT>(vn_value);
 }
 
 extern template intx::uint256 modinv_scaled(
