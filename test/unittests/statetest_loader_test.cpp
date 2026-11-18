@@ -182,11 +182,17 @@ TEST(statetest_loader, validate_state_unexpected_ef_prefix)
 
 TEST(statetest_loader, validate_state_invalid_delegation_size)
 {
-    TestState state{{0xadd4_address, {.code = "EF010000"_hex}}};
-    EXPECT_THAT([&] { validate_state(state, EVMC_PRAGUE); },
-        ThrowsMessage<std::invalid_argument>(
-            "EIP-7702 delegation designator at 0x000000000000000000000000000000000000add4 has "
-            "invalid size"));
+    // Code with the delegation magic but of invalid size is not a delegation designation,
+    // but it is allowed from Prague to test that it is executed as code.
+    const auto designation = "EF01000000000000000000000000000000000000000001"_hex;
+    for (const auto& code : {designation.substr(0, 4), designation + "00"_hex})
+    {
+        TestState state{{0xadd4_address, {.code = code}}};
+        EXPECT_NO_THROW(validate_state(state, EVMC_PRAGUE));
+        EXPECT_THAT([&] { validate_state(state, EVMC_CANCUN); },
+            ThrowsMessage<std::invalid_argument>("unexpected code starting with 0xEF at "
+                                                 "0x000000000000000000000000000000000000add4"));
+    }
 }
 
 TEST(statetest_loader, validate_state_unexpected_delegation)

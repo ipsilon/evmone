@@ -543,7 +543,10 @@ void validate_state(const TestState& state, evmc_revision rev)
         if (state::is_precompile(rev, addr) && !acc.code.empty())
             throw std::invalid_argument("unexpected code at precompile address " + hex0x(addr));
 
-        const bool allowedEF = (rev >= EVMC_PRAGUE && is_code_delegated(acc.code)) ||
+        // From Prague, allow code starting with the EIP-7702 delegation magic also when it is not
+        // a valid delegation designation (of other size). Such code cannot be created, but tests
+        // use it to check that it is executed as code and not as a delegation.
+        const bool allowedEF = (rev >= EVMC_PRAGUE && acc.code.starts_with(DELEGATION_MAGIC)) ||
                                // exceptions to EIP-3541 rule existing on Mainnet
                                acc.code == "EF"_hex || acc.code == "EFF09f918bf09f9fa9"_hex;
         if (rev >= EVMC_LONDON && !allowedEF && !acc.code.empty() && acc.code[0] == 0xEF)
@@ -552,13 +555,6 @@ void validate_state(const TestState& state, evmc_revision rev)
         if (rev >= EVMC_PARIS && acc.code.empty() && acc.balance == 0 && acc.nonce == 0 &&
             !acc.storage.empty())
             throw std::invalid_argument("empty account with non-empty storage at " + hex0x(addr));
-
-        if (rev >= EVMC_PRAGUE && is_code_delegated(acc.code) &&
-            acc.code.size() != std::size(DELEGATION_MAGIC) + sizeof(evmc::address))
-        {
-            throw std::invalid_argument(
-                "EIP-7702 delegation designator at " + hex0x(addr) + " has invalid size");
-        }
 
         for (const auto& [key, value] : acc.storage)
         {
