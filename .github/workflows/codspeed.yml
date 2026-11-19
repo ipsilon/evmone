@@ -21,9 +21,9 @@ env:
   CXX: g++-15
   # A benchmark is identified by the name of the fixture it ran, so a release which renames
   # the fixtures starts the series over. Bump this deliberately, with the archive's digest.
-  BENCHMARK_FIXTURES_RELEASE: benchmark@v0.0.7
-  BENCHMARK_FIXTURES_SHA256: efa7cbec58bedab28870e260eca1f5271b1c3d81c952f221ba6432bff88fee5d
-  FIXTURES: fixtures/blockchain_tests/benchmark
+  BENCHMARK_FIXTURES_RELEASE: tests-benchmark@v0.0.11
+  BENCHMARK_FIXTURES_SHA256: 7ed826b7e6fe9bbf66c027b417cde359ae50fcb3519728c85c1ee9f22c9c2807
+  FIXTURES: fixtures/blockchain_tests/for_amsterdam_at_0001M
 
 jobs:
   benchmark:
@@ -35,10 +35,10 @@ jobs:
       id-token: write # required for OIDC authentication with CodSpeed
     strategy:
       fail-fast: false
-      # CodSpeed merges the jobs of a workflow run into one report, but rejects too many
-      # benchmarks in a single upload (750 were), so the fixtures are split into jobs. Two sweeps
-      # measured elsewhere are left out: modexp.json (the precompiles benchmark sweeps it) and
-      # log_benchmark.json (log.json sweeps the same opcodes).
+      # CodSpeed merges the jobs of a workflow run into one report. Sweeps measured elsewhere are
+      # left out: modexp.json (the precompiles benchmark sweeps it), log_benchmark.json (log.json
+      # sweeps the same opcodes), and calldatacopy_from_origin.json and returndatacopy.json
+      # (mcopy.json sweeps the same copying).
       matrix:
         include:
           - name: evmone
@@ -54,20 +54,24 @@ jobs:
           - name: instruction
             fixtures: compute/instruction
             run: >-
-              $BUILD_DIR/bin/evmone test $FIXTURES/compute/instruction -k benchmark-gas-value_1M
+              $BUILD_DIR/bin/evmone test $FIXTURES/compute/instruction
               --ignore call_context --ignore account_query --ignore log/log_benchmark.json
           - name: instruction/call_context
             fixtures: compute/instruction/call_context
-            run: $BUILD_DIR/bin/evmone test $FIXTURES/compute/instruction/call_context -k benchmark-gas-value_1M
+            run: >-
+              $BUILD_DIR/bin/evmone test $FIXTURES/compute/instruction/call_context
+              --ignore calldatacopy_from_origin.json --ignore returndatacopy.json
           - name: instruction/account_query
             fixtures: compute/instruction/account_query
-            run: $BUILD_DIR/bin/evmone test $FIXTURES/compute/instruction/account_query -k benchmark-gas-value_1M
+            run: $BUILD_DIR/bin/evmone test $FIXTURES/compute/instruction/account_query
           - name: precompile
             fixtures: compute/precompile
-            run: $BUILD_DIR/bin/evmone test $FIXTURES/compute/precompile -k benchmark-gas-value_1M --ignore modexp/modexp.json
+            run: $BUILD_DIR/bin/evmone test $FIXTURES/compute/precompile --ignore modexp/modexp.json
           - name: scenario
-            fixtures: compute/scenario
-            run: $BUILD_DIR/bin/evmone test $FIXTURES/compute/scenario -k benchmark-gas-value_1M
+            fixtures: compute/scenario compute/eip7928_block_level_access_lists
+            run: >-
+              $BUILD_DIR/bin/evmone test $FIXTURES/compute/scenario
+              $FIXTURES/compute/eip7928_block_level_access_lists
     steps:
       - uses: actions/checkout@v5
         with:
@@ -99,9 +103,9 @@ jobs:
         if: matrix.fixtures
         run: |
           curl -L --fail --retry 3 --output-dir /tmp -O \
-            https://github.com/ethereum/execution-spec-tests/releases/download/$BENCHMARK_FIXTURES_RELEASE/fixtures_benchmark.tar.gz
+            https://github.com/ethereum/execution-specs/releases/download/$BENCHMARK_FIXTURES_RELEASE/fixtures_benchmark.tar.gz
           echo "$BENCHMARK_FIXTURES_SHA256  /tmp/fixtures_benchmark.tar.gz" | sha256sum -c
-          tar -xzf /tmp/fixtures_benchmark.tar.gz $FIXTURES/${{ matrix.fixtures }}
+          tar -xzf /tmp/fixtures_benchmark.tar.gz $(printf "$FIXTURES/%s " ${{ matrix.fixtures }})
 
       - name: Benchmark
         uses: CodSpeedHQ/action@v5
