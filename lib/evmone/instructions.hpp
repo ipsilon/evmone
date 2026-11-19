@@ -179,9 +179,8 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
 inline bool check_memory(
     int64_t& gas_left, Memory& memory, const uint256& offset, uint64_t size) noexcept
 {
-    // TODO: This should be done in intx.
-    // There is "branchless" variant of this using | instead of ||, but benchmarks difference
-    // is within noise. This should be decided when moving the implementation to intx.
+    // Not offset > max_buffer_size: the branch-free intx comparison takes more instructions
+    // with GCC, and this check almost never fails, so its branches are predicted.
     if (((offset[3] | offset[2] | offset[1]) != 0) || (offset[0] > max_buffer_size))
         return false;
 
@@ -205,7 +204,7 @@ inline bool check_memory(
 
     // This check has 3 same word checks with the check above.
     // However, compilers do decent although not perfect job unifying common instructions.
-    // TODO: This should be done in intx.
+    // Not size > max_buffer_size, as in the offset check.
     if (((size[3] | size[2] | size[1]) != 0) || (size[0] > max_buffer_size))
         return false;
 
@@ -251,28 +250,29 @@ inline void sub(StackTop stack) noexcept
     stack[1] = stack[0] - stack[1];
 }
 
+// In intx a division by 0 and a modulus of 0 give 0, as the EVM requires.
 inline void div(StackTop stack) noexcept
 {
     auto& v = stack[1];
-    v = v != 0 ? stack[0] / v : 0;
+    v = stack[0] / v;
 }
 
 inline void sdiv(StackTop stack) noexcept
 {
     auto& v = stack[1];
-    v = v != 0 ? intx::sdivrem(stack[0], v).quot : 0;
+    v = intx::sdivrem(stack[0], v).quot;
 }
 
 inline void mod(StackTop stack) noexcept
 {
     auto& v = stack[1];
-    v = v != 0 ? stack[0] % v : 0;
+    v = stack[0] % v;
 }
 
 inline void smod(StackTop stack) noexcept
 {
     auto& v = stack[1];
-    v = v != 0 ? intx::sdivrem(stack[0], v).rem : 0;
+    v = intx::sdivrem(stack[0], v).rem;
 }
 
 inline void addmod(StackTop stack) noexcept
@@ -280,7 +280,7 @@ inline void addmod(StackTop stack) noexcept
     const auto& x = stack.pop();
     const auto& y = stack.pop();
     auto& m = stack.top();
-    m = m != 0 ? intx::addmod(x, y, m) : 0;
+    m = intx::addmod(x, y, m);
 }
 
 inline void mulmod(StackTop stack) noexcept
@@ -288,7 +288,7 @@ inline void mulmod(StackTop stack) noexcept
     const auto& x = stack[0];
     const auto& y = stack[1];
     auto& m = stack[2];
-    m = m != 0 ? intx::mulmod(x, y, m) : 0;
+    m = intx::mulmod(x, y, m);
 }
 
 inline Result exp(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
