@@ -251,28 +251,29 @@ inline void sub(StackTop stack) noexcept
     stack[1] = stack[0] - stack[1];
 }
 
+// In intx a division by 0 and a modulus of 0 give 0, as the EVM requires.
 inline void div(StackTop stack) noexcept
 {
     auto& v = stack[1];
-    v = v != 0 ? stack[0] / v : 0;
+    v = stack[0] / v;
 }
 
 inline void sdiv(StackTop stack) noexcept
 {
     auto& v = stack[1];
-    v = v != 0 ? intx::sdivrem(stack[0], v).quot : 0;
+    v = intx::sdivrem(stack[0], v).quot;
 }
 
 inline void mod(StackTop stack) noexcept
 {
     auto& v = stack[1];
-    v = v != 0 ? stack[0] % v : 0;
+    v = stack[0] % v;
 }
 
 inline void smod(StackTop stack) noexcept
 {
     auto& v = stack[1];
-    v = v != 0 ? intx::sdivrem(stack[0], v).rem : 0;
+    v = intx::sdivrem(stack[0], v).rem;
 }
 
 inline void addmod(StackTop stack) noexcept
@@ -280,7 +281,7 @@ inline void addmod(StackTop stack) noexcept
     const auto& x = stack.pop();
     const auto& y = stack.pop();
     auto& m = stack.top();
-    m = m != 0 ? intx::addmod(x, y, m) : 0;
+    m = intx::addmod(x, y, m);
 }
 
 inline void mulmod(StackTop stack) noexcept
@@ -288,7 +289,7 @@ inline void mulmod(StackTop stack) noexcept
     const auto& x = stack[0];
     const auto& y = stack[1];
     auto& m = stack[2];
-    m = m != 0 ? intx::mulmod(x, y, m) : 0;
+    m = intx::mulmod(x, y, m);
 }
 
 inline Result exp(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
