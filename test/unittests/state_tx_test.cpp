@@ -71,6 +71,30 @@ TEST(state_tx, validate_sender)
         "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS");
 }
 
+TEST(state_tx, validate_sender_delegation)
+{
+    const BlockInfo block{.gas_limit = 53000};
+    const Transaction tx{
+        .gas_limit = block.gas_limit,
+        .sender = 0x02_address,
+    };
+    const auto designation = "EF0100000000000000000000000000000000000000de1e"_hex;
+
+    // A sender with delegation designation is an EOA (EIP-7702).
+    const TestState state{{tx.sender, {.code = designation}}};
+    ASSERT_FALSE(holds_alternative<std::error_code>(
+        validate_transaction(state, block, tx, EVMC_PRAGUE, block.gas_limit, 0, 0)));
+
+    // Code of other size starting with the delegation magic is not a designation (EIP-3607).
+    for (const auto& code : {designation + "00"_hex, designation.substr(0, 22)})
+    {
+        const TestState invalid_state{{tx.sender, {.code = code}}};
+        EXPECT_EQ(std::get<std::error_code>(validate_transaction(
+                      invalid_state, block, tx, EVMC_PRAGUE, block.gas_limit, 0, 0)),
+            make_error_code(ErrorCode::SENDER_NOT_EOA));
+    }
+}
+
 TEST(state_tx, validate_blob_tx)
 {
     const BlockInfo block{

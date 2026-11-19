@@ -193,8 +193,8 @@ struct AppliedAuthorization
 
         if (rev >= EVMC_AMSTERDAM)  // The state-dependent costs replace the refund (EIP-2780).
         {
-            // TODO: Extract the 23 to global constant. Also use to check delegation (fuzzing).
-            static constexpr auto AUTHORIZATION_STATE_GAS = 23 * COST_PER_STATE_BYTE;
+            static constexpr auto AUTHORIZATION_STATE_GAS =
+                int64_t{DELEGATION_DESIGNATION_SIZE} * COST_PER_STATE_BYTE;
             // TODO: Replace the linear search with a "written" account flag
             //   or by processing the authorizations sorted by authority.
             const auto already_applied = std::ranges::find(applied, &authority,
@@ -207,7 +207,7 @@ struct AppliedAuthorization
                 if ((gas_left -= instr::ACCOUNT_WRITE) < 0)
                     return std::nullopt;
             }
-            // A new account and a net-new delegation indicator: no code at the transaction start
+            // A new account and a net-new delegation designation: no code at the transaction start
             // and none set since. An applied authority is not empty because of its nonce bump.
             assert(!authority.is_empty() || !authority.code_changed);
             if (authority.code_hash == Account::EMPTY_CODE_HASH && !authority.code_changed)
@@ -255,7 +255,7 @@ struct AppliedAuthorization
         // 8. Set the code of authority to be 0xef0100 || address. This is a delegation designation.
         else
         {
-            uint8_t designation_buf[std::size(DELEGATION_MAGIC) + sizeof(auth.addr)];
+            uint8_t designation_buf[DELEGATION_DESIGNATION_SIZE];
             const auto it = std::ranges::copy(DELEGATION_MAGIC, std::begin(designation_buf)).out;
             std::ranges::copy(auth.addr.bytes, it);
             const bytes_view designation{designation_buf, std::size(designation_buf)};

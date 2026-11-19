@@ -815,3 +815,31 @@ TEST_P(evm, call_gas_refund_aggregation_same_calls)
         EXPECT_EQ(result.gas_refund, 2);
     }
 }
+
+TEST_P(evm, call_delegated_account)
+{
+    rev = EVMC_PRAGUE;
+    constexpr auto callee = 0xca11ee_address;
+    constexpr auto delegate = 0xde1e_address;
+    const auto magic = bytes{0xef, 0x01, 0x00};
+    const auto designation = magic + bytes{delegate};
+
+    // The exact designation delegates the call to the delegate's code.
+    host.accounts[callee].code = designation;
+    execute(call(callee));
+    ASSERT_EQ(host.recorded_calls.size(), 1);
+    EXPECT_EQ(host.recorded_calls.back().flags & EVMC_DELEGATED, EVMC_DELEGATED);
+    EXPECT_EQ(host.recorded_calls.back().code_address, delegate);
+
+    // Code of other size starting with the magic is not a delegation.
+    for (const auto& code :
+        {designation + bytes{0x00}, designation.substr(0, designation.size() - 1), magic})
+    {
+        host.accounts[callee].code = code;
+        host.recorded_calls.clear();
+        execute(call(callee));
+        ASSERT_EQ(host.recorded_calls.size(), 1);
+        EXPECT_EQ(host.recorded_calls.back().flags & EVMC_DELEGATED, 0);
+        EXPECT_EQ(host.recorded_calls.back().code_address, callee);
+    }
+}
