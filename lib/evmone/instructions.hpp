@@ -179,9 +179,8 @@ constexpr int64_t copy_cost(uint64_t size_in_bytes) noexcept
 inline bool check_memory(
     int64_t& gas_left, Memory& memory, const uint256& offset, uint64_t size) noexcept
 {
-    // TODO: This should be done in intx.
-    // There is "branchless" variant of this using | instead of ||, but benchmarks difference
-    // is within noise. This should be decided when moving the implementation to intx.
+    // Not offset > max_buffer_size: the branch-free intx comparison takes more instructions
+    // with GCC, and this check almost never fails, so its branches are predicted.
     if (((offset[3] | offset[2] | offset[1]) != 0) || (offset[0] > max_buffer_size))
         return false;
 
@@ -205,7 +204,7 @@ inline bool check_memory(
 
     // This check has 3 same word checks with the check above.
     // However, compilers do decent although not perfect job unifying common instructions.
-    // TODO: This should be done in intx.
+    // Not size > max_buffer_size, as in the offset check.
     if (((size[3] | size[2] | size[1]) != 0) || (size[0] > max_buffer_size))
         return false;
 
