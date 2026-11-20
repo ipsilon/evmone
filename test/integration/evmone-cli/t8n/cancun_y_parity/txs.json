@@ -1,0 +1,19 @@
+[
+  {
+    "accessList": [],
+    "chainId": "0x1",
+    "gas": "0x5208",
+    "hash": "0x3a01c573d8ea83d8872a79d7afe20bd009a61039da1347b64f0b3972ebc6a911",
+    "input": "0x",
+    "maxFeePerGas": "0x1",
+    "maxPriorityFeePerGas": "0x0",
+    "nonce": "0x0",
+    "r": "0x1043c2860f2cc884d4ce573c89fd36e7b68ff41480a17693f1e1349a5837e9fe",
+    "s": "0x78b469d7feac811d12dffc12bfefafc27e36e893042cb11c5c24a2e3e35b94a4",
+    "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+    "to": "0x095E7BAea6a6c7c4c2DfeB977eFac326aF552d87",
+    "type": "0x2",
+    "value": "0x0",
+    "yParity": "0x1"
+  }
+]
