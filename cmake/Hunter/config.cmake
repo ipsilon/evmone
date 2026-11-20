@@ -4,9 +4,9 @@
 
 hunter_config(
     intx
-    VERSION 0.15.0
-    URL https://github.com/chfast/intx/archive/v0.15.0.tar.gz
-    SHA1 571b3f4c5a7b09135755720b478bc03f9d7ba7bb
+    VERSION 0.15.0-exp-pow2
+    URL https://github.com/chfast/intx/archive/3c4e9cb18285a220ab0fe1d6fedc3259c9a9339a.tar.gz
+    SHA1 11e515458da5b2ae8531292f59e099d97dfb96d9
 )
 
 hunter_config(
