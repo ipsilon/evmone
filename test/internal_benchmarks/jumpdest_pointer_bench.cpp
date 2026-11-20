@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Benchmarks of the JUMPDEST analysis loop of lib/evmone/baseline_analysis.cpp: the index loop
-// (index), the pointer walk of the ZisK Ethereum guest program, ziskethone patch 04 (zisk), and
-// the index loop with the index replaced by a pointer (ptr). Each variant is compiled 4 times,
-// with its code shifted by 0, 16, 32 and 48 bytes from a 64-byte boundary, so that no result
-// depends on one alignment of the loop. Each benchmark checks its result against the index loop.
+// (index), the pointer walk of the ZisK Ethereum guest program, ziskethone patch 04 (zisk), the
+// index loop with the index replaced by a pointer (ptr), and the zisk loop with signed byte loads
+// (szisk). Each variant is compiled 4 times, with its code shifted by 0, 16, 32 and 48 bytes from
+// a 64-byte boundary, so that no result depends on one alignment of the loop. Each benchmark
+// checks its result against the index loop.
 //
 // Name: jumpdest_pointer/<input>/<variant>/s<shift>.
 
@@ -94,6 +95,24 @@ static_assert(OP_PUSH32 == std::numeric_limits<int8_t>::max());
     }
 }
 
+[[gnu::always_inline]] inline void szisk_loop(BitsetSpan map, bytes_view code) noexcept
+{
+    const auto* const begin = reinterpret_cast<const int8_t*>(code.data());
+    const auto* const end = begin + code.size();
+    for (const auto* p = begin; p < end;)
+    {
+        const auto op = *p;
+        if (op >= OP_PUSH1)
+            p += static_cast<uint8_t>(op) - size_t{OP_PUSH1 - 2};
+        else
+        {
+            if (JDP_UNLIKELY(op == OP_JUMPDEST))
+                map.set(static_cast<size_t>(p - begin));
+            ++p;
+        }
+    }
+}
+
 #define JDP_VARIANT(NAME, K)                                                          \
     [[gnu::noinline]] void jdp_##NAME##_##K(BitsetSpan map, bytes_view code) noexcept \
     {                                                                                 \
@@ -109,6 +128,7 @@ static_assert(OP_PUSH32 == std::numeric_limits<int8_t>::max());
 JDP_VARIANTS(index)
 JDP_VARIANTS(zisk)
 JDP_VARIANTS(ptr)
+JDP_VARIANTS(szisk)
 
 using AnalyzeFn = void (*)(BitsetSpan, bytes_view) noexcept;
 
@@ -126,7 +146,8 @@ struct Variant
     }
 #define JDP_ENTRIES(NAME) \
     JDP_ENTRY(NAME, 0), JDP_ENTRY(NAME, 16), JDP_ENTRY(NAME, 32), JDP_ENTRY(NAME, 48)
-const Variant variants[] = {JDP_ENTRIES(index), JDP_ENTRIES(zisk), JDP_ENTRIES(ptr)};
+const Variant variants[] = {
+    JDP_ENTRIES(index), JDP_ENTRIES(zisk), JDP_ENTRIES(ptr), JDP_ENTRIES(szisk)};
 
 /// The padding of the code in evmone (32 bytes of the PUSH32 data and a STOP), rounded up.
 constexpr size_t PADDING = 64;
