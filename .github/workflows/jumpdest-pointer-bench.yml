@@ -1,0 +1,68 @@
+name: JUMPDEST pointer benchmark
+
+on:
+  push:
+    branches:
+      - bench/jumpdest-pointer
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: ${{ matrix.os }} ${{ matrix.cc }} ${{ matrix.n }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The x86 runners get one of several CPUs, so each Linux job runs twice.
+          - {os: ubuntu-24.04, cc: gcc, n: 1}
+          - {os: ubuntu-24.04, cc: gcc, n: 2}
+          - {os: ubuntu-24.04, cc: clang, n: 1}
+          - {os: ubuntu-24.04, cc: clang, n: 2}
+          - {os: ubuntu-22.04, cc: gcc, n: 1}
+          - {os: macos-15-intel, cc: clang, n: 1}
+          - {os: ubuntu-24.04-arm, cc: gcc, n: 1}
+          - {os: ubuntu-24.04-arm, cc: clang, n: 1}
+          - {os: macos-15, cc: clang, n: 1}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: command -v ninja || (sudo apt-get update -q && sudo apt-get install -y -q ninja-build)
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: command -v ninja || HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
+      - name: Benchmark
+        run: |
+          if [ "${{ matrix.cc }}" = clang ]; then export CC=clang CXX=clang++; else export CC=gcc CXX=g++; fi
+          JOBS=4 test/internal_benchmarks/jumpdest_pointer_bench_ci.sh \
+            github-${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.n }} results
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: jdp-${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.n }}
+          path: results
+
+  riscv64:
+    # The RISE project runners (4 T-Head C910 cores), set up as in riscv.yml.
+    runs-on: ubuntu-24.04-riscv
+    timeout-minutes: 120
+    env:
+      CC: clang-18
+      CXX: clang++-18
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.hunter/_Base/Cache
+          key: hunter-riscv64-${{ hashFiles('cmake/Hunter/*.cmake') }}
+      - name: Benchmark
+        run: JOBS=4 test/internal_benchmarks/jumpdest_pointer_bench_ci.sh github-riscv64-clang-18 results
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: jdp-riscv64-clang-18
+          path: results

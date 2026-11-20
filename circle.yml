@@ -748,47 +748,121 @@ jobs:
 
 
 
+  jumpdest-pointer-bench-docker:
+    parameters:
+      image:
+        type: string
+        default: chfast/cpp-build-env:25-gcc-15
+      resource_class:
+        type: string
+      label:
+        type: string
+    docker:
+      - image: << parameters.image >>
+    resource_class: << parameters.resource_class >>
+    steps:
+      - checkout
+      - run:
+          name: "JUMPDEST pointer benchmark"
+          no_output_timeout: 30m
+          command: JOBS=4 test/internal_benchmarks/jumpdest_pointer_bench_ci.sh << parameters.label >> ~/results
+      - store_artifacts:
+          path: ~/results
+          destination: results
+
+  jumpdest-pointer-bench-machine:
+    parameters:
+      resource_class:
+        type: string
+      label:
+        type: string
+      # The build image to run in, or empty for the machine's own compiler.
+      docker_image:
+        type: string
+        default: ""
+    machine:
+      image: ubuntu-2404:current
+    resource_class: << parameters.resource_class >>
+    steps:
+      - checkout
+      - when:
+          condition: << parameters.docker_image >>
+          steps:
+            - run:
+                name: "JUMPDEST pointer benchmark (in docker)"
+                no_output_timeout: 30m
+                command: |
+                  mkdir -p ~/results
+                  docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e JOBS=4 \
+                    -v "$PWD:/src" -v "$HOME/results:/results" -w /src << parameters.docker_image >> \
+                    test/internal_benchmarks/jumpdest_pointer_bench_ci.sh << parameters.label >> /results
+      - unless:
+          condition: << parameters.docker_image >>
+          steps:
+            - run:
+                name: "Install build tools"
+                command: sudo apt-get -q update && sudo apt-get -qy install cmake ninja-build g++
+            - run:
+                name: "JUMPDEST pointer benchmark"
+                no_output_timeout: 30m
+                command: JOBS=4 test/internal_benchmarks/jumpdest_pointer_bench_ci.sh << parameters.label >> ~/results
+      - store_artifacts:
+          path: ~/results
+          destination: results
+
+  jumpdest-pointer-bench-macos:
+    parameters:
+      resource_class:
+        type: string
+      label:
+        type: string
+    macos:
+      xcode: 26.5
+    resource_class: << parameters.resource_class >>
+    steps:
+      - checkout
+      - run:
+          name: "Install build tools"
+          command: HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake ninja
+      - run:
+          name: "JUMPDEST pointer benchmark"
+          no_output_timeout: 30m
+          command: JOBS=6 test/internal_benchmarks/jumpdest_pointer_bench_ci.sh << parameters.label >> ~/results
+      - store_artifacts:
+          path: ~/results
+          destination: results
+
 workflows:
-  version: 2
-  evmone:
+  jumpdest-pointer-bench:
     jobs:
-      - lint
-      - clang-tidy
-      - release-linux:
-          filters:
-            tags:
-              only: /.*/
-      - release-windows:
-          filters:
-            tags:
-              only: /.*/
-      - release-macos:
-          filters:
-            tags:
-              only: /.*/
-      - deploy:
-          requires:
-            - release-linux
-            - release-windows
-            - release-macos
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: /^v[0-9].*/
-      - execution-spec-tests
-      - ethereum-tests
-      - precompiles-libsecp256k1
-      - precompiles-gmp
-      - cmake-min
-      - gcc-min
-      - clang-min
-      - gcc-latest-memcheck
-      - clang-latest-sanitizers
-      - clang-latest-coverage
-      - macos-asan
-      - xcode-min
-      - gcc-32bit
-      - x86-64-v1
-      - riscv32
-      - fuzzing
+      - jumpdest-pointer-bench-docker:
+          name: docker-gcc-large-1
+          label: circleci-docker-large-gcc-15-1
+          resource_class: large
+      - jumpdest-pointer-bench-docker:
+          name: docker-gcc-large-2
+          label: circleci-docker-large-gcc-15-2
+          resource_class: large
+      - jumpdest-pointer-bench-docker:
+          name: docker-clang-large
+          label: circleci-docker-large-clang-21
+          image: chfast/cpp-build-env:25-clang-21
+          resource_class: large
+      - jumpdest-pointer-bench-machine:
+          name: machine-gcc-large
+          label: circleci-machine-large-gcc-15
+          resource_class: large
+          docker_image: chfast/cpp-build-env:25-gcc-15
+      - jumpdest-pointer-bench-machine:
+          name: machine-clang-large
+          label: circleci-machine-large-clang-21
+          resource_class: large
+          docker_image: chfast/cpp-build-env:25-clang-21
+      - jumpdest-pointer-bench-machine:
+          name: arm-gcc-large
+          label: circleci-arm-large-gcc
+          resource_class: arm.large
+      - jumpdest-pointer-bench-macos:
+          name: macos-m4pro
+          label: circleci-macos-m4pro-medium
+          resource_class: m4pro.medium
