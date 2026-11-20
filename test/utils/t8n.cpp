@@ -58,7 +58,8 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
     else
     {
         const auto current_difficulty = state::calculate_difficulty(block.parent_difficulty,
-            block.parent_ommers_hash != EmptyListHash, block.parent_timestamp, block.timestamp,
+            block.parent_ommers_hash != EmptyListHash,
+            static_cast<uint64_t>(block.parent_timestamp), static_cast<uint64_t>(block.timestamp),
             block.number, rev);
 
         j_result["currentDifficulty"] = hex0x(current_difficulty);
