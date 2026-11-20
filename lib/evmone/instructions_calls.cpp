@@ -21,7 +21,7 @@ constexpr auto ACCOUNT_CREATION_COST = 25000;
 /// Returns EIP-7702 delegate address if addr is delegated, or addr itself otherwise.
 /// Applies gas charge for accessing delegate account and may fail with out of gas.
 inline std::variant<evmc::address, Result> get_target_address(
-    const evmc::address& addr, int64_t& gas_left, ExecutionState& state) noexcept
+    const evmc::address& addr, Gas& gas_left, ExecutionState& state) noexcept
 {
     if (state.rev < EVMC_PRAGUE)
         return addr;
@@ -49,7 +49,7 @@ inline std::variant<evmc::address, Result> get_target_address(
 
 /// Absorbs a child's state-gas back to the parent (EIP-8037).
 inline void absorb_child_state_gas(
-    int64_t& gas_left, ExecutionState& state, const evmc::Result& result) noexcept
+    Gas& gas_left, ExecutionState& state, const evmc::Result& result) noexcept
 {
     assert(result.state_gas.left >= 0);
     assert(result.state_gas.spilled >= 0);
@@ -95,7 +95,7 @@ consteval evmc_call_kind to_call_kind(Opcode op) noexcept
 }
 
 template <Opcode Op>
-Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
+Result call_impl(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
 {
     static_assert(
         Op == OP_CALL || Op == OP_CALLCODE || Op == OP_DELEGATECALL || Op == OP_STATICCALL);
@@ -195,13 +195,13 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
 
     if constexpr (Op == OP_STATICCALL)
     {
-        msg.gas = std::min(msg.gas, gas_left - gas_left / 64);
+        msg.gas = std::min(msg.gas, static_cast<int64_t>(gas_left - gas_left / 64));
     }
     else
     {
         if (state.rev >= EVMC_TANGERINE_WHISTLE)  // Always true for STATICCALL.
-            msg.gas = std::min(msg.gas, gas_left - gas_left / 64);
-        else if (msg.gas > gas_left)
+            msg.gas = std::min(msg.gas, static_cast<int64_t>(gas_left - gas_left / 64));
+        else if (gas_left < msg.gas)
             return {EVMC_OUT_OF_GAS, gas_left};
     }
 
@@ -244,17 +244,16 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
     return {EVMC_SUCCESS, gas_left};
 }
 
-template Result call_impl<OP_CALL>(
-    StackTop stack, int64_t gas_left, ExecutionState& state) noexcept;
+template Result call_impl<OP_CALL>(StackTop stack, Gas gas_left, ExecutionState& state) noexcept;
 template Result call_impl<OP_STATICCALL>(
-    StackTop stack, int64_t gas_left, ExecutionState& state) noexcept;
+    StackTop stack, Gas gas_left, ExecutionState& state) noexcept;
 template Result call_impl<OP_DELEGATECALL>(
-    StackTop stack, int64_t gas_left, ExecutionState& state) noexcept;
+    StackTop stack, Gas gas_left, ExecutionState& state) noexcept;
 template Result call_impl<OP_CALLCODE>(
-    StackTop stack, int64_t gas_left, ExecutionState& state) noexcept;
+    StackTop stack, Gas gas_left, ExecutionState& state) noexcept;
 
 template <Opcode Op>
-Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
+Result create_impl(StackTop stack, Gas gas_left, ExecutionState& state) noexcept
 {
     static_assert(Op == OP_CREATE || Op == OP_CREATE2);
 
@@ -318,7 +317,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
         new_account_charged = true;
     }
 
-    msg.gas = gas_left;
+    msg.gas = static_cast<int64_t>(gas_left);
     if (state.rev >= EVMC_TANGERINE_WHISTLE)
         msg.gas -= msg.gas / 64;
 
@@ -344,7 +343,7 @@ Result create_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noex
 }
 
 template Result create_impl<OP_CREATE>(
-    StackTop stack, int64_t gas_left, ExecutionState& state) noexcept;
+    StackTop stack, Gas gas_left, ExecutionState& state) noexcept;
 template Result create_impl<OP_CREATE2>(
-    StackTop stack, int64_t gas_left, ExecutionState& state) noexcept;
+    StackTop stack, Gas gas_left, ExecutionState& state) noexcept;
 }  // namespace evmone::instr::core
