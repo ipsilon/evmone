@@ -8,6 +8,7 @@
 
 #include <evmc/evmc.hpp>
 #include <evmone/evmone.h>
+#include <evmone/execution_context.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <test/utils/blockchaintest.hpp>
@@ -56,7 +57,8 @@ std::vector<Failure> run(const BlockchainTest& t)
     std::vector<Failure> failures;
     TestReport report{[&](const Failure& failure) { failures.push_back(failure); }};
     evmc::VM vm{evmc_create_evmone()};
-    run_blockchain_test(t, vm, report);
+    evmone::ExecutionContext execution_context;
+    run_blockchain_test(t, vm, execution_context, report);
     return failures;
 }
 }  // namespace

@@ -80,6 +80,7 @@ static inline enum evmc_set_option_result evmc_set_option(struct evmc_vm* vm,
  * @see evmc_execute_fn.
  */
 static inline struct evmc_result evmc_execute(struct evmc_vm* vm,
+                                              struct evmc_execution_context* execution_context,
                                               const struct evmc_host_interface* host,
                                               struct evmc_host_context* context,
                                               enum evmc_revision rev,
@@ -87,7 +88,7 @@ static inline struct evmc_result evmc_execute(struct evmc_vm* vm,
                                               uint8_t const* code,
                                               size_t code_size)
 {
-    return vm->execute(vm, host, context, rev, msg, code, code_size);
+    return vm->execute(vm, execution_context, host, context, rev, msg, code, code_size);
 }
 
 /// The evmc_result release function using free() for releasing the memory.

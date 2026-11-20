@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <evmone/evmone.h>
+#include <evmone/execution_context.hpp>
 #include <gmock/gmock.h>
 #include <nlohmann/json.hpp>
 #include <test/utils/t8n.hpp>
@@ -60,6 +61,7 @@ std::string run_t8n(std::string_view alloc_json, std::string_view txs_json, evmc
     std::string_view env_json = ENV_JSON)
 {
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
 
     std::istringstream env{std::string{env_json}};
     std::istringstream alloc{std::string{alloc_json}};
@@ -74,7 +76,7 @@ std::string run_t8n(std::string_view alloc_json, std::string_view txs_json, evmc
     args.txs = &txs;
     args.out_result = &out_result;
 
-    tooling::t8n(vm, args);
+    tooling::t8n(vm, execution_context, args);
     return out_result.str();
 }
 
@@ -125,6 +127,7 @@ constexpr auto ENV_WITH_PARENT_JSON = R"({
 std::string run_t8n_env(std::string_view env_json, evmc_revision rev)
 {
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
 
     std::istringstream env{std::string{env_json}};
     std::istringstream alloc{"{}"};
@@ -138,7 +141,7 @@ std::string run_t8n_env(std::string_view env_json, evmc_revision rev)
     args.txs = &txs;
     args.out_result = &out_result;
 
-    tooling::t8n(vm, args);
+    tooling::t8n(vm, execution_context, args);
     return out_result.str();
 }
 
@@ -261,16 +264,18 @@ TEST(tooling_t8n, no_inputs_no_outputs)
 {
     // Smoke: t8n() with everything left at defaults must not throw or crash.
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
 
     tooling::T8NArgs args;
     args.rev = EVMC_OSAKA;
 
-    tooling::t8n(vm, args);
+    tooling::t8n(vm, execution_context, args);
 }
 
 TEST(tooling_t8n, result_written_to_out_streams)
 {
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
 
     tooling::T8NArgs args;
     args.rev = EVMC_OSAKA;
@@ -279,7 +284,7 @@ TEST(tooling_t8n, result_written_to_out_streams)
     args.out_result = &out_result;
     args.out_alloc = &out_alloc;
 
-    tooling::t8n(vm, args);
+    tooling::t8n(vm, execution_context, args);
 
     EXPECT_THAT(out_result.str(), HasSubstr("\"gasUsed\""));
     EXPECT_THAT(out_result.str(), HasSubstr("\"txRoot\""));
@@ -291,6 +296,7 @@ TEST(tooling_t8n, result_written_to_out_streams)
 TEST(tooling_t8n, out_alloc_reports_the_beacon_root_write_and_the_created_account)
 {
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
 
     std::istringstream env{ENV_JSON};
     std::istringstream alloc{ALLOC_WITH_BEACON_ROOTS_JSON};
@@ -305,7 +311,7 @@ TEST(tooling_t8n, out_alloc_reports_the_beacon_root_write_and_the_created_accoun
     args.txs = &txs;
     args.out_alloc = &out_alloc;
 
-    tooling::t8n(vm, args);
+    tooling::t8n(vm, execution_context, args);
 
     const auto post = json::parse(out_alloc.str());
     // Slot timestamp % 8191 holds the timestamp (EIP-4788).
@@ -319,6 +325,7 @@ TEST(tooling_t8n, out_alloc_reports_the_beacon_root_write_and_the_created_accoun
 TEST(tooling_t8n, open_trace_called_per_tx)
 {
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
 
     std::istringstream env{ENV_JSON};
     std::istringstream alloc{ALLOC_JSON};
@@ -341,7 +348,7 @@ TEST(tooling_t8n, open_trace_called_per_tx)
         return trace_buf;
     };
 
-    tooling::t8n(vm, args);
+    tooling::t8n(vm, execution_context, args);
 
     ASSERT_EQ(trace_calls.size(), 1U);
     EXPECT_EQ(trace_calls[0].first, 0U);
@@ -353,6 +360,7 @@ TEST(tooling_t8n, open_trace_called_per_tx)
 TEST(tooling_t8n, out_body_is_hex_rlp_of_transactions)
 {
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
 
     std::istringstream env{ENV_JSON};
     std::istringstream alloc{ALLOC_JSON};
@@ -371,7 +379,7 @@ TEST(tooling_t8n, out_body_is_hex_rlp_of_transactions)
     args.out_alloc = &out_alloc;
     args.out_body = &out_body;
 
-    tooling::t8n(vm, args);
+    tooling::t8n(vm, execution_context, args);
 
     // RLP-encoded list of one legacy transaction, hex-prefixed.
     EXPECT_THAT(out_body.str(), StartsWith("0x"));
@@ -392,6 +400,7 @@ TEST(tooling_t8n, pre_byzantium_sets_receipt_post_state)
 TEST(tooling_t8n, mismatched_tx_hash_throws)
 {
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
 
     // TX_JSON's tx with a deliberately wrong "hash" field. t8n() must detect
     // the mismatch against the recomputed hash and throw std::logic_error.
@@ -421,12 +430,13 @@ TEST(tooling_t8n, mismatched_tx_hash_throws)
     args.env = &env;
     args.txs = &txs;
 
-    EXPECT_THROW(tooling::t8n(vm, args), std::logic_error);
+    EXPECT_THROW(tooling::t8n(vm, execution_context, args), std::logic_error);
 }
 
 TEST(tooling_t8n, max_chain_id)
 {
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
 
     // The maximum `chainId` (uint64 max = 0xffffffffffffffff) must be parsed and
     // executed without overflow; regression test for `chainId` being loaded as
@@ -458,13 +468,14 @@ TEST(tooling_t8n, max_chain_id)
     args.txs = &txs;
     args.out_result = &out_result;
 
-    EXPECT_NO_THROW(tooling::t8n(vm, args));
+    EXPECT_NO_THROW(tooling::t8n(vm, execution_context, args));
     EXPECT_THAT(out_result.str(), HasSubstr("\"transactionHash\""));
 }
 
 TEST(tooling_t8n, max_v)
 {
     evmc::VM vm{evmc_create_evmone()};
+    evmone::ExecutionContext execution_context;
 
     // Legacy EIP-155 `v` is chainId*2 + 35 + parity, exceeding 0xff for chainId > 110.
     // The maximum `v` (uint64 max = 0xffffffffffffffff) must be parsed and executed without
@@ -497,7 +508,7 @@ TEST(tooling_t8n, max_v)
     args.txs = &txs;
     args.out_result = &out_result;
 
-    EXPECT_NO_THROW(tooling::t8n(vm, args));
+    EXPECT_NO_THROW(tooling::t8n(vm, execution_context, args));
     EXPECT_THAT(out_result.str(), HasSubstr("\"transactionHash\""));
 }
 

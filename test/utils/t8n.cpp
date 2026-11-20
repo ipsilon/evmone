@@ -20,7 +20,7 @@ namespace evmone::tooling
 using JSON = nlohmann::json;
 using namespace evmone::test;
 
-void t8n(evmc::VM& vm, const T8NArgs& args)
+void t8n(evmc::VM& vm, evmc_execution_context& execution_context, const T8NArgs& args)
 {
     const auto rev = args.rev;
 
@@ -117,10 +117,11 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
 
         // No block reward from Paris (EIP-3675). A reward of 0 would still touch the coinbase,
         // which would then be read (EIP-7928).
-        auto res = apply_block(state, vm, block, block_hashes, txs, rev, blob_gas_limit,
-            {.block_reward = rev < EVMC_PARIS ? args.block_reward : std::nullopt,
-                .skip_system_calls = args.pre_state_only,
-                .open_trace = args.open_trace});
+        auto res =
+            apply_block(state, vm, execution_context, block, block_hashes, txs, rev, blob_gas_limit,
+                {.block_reward = rev < EVMC_PARIS ? args.block_reward : std::nullopt,
+                    .skip_system_calls = args.pre_state_only,
+                    .open_trace = args.open_trace});
 
         // Build the receipts/rejected JSON lists from the partitioned result. `rejected`
         // is in input order, so walk it alongside the input transactions; the rest map to
