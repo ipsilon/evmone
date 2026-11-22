@@ -834,6 +834,7 @@ jobs:
 
 workflows:
   jumpdest-pointer-bench:
+    # x86 only, repeated to sample the CPUs of the resource classes.
     jobs:
       - jumpdest-pointer-bench-docker:
           name: docker-gcc-large-1
@@ -844,9 +845,34 @@ workflows:
           label: circleci-docker-large-gcc-15-2
           resource_class: large
       - jumpdest-pointer-bench-docker:
-          name: docker-clang-large
-          label: circleci-docker-large-clang-21
+          name: docker-gcc-large-3
+          label: circleci-docker-large-gcc-15-3
+          resource_class: large
+      - jumpdest-pointer-bench-docker:
+          name: docker-clang-large-1
+          label: circleci-docker-large-clang-21-1
+          resource_class: large
           image: chfast/cpp-build-env:25-clang-21
+      - jumpdest-pointer-bench-docker:
+          name: docker-clang-large-2
+          label: circleci-docker-large-clang-21-2
+          resource_class: large
+          image: chfast/cpp-build-env:25-clang-21
+      - jumpdest-pointer-bench-docker:
+          name: docker-gcc-xlarge
+          label: circleci-docker-xlarge-gcc-15
+          resource_class: xlarge
+      - jumpdest-pointer-bench-docker:
+          name: docker-gcc-medium
+          label: circleci-docker-medium-gcc-15
+          resource_class: medium
+      - jumpdest-pointer-bench-machine:
+          name: machine-native-large-1
+          label: circleci-machine-large-gcc-13-1
+          resource_class: large
+      - jumpdest-pointer-bench-machine:
+          name: machine-native-large-2
+          label: circleci-machine-large-gcc-13-2
           resource_class: large
       - jumpdest-pointer-bench-machine:
           name: machine-gcc-large
@@ -859,10 +885,7 @@ workflows:
           resource_class: large
           docker_image: chfast/cpp-build-env:25-clang-21
       - jumpdest-pointer-bench-machine:
-          name: arm-gcc-large
-          label: circleci-arm-large-gcc
-          resource_class: arm.large
-      - jumpdest-pointer-bench-macos:
-          name: macos-m4pro
-          label: circleci-macos-m4pro-medium
-          resource_class: m4pro.medium
+          name: machine-gcc-xlarge
+          label: circleci-machine-xlarge-gcc-15
+          resource_class: xlarge
+          docker_image: chfast/cpp-build-env:25-gcc-15

@@ -7,10 +7,14 @@
 // index loop with the index replaced by a pointer (ptr), and the zisk loop with signed byte loads
 // (szisk). Each variant is compiled 4 times, with its code shifted by 0, 16, 32 and 48 bytes from
 // a 64-byte boundary, so that no result depends on one alignment of the loop. Each benchmark
-// checks its result against the index loop.
+// checks its result against the index loop. All of that is compiled once per code layout mode
+// (jumpdest_pointer_mode_*.cpp): the default, loops aligned to 64 bytes (+al), and that plus the
+// assembler's mitigation of the Skylake JCC erratum (+alj). A mode the compiler cannot build is
+// skipped; the jdp_modes context of the results lists the flags of each.
 //
-// Name: jumpdest_pointer/<input>/<variant>/s<shift>.
+// Name: jumpdest_pointer/<input>/<variant><mode>/s<shift>.
 
+#include "jumpdest_pointer_loops.hpp"
 #include "test_bytecodes.hpp"
 #include <benchmark/benchmark.h>
 #include <evmc/bytes.hpp>
@@ -24,130 +28,25 @@
 #include <string>
 #include <vector>
 
-#define JDP_UNLIKELY(EXPR) __builtin_expect(bool{EXPR}, false)
-
-#if defined(__x86_64__)
-#define JDP_JUMP "jmp"
-#elif defined(__aarch64__)
-#define JDP_JUMP "b"
-#elif defined(__riscv)
-#define JDP_JUMP "j"
-#else
-#error "unsupported architecture"
-#endif
-
-/// Jumps over padding which places the code that follows K bytes after a 64-byte boundary.
-#define JDP_SHIFT(K) asm volatile(JDP_JUMP " 1f\n\t.p2align 6\n\t.skip " #K "\n1:" :::)
+namespace jdp
+{
+namespace def
+{
+extern const Mode mode;
+}
+namespace al
+{
+extern const Mode mode;
+}
+namespace alj
+{
+extern const Mode mode;
+}
+}  // namespace jdp
 
 namespace
 {
-using evmc::bytes_view;
-using evmone::BitsetSpan;
-using evmone::OP_JUMPDEST;
-using evmone::OP_PUSH1;
-using evmone::OP_PUSH32;
-
-static_assert(OP_PUSH32 == std::numeric_limits<int8_t>::max());
-
-[[gnu::always_inline]] inline void index_loop(BitsetSpan map, bytes_view code) noexcept
-{
-    for (size_t i = 0; i < code.size(); ++i)
-    {
-        const auto op = code[i];
-        if (static_cast<int8_t>(op) >= OP_PUSH1)
-            i += op - size_t{OP_PUSH1 - 1};
-        else if (JDP_UNLIKELY(op == OP_JUMPDEST))
-            map.set(i);
-    }
-}
-
-[[gnu::always_inline]] inline void zisk_loop(BitsetSpan map, bytes_view code) noexcept
-{
-    const auto* const begin = code.data();
-    const auto* const end = begin + code.size();
-    for (const auto* p = begin; p < end;)
-    {
-        const auto op = *p;
-        if (static_cast<int8_t>(op) >= OP_PUSH1)
-        {
-            p += op - size_t{OP_PUSH1 - 2};
-        }
-        else
-        {
-            if (JDP_UNLIKELY(op == OP_JUMPDEST))
-                map.set(static_cast<size_t>(p - begin));
-            ++p;
-        }
-    }
-}
-
-[[gnu::always_inline]] inline void ptr_loop(BitsetSpan map, bytes_view code) noexcept
-{
-    const auto* const begin = code.data();
-    const auto* const end = begin + code.size();
-    for (const auto* p = begin; p < end; ++p)
-    {
-        const auto op = *p;
-        if (static_cast<int8_t>(op) >= OP_PUSH1)
-            p += op - size_t{OP_PUSH1 - 1};
-        else if (JDP_UNLIKELY(op == OP_JUMPDEST))
-            map.set(static_cast<size_t>(p - begin));
-    }
-}
-
-[[gnu::always_inline]] inline void szisk_loop(BitsetSpan map, bytes_view code) noexcept
-{
-    const auto* const begin = reinterpret_cast<const int8_t*>(code.data());
-    const auto* const end = begin + code.size();
-    for (const auto* p = begin; p < end;)
-    {
-        const auto op = *p;
-        if (op >= OP_PUSH1)
-            p += static_cast<uint8_t>(op) - size_t{OP_PUSH1 - 2};
-        else
-        {
-            if (JDP_UNLIKELY(op == OP_JUMPDEST))
-                map.set(static_cast<size_t>(p - begin));
-            ++p;
-        }
-    }
-}
-
-#define JDP_VARIANT(NAME, K)                                                          \
-    [[gnu::noinline]] void jdp_##NAME##_##K(BitsetSpan map, bytes_view code) noexcept \
-    {                                                                                 \
-        JDP_SHIFT(K);                                                                 \
-        NAME##_loop(map, code);                                                       \
-    }
-#define JDP_VARIANTS(NAME) \
-    JDP_VARIANT(NAME, 0)   \
-    JDP_VARIANT(NAME, 16)  \
-    JDP_VARIANT(NAME, 32)  \
-    JDP_VARIANT(NAME, 48)
-
-JDP_VARIANTS(index)
-JDP_VARIANTS(zisk)
-JDP_VARIANTS(ptr)
-JDP_VARIANTS(szisk)
-
-using AnalyzeFn = void (*)(BitsetSpan, bytes_view) noexcept;
-
-struct Variant
-{
-    const char* name;
-    unsigned shift;
-    AnalyzeFn fn;
-};
-
-#define JDP_ENTRY(NAME, K)         \
-    Variant                        \
-    {                              \
-        #NAME, K, jdp_##NAME##_##K \
-    }
-#define JDP_ENTRIES(NAME) \
-    JDP_ENTRY(NAME, 0), JDP_ENTRY(NAME, 16), JDP_ENTRY(NAME, 32), JDP_ENTRY(NAME, 48)
-const Variant variants[] = {
-    JDP_ENTRIES(index), JDP_ENTRIES(zisk), JDP_ENTRIES(ptr), JDP_ENTRIES(szisk)};
+using namespace jdp;
 
 /// The padding of the code in evmone (32 bytes of the PUSH32 data and a STOP), rounded up.
 constexpr size_t PADDING = 64;
@@ -270,14 +169,28 @@ void jumpdest_pointer(benchmark::State& state, const Variant& v, const Input& in
 
 [[maybe_unused]] const auto registered = [] {
     static const auto inputs = make_inputs();
+    const Mode* const modes[] = {&jdp::def::mode, &jdp::al::mode, &jdp::alj::mode};
+    std::string modes_info;
+    for (const auto* m : modes)
+    {
+        modes_info += std::string{m->name[0] != '\0' ? m->name : "def"} + "=" +
+                      (m->flags != nullptr ? m->flags : "unsupported") + "; ";
+    }
+    benchmark::AddCustomContext("jdp_modes", modes_info);
     for (const auto& in : inputs)
     {
-        for (const auto& v : variants)
+        for (const auto* m : modes)
         {
-            const auto name =
-                "jumpdest_pointer/" + in.name + "/" + v.name + "/s" + std::to_string(v.shift);
-            benchmark::RegisterBenchmark(
-                name, [&v, &in](benchmark::State& state) { jumpdest_pointer(state, v, in); });
+            if (m->flags == nullptr)
+                continue;
+            for (size_t i = 0; i < NUM_VARIANTS; ++i)
+            {
+                const auto& v = m->variants[i];
+                const auto name = "jumpdest_pointer/" + in.name + "/" + v.name + m->name + "/s" +
+                                  std::to_string(v.shift);
+                benchmark::RegisterBenchmark(
+                    name, [&v, &in](benchmark::State& state) { jumpdest_pointer(state, v, in); });
+            }
         }
     }
     return true;
