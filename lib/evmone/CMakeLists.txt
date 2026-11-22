@@ -57,6 +57,11 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
     # instructions in or out of the loops. Raise the limits above what the loops need.
     set_source_files_properties(baseline_execution.cpp PROPERTIES COMPILE_OPTIONS
         "--param=inline-unit-growth=100;--param=large-function-growth=200")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES Clang)
+    # The speed of the JUMPDEST analysis loop depends on where it lands relative to the 64-byte
+    # boundaries. Align it to 64 bytes so that unrelated code changes don't move it.
+    # GCC's -falign-loops does not reach this loop (the code is the same with it), so clang only.
+    set_source_files_properties(baseline_analysis.cpp PROPERTIES COMPILE_OPTIONS -falign-loops=64)
 endif()
 
 if(CABLE_COMPILER_GNULIKE)
