@@ -1,0 +1,50 @@
+# Throwaway: times the code alignment flags for baseline_execution.cpp. Delete with the branch.
+name: Baseline alignment benchmark
+
+on:
+  push:
+    branches:
+      - bench/baseline-align
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: ${{ matrix.os }} ${{ matrix.cc }} v${{ matrix.level }} ${{ matrix.n }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # The x86 runners get one of several CPUs, so their jobs are repeated.
+        include:
+          - {os: ubuntu-24.04, cc: gcc-14, cxx: g++-14, level: 2, n: 1}
+          - {os: ubuntu-24.04, cc: gcc-14, cxx: g++-14, level: 2, n: 2}
+          - {os: ubuntu-24.04, cc: gcc-14, cxx: g++-14, level: 2, n: 3}
+          - {os: ubuntu-24.04, cc: gcc-14, cxx: g++-14, level: 3, n: 1}
+          - {os: ubuntu-24.04, cc: gcc-14, cxx: g++-14, level: 3, n: 2}
+          - {os: ubuntu-24.04, cc: gcc-14, cxx: g++-14, level: 3, n: 3}
+          - {os: ubuntu-24.04, cc: clang-18, cxx: clang++-18, level: 2, n: 1}
+          - {os: ubuntu-24.04, cc: clang-18, cxx: clang++-18, level: 2, n: 2}
+          - {os: ubuntu-24.04, cc: clang-18, cxx: clang++-18, level: 2, n: 3}
+          - {os: ubuntu-24.04, cc: clang-18, cxx: clang++-18, level: 3, n: 1}
+          - {os: ubuntu-24.04, cc: clang-18, cxx: clang++-18, level: 3, n: 2}
+          - {os: ubuntu-24.04, cc: clang-18, cxx: clang++-18, level: 3, n: 3}
+          - {os: ubuntu-24.04-arm, cc: gcc, cxx: g++, level: '-', n: 1}
+          - {os: ubuntu-24.04-arm, cc: clang, cxx: clang++, level: '-', n: 1}
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      LABEL: github-${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.level == '-' && 'default' || format('v{0}', matrix.level) }}-${{ matrix.n }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install build tools
+        run: command -v ninja || (sudo apt-get update -q && sudo apt-get install -y -q ninja-build)
+      - name: Benchmark
+        run: test/internal_benchmarks/baseline_align/ci.sh "$LABEL" results "${{ matrix.level }}"
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: balign-${{ env.LABEL }}
+          path: results

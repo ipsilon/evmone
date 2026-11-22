@@ -748,47 +748,93 @@ jobs:
 
 
 
+  baseline-align-bench-docker:
+    parameters:
+      image:
+        type: string
+      resource_class:
+        type: string
+      label:
+        type: string
+    docker:
+      - image: << parameters.image >>
+    resource_class: << parameters.resource_class >>
+    steps:
+      - checkout
+      - run:
+          name: "Baseline alignment benchmark"
+          no_output_timeout: 30m
+          command: test/internal_benchmarks/baseline_align/ci.sh << parameters.label >> ~/results 2 3
+      - store_artifacts:
+          path: ~/results
+          destination: results
+
+  baseline-align-bench-machine:
+    parameters:
+      image:
+        type: string
+      resource_class:
+        type: string
+      label:
+        type: string
+    machine:
+      image: ubuntu-2404:current
+    resource_class: << parameters.resource_class >>
+    steps:
+      - checkout
+      - run:
+          name: "Baseline alignment benchmark (in docker)"
+          no_output_timeout: 30m
+          command: |
+            mkdir -p ~/results
+            docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/src" -v "$HOME/results:/results" \
+              -w /src << parameters.image >> \
+              test/internal_benchmarks/baseline_align/ci.sh << parameters.label >> /results 2 3
+      - store_artifacts:
+          path: ~/results
+          destination: results
+
 workflows:
-  version: 2
-  evmone:
+  baseline-align-bench:
+    # Throwaway. The x86 jobs are repeated to sample the CPUs of the resource classes.
     jobs:
-      - lint
-      - clang-tidy
-      - release-linux:
-          filters:
-            tags:
-              only: /.*/
-      - release-windows:
-          filters:
-            tags:
-              only: /.*/
-      - release-macos:
-          filters:
-            tags:
-              only: /.*/
-      - deploy:
-          requires:
-            - release-linux
-            - release-windows
-            - release-macos
-          filters:
-            branches:
-              ignore: /.*/
-            tags:
-              only: /^v[0-9].*/
-      - execution-spec-tests
-      - ethereum-tests
-      - precompiles-libsecp256k1
-      - precompiles-gmp
-      - cmake-min
-      - gcc-min
-      - clang-min
-      - gcc-latest-memcheck
-      - clang-latest-sanitizers
-      - clang-latest-coverage
-      - macos-asan
-      - xcode-min
-      - gcc-32bit
-      - x86-64-v1
-      - riscv32
-      - fuzzing
+      - baseline-align-bench-docker:
+          name: docker-large-gcc-1
+          label: circleci-docker-large-gcc-15-1
+          image: chfast/cpp-build-env:25-gcc-15
+          resource_class: large
+      - baseline-align-bench-docker:
+          name: docker-large-gcc-2
+          label: circleci-docker-large-gcc-15-2
+          image: chfast/cpp-build-env:25-gcc-15
+          resource_class: large
+      - baseline-align-bench-docker:
+          name: docker-large-clang-1
+          label: circleci-docker-large-clang-21-1
+          image: chfast/cpp-build-env:25-clang-21
+          resource_class: large
+      - baseline-align-bench-docker:
+          name: docker-large-clang-2
+          label: circleci-docker-large-clang-21-2
+          image: chfast/cpp-build-env:25-clang-21
+          resource_class: large
+      - baseline-align-bench-docker:
+          name: docker-medium-gcc
+          label: circleci-docker-medium-gcc-15
+          image: chfast/cpp-build-env:25-gcc-15
+          resource_class: medium
+      - baseline-align-bench-docker:
+          name: docker-medium-clang
+          label: circleci-docker-medium-clang-21
+          image: chfast/cpp-build-env:25-clang-21
+          resource_class: medium
+      - baseline-align-bench-machine:
+          name: machine-large-gcc
+          label: circleci-machine-large-gcc-15
+          image: chfast/cpp-build-env:25-gcc-15
+          resource_class: large
+      - baseline-align-bench-machine:
+          name: machine-large-clang
+          label: circleci-machine-large-clang-21
+          image: chfast/cpp-build-env:25-clang-21
+          resource_class: large

@@ -1,0 +1,17 @@
+micro-JUMPDEST_n0 20
+micro-jump_around 40
+micro-loop_with_many_jumpdests 3
+micro-memory_grow_mload 40
+micro-memory_grow_mstore 35
+micro-signextend 60
+main-blake2b_huff 15
+main-blake2b_shifts 4
+main-sha1_divs 8
+main-sha1_shifts 10
+main-snailtracer 1
+main-structarray_alloc 60
+main-swap_math 150
+main-weierstrudel 15
+MUL-c 3
+MUL-y 3
+MUL-tp 3
