@@ -4,8 +4,9 @@
 
 // Benchmarks of the JUMPDEST analysis loop of lib/evmone/baseline_analysis.cpp: the index loop
 // (index), the pointer walk of the ZisK Ethereum guest program, ziskethone patch 04 (zisk), the
-// index loop with the index replaced by a pointer (ptr), and the zisk loop with signed byte loads
-// (szisk). Each variant is compiled 4 times, with its code shifted by 0, 16, 32 and 48 bytes from
+// index loop with the index replaced by a pointer (ptr), the zisk loop with signed byte loads
+// (szisk), and szisk and ptr loading the opcodes as unsigned char on x86 and signed char elsewhere
+// (tszisk, tsptr). Each variant is compiled 4 times, with its code shifted by 0, 16, 32 and 48 bytes from
 // a 64-byte boundary, so that no result depends on one alignment of the loop. Each benchmark
 // checks its result against the index loop. All of that is compiled once per code layout mode
 // (jumpdest_pointer_mode_*.cpp): the default, loops aligned to 64 bytes (+al), and that plus the

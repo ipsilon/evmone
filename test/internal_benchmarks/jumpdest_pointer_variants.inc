@@ -34,6 +34,8 @@ JDP_VARIANTS(index)
 JDP_VARIANTS(zisk)
 JDP_VARIANTS(ptr)
 JDP_VARIANTS(szisk)
+JDP_VARIANTS(tszisk)
+JDP_VARIANTS(tsptr)
 }  // namespace
 
 
@@ -45,7 +47,8 @@ JDP_VARIANTS(szisk)
 #define JDP_ENTRIES(NAME) \
     JDP_ENTRY(NAME, 0), JDP_ENTRY(NAME, 16), JDP_ENTRY(NAME, 32), JDP_ENTRY(NAME, 48)
 const Variant variants[NUM_VARIANTS] = {
-    JDP_ENTRIES(index), JDP_ENTRIES(zisk), JDP_ENTRIES(ptr), JDP_ENTRIES(szisk)};
+    JDP_ENTRIES(index), JDP_ENTRIES(zisk), JDP_ENTRIES(ptr), JDP_ENTRIES(szisk),
+    JDP_ENTRIES(tszisk), JDP_ENTRIES(tsptr)};
 
 extern const Mode mode;
 #ifdef JDP_FLAGS

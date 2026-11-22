@@ -16,9 +16,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # x86 only. The hosted runners get one of several CPUs, so the jobs are repeated.
+        # The x86 runners get one of several CPUs, so their jobs are repeated.
         # The image jobs build with GCC 15 and Clang 21 in docker; the others use the runner's compiler.
         include:
+          - {os: ubuntu-24.04-arm, tag: gcc-13, cc: gcc, n: 1}
+          - {os: ubuntu-24.04-arm, tag: clang-18, cc: clang, n: 1}
+          - {os: macos-15, tag: clang, cc: clang, n: 1}
           - {os: ubuntu-24.04, tag: gcc-13, cc: gcc, n: 1}
           - {os: ubuntu-24.04, tag: gcc-13, cc: gcc, n: 2}
           - {os: ubuntu-24.04, tag: gcc-13, cc: gcc, n: 3}
@@ -58,4 +61,25 @@ jobs:
         if: always()
         with:
           name: jdp-${{ env.LABEL }}
+          path: results
+
+  riscv64:
+    # The RISE project runners (4 T-Head C910 cores), set up as in riscv.yml.
+    runs-on: ubuntu-24.04-riscv
+    timeout-minutes: 150
+    env:
+      CC: clang-18
+      CXX: clang++-18
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.hunter/_Base/Cache
+          key: hunter-riscv64-${{ hashFiles('cmake/Hunter/*.cmake') }}
+      - name: Benchmark
+        run: JOBS=4 test/internal_benchmarks/jumpdest_pointer_bench_ci.sh github-riscv64-clang-18 results
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: jdp-riscv64-clang-18
           path: results

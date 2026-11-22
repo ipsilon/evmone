@@ -101,6 +101,52 @@ static_assert(OP_PUSH32 == std::numeric_limits<int8_t>::max());
     }
 }
 
+/// The type the tszisk and tsptr loops load the opcodes as. x86 extends a loaded byte either way at no
+/// extra cost, but its sign-extending load is a byte longer and, on Zen 3/4 and Granite Rapids, a
+/// cycle slower in the chain of PUSH skips. GCC for RISC-V and AArch64 folds the sign extension into
+/// the load (lb, ldrsb) only when the byte is loaded as signed. Not plain char: it is unsigned on
+/// AArch64 Linux and RISC-V. Accessing the unsigned char code as signed char is allowed: it is the
+/// signed type corresponding to the type of the object.
+#if defined(__x86_64__) || defined(_M_X64)
+using OpcodeByte = unsigned char;
+#else
+using OpcodeByte = signed char;
+#endif
+
+/// szisk with the opcode type picked per target: one cast in the loop, a no-op for signed char.
+[[gnu::always_inline]] inline void tszisk_loop(BitsetSpan map, bytes_view code) noexcept
+{
+    const auto* const begin = reinterpret_cast<const OpcodeByte*>(code.data());
+    const auto* const end = begin + code.size();
+    for (const auto* p = begin; p < end;)
+    {
+        const auto op = *p;
+        if (static_cast<signed char>(op) >= OP_PUSH1)
+            p += op - std::ptrdiff_t{OP_PUSH1 - 2};
+        else
+        {
+            if (JDP_UNLIKELY(op == OP_JUMPDEST))
+                map.set(static_cast<size_t>(p - begin));
+            ++p;
+        }
+    }
+}
+
+/// The ptr loop (the index loop's shape) with the opcode type picked per target.
+[[gnu::always_inline]] inline void tsptr_loop(BitsetSpan map, bytes_view code) noexcept
+{
+    const auto* const begin = reinterpret_cast<const OpcodeByte*>(code.data());
+    const auto* const end = begin + code.size();
+    for (const auto* p = begin; p < end; ++p)
+    {
+        const auto op = *p;
+        if (static_cast<signed char>(op) >= OP_PUSH1)
+            p += op - std::ptrdiff_t{OP_PUSH1 - 1};
+        else if (JDP_UNLIKELY(op == OP_JUMPDEST))
+            map.set(static_cast<size_t>(p - begin));
+    }
+}
+
 using AnalyzeFn = void (*)(BitsetSpan, bytes_view) noexcept;
 
 struct Variant
@@ -110,8 +156,8 @@ struct Variant
     AnalyzeFn fn;
 };
 
-/// 4 loops x 4 shifts.
-constexpr size_t NUM_VARIANTS = 16;
+/// 6 loops x 4 shifts.
+constexpr size_t NUM_VARIANTS = 24;
 
 /// The loops compiled with one set of code layout flags (one jumpdest_pointer_mode_*.cpp).
 struct Mode
