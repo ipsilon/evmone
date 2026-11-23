@@ -40,9 +40,12 @@ constexpr AlternativeExceptions ALTERNATIVE_TX_EXCEPTIONS[]{
     // evmone bounds the signature v while decoding the transaction, because the domain of v is
     // what tells a legacy transaction from a typed one and carries the chain id (EIP-155). The
     // execution specs read v as a plain integer and bound it with the rest of the signature.
+    // A legacy v must also fit 64 bits, so a transaction for a chain id over 2**63 - 18 fails to
+    // decode, where the specs compare chain ids up to 2**64 - 1.
     // decode_transaction() reports one code for every malformed encoding, so this accepts more
     // than the v rule; narrowing it needs the decoder to report the v domain separately.
-    {state::INVALID_ENCODING, "TransactionException.INVALID_SIGNATURE_VRS"},
+    {state::INVALID_ENCODING,
+        "TransactionException.INVALID_SIGNATURE_VRS|TransactionException.INVALID_CHAINID"},
 
 };
 

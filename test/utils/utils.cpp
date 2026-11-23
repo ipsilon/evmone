@@ -39,16 +39,18 @@ evmc_revision to_rev(std::string_view s)
         return EVMC_OSAKA;
     if (s == "Amsterdam")
         return EVMC_AMSTERDAM;
+    if (s == "BPO1" || s == "BPO2")
+        return EVMC_OSAKA;
+    if (s == "AmsterdamBPOIncrease" || s == "AmsterdamBPODecrease")
+        return EVMC_AMSTERDAM;
     if (s == "OsakaToBPO1AtTime15k")
         return EVMC_OSAKA;
     if (s == "BPO1ToBPO2AtTime15k")
         return EVMC_OSAKA;
-    if (s == "BPO2ToBPO3AtTime15k")
-        return EVMC_OSAKA;
-    if (s == "BPO3ToBPO4AtTime15k")
-        return EVMC_OSAKA;
     if (s == "BPO2ToAmsterdamAtTime15k")
         return EVMC_OSAKA;
+    if (s == "AmsterdamToBPOIncreaseAtTime15k" || s == "AmsterdamToBPODecreaseAtTime15k")
+        return EVMC_AMSTERDAM;
     if (s == "Experimental")
         return EVMC_EXPERIMENTAL;
     throw std::invalid_argument{"unknown revision: " + std::string{s}};
