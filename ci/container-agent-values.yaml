@@ -1,0 +1,19 @@
+# Helm values of the CircleCI container agent serving the ipsilon/ha9x resource class
+# (the linux-clang-selfhosted executor), without the resource class token. Apply with:
+#
+#   helm upgrade container-agent container-agent/container-agent -n circleci \
+#     --version 101.1.4 --reuse-values -f ci/container-agent-values.yaml
+#
+# The job container runs without containerd's AppArmor profile, which on the current host denies
+# ptrace between the container's own processes and so breaks LeakSanitizer. The container
+# runtime's default seccomp filter takes its place.
+agent:
+  resourceClasses:
+    ipsilon/ha9x:
+      metadata:
+        annotations:
+          container.apparmor.security.beta.kubernetes.io/primary: unconfined
+      spec:
+        securityContext:
+          seccompProfile:
+            type: RuntimeDefault
