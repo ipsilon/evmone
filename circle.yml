@@ -141,6 +141,10 @@ commands:
       fixtures_suffix:
         type: string
         default: ""
+      formats:
+        description: "The fixture formats to unpack"
+        type: string
+        default: "state_tests blockchain_tests"
     steps:
       - run:
           name: "Download test fixtures: <<parameters.repo>> <<parameters.release>>"
@@ -149,7 +153,8 @@ commands:
             find . -delete
             rm -f /tmp/fixtures<<parameters.fixtures_suffix>>.tar.gz
             curl -L --fail --retry 3 -C - --output-dir /tmp -O https://github.com/<<parameters.repo>>/releases/download/<<parameters.release>>/fixtures<<parameters.fixtures_suffix>>.tar.gz
-            tar -xzf /tmp/fixtures<<parameters.fixtures_suffix>>.tar.gz
+            tar -xzf /tmp/fixtures<<parameters.fixtures_suffix>>.tar.gz $(printf 'fixtures/%s ' <<parameters.formats>>)
+            rm /tmp/fixtures<<parameters.fixtures_suffix>>.tar.gz
             ls -l
 
   run_execution_spec_tests:
@@ -535,6 +540,7 @@ jobs:
       - build
       - download_execution_spec_tests:
           release: tests@v21.0.3
+          formats: state_tests
       - run:
           name: "Execution spec tests (state_tests)"
           working_directory: ~/build
@@ -555,6 +561,7 @@ jobs:
       - build
       - download_execution_spec_tests:
           release: tests@v21.0.3
+          formats: state_tests
       - run:
           name: "Execution spec tests (state_tests)"
           working_directory: ~/build
