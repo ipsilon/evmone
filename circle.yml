@@ -35,7 +35,7 @@ executors:
       CMAKE_BUILD_PARALLEL_LEVEL: 16
   linux-gcc-min:
     docker:
-      - image: ethereum/cpp-build-env:20-gcc-11
+      - image: chfast/cpp-build-env:25-gcc-12
     resource_class: small
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
@@ -52,7 +52,7 @@ executors:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-base:
     docker:
-      - image: cimg/base:edge-22.04
+      - image: cimg/base:edge-24.04
     resource_class: medium
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
