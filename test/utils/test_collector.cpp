@@ -16,13 +16,9 @@ std::vector<fs::path> collect_test_files(const fs::path& root)
         return entry.is_regular_file() && entry.path().extension() == ".json" &&
                entry.path().filename() != "index.json";
     };
-    // TODO(gcc-12): Pipe the temporary in directly. Adapting one needs owning_view, which C++20
-    //   has but gcc-11's libstdc++ does not implement.
-    const fs::recursive_directory_iterator entries{root};
-
     // TODO(C++23): std::ranges::to<std::vector>() replaces the vector and the copy.
     std::vector<fs::path> files;
-    std::ranges::copy(entries | std::views::filter(is_test_file) |
+    std::ranges::copy(fs::recursive_directory_iterator{root} | std::views::filter(is_test_file) |
                           std::views::transform(&fs::directory_entry::path),
         std::back_inserter(files));
     std::ranges::sort(files);
