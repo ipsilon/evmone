@@ -191,64 +191,27 @@ void rem(std::span<uint64_t> r, std::span<const uint64_t> u, std::span<const uin
     INTX_REQUIRE(u.size() > d.size());  // Because used only for to-Montgomery conversion.
     assert(scratch.size() >= 2 * u.size() + 2);
 
-    // Layout: un[u.size()+1] | dn[d.size()] | q[u.size()+1-d.size()]
-    auto un = scratch.subspan(0, u.size() + 1);
-    const auto dn = scratch.subspan(u.size() + 1, d.size());
-    const auto q_buf = scratch.subspan(u.size() + 1 + d.size(), u.size() + 1 - d.size());
-
-    // Normalize: left-shift both u and d so that the MSB of d's top word is set.
-    const auto shift = static_cast<unsigned>(std::countl_zero(d.back()));
-
-    un.back() = 0;  // Only the extra top word needs zeroing; the rest is set by normalization.
-
-    if (shift != 0)
+    // intx normalizes the operands itself. The quotient is unused but needs storage.
+    if (d.size() == 1)
     {
-        for (size_t i = d.size() - 1; i != 0; --i)
-            dn[i] = (d[i] << shift) | (d[i - 1] >> (64 - shift));
-        dn[0] = d[0] << shift;
-
-        // Normalize numerator into un.
-        un[u.size()] = u.back() >> (64 - shift);
-        for (size_t i = u.size() - 1; i != 0; --i)
-            un[i] = (u[i] << shift) | (u[i - 1] >> (64 - shift));
-        un[0] = u[0] << shift;
+        r[0] = intx::internal::udivrem_by1(scratch.first(u.size()), u, d[0]);
+    }
+    else if (d.size() == 2)
+    {
+        const auto rem2 =
+            intx::internal::udivrem_by2(scratch.first(u.size() - 1), u, uint128{d[0], d[1]});
+        r[0] = rem2[0];
+        r[1] = rem2[1];
     }
     else
     {
-        std::ranges::copy(d, dn.begin());
-        std::ranges::copy(u, un.begin());
+        // Layout: un[u.size() + 1] | dn[d.size()] | q[u.size() + 1 - d.size()]
+        const auto un = scratch.first(u.size() + 1);
+        const auto dn = scratch.subspan(u.size() + 1, d.size());
+        const auto q = scratch.subspan(u.size() + 1 + d.size());
+        intx::internal::udivrem_knuth(q.data(), r.first(d.size()), u, u.size(), d, un.data(), dn);
     }
-
-    // Shrink off the extra top word if it is not significant for the normalized numerator.
-    if (un.back() == 0 && un[un.size() - 2] < dn.back())
-        un = un.first(un.size() - 1);
-
-    const auto denormalize = [&r, shift](std::span<const uint64_t> x) noexcept {
-        assert(shift < 64);  // Normalization shift is sub-word.
-        assert(r.size() >= x.size());
-        shr(r.first(x.size()), x, shift);
-        std::ranges::fill(r.subspan(x.size()), uint64_t{0});
-    };
-
-    assert(un.size() > dn.size());  // Not possible in the current usage.
-
-    if (dn.size() == 1)
-    {
-        const uint64_t rem_words[1]{intx::internal::udivrem_by1(un, dn[0])};
-        denormalize(rem_words);
-    }
-    else if (dn.size() == 2)
-    {
-        const auto rem2 = intx::internal::udivrem_by2(un, uint128{dn[0], dn[1]});
-        denormalize(as_words(rem2));
-    }
-    else
-    {
-        // General case: Knuth's algorithm. The quotient is stored in q_buf;
-        // we don't use it, but udivrem_knuth requires storage for it.
-        intx::internal::udivrem_knuth(q_buf.data(), un, dn);
-        denormalize(un.subspan(0, dn.size()));
-    }
+    std::ranges::fill(r.subspan(d.size()), uint64_t{0});
 }
 
 /// Represents the exponent value of the modular exponentiation operation.
