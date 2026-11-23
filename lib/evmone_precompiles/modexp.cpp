@@ -341,10 +341,11 @@ void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
         const auto c1 = crypto::mul(r, x, y[0]);
 
         const auto m = r[0] * mod_inv;
-        const auto p = umul(mod[0], m) + r[0];
-        assert(p[0] == 0);  // The lowest word is canceled by m.
+        // The low word of mod[0]⋅m + r[0] is 0, so it carries out exactly when r[0] != 0.
+        assert(mod[0] * m + r[0] == 0);
+        const auto p_hi = umul(mod[0], m)[1] + uint64_t{r[0] != 0};
 
-        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, p[1]);
+        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, p_hi);
         std::tie(r[n - 1], r_carry) = intx::addc(c1, c3);
     }
 
@@ -354,10 +355,11 @@ void mul_amm(std::span<uint64_t, N> r, std::span<const uint64_t, N> x,
         const auto c1 = addmul(r, r, x, y[i]);
 
         const auto m = r[0] * mod_inv;
-        const auto p = umul(mod[0], m) + r[0];
-        assert(p[0] == 0);  // The lowest word is canceled by m.
+        // The low word of mod[0]⋅m + r[0] is 0, so it carries out exactly when r[0] != 0.
+        assert(mod[0] * m + r[0] == 0);
+        const auto p_hi = umul(mod[0], m)[1] + uint64_t{r[0] != 0};
 
-        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, p[1]);
+        const auto c3 = addmul(r_lo, r_hi, mod_hi, m, p_hi);
         std::tie(r[n - 1], r_carry) = intx::addc(c1, c3, r_carry);
     }
 
