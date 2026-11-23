@@ -339,7 +339,10 @@ static void from_json_tx_common(const json::json& j, state::Transaction& o)
     // `sender` is not provided for transactions in invalid blocks.
     o.sender = load_or<address>(j, "sender", {});
     o.nonce = from_json<uint64_t>(j.at("nonce"));
-    o.chain_id = load_or<uint64_t>(j, "chainId", 1);
+    // The EIP-155 tests give chain ids over 64 bits: load them as 0, which no test chain has.
+    const auto chain_id = load_or<intx::uint256>(j, "chainId", 1);
+    o.chain_id =
+        chain_id <= std::numeric_limits<uint64_t>::max() ? static_cast<uint64_t>(chain_id) : 0;
 
     if (const auto to_it = j.find("to"); to_it != j.end())
     {
@@ -417,7 +420,18 @@ state::Transaction from_json<state::Transaction>(const json::json& j)
 
     o.r = from_json<intx::uint256>(j.at("r"));
     o.s = from_json<intx::uint256>(j.at("s"));
-    o.v = from_json<uint64_t>(j.at("v"));
+    // A legacy v over 64 bits encodes a chain id over 2**63 - 18 (EIP-155). Load it as the
+    // largest v of the same y parity and chain id 0, which no test chain has.
+    const auto v = from_json<intx::uint256>(j.at("v"));
+    if (v <= std::numeric_limits<uint64_t>::max())
+    {
+        o.v = static_cast<uint64_t>(v);
+    }
+    else
+    {
+        o.v = static_cast<uint64_t>(v) | ~uint64_t{1};
+        o.chain_id = 0;
+    }
 
     return o;
 }

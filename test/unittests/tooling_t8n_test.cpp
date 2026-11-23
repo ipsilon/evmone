@@ -225,6 +225,30 @@ TEST(tooling_t8n, blob_transaction_creating_a_contract_is_rejected)
         result.at("rejected")[0].at("error"), "TransactionException.TYPE_3_TX_CONTRACT_CREATION");
 }
 
+TEST(tooling_t8n, legacy_chain_id_over_64_bits_is_rejected)
+{
+    // The v of this legacy transaction encodes the chain ID 2^64 + 1 (EIP-155), while its
+    // chainId field gives the chain's ID 1.
+    static constexpr auto TX = R"([{
+        "to": null,
+        "input": "0x60015ff3",
+        "gas": "0x186a0",
+        "nonce": "0x0",
+        "value": "0x0",
+        "gasPrice": "0x32",
+        "chainId": "0x1",
+        "sender": "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+        "v": "0x020000000000000025",
+        "r": "0x468a915f087692bb9be503831a3dfef2cf9c8dee26deb40ff2ec99e8d22665ae",
+        "s": "0x5cedae0810c3851ecd1004bfdbfe6ddc7753c2d665993bb01ce75af7857b13dc"
+    }])";
+
+    const auto result = json::parse(run_t8n(ALLOC_JSON, TX, EVMC_SHANGHAI));
+    EXPECT_EQ(result.at("receipts"), json::array());
+    ASSERT_EQ(result.at("rejected").size(), 1u);
+    EXPECT_EQ(result.at("rejected")[0].at("error"), "TransactionException.INVALID_CHAINID");
+}
+
 TEST(tooling_t8n, a_block_requesting_nothing_reports_the_empty_requests_hash)
 {
     const auto result = json::parse(run_t8n(ALLOC_WITH_REQUEST_STUBS_JSON, "[]", EVMC_PRAGUE));
