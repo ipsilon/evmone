@@ -42,20 +42,13 @@ The codebase of _evmone_ is optimized to provide fast and efficient execution of
 
 ## Usage
 
-### As geth plugin
+### As an EVMC module
 
 evmone implements the [EVMC] API for Ethereum Virtual Machines.
-It can be used as a plugin replacing geth's internal EVM. But for that a modified
-version of geth is needed. The [Ewasm]'s fork
-of go-ethereum provides [binary releases of geth with EVMC support](https://github.com/ewasm/go-ethereum/releases).
-
-Next, download evmone from [Releases].
-
-Start the downloaded geth with `--vm.evm` option pointing to the evmone shared library.
-
-```bash
-geth --vm.evm=./libevmone.so
-```
+The evmone shared library can be loaded by an EVMC host application.
+Prebuilt libraries are available from [Releases].
+evmone vendors EVMC (in `evmc/`), so the host application must be built
+with the headers from `evmc/include` to be ABI compatible.
 
 ### Building from source
 
@@ -84,7 +77,7 @@ To build the evmone EVMC module (shared library), test, and benchmark:
    ```
 
 
-3. Run the unit tests or benchmarking tool:
+4. Run the unit tests or benchmarking tool:
    ```
    build/bin/evmone-unittests
    build/bin/evmone-bench test/evm-benchmarks/benchmarks
@@ -92,12 +85,22 @@ To build the evmone EVMC module (shared library), test, and benchmark:
 
 ### Precompiles
 
-Ethereum Precompiled Contracts (_precompiles_ for short) are supported by evmone with some exceptions:
+Ethereum Precompiled Contracts (_precompiles_ for short) are implemented in two places:
+the core parts are in the `evmone_precompiles` library (`lib/evmone_precompiles`),
+and the dispatch is in the evmone state library (`test/state`),
+which is built with the evmone tools (`EVMONE_TOOLS`).
+Two CMake options switch a precompile to an external library instead:
 
-1. The `ecrecover` is implemented directly by evmone and has degraded performance.
-2. For `expmod` stubs are enabled by default — they will correctly respond to known inputs. The CMake option `EVMONE_PRECOMPILES_GMP=1` enables full implementation but this requires [GMP] (e.g. libgmp-dev) library at build and execution time.
+1. `EVMONE_PRECOMPILES_LIBSECP256K1=ON` uses [libsecp256k1] for `ecrecover`.
+   The built-in `ecrecover` has degraded performance, so this can be enabled to speed it up.
+   The library is fetched and built with evmone.
+2. `EVMONE_PRECOMPILES_GMP=ON` uses [GMP] for `expmod`.
+   This requires the GMP library (e.g. libgmp-dev) at build and execution time.
 
 ### Docker
+
+> [!NOTE]
+> This section is outdated: the Docker image is not updated regularly.
 
 Docker images with evmone are available on Docker Hub:
 https://hub.docker.com/r/ethereum/evmone.
@@ -136,11 +139,11 @@ Licensed under the [Apache License, Version 2.0].
 [Ipsilon]: https://github.com/ipsilon
 [Ewasm]: https://github.com/ewasm
 [GMP]: https://gmplib.org
+[libsecp256k1]: https://github.com/bitcoin-core/secp256k1
 [intx]: https://github.com/chfast/intx
 [ethash]: https://github.com/chfast/ethash
 [Releases]: https://github.com/ethereum/evmone/releases
 [standard readme]: https://github.com/RichardLitt/standard-readme
-[silkpre]: https://github.com/torquem-ch/silkpre
 
 [appveyor badge]: https://img.shields.io/appveyor/ci/chfast/evmone/master.svg?logo=appveyor
 [circleci badge]: https://img.shields.io/circleci/project/github/ethereum/evmone/master.svg?logo=circleci
