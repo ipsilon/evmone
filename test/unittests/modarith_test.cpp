@@ -200,17 +200,24 @@ TYPED_TEST(modarith_test, modinv_structured)
 {
     // modinv_scaled() of small values and values near powers of 2, whose runs of equal bits drive
     // the inversion to its limits; ModArith::inv() only sees Montgomery forms, which look random.
+    // The scales are 1 and both ends of [0, mod); ModArith::inv() uses R² % mod.
     // For M256, 2⁶⁴ + 1 is not invertible but its gcd with M256 is 1 modulo 2⁶⁴.
     using Uint = TypeParam::uint;
     const TypeParam m;
     const auto check = [&](const Uint& x) {
         if (x >= m.mod())
             return;
-        const auto x_inv = modinv_scaled(x, Uint{1}, m.mod());
-        if (!is_invertible<TypeParam>(x))
-            EXPECT_EQ(x_inv, 0) << hex(x);
-        else
-            EXPECT_EQ(udivrem(umul(x, x_inv), m.mod()).rem, 1) << hex(x);
+        for (const auto& scale : {Uint{1}, Uint{0}, m.mod() - 1})
+        {
+            const auto x_inv = modinv_scaled(x, scale, m.mod());
+            if (!is_invertible<TypeParam>(x))
+                EXPECT_EQ(x_inv, 0) << hex(x);
+            else
+            {
+                EXPECT_LT(x_inv, m.mod()) << hex(x);
+                EXPECT_EQ(udivrem(umul(x, x_inv), m.mod()).rem, scale) << hex(x);
+            }
+        }
     };
     for (uint64_t j = 1; j < 1024; ++j)
         check(j);
