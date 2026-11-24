@@ -63,7 +63,7 @@ constexpr std::pair<uint64_t, uint64_t> addmul(
     const auto p = intx::builtin_uint128{a} * b + t + c;
     return {static_cast<uint64_t>(p >> 64), static_cast<uint64_t>(p)};
 #else
-    const auto p = intx::umul(a, b) + t + c;
+    const auto p = intx::mac(t, a, b, c);
     return {p[1], p[0]};
 #endif
 }
