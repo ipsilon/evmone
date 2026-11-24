@@ -1,8 +1,10 @@
-name: llvm-exegesis on Zen 4
+name: Instruction timing on Zen 4
 
 # DO NOT MERGE. A throwaway run for https://github.com/llvm/llvm-project/issues/244230:
-# the x86 runners get one of several CPUs, so the job is repeated, and the jobs that land on a
-# Zen 4 measure the instructions of the issue with llvm-exegesis.
+# the x86 runners get one of several CPUs, so the job is repeated. The runner VMs have no
+# performance counters for llvm-exegesis, so zen4-timing/timing.c times the instructions with
+# rdtscp against a chain of 1-cycle adds. AMD jobs run the SSE/AVX2 tests, and the ones with
+# AVX-512 also run the AVX-512 tests.
 
 on:
   push:
@@ -13,7 +15,7 @@ permissions:
   contents: read
 
 jobs:
-  exegesis:
+  timing:
     name: ubuntu-24.04 ${{ matrix.n }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -22,63 +24,32 @@ jobs:
       matrix:
         n: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
     steps:
+      - uses: actions/checkout@v5
+
       - name: CPU
         id: cpu
         run: |
           lscpu | tee cpu.txt
-          if grep -q -m1 '^vendor_id.*AuthenticAMD' /proc/cpuinfo &&
-             grep -q -m1 '^cpu family[[:space:]]*: 25$' /proc/cpuinfo &&
-             grep -q -m1 -w avx512f /proc/cpuinfo; then
-            echo "zen4=1" >> "$GITHUB_OUTPUT"
+          if grep -q -m1 '^vendor_id.*AuthenticAMD' /proc/cpuinfo; then
+            echo "amd=1" >> "$GITHUB_OUTPUT"
+            grep -q -m1 -w avx512f /proc/cpuinfo && echo "arg=avx512" >> "$GITHUB_OUTPUT"
           fi
-          echo "### $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2-)" >> "$GITHUB_STEP_SUMMARY"
+          model="$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2-)"
+          family="$(grep -m1 'cpu family' /proc/cpuinfo | cut -d: -f2- | xargs)"
+          modelno="$(grep -m1 '^model[[:space:]]*:' /proc/cpuinfo | cut -d: -f2- | xargs)"
+          echo "### $model (family $family, model $modelno)" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Install llvm-exegesis
-        if: steps.cpu.outputs.zen4
+      - name: Time
+        if: steps.cpu.outputs.amd
         run: |
-          wget -q https://apt.llvm.org/llvm.sh
-          sudo bash llvm.sh 23
-          sudo apt-get install -y -q llvm-23
-          llvm-exegesis-23 --version
-
-      - name: Measure
-        if: steps.cpu.outputs.zen4
-        run: |
-          sudo sysctl -w kernel.perf_event_paranoid=-1
-          ops="PSHUFBrr VPSHUFBrr VPSHUFBYrr VPSHUFBZ128rr VPSHUFBZ256rr VPSHUFBZrr
-               VPSHUFBZ128rrk VPSHUFBZ128rrkz VPSHUFBZ256rrkz VPSHUFBZrrkz
-               VPSHUFBITQMBZ128rr VPSHUFBITQMBZ256rr VPSHUFBITQMBZrr
-               VFMSUB231SSZrkz_Int VFMSUB231SSZrk_Int VFMSUB231SSZr_Int
-               VFMADD231SSZrkz_Int VFMSUB231SDZrkz_Int"
-          mkdir -p results
-          for mode in latency inverse_throughput uops; do
-            for op in $ops; do
-              llvm-exegesis-23 --mode=$mode --opcode-name=$op \
-                --benchmark-repeat-count=20 --result-aggregation-mode=min \
-                --benchmarks-file=results/$mode-$op.yaml 2> results/$mode-$op.err || true
-            done
-          done
-          cat results/*.yaml > results/all.yaml
-          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
-          import glob, re
-          print("| opcode | mode | value | uops | error |")
-          print("|---|---|---|---|---|")
-          for f in sorted(glob.glob("results/*-*.yaml")):
-              for d in open(f).read().split("\n---\n"):
-                  op = re.search(r"instructions:\s*\n\s*- '(\S+)", d)
-                  mode = re.search(r"mode:\s+(\S+)", d)
-                  if not op or not mode:
-                      continue
-                  ms = dict(re.findall(r"\{ key: ([\w-]+), value: ([0-9.e+-]+)", d))
-                  err = re.search(r"error:\s+'([^']*)'", d)
-                  main = ms.get(mode.group(1), "")
-                  print(f"| {op.group(1)} | {mode.group(1)} | {main} | {ms.get('NumMicroOps', '')} | {err.group(1) if err else ''} |")
-          EOF
+          gcc -O2 -Wall -o timing zen4-timing/timing.c
+          ./timing ${{ steps.cpu.outputs.arg }} | tee timing.txt
+          { echo '```'; cat timing.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v5
-        if: steps.cpu.outputs.zen4
+        if: steps.cpu.outputs.amd
         with:
-          name: exegesis-zen4-${{ matrix.n }}
+          name: timing-${{ matrix.n }}
           path: |
             cpu.txt
-            results
+            timing.txt
