@@ -90,73 +90,301 @@ constexpr UintT modsub(const UintT& x, const UintT& y, const UintT& mod) noexcep
     return (d.carry) ? s : d.value;
 }
 
+// The safegcd values are signed integers, shifted and masked in two's complement (C++20).
+// NOLINTBEGIN(*-signed-bitwise)
+
+/// The helpers of modinv_scaled().
+/// Its comments describe the algorithm and cite the paper that the § numbers refer to.
+namespace safegcd
+{
+using intx::int128;
+using intx::smul;
+
+/// The number of divsteps in a batch, which is also the number of bits of a limb.
+constexpr int BATCH = 62;
+
+constexpr uint64_t LIMB_MASK = (uint64_t{1} << BATCH) - 1;
+
+/// A signed integer in limbs of 62 bits, the least significant first. All limbs but the top one
+/// are in [0, 2⁶²).
+template <size_t N>
+using Limbs = std::array<int64_t, N>;
+
+/// The transition matrix of a batch of divsteps scaled by 2⁶² (§12.1):
+/// [u v; q r]⋅[f, g] = 2⁶²⋅[f', g'] for the f' and g' after the batch.
+/// The row sums |u| + |v| and |q| + |r| are at most 2⁶².
+struct TransitionMatrix
+{
+    int64_t u;
+    int64_t v;
+    int64_t q;
+    int64_t r;
+};
+
+/// Runs BATCH divsteps (§8) from delta and the low 62 bits of f and g, f odd.
+/// Returns the transition matrix of the batch and the updated delta.
+[[gnu::noinline]] constexpr std::pair<TransitionMatrix, int> divsteps(
+    int delta, uint64_t f, uint64_t g) noexcept
+{
+    assert(f % 2 == 1);
+
+    // The matrix of the divsteps so far, scaled by 2ⁱ after i of them:
+    // u⋅f₀ + v⋅g₀ = 2ⁱ⋅f and q⋅f₀ + r⋅g₀ = 2ⁱ⋅g.
+    int64_t u = 1;
+    int64_t v = 0;
+    int64_t q = 0;
+    int64_t r = 1;
+    int left = BATCH;
+    while (true)
+    {
+        // While g is even, a divstep is (δ, f, g) → (1 + δ, f, g/2).
+        const auto zeros = std::countr_zero(g | (~uint64_t{0} << left));
+        g >>= zeros;
+        u <<= zeros;
+        v <<= zeros;
+        delta += zeros;
+        left -= zeros;
+        if (left == 0)
+            break;
+
+        // For odd g, a divstep is the conditional swap (δ, f, g) → (−δ, g, −f) if δ > 0,
+        // followed by the elimination (δ, f, g) → (1 + δ, f, (g + f)/2) (§8.2).
+        // neg_g is −g, kept apart to take the negation off the critical path.
+        auto neg_g = -g;
+        if (delta > 0)
+        {
+            delta = -delta;
+            neg_g = f;
+            f = g;
+            g = -neg_g;
+            std::swap(u, q);
+            std::swap(v, r);
+            q = -q;
+            r = -r;
+        }
+
+        // Now δ ≤ 0, so the next 1 − δ divsteps are eliminations, also those for even g.
+        // With k = min(1 − δ, left), the first j = min(k, 5) of them add multiplier⋅f to g, for
+        // multiplier ≡ −g⋅f⁻¹ (mod 2ʲ), which gives g j trailing zeros for the shift above.
+        // f⁻¹ ≡ (3⋅f) ⊕ 2 (mod 2⁵) for all 16 odd residues, so multiplier takes one multiplication.
+        const auto k = std::min(1 - delta, left);
+        const auto multiplier = (neg_g * ((3 * f) ^ 2)) % (uint64_t{1} << k) % 32;
+        g += multiplier * f;
+        assert(g % (uint64_t{1} << std::min(k, 5)) == 0);
+        q += static_cast<int64_t>(multiplier) * u;
+        r += static_cast<int64_t>(multiplier) * v;
+    }
+    // The matrices T(δ, f, g) of §8.1 have determinant 1/2,
+    // so the matrix 2⁶²⋅T⋯T of the batch has determinant 2⁶².
+    assert(smul(u, r) - smul(v, q) == int128{uint64_t{1} << BATCH});
+    assert(smul(u, u < 0 ? -1 : 1) + smul(v, v < 0 ? -1 : 1) <= int128{uint64_t{1} << BATCH});
+    assert(smul(q, q < 0 ? -1 : 1) + smul(r, r < 0 ? -1 : 1) <= int128{uint64_t{1} << BATCH});
+    return {{u, v, q, r}, delta};
+}
+
+constexpr int64_t low_limb(const int128& x) noexcept
+{
+    return static_cast<int64_t>(x[0] & LIMB_MASK);
+}
+
+/// Computes [f, g] = t⋅[f, g] / 2⁶² for the first size limbs of f and g, with t the matrix of the
+/// divsteps of their low limbs: the division is exact and the results fit in size limbs (§8.3).
+template <size_t N>
+[[gnu::always_inline]] constexpr void update_fg(
+    Limbs<N>& f, Limbs<N>& g, size_t size, const TransitionMatrix& t) noexcept
+{
+    const auto [u, v, q, r] = t;
+    auto cf = smul(u, f[0]) + smul(v, g[0]);
+    auto cg = smul(q, f[0]) + smul(r, g[0]);
+    assert(low_limb(cf) == 0 && low_limb(cg) == 0);
+    cf >>= BATCH;
+    cg >>= BATCH;
+    for (size_t i = 1; i < size; ++i)
+    {
+        cf += smul(u, f[i]) + smul(v, g[i]);
+        cg += smul(q, f[i]) + smul(r, g[i]);
+        f[i - 1] = low_limb(cf);
+        g[i - 1] = low_limb(cg);
+        cf >>= BATCH;
+        cg >>= BATCH;
+    }
+    f[size - 1] = static_cast<int64_t>(cf);
+    g[size - 1] = static_cast<int64_t>(cg);
+}
+
+/// Computes [vn, rn] = (t⋅[vn, rn] + mod⋅[mv, mr]) / 2⁶², with mv and mr making the division
+/// exact. Requires vn and rn in (−2⋅mod, mod), the row sums of t at most 2⁶², and
+/// mod_inv⋅mod ≡ 1 (mod 2⁶⁴). The results are in (−2⋅mod, mod).
+template <size_t N>
+[[gnu::always_inline]] constexpr void update_vr(Limbs<N>& vn, Limbs<N>& rn,
+    const TransitionMatrix& t, const Limbs<N>& mod, uint64_t mod_inv) noexcept
+{
+    const auto [u, v, q, r] = t;
+
+    // Counting negative vn or rn as itself plus mod keeps |u⋅vn + v⋅rn| < 2⁶²⋅mod; subtracting
+    // less than 2⁶² multiples of mod then makes the division exact, with results in (−2⋅mod, mod).
+    const auto vn_sign = vn[N - 1] >> 63;
+    const auto rn_sign = rn[N - 1] >> 63;
+    auto mv = (u & vn_sign) + (v & rn_sign);
+    auto mr = (q & vn_sign) + (r & rn_sign);
+    auto cv = smul(u, vn[0]) + smul(v, rn[0]);
+    auto cr = smul(q, vn[0]) + smul(r, rn[0]);
+
+    // Subtract from m the residue modulo 2⁶² that cancels the low limb of c + mod⋅m.
+    const auto cancel = [mod_inv](const int128& c, int64_t m) noexcept {
+        const auto residue = mod_inv * c[0] + static_cast<uint64_t>(m);
+        return m - static_cast<int64_t>(residue & LIMB_MASK);
+    };
+    mv = cancel(cv, mv);
+    mr = cancel(cr, mr);
+    cv += smul(mod[0], mv);
+    cr += smul(mod[0], mr);
+    assert(low_limb(cv) == 0 && low_limb(cr) == 0);
+    cv >>= BATCH;
+    cr >>= BATCH;
+    // TODO(gcc-14): Unroll by the template-dependent count N.
+#pragma GCC unroll 8
+    for (size_t i = 1; i < N; ++i)
+    {
+        cv += smul(u, vn[i]) + smul(v, rn[i]) + smul(mod[i], mv);
+        cr += smul(q, vn[i]) + smul(r, rn[i]) + smul(mod[i], mr);
+        vn[i - 1] = low_limb(cv);
+        rn[i - 1] = low_limb(cr);
+        cv >>= BATCH;
+        cr >>= BATCH;
+    }
+    vn[N - 1] = static_cast<int64_t>(cv);
+    rn[N - 1] = static_cast<int64_t>(cr);
+}
+
+/// Splits x into N limbs.
+template <size_t N, typename UintT>
+constexpr Limbs<N> to_limbs(const UintT& x) noexcept
+{
+    Limbs<N> r{};
+    for (size_t i = 0; i < N; ++i)
+        r[i] = static_cast<int64_t>((x >> (i * BATCH))[0] & LIMB_MASK);
+    return r;
+}
+
+/// Returns the value of the first size limbs of a.
+template <typename SintT, size_t N>
+constexpr SintT from_limbs(const Limbs<N>& a, size_t size) noexcept
+{
+    SintT r = a[size - 1];
+    for (size_t i = size - 1; i != 0; --i)
+        r = (r << BATCH) | SintT{a[i - 1]};
+    return r;
+}
+
+}  // namespace safegcd
+
 /// Computes scale⋅x⁻¹ % mod, i.e. the modular inverse of x scaled by the given factor.
 /// Returns 0 for non-invertible x (including x == 0).
 /// Requires an odd mod not less than 3, and both x and scale less than mod.
+/// Runs in variable time.
 ///
-/// The scale is the initial value of the Bézout coefficient u and the algorithm is linear in it,
-/// so any factor can be folded into the result for free.
+/// Implements the safegcd algorithm of D. J. Bernstein and B.-Y. Yang,
+/// "Fast constant-time gcd computation and modular inversion", IACR TCHES 2019(3),
+/// https://eprint.iacr.org/2019/266 (section and theorem numbers of its 2019-04-13 version).
+/// The comments in the function body describe the implementation details.
 template <typename UintT>
 constexpr UintT modinv_scaled(const UintT& x, const UintT& scale, const UintT& mod) noexcept
 {
+    // As in §12.1, batches of 62 divsteps run on the low bits, and their transition matrix is
+    // then applied to the full values. The code departs from the paper's recip2 (§11) in:
+    // 1. It stops at g = 0, not after the divsteps count of Theorem 11.2.
+    // 2. A batch does the divsteps of all trailing zeros of g at once, and cancels up to 5 low
+    //    bits of g by adding a multiple of f.
+    // 3. The inverse is the top-right vₙ of the matrix product, as in recip2, but each batch
+    //    updates [vₙ, rₙ] modulo mod and divides it by 2⁶², not by a power of 1/2 at the end.
+    // 4. The values are signed integers in 62-bit limbs, and f and g drop a top limb that only
+    //    extends the sign.
+    // 5. rₙ starts as scale, and the gcd is checked.
+    //
+    // The first four, and the correction that keeps vₙ and rₙ in (−2⋅mod, mod), follow
+    // libsecp256k1's modinv64_var (which cancels up to 6 bits after a swap and 4 otherwise), see
+    // https://github.com/bitcoin-core/secp256k1/blob/master/doc/safegcd_implementation.md.
+
+    using namespace safegcd;
+
     assert((mod & 1) == 1);
     assert(mod >= 3);
     assert(x < mod);
-    assert(scale < mod);  // Otherwise the first modsub() below gets a non-reduced operand.
+    assert(scale < mod);  // Otherwise rn starts out of its range.
 
-    // Precompute inverse of 2 modulo mod: inv2 * 2 % mod == 1.
-    // The 1/2 is inexact division that can be fixed by adding "0" to the numerator
-    // and making it even: (mod + 1) / 2. To avoid potential overflow of (1 + mod)
-    // we rewrite it further to (mod - 1 + 2) / 2 = (mod - 1) / 2 + 1 = ⌊mod / 2⌋ + 1.
-    const auto inv2 = (mod >> 1) + 1;
+    // f and g are in [−mod, mod], vn and rn in (−2⋅mod, mod): 2 bits more than UintT.
+    constexpr auto N = (UintT::num_bits + 2 + BATCH - 1) / BATCH;
+    const auto mod_limbs = to_limbs<N>(mod);
+    const auto mod_inv = modinv_pow2(mod[0]);
 
-    // Use extended binary Euclidean algorithm. This evolves variables a and b until a is 0.
-    // Then GCD(x, mod) is in b. If GCD(x, mod) == 1 then the inversion exists and is in v.
-    // This follows the classic algorithm (Algorithm 1) presented in
-    // "Optimized Binary GCD for Modular Inversion".
-    // https://eprint.iacr.org/2020/972.pdf#algorithm.1
-    // TODO: The same paper has additional optimizations that could be applied.
-    UintT a = x;
-    UintT b = mod;
-    UintT u = scale;
-    UintT v = 0;
+    // (δ, f, g) = divstepⁿ(1, mod, x) (Theorem 11.2), vn⋅x ≡ scale⋅f and rn⋅x ≡ scale⋅g (mod mod).
+    int delta = 1;
+    auto f = mod_limbs;
+    auto g = to_limbs<N>(x);
+    Limbs<N> vn{};
+    auto rn = to_limbs<N>(scale);
+    size_t fg_size = N;  // The limbs of f and g in use, the higher limbs are stale.
 
-    while (a != 0)
+    using SintT = intx::sint<UintT::num_bits + 64>;
+    [[maybe_unused]] const auto in_fg_range = [&mod](const Limbs<N>& a, size_t size) noexcept {
+        const auto value = from_limbs<SintT>(a, size);
+        return value + mod >= 0 && value <= mod;
+    };
+    [[maybe_unused]] const auto in_vr_range = [&mod](const Limbs<N>& a) noexcept {
+        const auto value = from_limbs<SintT>(a, N);
+        return value + mod + mod > 0 && value < mod;
+    };
+
+    // For |f|, |g| < 2ᵈ, d ≥ 46, g = 0 after ⌊(49⋅d + 57)/17⌋ divsteps (Theorem 11.2).
+    [[maybe_unused]] constexpr auto ITERATIONS = (49 * UintT::num_bits + 57) / 17;
+    for ([[maybe_unused]] unsigned num_divsteps = 0;; num_divsteps += BATCH)
     {
-        if ((a & 1) != 0)
+        assert(num_divsteps < ITERATIONS);
+        const auto [t, new_delta] =
+            divsteps(delta, static_cast<uint64_t>(f[0]), static_cast<uint64_t>(g[0]));
+        delta = new_delta;
+        update_fg(f, g, fg_size, t);
+        assert(in_fg_range(f, fg_size) && in_fg_range(g, fg_size));
+        update_vr(vn, rn, t, mod_limbs, mod_inv);
+        assert(in_vr_range(vn) && in_vr_range(rn));
+
+        int64_t g_any = 0;
+        for (size_t i = 0; i < fg_size; ++i)
+            g_any |= g[i];
+        if (g_any == 0)
+            break;
+
+        // Drop the top limbs of f and g if both are 0 or −1: the limbs below take the sign.
+        const auto f_top = f[fg_size - 1];
+        const auto g_top = g[fg_size - 1];
+        if (fg_size >= 2 && (f_top == 0 || f_top == -1) && (g_top == 0 || g_top == -1))
         {
-            // if a is odd, update it to a - b.
-            if (const auto [d, less] = subc(a, b); less)
-            {
-                // swap a and b in case a < b.
-                b = a;
-                a = -d;
-
-                using namespace std;
-                swap(u, v);
-            }
-            else
-            {
-                a = d;
-            }
-            u = modsub(u, v, mod);
+            f[fg_size - 2] += f_top << BATCH;
+            g[fg_size - 2] += g_top << BATCH;
+            --fg_size;
         }
-
-        // Compute a / 2 % mod, a is even so division is exact and can be computed as ⌊a / 2⌋.
-        a >>= 1;
-
-        // Compute u / 2 % mod. If u is even, this can be computed as ⌊u / 2⌋.
-        // Otherwise, (u - 1 + 1) / 2 = ⌊u / 2⌋ + (1 / 2 % mod).
-        const auto u_odd = (u & 1) != 0;
-        u >>= 1;
-        if (u_odd)
-            u += inv2;  // if u is odd, add back ½ % mod.
     }
 
-    if (b != 1) [[unlikely]]
-        v = 0;  // not invertible
-    return v;
+    // Now f = ±gcd(x, mod), and vn ≡ ±scale⋅x⁻¹ (mod mod) if the gcd is 1.
+    // TODO: For a prime mod the sign of f would do (the gcd is 1, or x = 0 and vn = 0). Specialize,
+    //   e.g. with an is_prime template parameter, unless a compile-time ModArith modulus covers it.
+    const auto f_value = from_limbs<SintT>(f, fg_size);
+    if (f_value != 1 && f_value != -1) [[unlikely]]
+        return 0;
+
+    // Move vn from (−2⋅mod, mod) to [0, mod), negated if f = −1.
+    auto vn_value = from_limbs<SintT>(vn, N);
+    if (vn_value < 0)
+        vn_value += mod;
+    if (f_value == -1)
+        vn_value = -vn_value;
+    if (vn_value < 0)
+        vn_value += mod;
+    assert(vn_value >= 0 && vn_value < mod);
+    return static_cast<UintT>(vn_value);
 }
+// NOLINTEND(*-signed-bitwise)
 
 /// The modular arithmetic operations using the Montgomery form of the values.
 template <typename UintT>
