@@ -5,6 +5,79 @@ Documentation of all notable changes to the **evmone** project.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.26.0] — unreleased
+
+This release speeds up the precompiles and the Baseline interpreter.
+
+### Changed
+
+- **Modular inversion uses the safegcd algorithm** of Bernstein and Yang
+  instead of the binary GCD: `ecadd` executes 30–40% fewer instructions,
+  and `ecmul`, `ecrecover` and `p256verify` 1–2.5% fewer.
+  [#1806](https://github.com/ipsilon/evmone/pull/1806)
+  [#1812](https://github.com/ipsilon/evmone/pull/1812)
+- `p256verify` compares the signature with the Jacobian coordinates
+  of the computed point, without inverting its Z (about 0.7% faster).
+  [#1838](https://github.com/ipsilon/evmone/pull/1838)
+- **BN254 pairing (`ecpairing`)**: the multiplication by ξ = 9 + u takes
+  2 field multiplications instead of 4 (about 4–5% faster).
+  [#1648](https://github.com/ipsilon/evmone/pull/1648)
+- **Montgomery multiplication** computes only the high word of the reduction
+  product (the 256-bit `modexp` executes about 4% fewer instructions with GCC),
+  and GCC uses `unsigned __int128` in the multiply-accumulate.
+  [#1803](https://github.com/ipsilon/evmone/pull/1803)
+  [#1833](https://github.com/ipsilon/evmone/pull/1833)
+- **Keccak** is implemented in C++, computes the theta column parities
+  inside chi (~120 fewer instructions per permutation),
+  and uses the Armv8.2 SHA3 instructions on Apple silicon.
+  [#1696](https://github.com/ipsilon/evmone/pull/1696)
+  [#1771](https://github.com/ipsilon/evmone/pull/1771)
+  [#1773](https://github.com/ipsilon/evmone/pull/1773)
+  [#1774](https://github.com/ipsilon/evmone/pull/1774)
+  [#1775](https://github.com/ipsilon/evmone/pull/1775)
+- **Baseline interpreter optimizations**:
+  - `CALLDATALOAD` loads a word that is entirely in the input in place,
+    with about half the instructions.
+    [#1776](https://github.com/ipsilon/evmone/pull/1776)
+  - The memory growth by one word, three quarters of the `MSTORE` growths
+    on mainnet, has a fast path.
+    [#1777](https://github.com/ipsilon/evmone/pull/1777)
+    [#1778](https://github.com/ipsilon/evmone/pull/1778)
+    [#1783](https://github.com/ipsilon/evmone/pull/1783)
+    [#1793](https://github.com/ipsilon/evmone/pull/1793)
+  - The jumps read the code and the JUMPDEST bitset directly
+    from the execution state.
+    [#1781](https://github.com/ipsilon/evmone/pull/1781)
+    [#1785](https://github.com/ipsilon/evmone/pull/1785)
+    [#1786](https://github.com/ipsilon/evmone/pull/1786)
+  - Better GCC code: 64-bit values are pushed without a temporary,
+    the gas costs are `int64_t`, and the dispatch loops get a larger
+    inlining budget.
+    [#1784](https://github.com/ipsilon/evmone/pull/1784)
+    [#1799](https://github.com/ipsilon/evmone/pull/1799)
+    [#1814](https://github.com/ipsilon/evmone/pull/1814)
+- On Linux x86-64 evmone is built with `-fcf-protection=return`:
+  with GCC 15 this removes the `ENDBR64` from every Baseline instruction
+  handler, about 5% of the instructions executed on mainnet blocks.
+  [#649](https://github.com/ipsilon/evmone/pull/649)
+- **GCC 12** is the minimum required version.
+  [#1832](https://github.com/ipsilon/evmone/pull/1832)
+- intx upgraded to 0.16.0: the Baseline benchmarks execute up to 28% fewer
+  instructions.
+  [#1834](https://github.com/ipsilon/evmone/pull/1834)
+- The execution-specs tests fixtures upgraded to `tests@v21.0.3`.
+  [#1831](https://github.com/ipsilon/evmone/pull/1831)
+
+### Fixed
+
+- `set_option("opcode.count", ...)` enabled the opcode counting
+  but returned `EVMC_SET_OPTION_INVALID_NAME`.
+  [#1810](https://github.com/ipsilon/evmone/pull/1810)
+- The test tools threw on legacy transactions with a chain id over 64 bits,
+  as in the EIP-155 tests since `tests@v21.0.2`. They are now rejected
+  as signed for another chain.
+  [#1829](https://github.com/ipsilon/evmone/pull/1829)
+
 ## [0.25.0] — 2026-10-14
 
 This release completes the Amsterdam EVM revision: with the Block-Level Access Lists
@@ -1613,6 +1686,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 - Exposes [EVMC] 6 ABI.
 - The [intx 0.2.0](https://github.com/chfast/intx/releases/tag/v0.2.0) library is used for 256-bit precision arithmetic. 
 
+[0.26.0]: https://github.com/ipsilon/evmone/compare/v0.25.0...master
 [0.25.0]: https://github.com/ipsilon/evmone/releases/tag/v0.25.0
 [0.24.0]: https://github.com/ipsilon/evmone/releases/tag/v0.24.0
 [0.23.0]: https://github.com/ipsilon/evmone/releases/tag/v0.23.0
