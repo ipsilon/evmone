@@ -79,6 +79,27 @@ TEST_F(state_transition, eip7702_set_code_transaction)
     expect.post[AUTHORITY].code = bytes{0xef, 0x01, 0x00} + hex(delegate);
 }
 
+TEST_F(state_transition, eip7702_set_code_transaction_authority_with_invalid_designation)
+{
+    // The authority's code starts with the delegation magic but is longer than the designation,
+    // so it is not delegated and the authorization is skipped.
+    rev = EVMC_PRAGUE;
+
+    constexpr auto delegate = 0xde1e_address;
+    const auto authority_code = bytes{0xef, 0x01, 0x00} + bytes{0x0bad_address} + bytes{0x00};
+    pre[AUTHORITY] = {.code = authority_code};
+    pre[delegate] = {.code = bytecode{OP_STOP}};
+    tx.to = To;
+    tx.type = Transaction::Type::set_code;
+    tx.authorization_list = {AUTHORITY_DELEGATION};
+    pre[To] = {.code = ret(0)};
+
+    expect.post[To].exists = true;
+    expect.post[delegate].exists = true;
+    expect.post[AUTHORITY].nonce = 0;
+    expect.post[AUTHORITY].code = authority_code;
+}
+
 TEST_F(state_transition, eip7702_set_code_transaction_authority_is_sender)
 {
     rev = EVMC_PRAGUE;
@@ -298,14 +319,30 @@ TEST_F(state_transition, eip7702_transaction_to_delegated_account)
     rev = EVMC_PRAGUE;
 
     constexpr auto delegate = 0xde1e_address;
-    pre[To].code = bytes{0xef, 0x01, 0x00} + hex(delegate);
-
-    pre[delegate] = {.code = sstore(1, 1)};
+    pre[To] = {.code = bytes{0xef, 0x01, 0x00} + hex(delegate)};
+    pre[delegate] = {.code = sstore(1, OP_CALLER)};
     tx.to = To;
-    pre[To] = {.code = sstore(1, OP_CALLER)};
 
+    // The delegate's code runs in the context of To.
     expect.post[delegate].exists = true;
     expect.post[To].storage[0x01_bytes32] = to_bytes32(Sender);
+}
+
+TEST_F(state_transition, eip7702_transaction_to_invalid_designation)
+{
+    // The code starts with the delegation magic but is longer than the designation,
+    // so it is not delegated and executes the 0xEF instruction.
+    rev = EVMC_PRAGUE;
+
+    constexpr auto delegate = 0xde1e_address;
+    pre[To] = {.code = bytes{0xef, 0x01, 0x00} + bytes{delegate} + bytes{0x00}};
+    pre[delegate] = {.code = sstore(1, 1)};
+    tx.to = To;
+
+    expect.status = EVMC_UNDEFINED_INSTRUCTION;
+    expect.gas_used = tx.gas_limit;
+    expect.post[To].exists = true;
+    expect.post[delegate].exists = true;
 }
 
 TEST_F(state_transition, eip7702_transaction_to_delegation_to_precompile)
