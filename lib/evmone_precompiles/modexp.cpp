@@ -400,7 +400,7 @@ void modexp_odd(std::span<uint64_t> result, std::span<const uint64_t> base, Expo
     rem(base_mont, u, mod, rem_scratch);
 
     // Double-buffer exponentiation loop, parameterized by mul_amm size.
-    const auto exp_loop = [&]<size_t N>() {
+    const auto exp_loop = [&]<size_t N> {
         auto r_cur = std::span<uint64_t, N>{result};
         auto r_tmp = std::span<uint64_t, N>{u.first(n)};
         const auto m = std::span<const uint64_t, N>{mod};
