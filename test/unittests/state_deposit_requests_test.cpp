@@ -31,31 +31,31 @@ TEST(state_deposit_requests, collect_deposit_requests)
     // Encode offsets (bytes) as 5 consecutive 32-byte big-endian words starting at word index 0.
     // log_data was filled with zeros above, so only set the non-zero trailing bytes.
     // 160  = 0x00...00A0
-    log_data.replace(0 * 32 + 31, 1, 1, char8_t(0xA0));
+    log_data.replace(0 * 32 + 31, 1, 1, char8_t{0xA0});
     // 256  = 0x00...0100
-    log_data.replace(1 * 32 + 30, 1, 1, char8_t(0x01));
-    log_data.replace(1 * 32 + 31, 1, 1, char8_t(0x00));
+    log_data.replace(1 * 32 + 30, 1, 1, char8_t{0x01});
+    log_data.replace(1 * 32 + 31, 1, 1, char8_t{0x00});
     // 320  = 0x00...0140
-    log_data.replace(2 * 32 + 30, 1, 1, char8_t(0x01));
-    log_data.replace(2 * 32 + 31, 1, 1, char8_t(0x40));
+    log_data.replace(2 * 32 + 30, 1, 1, char8_t{0x01});
+    log_data.replace(2 * 32 + 31, 1, 1, char8_t{0x40});
     // 384  = 0x00...0180
-    log_data.replace(3 * 32 + 30, 1, 1, char8_t(0x01));
-    log_data.replace(3 * 32 + 31, 1, 1, char8_t(0x80));
+    log_data.replace(3 * 32 + 30, 1, 1, char8_t{0x01});
+    log_data.replace(3 * 32 + 31, 1, 1, char8_t{0x80});
     // 512  = 0x00...0200
-    log_data.replace(4 * 32 + 30, 1, 1, char8_t(0x02));
-    log_data.replace(4 * 32 + 31, 1, 1, char8_t(0x00));
+    log_data.replace(4 * 32 + 30, 1, 1, char8_t{0x02});
+    log_data.replace(4 * 32 + 31, 1, 1, char8_t{0x00});
 
     // Encode lengths and data for each field at the expected offsets.
     // Pubkey (48 bytes) at offset 160
-    log_data.replace(5 * 32 + 31, 1, 1, char8_t(0x30));  // length = 48
+    log_data.replace(5 * 32 + 31, 1, 1, char8_t{0x30});  // length = 48
     // Withdrawal credentials (32 bytes) at offset 256
-    log_data.replace(8 * 32 + 31, 1, 1, char8_t(0x20));  // length = 32
+    log_data.replace(8 * 32 + 31, 1, 1, char8_t{0x20});  // length = 32
     // Amount (8 bytes) at offset 320
-    log_data.replace(10 * 32 + 31, 1, 1, char8_t(0x08));  // length = 8
+    log_data.replace(10 * 32 + 31, 1, 1, char8_t{0x08});  // length = 8
     // Signature (96 bytes) at offset 384
-    log_data.replace(12 * 32 + 31, 1, 1, char8_t(0x60));  // length = 96
+    log_data.replace(12 * 32 + 31, 1, 1, char8_t{0x60});  // length = 96
     // Index (8 bytes) at offset 512
-    log_data.replace(16 * 32 + 31, 1, 1, char8_t(0x08));  // length = 8
+    log_data.replace(16 * 32 + 31, 1, 1, char8_t{0x08});  // length = 8
 
     log_data.replace(6 * 32, 48, 48, 0x01);   // pubkey
     log_data.replace(9 * 32, 32, 32, 0x02);   // withdrawal_credentials

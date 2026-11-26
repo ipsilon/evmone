@@ -1061,7 +1061,7 @@ inline Result log(StackTop stack, int64_t gas_left, ExecutionState& state) noexc
     const auto o = static_cast<size_t>(offset);
     const auto s = static_cast<size_t>(size);
 
-    const auto cost = int64_t(s) * 8;
+    const auto cost = static_cast<int64_t>(s) * 8;
     if ((gas_left -= cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
 
