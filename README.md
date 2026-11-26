@@ -47,8 +47,7 @@ The codebase of _evmone_ is optimized to provide fast and efficient execution of
 evmone implements the [EVMC] API for Ethereum Virtual Machines.
 The evmone shared library can be loaded by an EVMC host application.
 Prebuilt libraries are available from [Releases].
-evmone vendors EVMC (in `evmc/`), so the host application must be built
-with the headers from `evmc/include` to be ABI compatible.
+evmone vendors EVMC (in `evmc/`); to be ABI compatible, the host application must use EVMC headers with the same ABI version (the vendored headers are in `evmc/include`).
 
 ### Building from source
 
