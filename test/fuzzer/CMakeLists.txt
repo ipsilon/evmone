@@ -15,4 +15,4 @@ else()
 endif()
 
 add_executable(evmone-fuzzer fuzzer.cpp)
-target_link_libraries(evmone-fuzzer PRIVATE evmone evmone::testutils evmc::mocked_host)
+target_link_libraries(evmone-fuzzer PRIVATE evmone evmone::testutils)

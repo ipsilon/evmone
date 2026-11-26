@@ -27,16 +27,14 @@ inline bytes encode_length(size_t l)
     static_assert(ShortBase + SHORT_LENGTH_LIMIT <= std::numeric_limits<uint8_t>::max(),
         "long base must fit uint8_t");
     static constexpr uint8_t LONG_BASE = ShortBase + SHORT_LENGTH_LIMIT;
-    assert(l <= 0xffffff);
-
     if (l <= SHORT_LENGTH_LIMIT)
         return {static_cast<uint8_t>(ShortBase + l)};
-    else if (const auto l0 = static_cast<uint8_t>(l); l <= 0xff)
-        return {LONG_BASE + 1, l0};
-    else if (const auto l1 = static_cast<uint8_t>(l >> 8); l <= 0xffff)
-        return {LONG_BASE + 2, l1, l0};
-    else
-        return {LONG_BASE + 3, static_cast<uint8_t>(l >> 16), l1, l0};
+
+    bytes length;
+    for (auto v = uint64_t{l}; v != 0; v >>= 8)
+        length.insert(length.begin(), static_cast<uint8_t>(v));
+    length.insert(length.begin(), static_cast<uint8_t>(LONG_BASE + length.size()));
+    return length;
 }
 
 inline bytes wrap_list(const bytes& content)
