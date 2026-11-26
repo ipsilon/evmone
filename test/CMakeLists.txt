@@ -43,9 +43,12 @@ block(PROPAGATE benchmark_libs)
     FetchContent_MakeAvailable(benchmark)
 endblock()
 
+set_property(
+    TARGET ${benchmark_libs} APPEND PROPERTY
+    COMPILE_OPTIONS "$<$<COMPILE_LANG_AND_ID:C,GNU,Clang,AppleClang>:-w>;$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-w>"
+)
 set_target_properties(
     ${benchmark_libs} PROPERTIES
-    COMPILE_OPTIONS "$<$<COMPILE_LANG_AND_ID:C,GNU,Clang,AppleClang>:-w>;$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-w>"
     C_CLANG_TIDY ""
     CXX_CLANG_TIDY ""
     SYSTEM TRUE  # TODO(cmake-3.26): Use the SYSTEM option of FetchContent_Declare().
