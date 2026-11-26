@@ -44,6 +44,14 @@ const P256VerifyInput VALID_INPUTS[]{
         G.y.value(),
     },
     {
+        // Q = −G: the msm() table entry G + Q is the point at infinity.
+        0x6038d49a0c9edc92c761aa73983cffd22aab0cfc8e972d09100f2ea5fa094cb0_u256,
+        0xe4958eb9a98b86c3fd80ef08a6702a50532d4470a9d5ccd7f21feff38ebfcf06_u256,
+        0x2aa1c1dfb80ec2e1ac69e9f321c50304684efc958443a5bfa1e546dd4e6beb86_u256,
+        G.x.value(),
+        (-G).y.value(),
+    },
+    {
         // s is 2²¹¹ in Montgomery form, so its inversion starts with 211 halvings.
         0xe4e07c26c991c0d95d8056b8b9b3ee94fd97fcace24780feb1a55bcce5ef83e7_u256,
         0x6bf85d5fe84598b10ca6199ec09ccd7d35dcd7195fdd1dc7737a0c67006ef251_u256,

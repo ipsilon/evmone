@@ -24,6 +24,7 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     // https://eips.ethereum.org/EIPS/eip-7951#signature-verification-algorithm
 
     // 1. Validate r and s are within [1, n-1].
+    // TODO: The s == 0 check is redundant: s = 0 gives s⁻¹ = 0 and R at infinity.
     if (r == 0 || r >= Curve::ORDER || s == 0 || s >= Curve::ORDER)
         return false;
 
@@ -31,7 +32,7 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     if (qx >= Curve::FIELD_PRIME || qy >= Curve::FIELD_PRIME)
         return false;
     const AffinePoint Q{AffinePoint::FE{qx}, AffinePoint::FE{qy}};
-    if (Q == 0)
+    if (Q == 0)  // TODO: Redundant, (0, 0) fails is_on_curve() because b ≠ 0.
         return false;
 
     // Check that Q lies on the curve.
