@@ -326,7 +326,6 @@ template <typename Curve>
 ProjPoint<Curve> add(const ProjPoint<Curve>& p, const AffinePoint<Curve>& q) noexcept
 {
     if (q == 0)
-        // TODO: Untested and untestable via precompile call (for secp256r1).
         return p;
     if (p == 0)
         return ProjPoint(q);
