@@ -24,7 +24,8 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     // https://eips.ethereum.org/EIPS/eip-7951#signature-verification-algorithm
 
     // 1. Validate r and s are within [1, n-1].
-    // TODO: The s == 0 check is redundant: s = 0 gives s⁻¹ = 0 and R at infinity.
+    // TODO: The r == 0 and s == 0 checks are redundant in practice: s = 0 gives s⁻¹ = 0 and R at
+    //       infinity, and r = 0 is accepted only if x(u₁×G) = 0, which takes a discrete logarithm.
     if (r == 0 || r >= Curve::ORDER || s == 0 || s >= Curve::ORDER)
         return false;
 
@@ -51,15 +52,20 @@ bool verify(const ethash::hash256& h, const uint256& r, const uint256& s, const 
     const auto u2 = n.from_mont(n.mul(n.to_mont(r), s_inv));
 
     // 5. Calculate the curve point R = (x₁, y₁) = u₁×G + u₂×Q.
-    const auto R = ecc::to_affine(msm(u1, G, u2, Q));
+    const auto R = msm(u1, G, u2, Q);
 
     //    If R is at infinity, the signature is invalid.
-    //    In this case x₁ is 0 and cannot be equal to r.
-    // 6. The signature is valid if r ≡ x₁ (mod n).
-    auto x1 = R.x.value();
-    if (x1 >= Curve::ORDER)
-        x1 -= Curve::ORDER;
+    if (R == 0)
+        return false;
 
-    return x1 == r;
+    // 6. The signature is valid if r ≡ x₁ (mod n), i.e. x₁ = r or x₁ = r + n because x₁ < p < 2n.
+    //    R is Jacobian with X = x₁⋅Z², so compare X with r⋅Z² instead of inverting Z.
+    static constexpr auto P_MINUS_N = Curve::FIELD_PRIME - Curve::ORDER;
+    static_assert(
+        Curve::ORDER < Curve::FIELD_PRIME && P_MINUS_N < Curve::ORDER, "requires n < p < 2n");
+    const auto zz = R.z * R.z;
+    if (R.x == Curve::Fp{r} * zz) [[likely]]  // x₁ = r
+        return true;
+    return r < P_MINUS_N && R.x == Curve::Fp{r + Curve::ORDER} * zz;  // x₁ = r + n if r + n < p
 }
 }  // namespace evmone::crypto::secp256r1
