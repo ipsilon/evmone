@@ -55,6 +55,7 @@ if(CABLE_COMPILER_GNULIKE)
         $<$<CXX_COMPILER_ID:GNU>:-Wlogical-op>
 
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-unknown-attributes>
+        $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wno-ignored-attributes>
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wduplicate-enum>
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wnewline-eof>
         $<$<CXX_COMPILER_ID:Clang,AppleClang>:-Wunreachable-code-aggressive>

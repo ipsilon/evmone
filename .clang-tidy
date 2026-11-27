@@ -6,21 +6,9 @@ Checks:
   - "-bugprone-assignment-in-if-condition"
   - "-bugprone-easily-swappable-parameters"
   - "-bugprone-implicit-widening-of-multiplication-result"
+  # C++20 defines the bitwise operations and shifts of signed integers.
+  - "-bugprone-signed-bitwise"
   - "-bugprone-unchecked-optional-access"
-  - "cert-dcl21-cpp"
-  - "cert-dcl50-cpp"
-  - "cert-dcl58-cpp"
-  - "cert-env33-c"
-  - "cert-err33-c"
-  - "cert-err34-c"
-  - "cert-err52-cpp"
-  - "cert-err60-cpp"
-  - "cert-flp30-c"
-  - "cert-mem57-cpp"
-  - "cert-msc50-cpp"
-  - "cert-msc51-cpp"
-  - "cert-oop57-cpp"
-  - "cert-oop58-cpp"
   - "clang-analyzer-*"
   - "cppcoreguidelines-*"
   - "-cppcoreguidelines-avoid-c-arrays"
@@ -43,9 +31,6 @@ Checks:
   - "-cppcoreguidelines-special-member-functions"
   - "google-global-names-in-headers"
   - "google-runtime-int"
-  - "hicpp-exception-baseclass"
-  - "hicpp-multiway-paths-covered"
-  - "hicpp-no-assembler"
   - "misc-*"
   - "-misc-include-cleaner"
   - "-misc-non-private-member-variables-in-classes"
@@ -70,13 +55,21 @@ Checks:
   - "-readability-function-cognitive-complexity"
   - "-readability-function-size"
   - "-readability-identifier-length"
+  # TODO: Enable. Some if-else statements have braces only in some branches.
+  - "-readability-inconsistent-ifelse-braces"
   - "-readability-magic-numbers"
   - "-readability-named-parameter"
   - "-readability-qualified-auto"
+  # It merges a gas charge in a nested if into the condition of the outer if.
+  - "-readability-redundant-nested-if"
+  # clang-format decides the trailing commas.
+  - "-readability-trailing-comma"
   - "-readability-uppercase-literal-suffix"
   # This is too noisy about multiplication and addition precedence.
   - "-readability-math-missing-parentheses"
 
 CheckOptions:
+  # The instruction implementations must match the signatures of the dispatch table.
+  misc-const-correctness.AnalyzeParameters: false
   readability-identifier-naming.ClassCase: CamelCase
   readability-identifier-naming.UnionCase: CamelCase

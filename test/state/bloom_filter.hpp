@@ -18,6 +18,7 @@ struct BloomFilter
     uint8_t bytes[256] = {};
 
     /// Implicit operator converting to bytes_view.
+    // NOLINTNEXTLINE(*-explicit-constructor)
     constexpr operator bytes_view() const noexcept { return {bytes, sizeof(bytes)}; }
 };
 

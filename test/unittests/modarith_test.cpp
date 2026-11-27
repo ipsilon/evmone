@@ -180,7 +180,7 @@ TYPED_TEST(modarith_test, inv_random)
 {
     using Uint = TypeParam::uint;
     const TypeParam m;
-    std::mt19937_64 rng{2};  // NOLINT(cert-msc51-cpp)
+    std::mt19937_64 rng{2};  // NOLINT(bugprone-random-generator-seed)
     for (size_t i = 0; i < 1000; ++i)
     {
         Uint x;
