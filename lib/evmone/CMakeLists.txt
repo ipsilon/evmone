@@ -55,8 +55,11 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
     # function grow by large-function-growth (100%). The interpreter loops reach these limits:
     # some instructions are called out of line and any code size change (e.g. in intx) moves
     # instructions in or out of the loops. Raise the limits above what the loops need.
+    # GCC does not align the computed goto targets (-falign-jumps does not cover them), so each
+    # instruction starts where the code before it ends and any code size change moves the others,
+    # which changes how the dispatch jumps are predicted. Align all labels to 32 bytes.
     set_source_files_properties(baseline_execution.cpp PROPERTIES COMPILE_OPTIONS
-        "--param=inline-unit-growth=100;--param=large-function-growth=200")
+        "--param=inline-unit-growth=100;--param=large-function-growth=200;-falign-labels=32")
 endif()
 
 if(CABLE_COMPILER_GNULIKE)
