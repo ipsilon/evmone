@@ -117,6 +117,8 @@ TEST_P(evm, calldatacopy_memory_cost)
 }
 
 
+namespace
+{
 struct memory_access_opcode
 {
     Opcode opcode;
@@ -125,7 +127,7 @@ struct memory_access_opcode
 };
 
 
-static constexpr memory_access_opcode memory_access_opcodes[] = {
+constexpr memory_access_opcode memory_access_opcodes[] = {
     {OP_KECCAK256, 0, 1},
     {OP_CALLDATACOPY, 0, 2},
     {OP_CODECOPY, 0, 2},
@@ -154,6 +156,7 @@ static constexpr memory_access_opcode memory_access_opcodes[] = {
     {OP_CREATE, 1, 2},
     {OP_CREATE2, 1, 2},
 };
+}  // namespace
 
 struct
 {

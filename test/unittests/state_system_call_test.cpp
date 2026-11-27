@@ -13,6 +13,8 @@ using namespace evmc::literals;
 using namespace evmone::state;
 using namespace evmone::test;
 
+namespace
+{
 class state_system_call : public testing::Test
 {
 protected:
@@ -20,6 +22,7 @@ protected:
     TestState state;
     TestBlockHashes block_hashes;
 };
+}  // namespace
 
 TEST_F(state_system_call, non_existient)
 {

@@ -43,7 +43,6 @@ const bytecode bytecode_test_cases[]{
     32 * OP_STOP + push("00000000000000005b000000000000005b") + OP_JUMPDEST,
     "5b14000000000000005badadad0000000000000000000000606060606060ff5b",
 };
-}  // namespace
 
 /// Wrapper for jumpdest analysis implementations suitable for typed tests.
 template <typename T, T Fn(bytes_view)>
@@ -55,6 +54,8 @@ struct Impl
 template <typename>
 class jumpdest_analysis_test : public testing::Test
 {};
+}  // namespace
+
 using test_types = testing::Types<                   //
     Impl<baseline::CodeAnalysis, baseline_analyze>,  //
     Impl<JumpdestBitset, speculate_push_data_size>   //

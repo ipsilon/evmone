@@ -20,6 +20,8 @@ void state_transition::SetUp()
     expect.post[tx.sender].exists = true;
 }
 
+namespace
+{
 class TraceCapture
 {
     std::streambuf* m_orig_rdbuf = nullptr;
@@ -30,6 +32,7 @@ public:
     ~TraceCapture() { std::clog.rdbuf(m_orig_rdbuf); }
     [[maybe_unused]] std::string get_capture() const { return m_trace_stream.str(); }
 };
+}  // namespace
 
 void state_transition::TearDown()
 {

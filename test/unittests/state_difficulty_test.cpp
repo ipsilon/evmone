@@ -7,6 +7,8 @@
 
 using namespace evmone::state;
 
+namespace
+{
 struct DifficultyTest  // NOLINT(clang-analyzer-optin.performance.Padding)
 {
     evmc_revision rev;
@@ -21,7 +23,7 @@ struct DifficultyTest  // NOLINT(clang-analyzer-optin.performance.Padding)
 
 /// Example difficulty tests from
 /// https://github.com/ethereum/tests/blob/develop/DifficultyTests.
-static constexpr DifficultyTest tests[] = {
+constexpr DifficultyTest tests[] = {
     {
         EVMC_FRONTIER,
         "DifficultyTest1",
@@ -164,6 +166,7 @@ static constexpr DifficultyTest tests[] = {
         false,
     },
 };
+}  // namespace
 
 TEST(state_difficulty, tests)
 {

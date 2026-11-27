@@ -107,16 +107,42 @@ TEST(state_rlp, encode_mpt_node)
     EXPECT_EQ(node, "e18220419d765f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f31"_hex);
 }
 
+namespace
+{
 struct CustomStruct
 {
     uint64_t a;
     bytes b;
 };
 
-static bytes rlp_encode(const CustomStruct& t)
+bytes rlp_encode(const CustomStruct& t)
 {
     return rlp::encode_tuple(t.a, t.b);
 }
+
+bytes to_significant_be_bytes(uint64_t x)
+{
+    const auto byte_width = (std::bit_width(x) + 7) / 8;
+    const auto leading_zero_bits = std::countl_zero(x) & ~7;  // Leading bits rounded down to 8x.
+    const auto trimmed_x = x << leading_zero_bits;            // Significant bytes moved to the top.
+
+    uint8_t b[sizeof(x)];
+    intx::be::store(b, trimmed_x);
+    return bytes{b, static_cast<size_t>(byte_width)};
+}
+
+/// The "custom" implementation of RLP encoding of uint64. It trims leading zero bytes and
+/// manually constructs bytes with variadic-length encoding.
+bytes rlp_encode_uint64(uint64_t x)
+{
+    static constexpr uint8_t ShortBase = 0x80;
+    if (x < ShortBase)  // Single-byte encoding.
+        return bytes{(x == 0) ? ShortBase : static_cast<uint8_t>(x)};
+
+    const auto b = to_significant_be_bytes(x);
+    return static_cast<uint8_t>(ShortBase + b.size()) + b;
+}
+}  // namespace
 
 TEST(state_rlp, encode_custom_struct)
 {
@@ -152,29 +178,6 @@ TEST(state_rlp, encode_uint64)
     EXPECT_EQ(rlp::encode(uint64_t{0xffffffffffffff}), "87ffffffffffffff"_hex);
     EXPECT_EQ(rlp::encode(uint64_t{0x0100000000000000}), "880100000000000000"_hex);
     EXPECT_EQ(rlp::encode(uint64_t{0xffffffffffffffff}), "88ffffffffffffffff"_hex);
-}
-
-static bytes to_significant_be_bytes(uint64_t x)
-{
-    const auto byte_width = (std::bit_width(x) + 7) / 8;
-    const auto leading_zero_bits = std::countl_zero(x) & ~7;  // Leading bits rounded down to 8x.
-    const auto trimmed_x = x << leading_zero_bits;            // Significant bytes moved to the top.
-
-    uint8_t b[sizeof(x)];
-    intx::be::store(b, trimmed_x);
-    return bytes{b, static_cast<size_t>(byte_width)};
-}
-
-/// The "custom" implementation of RLP encoding of uint64. It trims leading zero bytes and
-/// manually constructs bytes with variadic-length encoding.
-static bytes rlp_encode_uint64(uint64_t x)
-{
-    static constexpr uint8_t ShortBase = 0x80;
-    if (x < ShortBase)  // Single-byte encoding.
-        return bytes{(x == 0) ? ShortBase : static_cast<uint8_t>(x)};
-
-    const auto b = to_significant_be_bytes(x);
-    return static_cast<uint8_t>(ShortBase + b.size()) + b;
 }
 
 TEST(state_rlp, encode_uint64_custom)

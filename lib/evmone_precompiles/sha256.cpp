@@ -44,11 +44,13 @@ namespace evmone::crypto
  * When useful for clarification, portions of the pseudo-code are reproduced here too.
  */
 
+namespace
+{
 /*
  * Initialize array of round constants:
  * (first 32 bits of the fractional parts of the cube roots of the first 64 primes 2..311):
  */
-static const uint32_t k[] = {0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
+const uint32_t k[] = {0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
     0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
     0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa,
     0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
@@ -71,7 +73,7 @@ struct BufferState
     {}
 };
 
-static bool calc_chunk(uint8_t chunk[CHUNK_SIZE], struct BufferState* state)
+bool calc_chunk(uint8_t chunk[CHUNK_SIZE], struct BufferState* state)
 {
     if (state->total_len_delivered)
     {
@@ -135,7 +137,7 @@ static bool calc_chunk(uint8_t chunk[CHUNK_SIZE], struct BufferState* state)
     return true;
 }
 
-[[gnu::always_inline, msvc::forceinline]] static inline void sha_256_implementation(
+[[gnu::always_inline, msvc::forceinline]] inline void sha_256_implementation(
     uint32_t h[8], const std::byte* input, size_t len)
 {
     /*
@@ -236,22 +238,22 @@ static bool calc_chunk(uint8_t chunk[CHUNK_SIZE], struct BufferState* state)
     }
 }
 
-static void sha_256_generic(uint32_t h[8], const std::byte* input, size_t len)
+void sha_256_generic(uint32_t h[8], const std::byte* input, size_t len)
 {
     sha_256_implementation(h, input, len);
 }
 
-static void (*sha_256_best)(uint32_t h[8], const std::byte* input, size_t len) = sha_256_generic;
+void (*sha_256_best)(uint32_t h[8], const std::byte* input, size_t len) = sha_256_generic;
 
 #if defined(__x86_64__)  // NOLINT(readability-use-concise-preprocessor-directives)
 
-__attribute__((target("bmi,bmi2"))) static void sha_256_x86_bmi(
+__attribute__((target("bmi,bmi2"))) void sha_256_x86_bmi(
     uint32_t h[8], const std::byte* input, size_t len)
 {
     sha_256_implementation(h, input, len);
 }
 
-[[gnu::always_inline]] static inline __m128i set(uint64_t a, uint64_t b) noexcept
+[[gnu::always_inline]] inline __m128i set(uint64_t a, uint64_t b) noexcept
 {
     // NOLINTNEXTLINE(*-runtime-int)
     return _mm_set_epi64x(static_cast<long long>(a), static_cast<long long>(b));
@@ -263,7 +265,7 @@ __attribute__((target("bmi,bmi2"))) static void sha_256_x86_bmi(
 /*   Written and place in public domain by Jeffrey Walton  */
 /*   Based on code from Intel, and by Sean Gulley for      */
 /*   the miTLS project.                                    */
-__attribute__((target("sha,sse4.1"))) static void sha_256_x86_sha(
+__attribute__((target("sha,sse4.1"))) void sha_256_x86_sha(
     uint32_t h[8], const std::byte* input, size_t len)
 {
     // NOLINTBEGIN(readability-isolate-declaration)
@@ -467,12 +469,12 @@ __attribute__((target("sha,sse4.1"))) static void sha_256_x86_sha(
 }
 
 // https://stackoverflow.com/questions/6121792/how-to-check-if-a-cpu-supports-the-sse3-instruction-set
-static void cpuid(int info[4], int InfoType)  // NOLINT(readability-non-const-parameter)
+void cpuid(int info[4], int InfoType)  // NOLINT(readability-non-const-parameter)
 {
     __cpuid_count(InfoType, 0, info[0], info[1], info[2], info[3]);
 }
 
-__attribute__((constructor)) static void select_sha256_implementation()
+__attribute__((constructor)) void select_sha256_implementation()
 {
     int info[4];
     cpuid(info, 0);
@@ -514,7 +516,7 @@ __attribute__((constructor)) static void select_sha256_implementation()
 /*   Written and placed in public domain by Jeffrey Walton    */
 /*   Based on code from ARM, and by Johannes Schneiders, Skip */
 /*   Hovsmith and Barry O'Rourke for the mbedTLS project.     */
-static void sha_256_arm_v8(uint32_t h[8], const std::byte* input, size_t len)
+void sha_256_arm_v8(uint32_t h[8], const std::byte* input, size_t len)
 {
     uint32x4_t STATE0, STATE1, ABEF_SAVE, CDGH_SAVE;
     uint32x4_t MSG0, MSG1, MSG2, MSG3;
@@ -678,7 +680,7 @@ static void sha_256_arm_v8(uint32_t h[8], const std::byte* input, size_t len)
     vst1q_u32(&h[4], STATE1);
 }
 
-__attribute__((constructor)) static void select_sha256_implementation(void)
+__attribute__((constructor)) void select_sha256_implementation(void)
 {
 #if defined(__linux__)
     if ((getauxval(AT_HWCAP) & HWCAP_SHA2) != 0)
@@ -701,6 +703,7 @@ __attribute__((constructor)) static void select_sha256_implementation(void)
 }
 
 #endif  // defined(__x86_64__), defined(__aarch64__)
+}  // namespace
 
 /*
  * Limitations:
