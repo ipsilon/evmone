@@ -57,7 +57,7 @@ TEST_P(evm, bad_jumpdest)
     host.tx_context.block_number = 1;
     host.tx_context.block_gas_limit = 0;
     host.tx_context.block_timestamp = 0x80000000;
-    for (auto op : {OP_JUMP, OP_JUMPI})
+    for (const auto op : {OP_JUMP, OP_JUMPI})
     {
         execute(bytecode{OP_NUMBER} + OP_GASLIMIT + op);
         EXPECT_EQ(result.status_code, EVMC_BAD_JUMP_DESTINATION);

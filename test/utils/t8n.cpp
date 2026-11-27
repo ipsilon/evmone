@@ -217,7 +217,7 @@ void t8n(evmc::VM& vm, const T8NArgs& args)
                 j_result["requests"].emplace_back(hex0x(r.raw_data));
         }
 
-        auto requests_hash = calculate_requests_hash(requests);
+        const auto requests_hash = calculate_requests_hash(requests);
 
         j_result["requestsHash"] = hex0x(requests_hash);
     }

@@ -565,7 +565,7 @@ TEST_P(evm, keccak256)
 
 TEST_P(evm, keccak256_empty)
 {
-    auto code = push(0) + OP_DUP1 + OP_KECCAK256 + ret_top();
+    const auto code = push(0) + OP_DUP1 + OP_KECCAK256 + ret_top();
     execute(code);
     ASSERT_EQ(result.output_size, 32);
     auto keccak256_empty = "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470";
@@ -650,12 +650,13 @@ TEST_P(evm, sar_01)
 TEST_P(evm, shift_overflow)
 {
     rev = EVMC_PETERSBURG;
-    for (auto op : {OP_SHL, OP_SHR, OP_SAR})
+    for (const auto op : {OP_SHL, OP_SHR, OP_SAR})
     {
         execute(not_(0) + 0x100 + op + ret_top());
         EXPECT_EQ(result.status_code, EVMC_SUCCESS);
         ASSERT_EQ(result.output_size, 32);
-        auto a = std::accumulate(result.output_data, result.output_data + result.output_size, 0);
+        const auto a =
+            std::accumulate(result.output_data, result.output_data + result.output_size, 0);
         EXPECT_EQ(a, op == OP_SAR ? 32 * 0xff : 0);
     }
 }
@@ -670,7 +671,7 @@ TEST_P(evm, undefined_instructions)
             if (evmone::instr::gas_costs[r][opcode] != evmone::instr::undefined)
                 continue;
 
-            auto res = vm.execute(host, r, {}, &opcode, sizeof(opcode));
+            const auto res = vm.execute(host, r, {}, &opcode, sizeof(opcode));
             EXPECT_EQ(res.status_code, EVMC_UNDEFINED_INSTRUCTION)
                 << " for opcode " << hex(opcode) << " on revision " << r;
         }
@@ -709,19 +710,19 @@ TEST_P(evm, abort)
 {
     for (auto r = 0; r <= EVMC_MAX_REVISION; ++r)
     {
-        auto opcode = uint8_t{0xfe};
-        auto res = vm.execute(host, evmc_revision(r), {}, &opcode, sizeof(opcode));
+        const auto opcode = uint8_t{0xfe};
+        const auto res = vm.execute(host, evmc_revision(r), {}, &opcode, sizeof(opcode));
         EXPECT_EQ(res.status_code, EVMC_INVALID_INSTRUCTION);
     }
 }
 
 TEST_P(evm, staticmode)
 {
-    auto code_prefix = 1 + 6 * OP_DUP1;
+    const auto code_prefix = 1 + 6 * OP_DUP1;
 
     rev = EVMC_PETERSBURG;
-    for (auto op : {OP_SSTORE, OP_LOG0, OP_LOG1, OP_LOG2, OP_LOG3, OP_LOG4, OP_CALL, OP_CREATE,
-             OP_CREATE2, OP_SELFDESTRUCT})
+    for (const auto op : {OP_SSTORE, OP_LOG0, OP_LOG1, OP_LOG2, OP_LOG3, OP_LOG4, OP_CALL,
+             OP_CREATE, OP_CREATE2, OP_SELFDESTRUCT})
     {
         msg.flags |= EVMC_STATIC;
         execute(code_prefix + hex(op));

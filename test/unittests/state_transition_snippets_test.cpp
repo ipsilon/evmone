@@ -21,27 +21,28 @@ TEST_F(state_transition, precompile_proxy)
 
     const auto store_loop_head = 29;
     const auto store_loop_body = 37;
-    auto code = bytecode() +                                       //
-                OP_PUSH0 + OP_PUSH0 + OP_CALLDATASIZE +            // [input_size, 0, 0]
-                OP_DUP1 + OP_PUSH0 + OP_PUSH0 + OP_CALLDATACOPY +  // [input_size, 0, 0]
-                OP_PUSH0 + OP_CALLVALUE + OP_GAS +  // [gas, addr, 0, input_size, 0, 0]
-                OP_STATICCALL +                     // [return_code]
-                sstore(1) +                         // [] store the return code @ 1.
-                OP_RETURNDATASIZE +                 // [output_size]
-                OP_DUP1 + OP_PUSH0 + OP_PUSH0 + OP_RETURNDATACOPY +  // [output_size]
-                OP_PUSH0 + OP_DUP2 + OP_MSTORE +  // [output_size]  clear 32 bytes after the output.
-                OP_DUP1 + sstore(2) +             // [output_size]  store the output size @ 2.
-                push(32) +                        // [32, output_size]
-                OP_PUSH0 +                        // [off=0, 32, output_size]
-                OP_JUMPDEST +                     // @store-loop-head
-                OP_DUP3 + OP_DUP2 + OP_LT +       // [off < output_size, off, 32, output_size]
-                store_loop_body + OP_JUMPI +      // [off, 32, output_size] → @store-loop-body
-                OP_STOP +                         //
-                OP_JUMPDEST +                     // @store-loop-body
-                OP_DUP1 + OP_MLOAD +              // [output[off], off, 32, output_size]
-                OP_DUP2 + OP_SSTORE +             // [off, 32, output_size] store output[off] @ off.
-                OP_DUP2 + OP_ADD +                // [off+=32, 32, output_size]
-                store_loop_head + OP_JUMP;        // [off, 32, output_size] → @store-loop-head
+    const auto code = bytecode() +                                       //
+                      OP_PUSH0 + OP_PUSH0 + OP_CALLDATASIZE +            // [input_size, 0, 0]
+                      OP_DUP1 + OP_PUSH0 + OP_PUSH0 + OP_CALLDATACOPY +  // [input_size, 0, 0]
+                      OP_PUSH0 + OP_CALLVALUE + OP_GAS +  // [gas, addr, 0, input_size, 0, 0]
+                      OP_STATICCALL +                     // [return_code]
+                      sstore(1) +                         // [] store the return code @ 1.
+                      OP_RETURNDATASIZE +                 // [output_size]
+                      OP_DUP1 + OP_PUSH0 + OP_PUSH0 + OP_RETURNDATACOPY +  // [output_size]
+                      OP_PUSH0 + OP_DUP2 +
+                      OP_MSTORE +            // [output_size]  clear 32 bytes after the output.
+                      OP_DUP1 + sstore(2) +  // [output_size]  store the output size @ 2.
+                      push(32) +             // [32, output_size]
+                      OP_PUSH0 +             // [off=0, 32, output_size]
+                      OP_JUMPDEST +          // @store-loop-head
+                      OP_DUP3 + OP_DUP2 + OP_LT +   // [off < output_size, off, 32, output_size]
+                      store_loop_body + OP_JUMPI +  // [off, 32, output_size] → @store-loop-body
+                      OP_STOP +                     //
+                      OP_JUMPDEST +                 // @store-loop-body
+                      OP_DUP1 + OP_MLOAD +          // [output[off], off, 32, output_size]
+                      OP_DUP2 + OP_SSTORE +       // [off, 32, output_size] store output[off] @ off.
+                      OP_DUP2 + OP_ADD +          // [off+=32, 32, output_size]
+                      store_loop_head + OP_JUMP;  // [off, 32, output_size] → @store-loop-head
 
     EXPECT_EQ(code.find(OP_JUMPDEST), store_loop_head);
     EXPECT_EQ(code.find(OP_JUMPDEST, store_loop_head + 1), store_loop_body);

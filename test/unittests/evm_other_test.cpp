@@ -42,7 +42,7 @@ TEST_P(evm, evmone_block_max_stack_growth_overflow)
 
     bytes code_buffer(test_max_code_size, uint8_t{OP_MSIZE});
 
-    for (auto max_stack_growth : {32767u, 32768u, 65535u, 65536u, test_max_code_size - 1})
+    for (const auto max_stack_growth : {32767u, 32768u, 65535u, 65536u, test_max_code_size - 1})
     {
         execute({code_buffer.data(), max_stack_growth});
         EXPECT_STATUS(EVMC_STACK_OVERFLOW);
@@ -143,7 +143,7 @@ TEST_P(evm, loop_full_of_jumpdests)
 
 TEST_P(evm, jumpdest_with_high_offset)
 {
-    for (auto offset : {3u, 16383u, 16384u, 32767u, 32768u, 65535u, 65536u})
+    for (const auto offset : {3u, 16383u, 16384u, 32767u, 32768u, 65535u, 65536u})
     {
         auto code = push(offset) + OP_JUMP;
         code.resize(offset, OP_INVALID);

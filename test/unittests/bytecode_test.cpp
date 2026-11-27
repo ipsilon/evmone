@@ -9,7 +9,7 @@ using namespace evmone::test;
 
 TEST(bytecode, push)
 {
-    auto code = push("0102") + OP_POP + push("010203040506070809") + "50";
+    const auto code = push("0102") + OP_POP + push("010203040506070809") + "50";
     EXPECT_EQ(hex(code), "610102506801020304050607080950");
 
     EXPECT_THROW(push(""), std::invalid_argument);
@@ -76,7 +76,7 @@ TEST(bytecode, add)
 
 TEST(bytecode, repeat)
 {
-    auto code = 0 + 2 * OP_DUP1 + "3c";
+    const auto code = 0 + 2 * OP_DUP1 + "3c";
     EXPECT_EQ(code, "600080803c");
 
     EXPECT_EQ(0 * OP_STOP, "");

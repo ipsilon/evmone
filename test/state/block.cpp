@@ -13,7 +13,7 @@ static constexpr auto BASE_FEE_MAX_CHANGE_DENOMINATOR = 8;
 uint64_t calc_base_fee(
     int64_t parent_gas_limit, int64_t parent_gas_used, uint64_t parent_base_fee) noexcept
 {
-    auto parent_gas_target = parent_gas_limit / GAS_LIMIT_ELASTICITY_MULTIPLIER;
+    const auto parent_gas_target = parent_gas_limit / GAS_LIMIT_ELASTICITY_MULTIPLIER;
 
     // Special logic for block activating EIP-1559 is not implemented, because test don't cover it.
     if (parent_gas_used == parent_gas_target)

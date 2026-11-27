@@ -66,10 +66,10 @@ constexpr void fast_swap(uint256& x, uint256& y) noexcept
     // clang missed optimization: https://github.com/llvm/llvm-project/issues/59116
     // TODO(clang): Check if #59116 bug fix has been released.
 
-    auto t0 = x[0];
-    auto t1 = x[1];
-    auto t2 = x[2];
-    auto t3 = x[3];
+    const auto t0 = x[0];
+    const auto t1 = x[1];
+    const auto t2 = x[2];
+    const auto t3 = x[3];
     x = y;
     y[0] = t0;
     y[1] = t1;
@@ -533,11 +533,11 @@ inline Result calldatacopy(StackTop stack, int64_t gas_left, ExecutionState& sta
     if (!check_memory(gas_left, state.memory, mem_index, size))
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    auto dst = static_cast<size_t>(mem_index);
-    auto src = state.msg->input_size < input_index ? state.msg->input_size :
-                                                     static_cast<size_t>(input_index);
-    auto s = static_cast<size_t>(size);
-    auto copy_size = std::min(s, state.msg->input_size - src);
+    const auto dst = static_cast<size_t>(mem_index);
+    const auto src = state.msg->input_size < input_index ? state.msg->input_size :
+                                                           static_cast<size_t>(input_index);
+    const auto s = static_cast<size_t>(size);
+    const auto copy_size = std::min(s, state.msg->input_size - src);
 
     if (const auto cost = copy_cost(s); (gas_left -= cost) < 0)
         return {EVMC_OUT_OF_GAS, gas_left};
@@ -679,12 +679,12 @@ inline Result returndatacopy(StackTop stack, int64_t gas_left, ExecutionState& s
     if (!check_memory(gas_left, state.memory, mem_index, size))
         return {EVMC_OUT_OF_GAS, gas_left};
 
-    auto dst = static_cast<size_t>(mem_index);
-    auto s = static_cast<size_t>(size);
+    const auto dst = static_cast<size_t>(mem_index);
+    const auto s = static_cast<size_t>(size);
 
     if (state.return_data.size() < input_index)
         return {EVMC_INVALID_MEMORY_ACCESS, gas_left};
-    auto src = static_cast<size_t>(input_index);
+    const auto src = static_cast<size_t>(input_index);
 
     if (src + s > state.return_data.size())
         return {EVMC_INVALID_MEMORY_ACCESS, gas_left};

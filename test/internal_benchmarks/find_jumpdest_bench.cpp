@@ -102,7 +102,7 @@ void find_jumpdest(benchmark::State& state)
     benchmark::ClobberMemory();
 
     int x = -1;
-    for (auto _ : state)
+    for (const auto _ : state)
     {
         x = Fn(begin, size, needle);
         benchmark::DoNotOptimize(x);
@@ -161,7 +161,7 @@ void find_jumpdest_random(benchmark::State& state)
 
     while (state.KeepRunningBatch(indexes.size()))
     {
-        for (auto i : indexes)
+        for (const auto i : indexes)
         {
             auto x = Fn(begin, jumpdest_map_size, i);
             benchmark::DoNotOptimize(x);
@@ -245,7 +245,7 @@ void find_jumpdest_split(benchmark::State& state)
     benchmark::ClobberMemory();
 
     int x = -1;
-    for (auto _ : state)
+    for (const auto _ : state)
     {
         x = Fn(begin, values, size, needle);
         benchmark::DoNotOptimize(x);
@@ -271,7 +271,7 @@ void find_jumpdest_split_random(benchmark::State& state)
 
     while (state.KeepRunningBatch(indexes.size()))
     {
-        for (auto i : indexes)
+        for (const auto i : indexes)
         {
             auto x = Fn(key, value, jumpdest_map_size, i);
             benchmark::DoNotOptimize(x);
@@ -296,9 +296,9 @@ void find_jumpdest_hashmap_random(benchmark::State& state)
 
     while (state.KeepRunningBatch(indexes.size()))
     {
-        for (auto i : indexes)
+        for (const auto i : indexes)
         {
-            auto it = hashmap.find(i);
+            const auto it = hashmap.find(i);
             auto x = it != hashmap.end() ? it->second : -1;
             benchmark::DoNotOptimize(x);
         }

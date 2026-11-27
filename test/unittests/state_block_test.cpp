@@ -14,7 +14,7 @@ TEST(state_block, blob_gas_price)
 {
     static constexpr uint64_t TARGET_BLOB_GAS_PER_BLOCK_CANCUN = 0x60000;
 
-    auto blob_params = get_blob_params(EVMC_CANCUN);
+    const auto blob_params = get_blob_params(EVMC_CANCUN);
     EXPECT_EQ(compute_blob_gas_price(blob_params, 0), 1);
     EXPECT_EQ(compute_blob_gas_price(blob_params, 1), 1);
     EXPECT_EQ(compute_blob_gas_price(blob_params, TARGET_BLOB_GAS_PER_BLOCK_CANCUN), 1);
@@ -33,7 +33,7 @@ TEST(state_block, blob_gas_price_prague)
 {
     static constexpr uint64_t TARGET_BLOB_GAS_PER_BLOCK_PRAGUE = 0xc0000;
 
-    auto blob_params = get_blob_params(EVMC_PRAGUE);
+    const auto blob_params = get_blob_params(EVMC_PRAGUE);
     EXPECT_EQ(compute_blob_gas_price(blob_params, 0), 1);
     EXPECT_EQ(compute_blob_gas_price(blob_params, 1), 1);
     EXPECT_EQ(compute_blob_gas_price(blob_params, TARGET_BLOB_GAS_PER_BLOCK_PRAGUE), 1);

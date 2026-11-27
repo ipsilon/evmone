@@ -268,7 +268,7 @@ void modexp(benchmark::State& state)
 
     const auto gas_cost = expmod_analyze({input.get(), input_len}, REV).gas_cost;
     int64_t total_gas_used = 0;
-    for ([[maybe_unused]] auto _ : state)
+    for ([[maybe_unused]] const auto _ : state)
     {
         auto r = Fn(input.get(), input_len, output.get(), base_mod_len);
         benchmark::DoNotOptimize(r);
