@@ -118,11 +118,11 @@ static bool calc_chunk(uint8_t chunk[CHUNK_SIZE], struct BufferState* state)
         chunk += left;
 
         /* Storing of len * 8 as a big endian 64-bit without overflow. */
-        chunk[7] = (uint8_t)(len << 3);
+        chunk[7] = static_cast<uint8_t>(len << 3);
         len >>= 5;
         for (i = 6; i >= 0; i--)
         {
-            chunk[i] = (uint8_t)len;
+            chunk[i] = static_cast<uint8_t>(len);
             len >>= 8;
         }
         state->total_len_delivered = true;
@@ -193,8 +193,8 @@ static bool calc_chunk(uint8_t chunk[CHUNK_SIZE], struct BufferState* state)
             {
                 if (i == 0)
                 {
-                    w[j] = (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 |
-                           (uint32_t)p[3];
+                    w[j] = uint32_t{p[0]} << 24 | uint32_t{p[1]} << 16 | uint32_t{p[2]} << 8 |
+                           uint32_t{p[3]};
                     p += 4;
                 }
                 else
@@ -278,8 +278,8 @@ __attribute__((target("sha,sse4.1"))) static void sha_256_x86_sha(
     // NOLINTBEGIN(cppcoreguidelines-pro-type-cstyle-cast)
     // NOLINTBEGIN(portability-simd-intrinsics)
     /* Load initial values */
-    TMP = _mm_loadu_si128((const __m128i*)&h[0]);
-    STATE1 = _mm_loadu_si128((const __m128i*)&h[4]);
+    TMP = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&h[0]));
+    STATE1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&h[4]));
 
     TMP = _mm_shuffle_epi32(TMP, 0xB1);          /* CDAB */
     STATE1 = _mm_shuffle_epi32(STATE1, 0x1B);    /* EFGH */
@@ -298,7 +298,7 @@ __attribute__((target("sha,sse4.1"))) static void sha_256_x86_sha(
         CDGH_SAVE = STATE1;
 
         /* Rounds 0-3 */
-        MSG = _mm_loadu_si128((const __m128i*)(chunk + 0));
+        MSG = _mm_loadu_si128(reinterpret_cast<const __m128i*>(chunk + 0));
         MSG0 = _mm_shuffle_epi8(MSG, MASK);
         MSG = _mm_add_epi32(MSG0, set(0xE9B5DBA5B5C0FBCF, 0x71374491428A2F98));
         STATE1 = _mm_sha256rnds2_epu32(STATE1, STATE0, MSG);
@@ -306,7 +306,7 @@ __attribute__((target("sha,sse4.1"))) static void sha_256_x86_sha(
         STATE0 = _mm_sha256rnds2_epu32(STATE0, STATE1, MSG);
 
         /* Rounds 4-7 */
-        MSG1 = _mm_loadu_si128((const __m128i*)(chunk + 16));
+        MSG1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(chunk + 16));
         MSG1 = _mm_shuffle_epi8(MSG1, MASK);
         MSG = _mm_add_epi32(MSG1, set(0xAB1C5ED5923F82A4, 0x59F111F13956C25B));
         STATE1 = _mm_sha256rnds2_epu32(STATE1, STATE0, MSG);
@@ -315,7 +315,7 @@ __attribute__((target("sha,sse4.1"))) static void sha_256_x86_sha(
         MSG0 = _mm_sha256msg1_epu32(MSG0, MSG1);
 
         /* Rounds 8-11 */
-        MSG2 = _mm_loadu_si128((const __m128i*)(chunk + 32));
+        MSG2 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(chunk + 32));
         MSG2 = _mm_shuffle_epi8(MSG2, MASK);
         MSG = _mm_add_epi32(MSG2, set(0x550C7DC3243185BE, 0x12835B01D807AA98));
         STATE1 = _mm_sha256rnds2_epu32(STATE1, STATE0, MSG);
@@ -324,7 +324,7 @@ __attribute__((target("sha,sse4.1"))) static void sha_256_x86_sha(
         MSG1 = _mm_sha256msg1_epu32(MSG1, MSG2);
 
         /* Rounds 12-15 */
-        MSG3 = _mm_loadu_si128((const __m128i*)(chunk + 48));
+        MSG3 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(chunk + 48));
         MSG3 = _mm_shuffle_epi8(MSG3, MASK);
         MSG = _mm_add_epi32(MSG3, set(0xC19BF1749BDC06A7, 0x80DEB1FE72BE5D74));
         STATE1 = _mm_sha256rnds2_epu32(STATE1, STATE0, MSG);
@@ -460,8 +460,8 @@ __attribute__((target("sha,sse4.1"))) static void sha_256_x86_sha(
     STATE1 = _mm_alignr_epi8(STATE1, TMP, 8);    /* ABEF */
 
     /* Save state */
-    _mm_storeu_si128((__m128i*)&h[0], STATE0);
-    _mm_storeu_si128((__m128i*)&h[4], STATE1);
+    _mm_storeu_si128(reinterpret_cast<__m128i*>(&h[0]), STATE0);
+    _mm_storeu_si128(reinterpret_cast<__m128i*>(&h[4]), STATE1);
     // NOLINTEND(portability-simd-intrinsics)
     // NOLINTEND(cppcoreguidelines-pro-type-cstyle-cast)
 }
