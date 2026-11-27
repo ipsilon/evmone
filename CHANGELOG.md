@@ -5,6 +5,79 @@ Documentation of all notable changes to the **evmone** project.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
+## [0.26.0] — unreleased
+
+This release speeds up the Baseline interpreter, precompiles and Keccak.
+
+### Changed
+
+- **Baseline interpreter optimizations**: `CALLDATALOAD` loads the whole word directly,
+  the memory growth has a fast path for one word, pushing of 64-bit values
+  does not use a temporary, and a taken `JUMP`/`JUMPI` is cheaper because the JUMPDEST analysis
+  is kept in `ExecutionState` as a bitset of the native word size.
+  The GCC inlining limits are raised for the interpreter loop.
+  [#1776](https://github.com/ipsilon/evmone/pull/1776)
+  [#1777](https://github.com/ipsilon/evmone/pull/1777)
+  [#1778](https://github.com/ipsilon/evmone/pull/1778)
+  [#1781](https://github.com/ipsilon/evmone/pull/1781)
+  [#1783](https://github.com/ipsilon/evmone/pull/1783)
+  [#1784](https://github.com/ipsilon/evmone/pull/1784)
+  [#1785](https://github.com/ipsilon/evmone/pull/1785)
+  [#1786](https://github.com/ipsilon/evmone/pull/1786)
+  [#1793](https://github.com/ipsilon/evmone/pull/1793)
+  [#1799](https://github.com/ipsilon/evmone/pull/1799)
+  [#1814](https://github.com/ipsilon/evmone/pull/1814)
+- evmone is built with `-fcf-protection=return` on Linux x86-64: the Baseline interpreter
+  does not execute `ENDBR64` at every instruction dispatch.
+  [#649](https://github.com/ipsilon/evmone/pull/649)
+- **Modular inversion** uses the safegcd algorithm instead of the binary extended GCD.
+  It makes `ecadd` faster and `ecrecover` and `p256verify` slightly faster.
+  [#1806](https://github.com/ipsilon/evmone/pull/1806)
+- **Precompile optimizations**: with GCC, `ecrecover`, `p256verify` and `ecmul` are ~15% faster
+  and `modexp` with moduli of 48 bytes or more is up to ~40% faster
+  (`unsigned __int128` multiply-accumulate);
+  `modexp` executes ~4% fewer instructions with GCC (high word of the Montgomery reduction);
+  `p256verify` does not invert Z; `ecpairing` multiplies by the Fq2 non-residue
+  with 2 instead of 4 field multiplications and shares the addition chain
+  for the curve seed; `ripemd160` is restructured for inlining.
+  [#1640](https://github.com/ipsilon/evmone/pull/1640)
+  [#1648](https://github.com/ipsilon/evmone/pull/1648)
+  [#1800](https://github.com/ipsilon/evmone/pull/1800)
+  [#1803](https://github.com/ipsilon/evmone/pull/1803)
+  [#1833](https://github.com/ipsilon/evmone/pull/1833)
+  [#1838](https://github.com/ipsilon/evmone/pull/1838)
+- **Keccak optimizations**: fewer instructions per permutation, and the Armv8.2 SHA3
+  instructions are used on Apple silicon. The implementation is converted from C to C++.
+  [#1696](https://github.com/ipsilon/evmone/pull/1696)
+  [#1771](https://github.com/ipsilon/evmone/pull/1771)
+  [#1773](https://github.com/ipsilon/evmone/pull/1773)
+  [#1774](https://github.com/ipsilon/evmone/pull/1774)
+  [#1775](https://github.com/ipsilon/evmone/pull/1775)
+  [#1839](https://github.com/ipsilon/evmone/pull/1839)
+- The [EIP-7702] delegation designation must be exactly `0xef0100 || address`.
+  Code starting with `0xef0100` of another size is not a delegation.
+  This is unreachable in a valid state, but possible in arbitrary pre-states (e.g. fuzzing).
+  [#1822](https://github.com/ipsilon/evmone/pull/1822)
+- **GCC 12** is the minimum required version.
+  [#1832](https://github.com/ipsilon/evmone/pull/1832)
+- Dependencies upgraded: [intx] 0.16.0 (the division by zero gives 0 without an extra check,
+  and `modexp` divides unnormalized operands).
+  [#1834](https://github.com/ipsilon/evmone/pull/1834)
+- The [Execution Spec Tests] fixtures upgraded to `tests@v21.0.3`.
+  [#1831](https://github.com/ipsilon/evmone/pull/1831)
+
+### Fixed
+
+- `set_option("opcode.count", ...)` returned the invalid-name status for a valid option.
+  [#1810](https://github.com/ipsilon/evmone/pull/1810)
+- The RLP encoder of the test tools aborted in debug builds or wrote a wrong prefix
+  for a list longer than 16 MiB, e.g. the block access list of a block with a large gas limit.
+  [#1807](https://github.com/ipsilon/evmone/pull/1807)
+- The test tools failed to load a legacy transaction with a chain id over 64 bits ([EIP-155]).
+  It is rejected as a transaction for another chain. `evmone t8n` does not replace
+  the chain id of a transaction that has one.
+  [#1829](https://github.com/ipsilon/evmone/pull/1829)
+
 ## [0.25.0] — 2026-10-14
 
 This release completes the Amsterdam EVM revision: with the Block-Level Access Lists
@@ -1613,6 +1686,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 - Exposes [EVMC] 6 ABI.
 - The [intx 0.2.0](https://github.com/chfast/intx/releases/tag/v0.2.0) library is used for 256-bit precision arithmetic. 
 
+[0.26.0]: https://github.com/ipsilon/evmone/compare/v0.25.0...master
 [0.25.0]: https://github.com/ipsilon/evmone/releases/tag/v0.25.0
 [0.24.0]: https://github.com/ipsilon/evmone/releases/tag/v0.24.0
 [0.23.0]: https://github.com/ipsilon/evmone/releases/tag/v0.23.0
