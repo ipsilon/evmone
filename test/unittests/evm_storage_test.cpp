@@ -67,7 +67,7 @@ TEST_P(evm, sstore_cost)
 
     constexpr auto v1 = 0x01_bytes32;
 
-    for (auto r : {EVMC_BYZANTIUM, EVMC_PETERSBURG, EVMC_ISTANBUL})
+    for (const auto r : {EVMC_BYZANTIUM, EVMC_PETERSBURG, EVMC_ISTANBUL})
     {
         rev = r;
 

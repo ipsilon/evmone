@@ -42,7 +42,7 @@ void allocate(benchmark::State& state)
 {
     const auto size = static_cast<size_t>(state.range(0)) * 1024;
 
-    for (auto _ : state)
+    for (const auto _ : state)
         F(size);
 }
 

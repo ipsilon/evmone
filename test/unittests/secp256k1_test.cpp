@@ -218,7 +218,7 @@ TEST(crypto, secp256k1_pt_mul)
         const auto d{100000000000000000000_u256};
         const AffinePoint e{0x4c34e6dc48badd579d1ce4702fd490fb98fa0e666417bfc2d4ff8e957d99c565_u256,
             0xb53da5be179d80c7f07226ba79b6bce643d89496b37d6bc2d111b009e37cc28b_u256};
-        auto r = mul(p1, d);
+        const auto r = mul(p1, d);
         EXPECT_EQ(r, e);
     }
 
@@ -226,7 +226,7 @@ TEST(crypto, secp256k1_pt_mul)
         const auto d{100000000000000000000000000000000_u256};
         const AffinePoint e{0xf86902594c8a4e4fc5f6dfb27886784271302c6bab3dc4350a0fe7c5b056af66_u256,
             0xb5748aa8f9122bfdcbf5846f6f8ec76f41626642a3f2ea0f483c92bf915847ad_u256};
-        auto r = mul(p1, d);
+        const auto r = mul(p1, d);
         EXPECT_EQ(r, e);
     }
 
@@ -236,7 +236,7 @@ TEST(crypto, secp256k1_pt_mul)
             0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8_u256};
         const AffinePoint e{0x39cb41b2567f68137aae52e99dbe91cd38d9faa3ba6be536a04355b63a7964fe_u256,
             0xf31e6abd08cbd8e4896c9e0304b25000edcd52a9f6d2bac7cfbdad2c835c9a35_u256};
-        auto r = mul(G, u1);
+        const auto r = mul(G, u1);
         EXPECT_EQ(r, e);
     }
 }

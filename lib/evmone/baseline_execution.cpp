@@ -48,6 +48,7 @@ inline evmc_status_code check_requirements(const CostTable& cost_table, int64_t&
         !instr::has_const_gas_cost(Op) || instr::gas_costs[EVMC_FRONTIER][Op] != instr::undefined,
         "undefined instructions must not be handled by check_requirements()");
 
+    // NOLINTNEXTLINE(misc-const-correctness): assigned in if constexpr (llvm/llvm-project#58778).
     auto gas_cost = int64_t{instr::gas_costs[EVMC_FRONTIER][Op]};  // Init assuming const cost.
     if constexpr (!instr::has_const_gas_cost(Op))
     {

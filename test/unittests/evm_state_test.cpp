@@ -90,7 +90,7 @@ TEST_P(evm, tx_context)
 TEST_P(evm, balance)
 {
     host.accounts[msg.recipient].set_balance(0x0504030201);
-    auto code = bytecode{} + OP_ADDRESS + OP_BALANCE + mstore(0) + ret(32 - 6, 6);
+    const auto code = bytecode{} + OP_ADDRESS + OP_BALANCE + mstore(0) + ret(32 - 6, 6);
     execute(417, code);
     EXPECT_GAS_USED(EVMC_SUCCESS, 417);
     ASSERT_EQ(result.output_size, 6);
@@ -127,7 +127,7 @@ TEST_P(evm, selfbalance)
     host.accounts[msg.recipient].set_balance(0x0504030201);
     // NOTE: adding push here to balance out the stack pre-Istanbul (needed to get undefined
     // instruction as a result)
-    auto code = bytecode{} + push(1) + OP_SELFBALANCE + mstore(0) + ret(32 - 6, 6);
+    const auto code = bytecode{} + push(1) + OP_SELFBALANCE + mstore(0) + ret(32 - 6, 6);
 
     rev = EVMC_PETERSBURG;
     execute(code);
@@ -147,7 +147,7 @@ TEST_P(evm, selfbalance)
 
 TEST_P(evm, log)
 {
-    for (auto op : {OP_LOG0, OP_LOG1, OP_LOG2, OP_LOG3, OP_LOG4})
+    for (const auto op : {OP_LOG0, OP_LOG1, OP_LOG2, OP_LOG3, OP_LOG4})
     {
         const uint8_t n = op - OP_LOG0;
         const auto code =
@@ -170,7 +170,7 @@ TEST_P(evm, log)
 
 TEST_P(evm, log0_empty)
 {
-    auto code = push(0) + OP_DUP1 + OP_LOG0;
+    const auto code = push(0) + OP_DUP1 + OP_LOG0;
     execute(code);
     ASSERT_EQ(host.recorded_logs.size(), 1);
     const auto& last_log = host.recorded_logs.back();
@@ -180,11 +180,11 @@ TEST_P(evm, log0_empty)
 
 TEST_P(evm, log_data_cost)
 {
-    for (auto op : {OP_LOG0, OP_LOG1, OP_LOG2, OP_LOG3, OP_LOG4})
+    for (const auto op : {OP_LOG0, OP_LOG1, OP_LOG2, OP_LOG3, OP_LOG4})
     {
-        auto num_topics = op - OP_LOG0;
-        auto code = push(0) + (4 * OP_DUP1) + push(1) + push(0) + op;
-        auto cost = 407 + num_topics * 375;
+        const auto num_topics = op - OP_LOG0;
+        const auto code = push(0) + (4 * OP_DUP1) + push(1) + push(0) + op;
+        const auto cost = 407 + num_topics * 375;
         EXPECT_EQ(host.recorded_logs.size(), 0);
         execute(cost, code);
         EXPECT_EQ(result.status_code, EVMC_SUCCESS);
@@ -529,7 +529,7 @@ TEST_P(evm, extcodecopy_empty)
 
 TEST_P(evm, codecopy_memory_cost)
 {
-    auto code = push(1) + push(0) + push(0) + OP_CODECOPY;
+    const auto code = push(1) + push(0) + push(0) + OP_CODECOPY;
     execute(18, code);
     EXPECT_EQ(result.status_code, EVMC_SUCCESS);
     execute(17, code);
@@ -538,7 +538,7 @@ TEST_P(evm, codecopy_memory_cost)
 
 TEST_P(evm, extcodecopy_memory_cost)
 {
-    auto code = push(1) + push(0) + 2 * OP_DUP1 + OP_EXTCODECOPY;
+    const auto code = push(1) + push(0) + 2 * OP_DUP1 + OP_EXTCODECOPY;
     execute(718, code);
     EXPECT_EQ(result.status_code, EVMC_SUCCESS);
     execute(717, code);
@@ -553,7 +553,7 @@ TEST_P(evm, extcodecopy_nonzero_index)
     auto& extcode = host.accounts[addr].code;
     extcode.assign(16, 0x00);
     extcode[index] = 0xc0;
-    auto code = push(2) + push(index) + push(0) + push(0xa) + OP_EXTCODECOPY + ret(0, 2);
+    const auto code = push(2) + push(index) + push(0) + push(0xa) + OP_EXTCODECOPY + ret(0, 2);
     EXPECT_EQ(code.length() + 1, index);
     execute(code);
     EXPECT_EQ(result.status_code, EVMC_SUCCESS);
@@ -572,7 +572,7 @@ TEST_P(evm, extcodecopy_fill_tail)
     auto& extcode = host.accounts[addr].code;
     extcode = {0xff, 0xfe};
     extcode.resize(1);
-    auto code = push(2) + push(0) + push(0) + push(0xa) + OP_EXTCODECOPY + ret(0, 2);
+    const auto code = push(2) + push(0) + push(0) + push(0xa) + OP_EXTCODECOPY + ret(0, 2);
     execute(code);
     ASSERT_EQ(host.recorded_account_accesses.size(), 1);
     EXPECT_EQ(host.recorded_account_accesses.back().bytes[19], 0xa);
@@ -591,9 +591,9 @@ TEST_P(evm, extcodecopy_buffer_overflow)
 
     const auto s = static_cast<int>(code.size());
     const auto values = {0, 1, s - 1, s, s + 1, 5000};
-    for (auto offset : values)
+    for (const auto offset : values)
     {
-        for (auto size : values)
+        for (const auto size : values)
         {
             host.tx_context.block_timestamp = offset;
             host.tx_context.block_number = size;

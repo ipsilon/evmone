@@ -58,7 +58,7 @@ TEST_P(evm, memory_big_allocation)
     execute(code);
     EXPECT_STATUS(EVMC_SUCCESS);
     ASSERT_EQ(result.output_size, size);
-    for (auto b : bytes_view{result.output_data, result.output_size})
+    for (const auto b : bytes_view{result.output_data, result.output_size})
         EXPECT_EQ(b, 0);
 }
 
@@ -94,7 +94,7 @@ TEST_P(evm, memory_grow_by_word_zeros)
 
 TEST_P(evm, mstore8_memory_cost)
 {
-    auto code = push(0) + mstore8(0);
+    const auto code = push(0) + mstore8(0);
     execute(12, code);
     EXPECT_EQ(result.status_code, EVMC_SUCCESS);
     execute(11, code);

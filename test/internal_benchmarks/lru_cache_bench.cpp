@@ -27,7 +27,7 @@ void lru_cache_not_found(benchmark::State& state)
 
     const volatile auto key = &keys[capacity];
 
-    for ([[maybe_unused]] auto _ : state)
+    for ([[maybe_unused]] const auto _ : state)
     {
         auto v = cache.get(*key);
         benchmark::DoNotOptimize(v);
@@ -55,7 +55,7 @@ void lru_cache_get_same(benchmark::State& state)
 
     const volatile auto key = &keys[capacity / 2];
 
-    for ([[maybe_unused]] auto _ : state)
+    for ([[maybe_unused]] const auto _ : state)
     {
         auto v = cache.get(*key);
         benchmark::DoNotOptimize(v);
@@ -82,7 +82,7 @@ void lru_cache_get(benchmark::State& state)
         cache.put(key, {});
 
     auto key_it = data.begin();
-    for ([[maybe_unused]] auto _ : state)
+    for ([[maybe_unused]] const auto _ : state)
     {
         auto v = cache.get(*key_it++);
         benchmark::DoNotOptimize(v);
@@ -138,7 +138,7 @@ void lru_cache_put_full(benchmark::State& state)
         cache.put(key, {});
 
     auto key_index = keys.size();
-    for ([[maybe_unused]] auto _ : state)
+    for ([[maybe_unused]] const auto _ : state)
     {
         cache.put(static_cast<Key>(key_index), {});
         ++key_index;

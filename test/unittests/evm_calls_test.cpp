@@ -32,7 +32,7 @@ TEST_P(evm, delegatecall)
     EXPECT_EQ(gas_used, 1690);
     EXPECT_EQ(result.status_code, EVMC_SUCCESS);
 
-    auto gas_left = 1700 - 736;
+    const auto gas_left = 1700 - 736;
     ASSERT_EQ(host.recorded_calls.size(), 1);
     const auto& call_msg = host.recorded_calls.back();
     EXPECT_EQ(call_msg.gas, gas_left - gas_left / 64);
@@ -96,7 +96,7 @@ TEST_P(evm, create)
 TEST_P(evm, create_gas)
 {
     size_t c = 0;
-    for (auto r : {EVMC_HOMESTEAD, EVMC_TANGERINE_WHISTLE})
+    for (const auto r : {EVMC_HOMESTEAD, EVMC_TANGERINE_WHISTLE})
     {
         ++c;
         rev = r;
@@ -158,7 +158,7 @@ TEST_P(evm, create_balance_too_low)
 {
     rev = EVMC_PETERSBURG;
     host.accounts[msg.recipient].set_balance(1);
-    for (auto op : {OP_CREATE, OP_CREATE2})
+    for (const auto op : {OP_CREATE, OP_CREATE2})
     {
         execute(push(2) + (3 * OP_DUP1) + hex(op) + ret_top());
         EXPECT_EQ(result.status_code, EVMC_SUCCESS);
@@ -170,7 +170,7 @@ TEST_P(evm, create_balance_too_low)
 TEST_P(evm, create_failure)
 {
     rev = EVMC_PETERSBURG;
-    for (auto op : {OP_CREATE, OP_CREATE2})
+    for (const auto op : {OP_CREATE, OP_CREATE2})
     {
         const auto computed_addr = op == OP_CREATE ?
                                        evmone::compute_create_address(msg.recipient, 0) :
@@ -208,7 +208,7 @@ TEST_P(evm, create_failure)
 TEST_P(evm, call_failing_with_value)
 {
     host.accounts[0x00000000000000000000000000000000000000aa_address] = {};
-    for (auto op : {OP_CALL, OP_CALLCODE})
+    for (const auto op : {OP_CALL, OP_CALLCODE})
     {
         const auto code = push(0xff) + push(0) + OP_DUP2 + OP_DUP2 + push(1) + push(0xaa) +
                           push(0x8000) + op + OP_POP;
@@ -272,7 +272,8 @@ TEST_P(evm, call_depth_limit)
     rev = EVMC_PETERSBURG;
     msg.depth = 1024;
 
-    for (auto op : {OP_CALL, OP_CALLCODE, OP_DELEGATECALL, OP_STATICCALL, OP_CREATE, OP_CREATE2})
+    for (const auto op :
+        {OP_CALL, OP_CALLCODE, OP_DELEGATECALL, OP_STATICCALL, OP_CREATE, OP_CREATE2})
     {
         const auto code = push(0) + 6 * OP_DUP1 + op + ret_top() + OP_INVALID;
         execute(code);
@@ -294,11 +295,11 @@ TEST_P(evm, call_output)
         result_is_correct = r->output_size == sizeof(call_output) && r->output_data == call_output;
     };
 
-    auto code_prefix_output_1 = push(1) + 6 * OP_DUP1 + push("7fffffffffffffff");
-    auto code_prefix_output_0 = push(0) + 6 * OP_DUP1 + push("7fffffffffffffff");
-    auto code_suffix = ret(0, 3);
+    const auto code_prefix_output_1 = push(1) + 6 * OP_DUP1 + push("7fffffffffffffff");
+    const auto code_prefix_output_0 = push(0) + 6 * OP_DUP1 + push("7fffffffffffffff");
+    const auto code_suffix = ret(0, 3);
 
-    for (auto op : {OP_CALL, OP_CALLCODE, OP_DELEGATECALL, OP_STATICCALL})
+    for (const auto op : {OP_CALL, OP_CALLCODE, OP_DELEGATECALL, OP_STATICCALL})
     {
         result_is_correct = false;
         execute(code_prefix_output_1 + hex(op) + code_suffix);
@@ -326,7 +327,7 @@ TEST_P(evm, call_high_gas)
     rev = EVMC_HOMESTEAD;
     host.accounts[0xaa_address] = {};
 
-    for (auto call_opcode : {OP_CALL, OP_CALLCODE, OP_DELEGATECALL})
+    for (const auto call_opcode : {OP_CALL, OP_CALLCODE, OP_DELEGATECALL})
     {
         execute(5000, 5 * push(0) + push(0xaa) + push(0x134c) + call_opcode);
         EXPECT_EQ(result.status_code, EVMC_OUT_OF_GAS);
@@ -544,9 +545,9 @@ TEST_P(evm, call_with_value_low_gas)
 {
     // Create the call destination account.
     host.accounts[0x0000000000000000000000000000000000000000_address] = {};
-    for (auto call_op : {OP_CALL, OP_CALLCODE})
+    for (const auto call_op : {OP_CALL, OP_CALLCODE})
     {
-        auto code = 4 * push(0) + push(1) + 2 * push(0) + call_op + OP_POP;
+        const auto code = 4 * push(0) + push(1) + 2 * push(0) + call_op + OP_POP;
         execute(9721, code);
         EXPECT_EQ(result.status_code, EVMC_SUCCESS);
         EXPECT_EQ(result.gas_left, 2300 - 2);
@@ -557,9 +558,9 @@ TEST_P(evm, call_oog_after_balance_check)
 {
     // Create the call destination account.
     host.accounts[0x0000000000000000000000000000000000000000_address] = {};
-    for (auto op : {OP_CALL, OP_CALLCODE})
+    for (const auto op : {OP_CALL, OP_CALLCODE})
     {
-        auto code = 4 * push(0) + push(1) + 2 * push(0) + op + OP_SELFDESTRUCT;
+        const auto code = 4 * push(0) + push(1) + 2 * push(0) + op + OP_SELFDESTRUCT;
         execute(12420, code);
         EXPECT_EQ(result.status_code, EVMC_OUT_OF_GAS);
     }
@@ -571,7 +572,7 @@ TEST_P(evm, call_oog_after_depth_check)
     host.accounts[0x0000000000000000000000000000000000000000_address] = {};
     msg.depth = 1024;
 
-    for (auto op : {OP_CALL, OP_CALLCODE})
+    for (const auto op : {OP_CALL, OP_CALLCODE})
     {
         const auto code = 4 * push(0) + push(1) + 2 * push(0) + op + OP_SELFDESTRUCT;
         execute(12420, code);
@@ -596,7 +597,7 @@ TEST_P(evm, call_recipient_and_code_address)
     msg.sender = origin;
     msg.recipient = executor;
 
-    for (auto op : {OP_CALL, OP_CALLCODE, OP_DELEGATECALL, OP_STATICCALL})
+    for (const auto op : {OP_CALL, OP_CALLCODE, OP_DELEGATECALL, OP_STATICCALL})
     {
         const auto code = 5 * push(0) + push(recipient) + push(0) + op;
         execute(100000, code);
@@ -625,7 +626,7 @@ TEST_P(evm, call_value)
     host.accounts[executor].set_balance(passed_value);
     host.accounts[recipient] = {};  // Create the call recipient account.
 
-    for (auto op : {OP_CALL, OP_CALLCODE, OP_DELEGATECALL, OP_STATICCALL})
+    for (const auto op : {OP_CALL, OP_CALLCODE, OP_DELEGATECALL, OP_STATICCALL})
     {
         const auto has_value_arg = (op == OP_CALL || op == OP_CALLCODE);
         const auto value_cost = has_value_arg ? 9000 : 0;
@@ -652,9 +653,9 @@ TEST_P(evm, call_value)
 TEST_P(evm, create_oog_after)
 {
     rev = EVMC_PETERSBURG;
-    for (auto op : {OP_CREATE, OP_CREATE2})
+    for (const auto op : {OP_CREATE, OP_CREATE2})
     {
-        auto code = 4 * push(0) + op + OP_SELFDESTRUCT;
+        const auto code = 4 * push(0) + op + OP_SELFDESTRUCT;
         execute(39000, code);
         EXPECT_STATUS(EVMC_OUT_OF_GAS);
     }

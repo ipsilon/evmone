@@ -505,7 +505,7 @@ TEST(expmod, incomplete_inputs)
         const auto input = evmc::from_spaced_hex(input_hex).value();
         const auto [gas_cost, max_output_size] = evmone::state::expmod_analyze(input, EVMC_PRAGUE);
         ASSERT_LT(gas_cost, GAS_LIMIT);
-        auto output = std::make_unique_for_overwrite<uint8_t[]>(max_output_size);
+        const auto output = std::make_unique_for_overwrite<uint8_t[]>(max_output_size);
         const auto [status, output_size] = evmone::state::expmod_execute(
             input.data(), input.size(), output.get(), max_output_size);
         EXPECT_EQ(status, EVMC_SUCCESS);

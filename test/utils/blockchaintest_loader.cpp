@@ -110,7 +110,7 @@ static TestBlock load_test_block(
         }
     }
 
-    if (auto it = j.find("transactions"); it != j.end())
+    if (const auto it = j.find("transactions"); it != j.end())
     {
         for (const auto& tx : *it)
             tb.transactions.emplace_back(from_json<Transaction>(tx));
