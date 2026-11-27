@@ -53,6 +53,8 @@ Checks:
   - "modernize-*"
   - "-modernize-avoid-c-arrays"
   - "-modernize-use-nodiscard"
+  # TODO(C++23): Enable when the minimum compilers have std::ranges::iota (GCC 13, libc++ 19).
+  - "-modernize-use-ranges"
   # Designated initializers are nice, but should not be used all the time.
   - "-modernize-use-designated-initializers"
   - "-modernize-use-trailing-return-type"

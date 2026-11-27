@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 add_executable(evmone-precompiles-bench)
-target_compile_features(evmone-precompiles-bench PRIVATE cxx_std_20)
+target_compile_features(evmone-precompiles-bench PRIVATE cxx_std_23)
 target_include_directories(evmone-precompiles-bench PRIVATE ..)
 target_link_libraries(evmone-precompiles-bench PRIVATE evmone::state benchmark::benchmark intx::intx)
 target_sources(
