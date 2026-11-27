@@ -26,6 +26,8 @@ constexpr auto BLS12384Mod =
     0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab_u384;
 
 
+namespace
+{
 template <typename UintT, const UintT& Mod>
 struct ModA : ModArith<UintT>
 {
@@ -36,6 +38,52 @@ struct ModA : ModArith<UintT>
 template <typename>
 class modarith_test : public testing::Test
 {};
+
+template <typename Mod>
+auto get_test_values(const Mod& m) noexcept
+{
+    using Uint = Mod::uint;
+    return std::array{
+        m.mod() - 1,
+        m.mod() - 2,
+        m.mod() / 2 + 1,
+        m.mod() / 2,
+        m.mod() / 2 - 1,
+        Uint{2},
+        Uint{1},
+        Uint{0},
+    };
+}
+
+[[maybe_unused]] void constexpr_test()
+{
+    // Make sure ModArith works in constexpr.
+    static constexpr ModArith m{BN254Mod};
+    static_assert(m.mod() == BN254Mod);
+
+    static constexpr auto a = m.to_mont(3);
+    static constexpr auto b = m.to_mont(11);
+    static_assert(m.add(a, b) == m.to_mont(14));
+    static_assert(m.sub(a, b) == m.to_mont(BN254Mod - 8));
+    static_assert(m.mul(a, b) == m.to_mont(33));
+    static_assert(m.mul(m.inv(a), a) == m.to_mont(1));
+    static_assert(m.inv(0) == 0);
+}
+
+template <typename Mod>
+bool is_invertible(const typename Mod::uint& x) noexcept
+{
+    // The prime factors of M256 = 2²⁵⁶ - 1, the only modulus here with non-invertible values > 0.
+    static constexpr std::array M256_FACTORS{3_u256, 5_u256, 17_u256, 257_u256, 641_u256,
+        65537_u256, 274177_u256, 6700417_u256, 67280421310721_u256, 59649589127497217_u256,
+        5704689200685129054721_u256};
+
+    if constexpr (std::is_same_v<Mod, ModA<uint256, M256>>)
+        return std::ranges::none_of(M256_FACTORS, [&](auto p) { return x % p == 0; });
+    else
+        return x != 0;
+}
+}  // namespace
 
 using test_types = testing::Types<ModA<uint256, P23>, ModA<uint256, BN254Mod>,
     ModA<uint256, Secp256k1Mod>, ModA<uint256, SECP256K1_ORDER>, ModA<uint256, SECP256R1_MOD>,
@@ -56,37 +104,6 @@ TYPED_TEST(modarith_test, to_from_mont_0)
     const TypeParam s;
     EXPECT_EQ(s.to_mont(0), 0);
     EXPECT_EQ(s.from_mont(0), 0);
-}
-
-template <typename Mod>
-static auto get_test_values(const Mod& m) noexcept
-{
-    using Uint = Mod::uint;
-    return std::array{
-        m.mod() - 1,
-        m.mod() - 2,
-        m.mod() / 2 + 1,
-        m.mod() / 2,
-        m.mod() / 2 - 1,
-        Uint{2},
-        Uint{1},
-        Uint{0},
-    };
-}
-
-[[maybe_unused]] static void constexpr_test()
-{
-    // Make sure ModArith works in constexpr.
-    static constexpr ModArith m{BN254Mod};
-    static_assert(m.mod() == BN254Mod);
-
-    static constexpr auto a = m.to_mont(3);
-    static constexpr auto b = m.to_mont(11);
-    static_assert(m.add(a, b) == m.to_mont(14));
-    static_assert(m.sub(a, b) == m.to_mont(BN254Mod - 8));
-    static_assert(m.mul(a, b) == m.to_mont(33));
-    static_assert(m.mul(m.inv(a), a) == m.to_mont(1));
-    static_assert(m.inv(0) == 0);
 }
 
 TYPED_TEST(modarith_test, add)
@@ -157,20 +174,6 @@ TYPED_TEST(modarith_test, mul)
             EXPECT_EQ(p, expected);
         }
     }
-}
-
-template <typename Mod>
-static bool is_invertible(const typename Mod::uint& x) noexcept
-{
-    // The prime factors of M256 = 2²⁵⁶ - 1, the only modulus here with non-invertible values > 0.
-    static constexpr std::array M256_FACTORS{3_u256, 5_u256, 17_u256, 257_u256, 641_u256,
-        65537_u256, 274177_u256, 6700417_u256, 67280421310721_u256, 59649589127497217_u256,
-        5704689200685129054721_u256};
-
-    if constexpr (std::is_same_v<Mod, ModA<uint256, M256>>)
-        return std::ranges::none_of(M256_FACTORS, [&](auto p) { return x % p == 0; });
-    else
-        return x != 0;
 }
 
 TYPED_TEST(modarith_test, inv_random)

@@ -7,9 +7,11 @@
 
 namespace evmone::advanced
 {
+namespace
+{
 /// Clamps x to the max value of To type.
 template <typename To, typename T>
-static constexpr To clamp(T x) noexcept
+constexpr To clamp(T x) noexcept
 {
     constexpr auto max = std::numeric_limits<To>::max();
     return x <= max ? static_cast<To>(x) : max;
@@ -37,6 +39,7 @@ struct BlockAnalysis
             clamp<decltype(BlockInfo{}.stack_max_growth)>(stack_max_growth)};
     }
 };
+}  // namespace
 
 AdvancedCodeAnalysis analyze(evmc_revision rev, bytes_view code) noexcept
 {

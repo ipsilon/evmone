@@ -70,10 +70,8 @@ inline void absorb_child_state_gas(
     state.state_gas.left = 0;
     state.state_gas.refill(gas_left, result.state_gas.left);
 }
-}  // namespace
 
 /// Converts an opcode to matching EVMC call kind.
-/// NOLINTNEXTLINE(misc-use-internal-linkage) fixed in clang-tidy 20.
 consteval evmc_call_kind to_call_kind(Opcode op) noexcept
 {
     switch (op)
@@ -93,6 +91,7 @@ consteval evmc_call_kind to_call_kind(Opcode op) noexcept
         intx::unreachable();
     }
 }
+}  // namespace
 
 template <Opcode Op>
 Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept

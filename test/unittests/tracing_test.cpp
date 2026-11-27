@@ -14,6 +14,8 @@
 using namespace testing;
 using namespace evmone::test;
 
+namespace
+{
 class tracing : public Test
 {
 private:
@@ -94,6 +96,7 @@ protected:
         [[nodiscard]] const bytes& get_last_code() const noexcept { return m_last_code; }
     };
 };
+}  // namespace
 
 
 TEST_F(tracing, no_tracer)
