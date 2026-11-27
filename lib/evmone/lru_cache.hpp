@@ -37,7 +37,7 @@ class LRUCache
     };
 
     using LRUList = std::list<LRUEntry>;
-    using LRUIterator = typename LRUList::iterator;
+    using LRUIterator = LRUList::iterator;
     using Map = std::unordered_map<Key, LRUIterator>;
 
     /// The fixed capacity of the cache.
