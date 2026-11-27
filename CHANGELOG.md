@@ -5,7 +5,7 @@ Documentation of all notable changes to the **evmone** project.
 The format is based on [Keep a Changelog],
 and this project adheres to [Semantic Versioning].
 
-## [0.26.0] — unreleased
+## [0.26.0] — 2026-11-27
 
 This release speeds up the Baseline interpreter, precompiles and Keccak.
 
@@ -1686,7 +1686,7 @@ It delivers fully-compatible and high-speed EVM implementation.
 - Exposes [EVMC] 6 ABI.
 - The [intx 0.2.0](https://github.com/chfast/intx/releases/tag/v0.2.0) library is used for 256-bit precision arithmetic. 
 
-[0.26.0]: https://github.com/ipsilon/evmone/compare/v0.25.0...master
+[0.26.0]: https://github.com/ipsilon/evmone/releases/tag/v0.26.0
 [0.25.0]: https://github.com/ipsilon/evmone/releases/tag/v0.25.0
 [0.24.0]: https://github.com/ipsilon/evmone/releases/tag/v0.24.0
 [0.23.0]: https://github.com/ipsilon/evmone/releases/tag/v0.23.0
