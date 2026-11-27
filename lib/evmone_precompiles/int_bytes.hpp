@@ -8,25 +8,14 @@
 #include <bit>
 #include <concepts>
 #include <cstddef>
-#include <type_traits>
 
 namespace evmone::crypto
 {
-// TODO(C++23): Use std::byteswap.
-template <std::integral T>
-constexpr T byteswap(T value) noexcept
-{
-    static_assert(std::has_unique_object_representations_v<T>, "T may not have padding bits");
-    auto value_representation = std::bit_cast<std::array<std::byte, sizeof(T)>>(value);
-    std::ranges::reverse(value_representation);
-    return std::bit_cast<T>(value_representation);
-}
-
 /// Converts native representation to/from little-endian.
 inline auto to_le(std::integral auto x) noexcept
 {
     if constexpr (std::endian::native == std::endian::big)
-        return byteswap(x);
+        return std::byteswap(x);
     return x;
 }
 
