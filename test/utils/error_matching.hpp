@@ -19,9 +19,6 @@ namespace evmone::test
 /// `expectException` value listing the exceptions it accepts. Names are compared whole: several
 /// are a prefix of another (BlockException.UNKNOWN_PARENT and BlockException.UNKNOWN_PARENT_ZERO),
 /// so a substring search would accept a rejection for a different rule.
-///
-/// TODO(C++23): both sides become std::views::split ranges. In C++20 that view is the lazy one:
-///   it yields forward ranges, not the contiguous ones std::string_view can be built from.
 [[nodiscard]] bool contains_any(std::string_view expected, std::string_view names) noexcept;
 
 /// Whether the transaction validation error @p ec is one of the exceptions @p expected, the

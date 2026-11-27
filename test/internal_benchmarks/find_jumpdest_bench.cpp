@@ -85,7 +85,7 @@ struct map_builder
 };
 
 template <typename T>
-const std::array<std::pair<T, T>, jumpdest_map_size> map_builder<T>::map = []() noexcept {
+const std::array<std::pair<T, T>, jumpdest_map_size> map_builder<T>::map = [] noexcept {
     auto m = std::array<std::pair<T, T>, jumpdest_map_size>{};
     for (size_t i = 0; i < m.size(); ++i)
         m[i] = {static_cast<T>(2 * i + 1), static_cast<T>(2 * i + 2)};
@@ -193,7 +193,7 @@ struct split_map_builder
 };
 
 template <typename T>
-const split_map<T> split_map_builder<T>::map = []() noexcept {
+const split_map<T> split_map_builder<T>::map = [] noexcept {
     auto m = split_map<T>{};
     for (size_t i = 0; i < m.key.size(); ++i)
     {

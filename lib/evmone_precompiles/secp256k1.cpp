@@ -98,12 +98,8 @@ std::optional<evmc::address> ecrecover(std::span<const uint8_t, 32> hash,
     std::span<const uint8_t, 32> r_bytes, std::span<const uint8_t, 32> s_bytes, bool parity,
     RecoveryMode mode) noexcept
 {
-    // TODO(C++23): use std::optional::and_then.
-    const auto pubkey = secp256k1_ecdsa_recover(hash, r_bytes, s_bytes, parity, mode);
-    if (!pubkey.has_value())
-        return std::nullopt;
-
-    return to_address(*pubkey);
+    return secp256k1_ecdsa_recover(hash, r_bytes, s_bytes, parity, mode)
+        .transform([](const auto& pubkey) { return to_address(pubkey); });
 }
 
 std::optional<Curve::Fp> field_sqrt(const Curve::Fp& x) noexcept

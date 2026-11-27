@@ -5,6 +5,7 @@
 #include "error_matching.hpp"
 #include <test/state/errors.hpp>
 #include <algorithm>
+#include <ranges>
 #include <span>
 
 namespace evmone::test
@@ -111,14 +112,6 @@ constexpr LegacyException LEGACY_EXCEPTIONS[]{
     {"1559BlockImportImpossible_BaseFeeWrong", state::INVALID_BASEFEE_PER_GAS},
 };
 
-/// Takes the next `|`-separated name off @p list, which is left pointing past it.
-std::string_view take_name(std::string_view& list) noexcept
-{
-    const auto end = std::min(list.find('|'), list.size());
-    const auto name = list.substr(0, end);
-    list.remove_prefix(std::min(end + 1, list.size()));
-    return name;
-}
 }  // namespace
 
 std::string map_legacy_exception(std::string_view expected)
@@ -135,16 +128,10 @@ std::string map_legacy_exception(std::string_view expected)
 
 bool contains_any(std::string_view expected, std::string_view names) noexcept
 {
-    while (!names.empty())
-    {
-        const auto name = take_name(names);
-        for (auto rest = expected; !rest.empty();)
-        {
-            if (take_name(rest) == name)
-                return true;
-        }
-    }
-    return false;
+    return std::ranges::any_of(std::views::split(names, '|'), [&](const auto& name) {
+        return std::ranges::any_of(std::views::split(expected, '|'),
+            [&](const auto& e) { return std::string_view{e} == std::string_view{name}; });
+    });
 }
 
 namespace

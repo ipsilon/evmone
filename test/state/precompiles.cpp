@@ -155,7 +155,7 @@ PrecompileAnalysis expmod_analyze(bytes_view input, evmc_revision rev) noexcept
         unsigned final_divisor;
         uint64_t (*calc_mult_complexity)(uint32_t max_len) noexcept;
     };
-    const auto& [min_gas, final_divisor, calc_mult_complexity] = [rev]() noexcept -> Params {
+    const auto& [min_gas, final_divisor, calc_mult_complexity] = [rev] noexcept -> Params {
         if (rev >= EVMC_OSAKA)
             return {500, 1, calc_mult_complexity_eip7883};
         else if (rev >= EVMC_BERLIN)

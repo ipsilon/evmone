@@ -21,7 +21,7 @@
 #include <cstdio>
 #include <cstdlib>
 
-static bool cpu_check = []() noexcept {
+static bool cpu_check = [] noexcept {
     if (!__builtin_cpu_supports(CPU_FEATURE))
     {
         (void)std::fputs("CPU does not support " CPU_FEATURE "\n", stderr);

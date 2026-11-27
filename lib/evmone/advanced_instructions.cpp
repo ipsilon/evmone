@@ -217,7 +217,7 @@ const Instruction* op_undefined(const Instruction*, AdvancedExecutionState& stat
 }
 
 
-constexpr std::array<instruction_exec_fn, 256> instruction_implementations = []() noexcept {
+constexpr std::array<instruction_exec_fn, 256> instruction_implementations = [] noexcept {
     std::array<instruction_exec_fn, 256> table{};
 
     // Init table with wrapped generic implementations.
@@ -255,7 +255,7 @@ constexpr std::array<instruction_exec_fn, 256> instruction_implementations = [](
 
 EVMC_EXPORT const OpTable& get_op_table(evmc_revision rev) noexcept
 {
-    static constexpr auto op_tables = []() noexcept {
+    static constexpr auto op_tables = [] noexcept {
         std::array<OpTable, EVMC_MAX_REVISION + 1> tables{};
         for (size_t r = EVMC_FRONTIER; r <= EVMC_MAX_REVISION; ++r)
         {

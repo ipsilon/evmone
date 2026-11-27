@@ -23,7 +23,7 @@ struct StorageCostSpec
 /// Table of gas cost specification for storage instructions per EVM revision.
 /// TODO: This can be moved to instruction traits and be used in other places: e.g.
 ///       SLOAD cost, replacement for WARM_ACCESS.
-constexpr auto STORAGE_COST_SPEC = []() noexcept {
+constexpr auto STORAGE_COST_SPEC = [] noexcept {
     std::array<StorageCostSpec, EVMC_MAX_REVISION + 1> tbl{};
 
     // Legacy cost schedule.
@@ -61,7 +61,7 @@ struct StorageStoreCost
 };
 
 // The lookup table of SSTORE costs by the storage update status.
-constexpr auto SSTORE_COSTS = []() noexcept {
+constexpr auto SSTORE_COSTS = [] noexcept {
     std::array<std::array<StorageStoreCost, EVMC_STORAGE_MODIFIED_RESTORED + 1>,
         EVMC_MAX_REVISION + 1>
         tbl{};
