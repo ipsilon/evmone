@@ -80,8 +80,9 @@ public:
 /// Wrapping of state::transition() which operates on TestState.
 [[nodiscard]] std::variant<state::TransactionReceipt, std::error_code> transition(TestState& state,
     const state::BlockInfo& block, const state::BlockHashes& block_hashes,
-    const state::Transaction& tx, evmc_revision rev, evmc::VM& vm, int64_t block_gas_left,
-    int64_t block_state_gas_left, int64_t blob_gas_left);
+    const state::Transaction& tx, evmc_revision rev, evmc::VM& vm,
+    evmc_execution_context& execution_context, int64_t block_gas_left, int64_t block_state_gas_left,
+    int64_t blob_gas_left);
 
 /// Wrapping of state::finalize() which operates on TestState.
 void finalize(TestState& state, evmc_revision rev, const address& coinbase,
@@ -90,12 +91,13 @@ void finalize(TestState& state, evmc_revision rev, const address& coinbase,
 
 /// Wrapping of state::system_call_block_start() which operates on TestState.
 void system_call_block_start(TestState& state, const state::BlockInfo& block,
-    const state::BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm);
+    const state::BlockHashes& block_hashes, evmc_revision rev, evmc::VM& vm,
+    evmc_execution_context& execution_context);
 
 /// Wrapping of state::system_call_block_end() which operates on TestState.
 /// Returns the collected requests, or the error code if the collection failed.
 std::variant<std::vector<state::Requests>, std::error_code> system_call_block_end(TestState& state,
     const state::BlockInfo& block, const state::BlockHashes& block_hashes, evmc_revision rev,
-    evmc::VM& vm);
+    evmc::VM& vm, evmc_execution_context& execution_context);
 }  // namespace test
 }  // namespace evmone

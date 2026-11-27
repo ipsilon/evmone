@@ -35,7 +35,8 @@ public:
 };
 }  // namespace
 
-TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::BlockInfo& block,
+TransitionResult apply_block(const TestState& state, evmc::VM& vm,
+    evmc_execution_context& execution_context, const state::BlockInfo& block,
     const state::BlockHashes& block_hashes, const std::vector<state::Transaction>& txs,
     evmc_revision rev, int64_t blob_gas_limit, const BlockTransitionOptions& opts)
 {
@@ -55,7 +56,8 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
     };
 
     if (!opts.skip_system_calls)
-        apply(0, state::system_call_block_start(block_state, block, block_hashes, rev, vm));
+        apply(0, state::system_call_block_start(
+                     block_state, block, block_hashes, rev, vm, execution_context));
 
     std::vector<RejectedTransaction> rejected_txs;
     std::vector<state::TransactionReceipt> receipts;
@@ -84,7 +86,7 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         else
         {
             auto receipt = state::transition(block_state, block, block_hashes, tx, rev, vm,
-                std::get<state::TransactionProperties>(tx_props_or_err));
+                execution_context, std::get<state::TransactionProperties>(tx_props_or_err));
             apply(i + 1, receipt.state_diff);
 
             cumulative_gas_used += receipt.gas_used;
@@ -118,8 +120,8 @@ TransitionResult apply_block(const TestState& state, evmc::VM& vm, const state::
         }
         if (!requests_error)
         {
-            auto block_end =
-                state::system_call_block_end(block_state, block, block_hashes, rev, vm);
+            auto block_end = state::system_call_block_end(
+                block_state, block, block_hashes, rev, vm, execution_context);
             if (const auto* ec = std::get_if<std::error_code>(&block_end))
                 requests_error = *ec;
             else

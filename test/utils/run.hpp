@@ -8,6 +8,6 @@
 
 namespace evmone::tooling
 {
-int run(evmc::VM& vm, evmc_revision rev, int64_t gas, evmc::bytes_view code, evmc::bytes_view input,
-    bool create, bool bench, std::ostream& out);
+int run(evmc::VM& vm, evmc_execution_context& execution_context, evmc_revision rev, int64_t gas,
+    evmc::bytes_view code, evmc::bytes_view input, bool create, bool bench, std::ostream& out);
 }  // namespace evmone::tooling

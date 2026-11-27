@@ -119,14 +119,14 @@ json::json load_fixture_file(const fs::path& path)
 
 /// Runs one fixture of a fixture file.
 void run_fixture(const std::string& name, const json::json& fixture, const RunOptions& options,
-    evmc::VM& vm, TestReport& report)
+    evmc::VM& vm, evmc_execution_context& execution_context, TestReport& report)
 {
     // The runners rename theirs; this names a failure to load, or a fixture which is not one.
     report.start_case(name);
     switch (classify(fixture))
     {
     case Format::state_test:
-        run_state_test(make_state_test(name, fixture), vm,
+        run_state_test(make_state_test(name, fixture), vm, execution_context,
             {.output = std::clog,
                 .trace_summary = options.trace_summary,
                 .state_diff = options.state_diff},
@@ -139,7 +139,7 @@ void run_fixture(const std::string& name, const json::json& fixture, const RunOp
         codspeed::CodSpeed::getInstance();  // Sets up the hooks and the integration name, once.
         measurement_start();
 #endif
-        run_blockchain_test(test, vm, report);
+        run_blockchain_test(test, vm, execution_context, report);
 #ifdef CODSPEED_ENABLED
         measurement_stop();
         measurement_set_executed_benchmark(name);  // The fixture's name is the benchmark's URI.
@@ -314,7 +314,8 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     return passed == 0 ? NOTHING_VERIFIED : SUCCESS;
 }
 
-std::vector<Result> run_fixture_file(const fs::path& path, const RunOptions& options, evmc::VM& vm)
+std::vector<Result> run_fixture_file(const fs::path& path, const RunOptions& options, evmc::VM& vm,
+    evmc_execution_context& execution_context)
 {
     json::json contents;
     if (auto loaded =
@@ -327,8 +328,9 @@ std::vector<Result> run_fixture_file(const fs::path& path, const RunOptions& opt
     {
         if (!options.selects(name))
             continue;
-        results.push_back(run_one(path.string() + "::" + name,
-            [&](TestReport& report) { run_fixture(name, fixture, options, vm, report); }));
+        results.push_back(run_one(path.string() + "::" + name, [&](TestReport& report) {
+            run_fixture(name, fixture, options, vm, execution_context, report);
+        }));
     }
     return results;
 }

@@ -20,8 +20,9 @@ constexpr auto create_address = 0xc9ea7ed000000000000000000000000000000001_addre
 /// The gas limit for contract creation.
 constexpr auto create_gas = 10'000'000;
 
-auto bench(MockedHost& host, evmc::VM& vm, evmc_revision rev, const evmc_message& msg,
-    bytes_view code, const evmc::Result& expected_result, std::ostream& out)
+auto bench(MockedHost& host, evmc::VM& vm, evmc_execution_context& execution_context,
+    evmc_revision rev, const evmc_message& msg, bytes_view code,
+    const evmc::Result& expected_result, std::ostream& out)
 {
     {
         using clock = std::chrono::steady_clock;
@@ -33,7 +34,7 @@ auto bench(MockedHost& host, evmc::VM& vm, evmc_revision rev, const evmc_message
 
         // Probe run: execute once again the already warm code to estimate a single run time.
         const auto probe_start = clock::now();
-        const auto result = vm.execute(host, rev, msg, code.data(), code.size());
+        const auto result = vm.execute(execution_context, host, rev, msg, code.data(), code.size());
         const auto bench_start = clock::now();
         const auto probe_time = bench_start - probe_start;
 
@@ -46,7 +47,7 @@ auto bench(MockedHost& host, evmc::VM& vm, evmc_revision rev, const evmc_message
         // Benchmark loop.
         const auto num_iterations = std::max(static_cast<int>(target_bench_time / probe_time), 1);
         for (int i = 0; i < num_iterations; ++i)
-            vm.execute(host, rev, msg, code.data(), code.size());
+            vm.execute(execution_context, host, rev, msg, code.data(), code.size());
         const auto bench_time = (clock::now() - bench_start) / num_iterations;
 
         out << "Time:     " << std::chrono::duration_cast<unit>(bench_time).count() << unit_name
@@ -55,8 +56,8 @@ auto bench(MockedHost& host, evmc::VM& vm, evmc_revision rev, const evmc_message
 }
 }  // namespace
 
-int run(VM& vm, evmc_revision rev, int64_t gas, bytes_view code, bytes_view input, bool create,
-    bool bench, std::ostream& out)
+int run(VM& vm, evmc_execution_context& execution_context, evmc_revision rev, int64_t gas,
+    bytes_view code, bytes_view input, bool create, bool bench, std::ostream& out)
 {
     out << (create ? "Creating and executing on " : "Executing on ") << rev << " with " << gas
         << " gas limit\n";
@@ -76,7 +77,8 @@ int run(VM& vm, evmc_revision rev, int64_t gas, bytes_view code, bytes_view inpu
         create_msg.recipient = create_address;
         create_msg.gas = create_gas;
 
-        const auto create_result = vm.execute(host, rev, create_msg, code.data(), code.size());
+        const auto create_result =
+            vm.execute(execution_context, host, rev, create_msg, code.data(), code.size());
         if (create_result.status_code != EVMC_SUCCESS)
         {
             out << "Contract creation failed: " << create_result.status_code << "\n";
@@ -91,10 +93,11 @@ int run(VM& vm, evmc_revision rev, int64_t gas, bytes_view code, bytes_view inpu
     }
     out << "\n";
 
-    const auto result = vm.execute(host, rev, msg, exec_code.data(), exec_code.size());
+    const auto result =
+        vm.execute(execution_context, host, rev, msg, exec_code.data(), exec_code.size());
 
     if (bench)
-        tooling::bench(host, vm, rev, msg, exec_code, result, out);
+        tooling::bench(host, vm, execution_context, rev, msg, exec_code, result, out);
 
     const auto gas_used = msg.gas - result.gas_left;
     out << "Result:   " << result.status_code << "\nGas used: " << gas_used << "\n";
