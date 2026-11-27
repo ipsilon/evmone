@@ -7,6 +7,7 @@ include(blst)
 add_library(evmone_precompiles STATIC)
 add_library(evmone::precompiles ALIAS evmone_precompiles)
 target_link_libraries(evmone_precompiles PUBLIC evmc::evmc_cpp intx::intx PRIVATE blst::blst)
+target_compile_features(evmone_precompiles PUBLIC cxx_std_23)
 target_include_directories(evmone_precompiles INTERFACE ..)
 target_sources(
     evmone_precompiles PRIVATE
