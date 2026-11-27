@@ -61,6 +61,8 @@ TEST_P(evm, jump_around)
     std::vector<uint16_t> jump_order(num_jumps, 0);
 
     // Generate sequence starting from 1, 0 is the execution starting point.
+    // TODO(C++23): std::ranges::iota needs GCC 13 and libc++ 19.
+    // NOLINTNEXTLINE(modernize-use-ranges)
     std::iota(std::begin(jump_order), std::end(jump_order), uint16_t{1});
 
     // Shuffle jump order, leaving the highest value in place for the last jump to the code end.
