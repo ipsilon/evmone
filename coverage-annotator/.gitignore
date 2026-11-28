@@ -1,0 +1,67 @@
+# ─── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyw
+*.so
+*.egg
+*.egg-info/
+.eggs/
+*.manifest
+*.spec
+*.log
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ─── uv / Packaging ───────────────────────────────────────────────────────
+.uv/
+uv.lock
+dist/
+build/
+*.whl
+*.tar.gz
+
+# ─── Virtual Environments ─────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ─── Coverage / Testing ──────────────────────────────────────────────────
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.cache/
+nosetests.xml
+test-results.xml
+
+# ─── Editor / IDE files ──────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+*.orig
+
+# ─── macOS / Linux / Windows OS junk ─────────────────────────────────────
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+Icon?
+*.tmp
+
+# ─── Project-specific extras ─────────────────────────────────────────────
+# Ignore generated annotated coverage output
+coverage_with_annotations.html
+*.html~
+
+# Ignore local data or configs
+local_settings.json
+*.env
+.env.*
