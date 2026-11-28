@@ -68,6 +68,23 @@ public:
     }
 };
 
+/// Names each fixture as it starts and gives its verdict once it ends, as pytest -v does. The
+/// name is flushed first, so whatever the fixture writes between the two is its own.
+Observer naming(std::ostream& out)
+{
+    return {[&out](const std::string& name) { out << name << ' ' << std::flush; },
+        [&out](const Result& result) {
+            std::clog << std::flush;
+            // Only a fixture which ran is told of, so none is deselected.
+            if (result.outcome == Outcome::failed)
+                out << "FAILED\n";
+            else if (result.outcome == Outcome::skipped)
+                out << "SKIPPED\n";
+            else
+                out << "PASSED\n";
+        }};
+}
+
 /// What this tool makes of one fixture.
 enum class Format
 {
@@ -215,11 +232,14 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     size_t deselected = 0;
     size_t passed = 0;
 
+    const auto observer =
+        options.verbose ? naming(out) : Observer{[](const std::string&) {}, [](const Result&) {}};
+
     for (const auto& test : cases)
     {
         out << std::flush;
 
-        auto results = test.run();
+        auto results = test.run(observer);
         // A test writes its own output, an EVM trace above all, to another stream.
         std::clog << std::flush;
 
@@ -259,7 +279,7 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
         if (!results.empty())
             notes.push_back({test.name, outcome, std::move(results)});
 
-        if (options.progress)
+        if (options.progress && !options.verbose)
             row.advance(outcome);
     }
 
@@ -314,21 +334,31 @@ int run_tests(std::span<const TestCase> cases, std::ostream& out, const RunOptio
     return passed == 0 ? NOTHING_VERIFIED : SUCCESS;
 }
 
-std::vector<Result> run_fixture_file(const fs::path& path, const RunOptions& options, evmc::VM& vm)
+std::vector<Result> run_fixture_file(
+    const fs::path& path, const RunOptions& options, evmc::VM& vm, const Observer& observer)
 {
     json::json contents;
     if (auto loaded =
             run_one(path.string(), [&](TestReport&) { contents = load_fixture_file(path); });
         loaded.outcome != Outcome::passed)
+    {
+        // Loading is not a fixture, so it is told of only when it is all the file comes to.
+        // Nothing runs in it which could write anything of its own.
+        observer.started(loaded.name);
+        observer.finished(loaded);
         return {std::move(loaded)};
+    }
 
     std::vector<Result> results;
     for (const auto& [name, fixture] : contents.items())
     {
         if (!options.selects(name))
             continue;
-        results.push_back(run_one(path.string() + "::" + name,
+        auto fixture_name = path.string() + "::" + name;
+        observer.started(fixture_name);
+        results.push_back(run_one(std::move(fixture_name),
             [&](TestReport& report) { run_fixture(name, fixture, options, vm, report); }));
+        observer.finished(results.back());
     }
     return results;
 }
