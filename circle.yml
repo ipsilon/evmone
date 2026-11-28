@@ -687,6 +687,13 @@ jobs:
           working_directory: ~/build
           command: |
             bin/evmone-fuzzer -runs=5000000 -fork=$CMAKE_BUILD_PARALLEL_LEVEL -fork_corpus_groups=1 ~/corpus -create_missing_dirs=1 -max_len=100 -entropic_scale_per_exec_time=1 2>&1 | sed '/NEW_FUNC/d'
+      - run:
+          name: "Minimize fuzzing corpus"
+          working_directory: ~/build
+          command: |
+            bin/evmone-fuzzer -merge=1 -create_missing_dirs=1 -max_len=100 ~/corpus-min ~/corpus
+            rm -rf ~/corpus
+            mv ~/corpus-min ~/corpus
       - save_cache:
           name: "Save fuzzing corpus"
           key: fuzzing-corpus-{{epoch}}
