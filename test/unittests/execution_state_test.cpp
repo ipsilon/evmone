@@ -74,7 +74,7 @@ TEST(execution_state, reset_advanced)
     const evmone::advanced::AdvancedCodeAnalysis analysis;
 
     evmone::advanced::AdvancedExecutionState st;
-    st.gas_left = 1;
+    st.gas_left = evmone::Gas{1};
     st.gas_refund = 2;
     st.stack.push(6u);
     st.memory.grow(64);
