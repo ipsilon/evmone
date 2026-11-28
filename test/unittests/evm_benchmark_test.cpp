@@ -64,7 +64,7 @@ TEST_P(evm, jump_around)
     std::iota(std::begin(jump_order), std::end(jump_order), uint16_t{1});
 
     // Shuffle jump order, leaving the highest value in place for the last jump to the code end.
-    std::mt19937_64 generator{0};  // NOLINT(cert-msc51-cpp)
+    std::mt19937_64 generator{0};  // NOLINT(bugprone-random-generator-seed)
     std::shuffle(std::begin(jump_order), std::prev(std::end(jump_order)), generator);
 
     const auto jumppad_code = bytecode{OP_JUMPDEST} + push(OP_PUSH2, "") + OP_JUMP;

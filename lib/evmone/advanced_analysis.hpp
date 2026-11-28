@@ -74,6 +74,7 @@ struct AdvancedExecutionState : ExecutionState
     }
 
     /// Resets the contents of the execution_state so that it could be reused.
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method)
     void reset(const evmc_message& message, evmc_revision revision,
         const evmc_host_interface& host_interface, evmc_host_context* host_ctx,
         bytes_view _code) noexcept

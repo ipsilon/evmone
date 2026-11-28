@@ -44,7 +44,7 @@ CodeAnalysis analyze_legacy(bytes_view code)
     const auto padded_code_size = code.size() + PADDING;
     const auto aligned_code_size =
         (padded_code_size + (BITSET_ALIGNMENT - 1)) / BITSET_ALIGNMENT * BITSET_ALIGNMENT;
-    const auto bitset_words = (code.size() + (BitsetSpan::WORD_BITS)) / BitsetSpan::WORD_BITS;
+    const auto bitset_words = (code.size() + BitsetSpan::WORD_BITS) / BitsetSpan::WORD_BITS;
     const auto total_size = aligned_code_size + bitset_words * sizeof(BitsetSpan::word_type);
 
     auto storage = std::make_unique_for_overwrite<uint8_t[]>(total_size);

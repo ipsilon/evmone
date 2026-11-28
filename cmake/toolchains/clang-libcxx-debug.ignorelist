@@ -1,0 +1,4 @@
+# libc++ 22+ basic_string::__grow_by() assigns -1 to the size_type size:
+# https://github.com/llvm/llvm-project/issues/246508
+[implicit-integer-sign-change]
+src:*/c++/v1/string

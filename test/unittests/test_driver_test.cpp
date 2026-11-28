@@ -71,7 +71,7 @@ TEST(test_driver, exception_fails_only_its_own_test)
     const std::vector<TestCase> cases{
         one("ok", [](TestReport&) {}),
         one("throws", [](TestReport&) { throw std::runtime_error{"the reason"}; }),
-        one("unknown", [](TestReport&) { throw 42; }),  // NOLINT(hicpp-exception-baseclass)
+        one("unknown", [](TestReport&) { throw 42; }),  // NOLINT(bugprone-std-exception-baseclass)
         one("last", [&last_ran](TestReport&) { last_ran = true; }),
     };
 

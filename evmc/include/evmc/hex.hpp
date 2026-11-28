@@ -88,7 +88,7 @@ inline bool validate_hex(std::string_view hex) noexcept
     {
         uint8_t sink = {};
         uint8_t& operator*() noexcept { return sink; }
-        noop_output_iterator operator++(int) noexcept { return *this; }  // NOLINT(cert-dcl21-cpp)
+        noop_output_iterator operator++(int) noexcept { return *this; }
     };
 
     return from_hex(hex.begin(), hex.end(), noop_output_iterator{});

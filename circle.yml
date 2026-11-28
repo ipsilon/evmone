@@ -6,30 +6,38 @@ orbs:
 executors:
   lint:
     docker:
-      - image: chfast/cpp-build-env:25-lint
+      - image: chfast/cpp-build-env:26-lint
     resource_class: small
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-gcc-latest:
     docker:
-      - image: chfast/cpp-build-env:25-gcc-15
+      - image: chfast/cpp-build-env:26-gcc-16
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
   linux-gcc-multilib:
     docker:
-      - image: chfast/cpp-build-env:25-gcc-15-multilib
+      - image: chfast/cpp-build-env:26-gcc-16-multilib
     resource_class: small
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-clang-xlarge:
     docker:
-      - image: chfast/cpp-build-env:25-clang-21
+      - image: chfast/cpp-build-env:26-clang-23
     resource_class: xlarge
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 8
   linux-clang-selfhosted:
     docker:
-      - image: chfast/cpp-build-env:25-clang-21
+      - image: chfast/cpp-build-env:26-clang-23
+    resource_class: ipsilon/ha9x
+    environment:
+      CMAKE_BUILD_PARALLEL_LEVEL: 16
+  linux-clang-fuzzing:
+    docker:
+      # The Clang 23 libFuzzer crashes in fork mode:
+      # https://github.com/llvm/llvm-project/issues/201274.
+      - image: chfast/cpp-build-env:26-clang-22
     resource_class: ipsilon/ha9x
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 16
@@ -41,7 +49,7 @@ executors:
       CMAKE_BUILD_PARALLEL_LEVEL: 2
   linux-clang-latest:
     docker:
-      - image: chfast/cpp-build-env:25-clang-21
+      - image: chfast/cpp-build-env:26-clang-23
     environment:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
   linux-clang-min:
@@ -555,9 +563,6 @@ jobs:
       BUILD_TYPE: Release
       CMAKE_OPTIONS: -DCOVERAGE=1 -DEVMONE_PRECOMPILES_GMP=1
     steps:
-      - run:
-          name: "Install GMP"
-          command: sudo apt-get -q update && sudo apt-get -qy install libgmp-dev
       - build
       - download_execution_spec_tests:
           release: tests@v21.0.3
@@ -673,7 +678,7 @@ jobs:
           flags: evmone-unittests
 
   fuzzing:
-    executor: linux-clang-selfhosted
+    executor: linux-clang-fuzzing
     environment:
       CMAKE_GENERATOR: Ninja
       CMAKE_OPTIONS: -DASSERTIONS=ON -DEVMONE_FUZZING=ON

@@ -16,7 +16,7 @@
 #endif
 
 #ifdef __GNUC__
-#define ASM_COMMENT(COMMENT) asm("# " #COMMENT)  // NOLINT(hicpp-no-assembler)
+#define ASM_COMMENT(COMMENT) asm("# " #COMMENT)  // NOLINT(portability-no-assembler)
 #else
 #define ASM_COMMENT(COMMENT)
 #endif

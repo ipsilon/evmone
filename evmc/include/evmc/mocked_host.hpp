@@ -28,7 +28,7 @@ struct StorageValue
     StorageValue() noexcept = default;
 
     /// Constructor sets the current and original to the same value. Optional access status.
-    StorageValue(const bytes32& _value,  // NOLINT(hicpp-explicit-conversions)
+    StorageValue(const bytes32& _value,  // NOLINT(*-explicit-constructor)
                  evmc_access_status _access_status = EVMC_ACCESS_COLD) noexcept
       : current{_value}, original{_value}, access_status{_access_status}
     {}
