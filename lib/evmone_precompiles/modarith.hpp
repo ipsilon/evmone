@@ -25,7 +25,6 @@ constexpr uint32_t modinv_pow2(uint32_t a) noexcept
     // https://gmplib.org/~tege/divcnst-pldi94.pdf#page=9, formula (9.2)
     // Each iteration doubles the number of correct bits, starting from 4:
     // 8, 16, 32, ..., so for 32-bit value we need 3 iterations.
-    // TODO(C++23): static
     constexpr auto ITERATIONS = std::countr_zero(sizeof(a) * 8 / 4);
     for (auto i = 0; i < ITERATIONS; ++i)
         inv *= 2 - a * inv;  // Overflows are fine because they wrap around modulo 2³².
@@ -438,7 +437,7 @@ public:
         // High-Speed Algorithms & Architectures For Number-Theoretic Cryptosystems
         // https://www.microsoft.com/en-us/research/wp-content/uploads/1998/06/97Acar.pdf
 
-        constexpr auto S = UintT::num_words;  // TODO(C++23): Make it static
+        constexpr auto S = UintT::num_words;
 
         intx::uint<UintT::num_bits + 64> t;
         for (size_t i = 0; i != S; ++i)

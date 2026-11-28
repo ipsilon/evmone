@@ -48,7 +48,7 @@ using GasCostTable = std::array<std::array<int16_t, 256>, EVMC_MAX_REVISION + 1>
 
 /// The EVM revision specific table of EVM instructions gas costs. For instructions undefined
 /// in given EVM revision, the value is instr::undefined.
-constexpr inline GasCostTable gas_costs = []() noexcept {
+constexpr inline GasCostTable gas_costs = [] noexcept {
     GasCostTable table{};
 
     for (auto& t : table[EVMC_FRONTIER])
@@ -248,7 +248,7 @@ consteval bool has_const_gas_cost(Opcode op) noexcept
 
 
 /// The global, EVM revision independent, table of traits of all known EVM instructions.
-constexpr inline std::array<Traits, 256> traits = []() noexcept {
+constexpr inline std::array<Traits, 256> traits = [] noexcept {
     std::array<Traits, 256> table{};
 
     table[OP_STOP] = {"STOP", 0, true, 0, 0, EVMC_FRONTIER};

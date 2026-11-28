@@ -386,8 +386,7 @@ void run_blockchain_test(const BlockchainTest& test, evmc::VM& vm, TestReport& r
 
             // Legacy fixtures name the broken rule in vocabulary evmone does not speak
             // (InvalidStateRoot, TooManyUncles); only the spec names can be compared.
-            const auto names_spec_exception =
-                test_block.expected_exception.find("Exception.") != std::string::npos;
+            const auto names_spec_exception = test_block.expected_exception.contains("Exception.");
 
             // TODO: The transaction senders come from the fixture instead of being recovered
             //   from the signatures, so evmone never sees the signature the test broke. Such a
